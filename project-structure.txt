@@ -1,0 +1,81 @@
+smriti-cortex/
+│
+├── manifest.json
+├── package.json
+├── tsconfig.json
+├── webpack.config.js          # lightweight bundler for TS → JS
+├── tailwind.config.js         # only if enabling Tailwind (not required)
+├── postcss.config.js          # optional if styling is added
+├── README.md
+│
+├── src/
+│   ├── background/
+│   │   ├── service-worker.ts
+│   │   ├── database.ts
+│   │   ├── indexing.ts
+│   │   ├── search/
+│   │   │   ├── search-engine.ts
+│   │   │   ├── scorer-manager.ts
+│   │   │   ├── scorers/
+│   │   │   │   ├── title-scorer.ts
+│   │   │   │   ├── url-scorer.ts
+│   │   │   │   ├── recency-scorer.ts
+│   │   │   │   ├── visitcount-scorer.ts
+│   │   │   │   ├── meta-scorer.ts
+│   │   │   │   ├── ai-scorer-placeholder.ts
+│   │   │   │   └── index.ts
+│   │   │   └── tokenizer.ts
+│   │   ├── messaging.ts
+│   │   ├── utils.ts
+│   │   └── schema.ts
+│   │
+│   ├── content_scripts/
+│   │   ├── extractor.ts
+│   │   └── injector.js           # optional content script loader
+│   │
+│   ├── popup/
+│   │   ├── popup.html
+│   │   ├── popup.ts
+│   │   └── popup.css
+│   │
+│   ├── core/
+│   │   ├── types.ts
+│   │   ├── interfaces.ts
+│   │   ├── constants.ts
+│   │   ├── scorer-types.ts
+│   │   └── helpers.ts
+│   │
+│   └── assets/
+│       ├── icon16.png
+│       ├── icon48.png
+│       ├── icon128.png
+│       └── logo.svg
+│
+├── .gitignore
+└── .github/
+    └── workflows/
+        └── build.yml
+
+
+🧠 SMRITI-CORTEX CORE DESIGN Principles
+
+(Already embedded into the architecture above)
+
+✔️ Lightweight popup → minimal UI overhead
+
+✔️ All intelligence in background service worker
+
+✔️ IndexedDB for flexible, high-volume storage
+
+✔️ Search engine modularized under /search
+
+✔️ Scorers are plug-ins (direct future AI support)
+
+✔️ Content script only extracts metadata
+
+✔️ Clean TypeScript across all layers
+
+✔️ Bundled via Webpack → MV3 compatible
+
+✔️ CI/CD ready .github/workflows
+
