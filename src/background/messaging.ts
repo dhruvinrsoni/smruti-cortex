@@ -17,6 +17,18 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 sendResponse({ status: "OK" });
                 break;
 
+            // inside messaging onMessage handler
+            case "METADATA_CAPTURE": {
+                const { payload } = msg;
+                // call mergeMetadata (implementation in indexing.ts)
+                await mergeMetadata(payload.url, {
+                    description: payload.metaDescription,
+                    keywords: payload.metaKeywords
+                });
+                sendResponse({ status: "ok" });
+                break;
+            }
+
             default:
                 sendResponse({ error: "Unknown message type" });
         }
