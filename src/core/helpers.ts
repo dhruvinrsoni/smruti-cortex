@@ -1,5 +1,7 @@
 // helpers.ts — Browser abstraction layer for Chrome, Firefox, Edge, Safari
 
+declare const browser: any;
+
 export const browserAPI = (() => {
     if (typeof chrome !== "undefined") {
         // MV3 Chrome, Edge, Brave, Opera

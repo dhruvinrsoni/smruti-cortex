@@ -1,7 +1,7 @@
 // database.ts — Hybrid storage layer with auto-detection for IndexedDB
 
 import { browserAPI } from "../core/helpers";
-import { IndexedItem } from "../core/types";
+import { IndexedItem } from "./schema";
 
 const DB_NAME = "smriti_cortex_db";
 const DB_VERSION = 1;

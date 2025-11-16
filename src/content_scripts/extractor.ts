@@ -1,6 +1,8 @@
 // extractor.ts
 // Runs in page context as a content script. Extracts metadata and posts it to background.
 
+declare const browser: any;
+
 import { browserAPI } from "../core/helpers"; // if you compile this into bundle; otherwise use chrome/browser direct
 
 // Only run in top-level frames

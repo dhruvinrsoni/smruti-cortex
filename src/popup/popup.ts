@@ -1,6 +1,8 @@
 // popup.ts — lightweight UI logic for SmritiCortex popup
 // Compiled by webpack to dist/popup/popup.js
 
+declare const browser: any;
+
 type IndexedItem = {
   url: string;
   title: string;
@@ -89,7 +91,7 @@ function renderResults() {
       const d = new URL(item.url).hostname;
       fav.src = `https://www.google.com/s2/favicons?domain=${d}&sz=64`;
     } catch {
-      fav.src = "../assets/icon48.png";
+      fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
     }
 
     // details
