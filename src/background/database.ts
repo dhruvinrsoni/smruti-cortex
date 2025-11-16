@@ -64,6 +64,35 @@ export async function getAllIndexedItems(): Promise<IndexedItem[]> {
     });
 }
 
+// database.ts — Hybrid storage layer with auto-detection for IndexedDB
+// [existing imports and code above remain the same]
+
+/* === ADD THESE FUNCTIONS INTO database.ts (below saveIndexedItem/getAllIndexedItems) === */
+
+// Get single item by URL (key)
+export async function getIndexedItem(url: string): Promise<IndexedItem | null> {
+    const db = dbInstance || await openDatabase();
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, "readonly");
+        const store = txn.objectStore(STORE_NAME);
+        const req = store.get(url);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Delete item by URL
+export async function deleteIndexedItem(url: string): Promise<void> {
+    const db = dbInstance || await openDatabase();
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, "readwrite");
+        const store = txn.objectStore(STORE_NAME);
+        const req = store.delete(url);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
 // -------------------------------------------------------------------
 // chrome.storage.local for settings (universal across all browsers)
 // -------------------------------------------------------------------

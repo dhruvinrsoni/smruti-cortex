@@ -1,0 +1,49 @@
+{
+  "name": "smriti-cortex",
+  "version": "0.1.0",
+  "description": "SmritiCortex — Everything-like instant browser history search. Hybrid IndexedDB + chrome.storage, MV3 extension built with TypeScript.",
+  "main": "dist/background/service-worker.js",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:dev": "npm run clean && webpack --mode development --devtool eval-cheap-module-source-map",
+    "build": "npm run clean && webpack --mode production",
+    "lint": "eslint 'src/**/*.{ts,tsx,js}' --fix",
+    "test": "echo \"No tests configured yet\" && exit 0",
+    "format": "prettier --write 'src/**/*.{ts,tsx,js,css,md,json}'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<your-org>/smriti-cortex.git"
+  },
+  "keywords": [
+    "browser-extension",
+    "chrome-extension",
+    "search",
+    "indexeddb",
+    "manifest-v3",
+    "smriti",
+    "cortex"
+  ],
+  "author": "<Your Name>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.188",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^6.8.0",
+    "eslint": "^8.50.0",
+    "eslint-config-prettier": "^9.0.0",
+    "html-webpack-plugin": "^5.5.0",
+    "prettier": "^3.0.0",
+    "rimraf": "^5.0.0",
+    "style-loader": "^3.3.0",
+    "ts-loader": "^9.4.0",
+    "typescript": "^5.6.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^1.0.0"
+  }
+}
