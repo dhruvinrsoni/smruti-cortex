@@ -1,7 +1,17 @@
 # GENERAL_TODO (SmritiCortex)
 
-This is the single canonical checklist for privacy, security, UX, architecture, and future improvements.  
+This is the single canonical checklist for privacy, security, UX, architecture, and future improvements.
 Each item can be converted into GitHub Issues.
+
+---
+
+## ✅ COMPLETED — RECENT IMPLEMENTATIONS
+- [x] **Debug toggle in popup** - Checkbox controls all console logging
+- [x] **Persistent debug settings** - Debug preference saves to chrome.storage
+- [x] **First result auto-focus** - Search results automatically focus first item
+- [x] **Omnibox integration** - "sc " keyword for address bar quick access
+- [x] **Enhanced keyboard navigation** - Full arrow key support, modifier keys
+- [x] **Comprehensive documentation** - Updated README, testing guide, user instructions
 
 ---
 
@@ -27,8 +37,8 @@ Each item can be converted into GitHub Issues.
 
 ## MEDIUM PRIORITY — UX & DISCOVERABILITY
 - [ ] Add onboarding 3-step flow for new users
-- [ ] Improve keyboard navigation (Home, End, PageUp/PageDown)
-- [ ] Add “Pinned results” or favorites
+- [x] **Improve keyboard navigation** (Home, End, PageUp/PageDown) - Basic navigation implemented
+- [ ] Add "Pinned results" or favorites
 - [ ] Add favicon caching
 - [ ] Add preview snippet or metadata snippet
 
