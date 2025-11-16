@@ -6,7 +6,7 @@ const cwd = resolve(".");
 const outdir = resolve(cwd, "dist");
 
 const common = {
-  sourcemap: true,
+  sourcemap: false,
   bundle: true,
   platform: "browser",
   target: ["chrome109", "edge109", "firefox109"],

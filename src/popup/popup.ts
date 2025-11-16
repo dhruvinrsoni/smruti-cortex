@@ -3,6 +3,8 @@
 
 declare const browser: any;
 
+console.log("[DEBUG] Popup script starting execution");
+
 type IndexedItem = {
   url: string;
   title: string;
@@ -14,11 +16,34 @@ type IndexedItem = {
   tokens?: string[];
 };
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+// Debug toggle
+let debugEnabled = false;
 
+// Helper
+const $ = <T extends HTMLElement>(id: string) => {
+  console.log("[DEBUG] Looking for element with id:", id);
+  const el = document.getElementById(id) as T;
+  console.log("[DEBUG] Element found:", el);
+  return el;
+};
+
+console.log("[DEBUG] Helper function defined");
+
+// Elements
+console.log("[DEBUG] About to get elements");
 const input = $("search-input") as HTMLInputElement;
 const resultsNode = $("results") as HTMLUListElement;
 const resultCountNode = $("result-count") as HTMLDivElement;
+
+console.log("[DEBUG] Elements retrieved:", { input: !!input, resultsNode: !!resultsNode, resultCountNode: !!resultCountNode });
+console.log("[DEBUG] Element details:", { input, resultsNode, resultCountNode });
+
+if (!input || !resultsNode || !resultCountNode) {
+  console.error("[DEBUG] CRITICAL: Missing DOM elements!");
+  alert("[DEBUG] ERROR: Missing DOM elements! Check console.");
+} else {
+  console.log("[DEBUG] All elements found, proceeding");
+}
 
 let results: IndexedItem[] = [];
 let activeIndex = -1;
@@ -26,49 +51,68 @@ let debounceTimer: number | undefined;
 
 // Helper to send messages to background in a cross-browser safe way
 function sendMessage(msg: any): Promise<any> {
+  console.log("[DEBUG] sendMessage called with:", msg);
   return new Promise((resolve) => {
+    console.log("[DEBUG] Creating promise for sendMessage");
     try {
+      console.log("[DEBUG] Checking for chrome/browser runtime");
       const runtime = (typeof chrome !== "undefined" && chrome.runtime) ? chrome.runtime : (typeof browser !== "undefined" ? browser.runtime : null);
+      console.log("[DEBUG] Runtime found:", !!runtime);
       if (!runtime || !runtime.sendMessage) {
+        console.log("[DEBUG] No runtime API found, resolving with empty results");
         resolve({ results: [] });
         return;
       }
+      console.log("[DEBUG] Calling runtime.sendMessage");
       runtime.sendMessage(msg, (resp: any) => {
+        console.log("[DEBUG] Runtime sendMessage callback received:", resp);
         resolve(resp);
       });
     } catch (e) {
+      console.error("[DEBUG] Send message error:", e);
       resolve({ results: [] });
     }
   });
-}
-
-// Debounce helper
+}// Debounce helper
 function debounceSearch(q: string) {
-  if (debounceTimer) window.clearTimeout(debounceTimer);
+  console.log("[DEBUG] debounceSearch called with:", q);
+  if (debounceTimer) {
+    console.log("[DEBUG] Clearing existing timer");
+    window.clearTimeout(debounceTimer);
+  }
+  console.log("[DEBUG] Setting new timer for doSearch");
   debounceTimer = window.setTimeout(() => {
+    console.log("[DEBUG] Timer fired, calling doSearch");
     doSearch(q);
   }, 120);
 }
 
 // Do the actual search (ask background worker)
 async function doSearch(q: string) {
+  console.log("[DEBUG] doSearch called with:", q);
   if (!q || q.trim() === "") {
+    console.log("[DEBUG] Query is empty, clearing results");
     results = [];
     renderResults();
     return;
   }
+  console.log("[DEBUG] Query is valid, calling sendMessage");
   const resp = await sendMessage({ type: "SEARCH_QUERY", query: q });
+  console.log("[DEBUG] Search response received:", resp);
   results = (resp && resp.results) ? resp.results : [];
   activeIndex = results.length ? 0 : -1;
+  console.log("[DEBUG] Setting results:", results.length, "items");
   renderResults();
 }
 
 // Render results list
 function renderResults() {
+  console.log("[DEBUG] renderResults called, results length:", results.length);
   resultsNode.innerHTML = "";
   resultCountNode.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
 
   if (results.length === 0) {
+    console.log("[DEBUG] No results, showing empty message");
     const empty = document.createElement("div");
     empty.textContent = "No matches — try different keywords";
     empty.style.padding = "8px";
@@ -77,7 +121,9 @@ function renderResults() {
     return;
   }
 
+  console.log("[DEBUG] Rendering", results.length, "results");
   results.forEach((item, idx) => {
+    console.log("[DEBUG] Rendering item", idx, item.title);
     const li = document.createElement("li");
     li.tabIndex = 0;
     li.dataset.index = String(idx);
@@ -218,18 +264,34 @@ function highlightActive() {
 }
 
 // Events
-input.addEventListener("input", (ev) => {
-  const q = (ev.target as HTMLInputElement).value;
-  debounceSearch(q);
-});
+if (input) {
+  console.log("[DEBUG] Adding input event listener");
+  input.addEventListener("input", (ev) => {
+    const q = (ev.target as HTMLInputElement).value;
+    console.log("[DEBUG] Input event fired, query:", q);
+    debounceSearch(q);
+  });
 
-input.addEventListener("keydown", (ev) => {
-  handleKeydown(ev);
-});
+  console.log("[DEBUG] Adding keydown event listener");
+  input.addEventListener("keydown", (ev) => {
+    console.log("[DEBUG] Keydown event fired, key:", ev.key);
+    handleKeydown(ev);
+  });
+} else {
+  console.log("[DEBUG] Input element not found, not adding listeners");
+}
 
 // Focus the input on load
+console.log("[DEBUG] Adding window load event listener");
 window.addEventListener("load", () => {
-  input.focus();
+  console.log("[DEBUG] Window load event fired");
+  if (input) {
+    console.log("[DEBUG] Focusing input");
+    input.focus();
+  } else {
+    console.log("[DEBUG] Input not found, cannot focus");
+  }
   // small initial query attempt: show nothing
+  console.log("[DEBUG] Calling initial renderResults");
   renderResults();
 });

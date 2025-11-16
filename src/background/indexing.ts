@@ -8,12 +8,14 @@ import { getIndexedItem } from "./database";
 
 
 export async function ingestHistory(): Promise<void> {
+    console.log("[Indexing] Starting history ingestion...");
     const historyItems = await new Promise<any[]>((resolve) => {
         browserAPI.history.search(
             { text: "", maxResults: 50000 },
             (results) => resolve(results)
         );
     });
+    console.log("[Indexing] Found", historyItems.length, "history items");
 
     for (const item of historyItems) {
         const indexed: IndexedItem = {

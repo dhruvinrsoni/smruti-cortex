@@ -14,11 +14,16 @@ let dbInstance: IDBDatabase | null = null;
 // ------------------------------
 export function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
+        console.log("[Database] Opening database...");
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onerror = () => reject(request.error);
+        request.onerror = () => {
+            console.error("[Database] Open error:", request.error);
+            reject(request.error);
+        };
         request.onsuccess = () => {
             dbInstance = request.result;
+            console.log("[Database] Database opened successfully");
             resolve(dbInstance);
         };
 
