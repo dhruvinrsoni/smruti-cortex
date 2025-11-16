@@ -3,6 +3,7 @@
 import { browserAPI } from "../core/helpers";
 import { runSearch } from "./search/search-engine";
 import { ingestHistory } from "./indexing";
+import { mergeMetadata } from "./indexing";
 
 browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {

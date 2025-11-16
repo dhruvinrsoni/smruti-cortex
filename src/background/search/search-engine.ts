@@ -2,7 +2,7 @@
 
 import { getAllIndexedItems } from "../database";
 import { getAllScorers } from "./scorer-manager";
-import { IndexedItem } from "../../core/types";
+import { IndexedItem } from "../../background/schema";
 import { tokenize } from "./tokenizer";
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {

@@ -3,7 +3,7 @@
 import { browserAPI } from "../core/helpers";
 import { saveIndexedItem } from "./database";
 import { tokenize } from "./search/tokenizer";
-import { IndexedItem } from "../core/types";
+import { IndexedItem } from "./schema";
 import { getIndexedItem } from "./database";
 
 
