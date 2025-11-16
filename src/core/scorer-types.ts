@@ -1,0 +1,9 @@
+// scorer-types.ts — Shared interfaces for modular scoring
+
+import { IndexedItem } from "./types";
+
+export interface Scorer {
+    name: string;                   // unique name
+    weight: number;                 // 0–1 normalized weight
+    score: (item: IndexedItem, query: string) => number;
+}
