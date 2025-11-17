@@ -1,4 +1,4 @@
-// popup.ts — lightweight UI logic for SmritiCortex popup
+// popup.ts — lightweight UI logic for SmrutiCortex popup
 // Compiled by webpack to dist/popup/popup.js
 
 declare const browser: any;

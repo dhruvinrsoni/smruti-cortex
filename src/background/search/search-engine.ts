@@ -1,4 +1,4 @@
-// search-engine.ts — SmritiCortex Search Brain
+// search-engine.ts — SmrutiCortex Search Brain
 
 import { getAllIndexedItems } from "../database";
 import { getAllScorers } from "./scorer-manager";

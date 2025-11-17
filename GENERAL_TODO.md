@@ -1,4 +1,4 @@
-# GENERAL_TODO (SmritiCortex)
+# GENERAL_TODO (SmrutiCortex)
 
 This is the single canonical checklist for privacy, security, UX, architecture, and future improvements.
 Each item can be converted into GitHub Issues.

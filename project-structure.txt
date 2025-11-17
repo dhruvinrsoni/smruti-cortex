@@ -1,4 +1,4 @@
-smriti-cortex/
+smruti-cortex/
 │
 ├── manifest.json
 ├── package.json
@@ -57,7 +57,7 @@ smriti-cortex/
         └── build.yml
 
 
-🧠 SMRITI-CORTEX CORE DESIGN Principles
+🧠 SMRUTI-CORTEX CORE DESIGN Principles
 
 (Already embedded into the architecture above)
 

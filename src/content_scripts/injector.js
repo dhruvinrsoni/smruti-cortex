@@ -4,8 +4,8 @@
 
 (function () {
   // Avoid injecting twice
-  if (window.__smriti_cortex_injected) return;
-  window.__smriti_cortex_injected = true;
+  if (window.__smruti_cortex_injected) return;
+  window.__smruti_cortex_injected = true;
 
   try {
     (function run() {

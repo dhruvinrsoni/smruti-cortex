@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "SmritiCortex",
-  "short_name": "SmritiCortex",
-  "description": "Everything-like instant search for your browser history — SmritiCortex indexes your browsing memory and retrieves any URL instantly.",
+  "name": "SmrutiCortex",
+  "short_name": "SmrutiCortex",
+  "description": "Everything-like instant search for your browser history — SmrutiCortex indexes your browsing memory and retrieves any URL instantly.",
   "version": "0.1.0",
   "permissions": [
     "history",
@@ -21,7 +21,7 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "SmritiCortex"
+    "default_title": "SmrutiCortex"
   },
   "content_scripts": [
     {
@@ -38,7 +38,7 @@
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
       },
-      "description": "Open SmritiCortex popup and focus first result"
+      "description": "Open SmrutiCortex popup and focus first result"
     }
   },
   "icons": {

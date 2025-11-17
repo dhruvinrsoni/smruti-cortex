@@ -1,8 +1,8 @@
 {
-  "name": "smriti-cortex",
+  "name": "smruti-cortex",
   "version": "0.1.0",
   "private": true,
-  "description": "SmritiCortex — Everything-like instant browser history search (MV3).",
+  "description": "SmrutiCortex — Everything-like instant browser history search (MV3).",
   "scripts": {
     "clean": "rimraf dist",
     "build:dev": "npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",

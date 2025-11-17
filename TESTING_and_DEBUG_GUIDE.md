@@ -1,6 +1,6 @@
-# TESTING & DEBUG GUIDE — SmritiCortex
+# TESTING & DEBUG GUIDE — SmrutiCortex
 
-This document is the single place for developers and maintainers to build, load, test, and debug SmritiCortex locally. It includes steps for common issues and verification checks.
+This document is the single place for developers and maintainers to build, load, test, and debug SmrutiCortex locally. It includes steps for common issues and verification checks.
 
 ---
 
@@ -49,7 +49,7 @@ npm run build:dev  # Recommended for development
 2. Enable "Developer mode" (top right toggle)
 3. Click "Load unpacked"
 4. Select the `dist/` folder
-5. SmritiCortex icon (🧠) appears in toolbar
+5. SmrutiCortex icon (🧠) appears in toolbar
 
 ### Basic Functionality Test
 1. **Extension loads** without errors
