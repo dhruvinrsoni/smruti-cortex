@@ -1,5 +1,6 @@
 // search-engine.ts — SmrutiCortex Search Brain
 
+import { BRAND_NAME } from "../../core/constants";
 import { getAllIndexedItems } from "../database";
 import { getAllScorers } from "./scorer-manager";
 import { IndexedItem } from "../../background/schema";

@@ -4,6 +4,7 @@ import { browserAPI } from "../core/helpers";
 import { saveIndexedItem } from "./database";
 import { tokenize } from "./search/tokenizer";
 import { IndexedItem } from "./schema";
+import { BRAND_NAME } from "../core/constants";
 import { getIndexedItem } from "./database";
 
 
@@ -74,6 +75,6 @@ export async function mergeMetadata(
         // Save updated item
         await saveIndexedItem(item);
     } catch (err) {
-        console.error("[SmrutiCortex] mergeMetadata error:", err);
+        console.error(`[${BRAND_NAME}] mergeMetadata error:`, err);
     }
 }
