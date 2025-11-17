@@ -78,7 +78,21 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     // Sort by score DESC
     results.sort((a, b) => b.finalScore - a.finalScore);
 
-    console.log("[DEBUG] Returning top 50 results");
+    console.log("[DEBUG] Diversifying results to avoid similar URLs");
+    // Diversify: limit to max 3 results per domain for variety
+    const diversified: Array<{ item: IndexedItem; finalScore: number }> = [];
+    const domainCount = new Map<string, number>();
+    const maxPerDomain = 3;
+    for (const res of results) {
+        const domain = res.item.hostname || "unknown";
+        const count = domainCount.get(domain) || 0;
+        if (count < maxPerDomain) {
+            diversified.push(res);
+            domainCount.set(domain, count + 1);
+        }
+    }
+
+    console.log("[DEBUG] Returning top 50 diversified results");
     // Return top 50 for speed
-    return results.slice(0, 50).map(r => r.item);
+    return diversified.slice(0, 50).map(r => r.item);
 }

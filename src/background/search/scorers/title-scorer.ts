@@ -2,7 +2,7 @@ import { Scorer } from "../../../core/scorer-types";
 
 const titleScorer: Scorer = {
     name: "title",
-    weight: 0.30,
+    weight: 0.40,
     score: (item, query) => {
         const title = item.title.toLowerCase();
         if (title === query) return 1;

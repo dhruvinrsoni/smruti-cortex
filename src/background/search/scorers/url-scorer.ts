@@ -2,7 +2,7 @@ import { Scorer } from "../../../core/scorer-types";
 
 const urlScorer: Scorer = {
     name: "url",
-    weight: 0.20,
+    weight: 0.15,
     score: (item, query) => {
         const url = item.url.toLowerCase();
         if (url.includes(query)) return 1;
