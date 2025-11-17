@@ -35,8 +35,8 @@
   "commands": {
     "open-popup": {
       "suggested_key": {
-        "default": "Ctrl+Shift+K",
-        "mac": "Command+Shift+K"
+        "default": "Ctrl+Shift+P",
+        "mac": "Command+Shift+P"
       },
       "description": "Open SmrutiCortex popup and focus first result"
     }
