@@ -43,6 +43,21 @@ console.log("[DEBUG] Service worker script starting");
             await ingestHistory(); // lightweight incremental indexing
         });
 
+        // Listen for keyboard commands
+        console.log("[DEBUG] Setting up command listener");
+        browserAPI.commands.onCommand.addListener(async (command) => {
+            console.log("[DEBUG] Command received:", command);
+            if (command === "open-popup") {
+                // Open the popup
+                if (browserAPI.action && browserAPI.action.openPopup) {
+                    await browserAPI.action.openPopup();
+                } else {
+                    // Fallback: create a new tab with the extension URL
+                    browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                }
+            }
+        });
+
         console.log("[DEBUG] Service worker ready.");
     } catch (error) {
         console.error("[DEBUG] Init error:", error);
