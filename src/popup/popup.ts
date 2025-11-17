@@ -1,6 +1,8 @@
 // popup.ts — lightweight UI logic for SmrutiCortex popup
 // Compiled by webpack to dist/popup/popup.js
 
+import { BRAND_NAME } from "../core/constants";
+
 declare const browser: any;
 
 console.log("[DEBUG] Popup script starting execution");

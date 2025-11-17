@@ -2,8 +2,8 @@
 
 import { browserAPI } from "../core/helpers";
 import { IndexedItem } from "./schema";
+import { DB_NAME } from "../core/constants";
 
-const DB_NAME = "smruti_cortex_db";
 const DB_VERSION = 1;
 const STORE_NAME = "pages";
 
