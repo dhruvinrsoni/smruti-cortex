@@ -19,11 +19,29 @@ type IndexedItem = {
 // Debug toggle
 let debugEnabled = false;
 
+function debugLog(...args: any[]) {
+  if (debugEnabled) {
+    console.log("[DEBUG]", ...args);
+  }
+}
+
+// Load debug setting from storage
+if (typeof chrome !== "undefined" && chrome.storage) {
+  chrome.storage.local.get(["debugEnabled"], (result) => {
+    debugEnabled = result.debugEnabled || false;
+    // Update the checkbox if it exists
+    const debugToggle = document.getElementById("debug-toggle") as HTMLInputElement;
+    if (debugToggle) {
+      debugToggle.checked = debugEnabled;
+    }
+  });
+}
+
 // Helper
 const $ = <T extends HTMLElement>(id: string) => {
-  console.log("[DEBUG] Looking for element with id:", id);
+  debugLog("Looking for element with id:", id);
   const el = document.getElementById(id) as T;
-  console.log("[DEBUG] Element found:", el);
+  debugLog("Element found:", el);
   return el;
 };
 
@@ -40,7 +58,7 @@ console.log("[DEBUG] Element details:", { input, resultsNode, resultCountNode })
 
 if (!input || !resultsNode || !resultCountNode) {
   console.error("[DEBUG] CRITICAL: Missing DOM elements!");
-  alert("[DEBUG] ERROR: Missing DOM elements! Check console.");
+  debugLog("[DEBUG] ERROR: Missing DOM elements! Check console.");
 } else {
   console.log("[DEBUG] All elements found, proceeding");
 }
@@ -51,21 +69,21 @@ let debounceTimer: number | undefined;
 
 // Helper to send messages to background in a cross-browser safe way
 function sendMessage(msg: any): Promise<any> {
-  console.log("[DEBUG] sendMessage called with:", msg);
+  debugLog("sendMessage called with:", msg);
   return new Promise((resolve) => {
-    console.log("[DEBUG] Creating promise for sendMessage");
+    debugLog("Creating promise for sendMessage");
     try {
-      console.log("[DEBUG] Checking for chrome/browser runtime");
+      debugLog("Checking for chrome/browser runtime");
       const runtime = (typeof chrome !== "undefined" && chrome.runtime) ? chrome.runtime : (typeof browser !== "undefined" ? browser.runtime : null);
-      console.log("[DEBUG] Runtime found:", !!runtime);
+      debugLog("Runtime found:", !!runtime);
       if (!runtime || !runtime.sendMessage) {
-        console.log("[DEBUG] No runtime API found, resolving with empty results");
+        debugLog("No runtime API found, resolving with empty results");
         resolve({ results: [] });
         return;
       }
-      console.log("[DEBUG] Calling runtime.sendMessage");
+      debugLog("Calling runtime.sendMessage");
       runtime.sendMessage(msg, (resp: any) => {
-        console.log("[DEBUG] Runtime sendMessage callback received:", resp);
+        debugLog("Runtime sendMessage callback received:", resp);
         resolve(resp);
       });
     } catch (e) {
@@ -75,44 +93,44 @@ function sendMessage(msg: any): Promise<any> {
   });
 }// Debounce helper
 function debounceSearch(q: string) {
-  console.log("[DEBUG] debounceSearch called with:", q);
+  debugLog("debounceSearch called with:", q);
   if (debounceTimer) {
-    console.log("[DEBUG] Clearing existing timer");
+    debugLog("Clearing existing timer");
     window.clearTimeout(debounceTimer);
   }
-  console.log("[DEBUG] Setting new timer for doSearch");
+  debugLog("Setting new timer for doSearch");
   debounceTimer = window.setTimeout(() => {
-    console.log("[DEBUG] Timer fired, calling doSearch");
+    debugLog("Timer fired, calling doSearch");
     doSearch(q);
   }, 120);
 }
 
 // Do the actual search (ask background worker)
 async function doSearch(q: string) {
-  console.log("[DEBUG] doSearch called with:", q);
+  debugLog("doSearch called with:", q);
   if (!q || q.trim() === "") {
-    console.log("[DEBUG] Query is empty, clearing results");
+    debugLog("Query is empty, clearing results");
     results = [];
     renderResults();
     return;
   }
-  console.log("[DEBUG] Query is valid, calling sendMessage");
+  debugLog("Query is valid, calling sendMessage");
   const resp = await sendMessage({ type: "SEARCH_QUERY", query: q });
-  console.log("[DEBUG] Search response received:", resp);
+  debugLog("Search response received:", resp);
   results = (resp && resp.results) ? resp.results : [];
   activeIndex = results.length ? 0 : -1;
-  console.log("[DEBUG] Setting results:", results.length, "items");
+  debugLog("Setting results:", results.length, "items");
   renderResults();
 }
 
 // Render results list
 function renderResults() {
-  console.log("[DEBUG] renderResults called, results length:", results.length);
+  debugLog("renderResults called, results length:", results.length);
   resultsNode.innerHTML = "";
   resultCountNode.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
 
   if (results.length === 0) {
-    console.log("[DEBUG] No results, showing empty message");
+    debugLog("No results, showing empty message");
     const empty = document.createElement("div");
     empty.textContent = "No matches — try different keywords";
     empty.style.padding = "8px";
@@ -121,9 +139,9 @@ function renderResults() {
     return;
   }
 
-  console.log("[DEBUG] Rendering", results.length, "results");
+  debugLog("Rendering", results.length, "results");
   results.forEach((item, idx) => {
-    console.log("[DEBUG] Rendering item", idx, item.title);
+    debugLog("Rendering item", idx, item.title);
     const li = document.createElement("li");
     li.tabIndex = 0;
     li.dataset.index = String(idx);
@@ -281,6 +299,17 @@ if (input) {
   console.log("[DEBUG] Input element not found, not adding listeners");
 }
 
+// Debug toggle handler
+const debugToggle = document.getElementById("debug-toggle") as HTMLInputElement;
+if (debugToggle) {
+  debugToggle.addEventListener("change", () => {
+    debugEnabled = debugToggle.checked;
+    if (typeof chrome !== "undefined" && chrome.storage) {
+      chrome.storage.local.set({ debugEnabled });
+    }
+  });
+}
+
 // Focus the input on load
 console.log("[DEBUG] Adding window load event listener");
 window.addEventListener("load", () => {
@@ -295,3 +324,33 @@ window.addEventListener("load", () => {
   console.log("[DEBUG] Calling initial renderResults");
   renderResults();
 });
+
+// Handle keyboard shortcut opening - focus first result if available
+function handleKeyboardShortcut() {
+  if (results.length > 0) {
+    // Focus on first result
+    activeIndex = 0;
+    highlightActive();
+    const firstResult = resultsNode.querySelector("li");
+    if (firstResult) {
+      (firstResult as HTMLElement).focus();
+    }
+  } else {
+    // Focus on search input
+    if (input) {
+      input.focus();
+    }
+  }
+}
+
+// Check if opened via keyboard shortcut (simple heuristic: if no user interaction yet)
+let hasUserInteracted = false;
+document.addEventListener("keydown", () => { hasUserInteracted = true; });
+document.addEventListener("click", () => { hasUserInteracted = true; });
+
+// After a short delay, if no interaction, assume keyboard shortcut
+setTimeout(() => {
+  if (!hasUserInteracted && results.length > 0) {
+    handleKeyboardShortcut();
+  }
+}, 100);
