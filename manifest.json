@@ -32,6 +32,15 @@
     }
   ],
   "omnibox": { "keyword": "sc" },
+  "commands": {
+    "open-popup": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open SmritiCortex popup and focus first result"
+    }
+  },
   "icons": {
     "16": "assets/icon16.svg",
     "48": "assets/icon48.svg"

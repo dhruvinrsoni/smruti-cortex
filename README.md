@@ -14,6 +14,7 @@ Ultra-fast, intelligent, Everything-like browser history search engine. SmritiCo
 - **First result auto-focus** - Type and hit Enter immediately
 - **Keyboard-first design** with full arrow key navigation
 - **Modifier key support** - Ctrl+Enter (new tab), Shift+Enter (background)
+- **Global keyboard shortcut** - Ctrl+Shift+K to open popup instantly
 - **Omnibox integration** - Type `sc ` in address bar for quick access
 
 ### 🔧 **Developer-Friendly Debug**
@@ -73,10 +74,12 @@ npm run build
 - **Arrow Up/Down**: Navigate results
 - **Escape**: Clear search and refocus input
 - **M**: Copy markdown link to clipboard
+- **Ctrl+Shift+K**: Quick open popup (focuses first result if available)
 
 ### Quick Access
 - **Omnibox**: Type `sc ` in address bar, then your search query
 - **Toolbar**: Click the brain icon 🧠
+- **Keyboard**: Press `Ctrl+Shift+K` to open popup instantly
 
 ### Debug Features
 - **Debug Toggle**: Check/uncheck the "Debug" box in popup header
