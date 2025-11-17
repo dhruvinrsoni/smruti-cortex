@@ -1,5 +1,6 @@
 // service-worker.ts — Core brain of SmrutiCortex
 
+import { BRAND_NAME } from "../core/constants";
 import { openDatabase } from "./database";
 import { ingestHistory } from "./indexing";
 import "./messaging";

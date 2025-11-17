@@ -2,10 +2,12 @@
 // Helper that background can call via chrome.scripting.executeScript to inject the metadata extractor code.
 // This is a small wrapper — the real extractor is compiled & stored in extension assets, but this shows approach.
 
+const INJECTED_FLAG = "__smruti_cortex_injected";
+
 (function () {
   // Avoid injecting twice
-  if (window.__smruti_cortex_injected) return;
-  window.__smruti_cortex_injected = true;
+  if (window[INJECTED_FLAG]) return;
+  window[INJECTED_FLAG] = true;
 
   try {
     (function run() {
