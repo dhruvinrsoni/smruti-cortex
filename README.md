@@ -1,6 +1,6 @@
-# SmritiCortex 🧠
+# SmrutiCortex 🧠
 
-Ultra-fast, intelligent, Everything-like browser history search engine. SmritiCortex indexes your browsing memory and retrieves any URL instantly.
+Ultra-fast, intelligent, Everything-like browser history search engine. SmrutiCortex indexes your browsing memory and retrieves any URL instantly.
 
 ## ✨ Features
 
@@ -39,8 +39,8 @@ Ultra-fast, intelligent, Everything-like browser history search engine. SmritiCo
 ### Build & Install
 ```bash
 # Clone the repository
-git clone https://github.com/dhruvinrsoni/smriti-cortex.git
-cd smriti-cortex
+git clone https://github.com/dhruvinrsoni/smruti-cortex.git
+cd smruti-cortex
 
 # Install dependencies
 npm install
@@ -57,12 +57,12 @@ npm run build
 2. Enable "Developer mode" (top right)
 3. Click "Load unpacked"
 4. Select the `dist/` folder from the project
-5. The SmritiCortex icon should appear in your toolbar
+5. The SmrutiCortex icon should appear in your toolbar
 
 ## 🎮 Usage
 
 ### Basic Search
-1. Click the SmritiCortex icon in your toolbar
+1. Click the SmrutiCortex icon in your toolbar
 2. Start typing - results appear instantly
 3. First result is automatically focused
 4. Press Enter to open, or use arrow keys to navigate
@@ -146,7 +146,7 @@ See LICENSE file for details.
 
 ## 🙏 Acknowledgments
 
-- **Smriti (स्मृति)**: Sanskrit for "memory"
+- **Smruti (स्मृति)**: Sanskrit for "memory"
 - **Cortex**: Human brain's intelligence center
 - Inspired by Everything search engine for Windows
 

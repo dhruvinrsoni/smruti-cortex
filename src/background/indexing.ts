@@ -74,6 +74,6 @@ export async function mergeMetadata(
         // Save updated item
         await saveIndexedItem(item);
     } catch (err) {
-        console.error("[SmritiCortex] mergeMetadata error:", err);
+        console.error("[SmrutiCortex] mergeMetadata error:", err);
     }
 }

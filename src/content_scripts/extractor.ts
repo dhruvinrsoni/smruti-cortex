@@ -9,7 +9,7 @@ import { browserAPI } from "../core/helpers"; // if you compile this into bundle
 if ((window as any).top !== window) {
   // skip if inside iframe
   // eslint-disable-next-line no-undef
-  // console.log('[SmritiCortex] extractor: iframe - skipping');
+  // console.log('[SmrutiCortex] extractor: iframe - skipping');
 } else {
   (function runExtractor() {
     try {

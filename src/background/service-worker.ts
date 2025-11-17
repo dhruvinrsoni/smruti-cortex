@@ -1,4 +1,4 @@
-// service-worker.ts — Core brain of SmritiCortex
+// service-worker.ts — Core brain of SmrutiCortex
 
 import { openDatabase } from "./database";
 import { ingestHistory } from "./indexing";
