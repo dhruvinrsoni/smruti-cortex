@@ -68,6 +68,11 @@ console.log("[DEBUG] Service worker script starting");
                             sendResponse({ status: "OK" });
                             break;
 
+                        case "PING":
+                            console.log("[DEBUG] Handling PING");
+                            sendResponse({ status: "ok" });
+                            break;
+
                         // inside messaging onMessage handler
                         case "METADATA_CAPTURE": {
                             console.log("[DEBUG] Handling METADATA_CAPTURE for:", msg.payload.url);
@@ -97,18 +102,118 @@ console.log("[DEBUG] Service worker script starting");
 
         // Listen for keyboard commands
         console.log("[DEBUG] Setting up command listener");
-        browserAPI.commands.onCommand.addListener(async (command) => {
-            console.log("[DEBUG] Command received:", command);
-            if (command === "open-popup") {
-                // Open the popup
-                if (browserAPI.action && browserAPI.action.openPopup) {
-                    await browserAPI.action.openPopup();
-                } else {
-                    // Fallback: create a new tab with the extension URL
-                    browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+        try {
+            if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
+                console.log("[DEBUG] Commands API is available, setting up listener");
+                browserAPI.commands.onCommand.addListener(async (command) => {
+                    console.log("[DEBUG] Command received:", command);
+                    if (command === "open-popup") {
+                        console.log("[DEBUG] Opening popup via keyboard shortcut");
+
+                        // Check if popup is already open by trying to send a message first
+                        try {
+                            console.log("[DEBUG] Checking if popup is already open");
+                            await browserAPI.runtime.sendMessage({ type: "PING" });
+                            console.log("[DEBUG] Popup is already open, sending focus message");
+                            // If we get here, popup is open, just send the focus message
+                            browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                            return;
+                        } catch (pingError) {
+                            console.log("[DEBUG] Popup not open or not responding, attempting to open it");
+                        }
+
+                        // Open the popup with keyboard shortcut flag
+                        if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
+                            console.log("[DEBUG] Using action.openPopup()");
+                            try {
+                                await browserAPI.action.openPopup();
+                                console.log("[DEBUG] Popup opened successfully");
+                                // Send message to popup to focus appropriately
+                                setTimeout(() => {
+                                    console.log("[DEBUG] Sending KEYBOARD_SHORTCUT_OPEN message to popup");
+                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                                }, 100);
+                            } catch (error) {
+                                console.error("[DEBUG] Failed to open popup with action.openPopup():", error);
+                                console.log("[DEBUG] Using final fallback: opening in new tab");
+                                // Final fallback: create a new tab with the extension URL
+                                browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                            }
+                        } else {
+                            console.log("[DEBUG] action.openPopup not available, using fallback: opening in new tab");
+                            // Fallback: create a new tab with the extension URL
+                            browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                        }
+                    } else {
+                        console.log("[DEBUG] Unknown command received:", command);
+                    }
+                });
+                console.log("[DEBUG] Commands listener set up successfully");
+            } else {
+                console.warn("[DEBUG] Commands API not available during init - this may be normal");
+                console.log("[DEBUG] browserAPI.commands exists:", !!browserAPI.commands);
+                if (browserAPI.commands) {
+                    console.log("[DEBUG] browserAPI.commands properties:", Object.keys(browserAPI.commands));
+                    console.log("[DEBUG] browserAPI.commands.onCommand:", browserAPI.commands.onCommand);
                 }
+                console.log("[DEBUG] Will retry commands setup later");
+
+                // Try to set up commands listener after a delay
+                setTimeout(() => {
+                    console.log("[DEBUG] Retrying commands setup after delay");
+                    try {
+                        if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
+                            console.log("[DEBUG] Commands API now available, setting up listener");
+                            browserAPI.commands.onCommand.addListener(async (command) => {
+                                console.log("[DEBUG] Command received (delayed setup):", command);
+                                // ... same command handling code ...
+                                if (command === "open-popup") {
+                                    console.log("[DEBUG] Opening popup via keyboard shortcut (delayed)");
+
+                                    try {
+                                        console.log("[DEBUG] Checking if popup is already open (delayed)");
+                                        await browserAPI.runtime.sendMessage({ type: "PING" });
+                                        console.log("[DEBUG] Popup is already open, sending focus message (delayed)");
+                                        browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                                        return;
+                                    } catch (pingError) {
+                                        console.log("[DEBUG] Popup not open or not responding, attempting to open it (delayed)");
+                                    }
+
+                                    if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
+                                        console.log("[DEBUG] Using action.openPopup() (delayed)");
+                                        try {
+                                            await browserAPI.action.openPopup();
+                                            console.log("[DEBUG] Popup opened successfully (delayed)");
+                                            setTimeout(() => {
+                                                console.log("[DEBUG] Sending KEYBOARD_SHORTCUT_OPEN message to popup (delayed)");
+                                                browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                                            }, 100);
+                                        } catch (error) {
+                                            console.error("[DEBUG] Failed to open popup with action.openPopup() (delayed):", error);
+                                            console.log("[DEBUG] Using final fallback: opening in new tab (delayed)");
+                                            browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                                        }
+                                    } else {
+                                        console.log("[DEBUG] action.openPopup not available, using fallback: opening in new tab (delayed)");
+                                        browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                                    }
+                                } else {
+                                    console.log("[DEBUG] Unknown command received (delayed):", command);
+                                }
+                            });
+                            console.log("[DEBUG] Commands listener set up successfully (delayed)");
+                        } else {
+                            console.warn("[DEBUG] Commands API still not available after delay - keyboard shortcuts disabled");
+                        }
+                    } catch (retryError) {
+                        console.error("[DEBUG] Error setting up commands listener (delayed):", retryError);
+                    }
+                }, 1000);
             }
-        });
+        } catch (error) {
+            console.error("[DEBUG] Error setting up commands listener:", error);
+        }
 
         console.log("[DEBUG] Service worker ready.");
     } catch (error) {

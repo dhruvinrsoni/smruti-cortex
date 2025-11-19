@@ -5,8 +5,7 @@
   "description": "SmrutiCortex — Everything-like instant browser history search (MV3).",
   "scripts": {
     "clean": "rimraf dist",
-    "build:dev": "npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",
-    "build": "npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-prod.mjs",
+    "build": "npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",
     "tsc": "tsc --project tsconfig.json",
     "lint": "echo \"No linter configured\"",
     "start:watch": "node ./scripts/esbuild-dev.mjs --watch"

@@ -45,10 +45,7 @@ cd smruti-cortex
 # Install dependencies
 npm install
 
-# Build for development (recommended for testing)
-npm run build:dev
-
-# Or build for production
+# Build the extension
 npm run build
 ```
 
@@ -112,8 +109,7 @@ src/
 
 ### Available Scripts
 ```bash
-npm run build:dev    # Development build (readable, with source maps)
-npm run build        # Production build (minified)
+npm run build        # Build extension (readable, with source maps)
 npm run clean        # Remove build artifacts
 npm run lint         # Run ESLint
 ```

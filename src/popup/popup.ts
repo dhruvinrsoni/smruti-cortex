@@ -86,6 +86,12 @@ function sendMessage(msg: any): Promise<any> {
       debugLog("Calling runtime.sendMessage");
       runtime.sendMessage(msg, (resp: any) => {
         debugLog("Runtime sendMessage callback received:", resp);
+        // Check for runtime errors
+        if (chrome && chrome.runtime && chrome.runtime.lastError) {
+          console.warn("[DEBUG] Runtime error in sendMessage:", chrome.runtime.lastError);
+          resolve({ results: [] });
+          return;
+        }
         resolve(resp);
       });
     } catch (e) {
@@ -93,6 +99,19 @@ function sendMessage(msg: any): Promise<any> {
       resolve({ results: [] });
     }
   });
+}
+
+// Check if service worker is available
+async function checkServiceWorkerStatus(): Promise<boolean> {
+  debugLog("Checking service worker status");
+  try {
+    const resp = await sendMessage({ type: "PING" });
+    debugLog("Service worker ping response:", resp);
+    return resp && resp.status === "ok";
+  } catch (error) {
+    console.warn("[DEBUG] Service worker ping failed:", error);
+    return false;
+  }
 }// Debounce helper
 function debounceSearch(q: string) {
   debugLog("debounceSearch called with:", q);
@@ -117,8 +136,31 @@ async function doSearch(q: string) {
     return;
   }
   debugLog("Query is valid, calling sendMessage");
-  const resp = await sendMessage({ type: "SEARCH_QUERY", query: q });
-  debugLog("Search response received:", resp);
+
+  // Retry logic for service worker connection
+  let retries = 3;
+  let resp;
+
+  while (retries > 0) {
+    try {
+      resp = await sendMessage({ type: "SEARCH_QUERY", query: q });
+      debugLog("Search response received:", resp);
+      break; // Success, exit retry loop
+    } catch (error) {
+      console.warn(`[DEBUG] Search attempt failed (${4 - retries}/3), retries left: ${retries - 1}`, error);
+      retries--;
+      if (retries > 0) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+  }
+
+  if (!resp) {
+    console.error("[DEBUG] All search attempts failed, showing empty results");
+    resp = { results: [] };
+  }
+
   results = (resp && resp.results) ? resp.results : [];
   activeIndex = results.length ? 0 : -1;
   debugLog("Setting results:", results.length, "items");
@@ -314,8 +356,37 @@ if (debugToggle) {
 
 // Focus the input on load
 console.log("[DEBUG] Adding window load event listener");
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
   console.log("[DEBUG] Window load event fired");
+
+  // Check service worker status
+  const isServiceWorkerReady = await checkServiceWorkerStatus();
+  console.log("[DEBUG] Service worker ready:", isServiceWorkerReady);
+
+  if (!isServiceWorkerReady) {
+    console.warn("[DEBUG] Service worker not ready, showing warning");
+    resultCountNode.textContent = "Initializing... Please wait.";
+    resultsNode.innerHTML = "";
+    const warning = document.createElement("div");
+    warning.textContent = "Extension is starting up. Search will be available shortly.";
+    warning.style.padding = "8px";
+    warning.style.color = "#f59e0b";
+    resultsNode.appendChild(warning);
+
+    // Retry after a short delay
+    setTimeout(async () => {
+      const retryReady = await checkServiceWorkerStatus();
+      if (retryReady) {
+        console.log("[DEBUG] Service worker ready after retry");
+        resultCountNode.textContent = "";
+        renderResults();
+      } else {
+        console.error("[DEBUG] Service worker still not ready after retry");
+        resultCountNode.textContent = "Extension error. Please reload.";
+      }
+    }, 2000);
+  }
+
   if (input) {
     console.log("[DEBUG] Focusing input");
     input.focus();
@@ -327,7 +398,7 @@ window.addEventListener("load", () => {
   renderResults();
 });
 
-// Handle keyboard shortcut opening - focus first result if available
+// Handle keyboard shortcut opening - focus search box or first result if available
 function handleKeyboardShortcut() {
   if (results.length > 0) {
     // Focus on first result
@@ -349,6 +420,33 @@ function handleKeyboardShortcut() {
 let hasUserInteracted = false;
 document.addEventListener("keydown", () => { hasUserInteracted = true; });
 document.addEventListener("click", () => { hasUserInteracted = true; });
+
+// Listen for keyboard shortcut message from background
+if (typeof chrome !== "undefined" && chrome.runtime) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log("[DEBUG] Popup received message:", message);
+    if (message.type === "KEYBOARD_SHORTCUT_OPEN") {
+      console.log("[DEBUG] Handling keyboard shortcut open");
+      handleKeyboardShortcut();
+      sendResponse({ status: "ok" });
+    } else if (message.type === "PING") {
+      console.log("[DEBUG] Handling ping from background");
+      sendResponse({ status: "ok" });
+    }
+  });
+} else if (typeof browser !== "undefined" && browser.runtime) {
+  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log("[DEBUG] Popup received message:", message);
+    if (message.type === "KEYBOARD_SHORTCUT_OPEN") {
+      console.log("[DEBUG] Handling keyboard shortcut open");
+      handleKeyboardShortcut();
+      sendResponse({ status: "ok" });
+    } else if (message.type === "PING") {
+      console.log("[DEBUG] Handling ping from background");
+      sendResponse({ status: "ok" });
+    }
+  });
+}
 
 // After a short delay, if no interaction, assume keyboard shortcut
 setTimeout(() => {

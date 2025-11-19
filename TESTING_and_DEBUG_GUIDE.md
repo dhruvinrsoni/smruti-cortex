@@ -16,15 +16,14 @@ This document is the single place for developers and maintainers to build, load,
 ## Local dev workflow summary
 1. Clone repository
 2. `npm install`
-3. `npm run build:dev` (or `npm run build` for production)
+3. `npm run build`
 4. Load unpacked extension into Chrome via `chrome://extensions`
 5. Use extension and follow debug checklist
 
 ---
 
 ## npm scripts (what they do)
-- `npm run build` — production build (minified) to `dist/`
-- `npm run build:dev` — development build (non-minified) with source maps
+- `npm run build` — development build (non-minified) with source maps to `dist/`
 - `npm run clean` — remove `dist/` artifacts
 - `npm run lint` — run ESLint
 - `npm run test` — run unit tests (if available)
@@ -37,7 +36,7 @@ This document is the single place for developers and maintainers to build, load,
 ```bash
 # from repo root
 npm install
-npm run build:dev  # Recommended for development
+npm run build
 ```
 
 ---
@@ -131,7 +130,7 @@ npm run build:dev  # Recommended for development
 ### Extension Won't Load
 - **Symptom**: Red error icon or missing from toolbar
 - **Check**: `chrome://extensions` for error messages
-- **Fix**: Rebuild with `npm run build:dev`
+- **Fix**: Rebuild with `npm run build`
 - **Verify**: `dist/` folder contains all files
 
 ### No Search Results
@@ -153,7 +152,7 @@ npm run build:dev  # Recommended for development
 - **Verify**: Setting persists across browser restarts
 
 ### Build Errors
-- **Symptom**: `npm run build:dev` fails
+- **Symptom**: `npm run build` fails
 - **Check**: Node.js version (must be 18+)
 - **Fix**: `npm install` and check for TypeScript errors
 - **Verify**: All source files compile successfully
@@ -178,8 +177,8 @@ npm run build:dev  # Recommended for development
 ## Release Checklist
 
 ### Pre-Release
-- [ ] `npm run build` (production build)
-- [ ] Test all functionality with production build
+- [ ] `npm run build` (development build with source maps)
+- [ ] Test all functionality with development build
 - [ ] Disable debug logging by default
 - [ ] Verify manifest.json is valid
 - [ ] Test on clean browser profile
