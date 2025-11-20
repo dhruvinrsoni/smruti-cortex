@@ -56,38 +56,45 @@ npm run build
 3. **Type query** - results appear instantly
 4. **First result focused** automatically
 5. **Enter key** opens result
-6. **Debug toggle** controls console logging
+6. **Log level buttons** show current selection (INFO by default)
 
 ---
 
-## Debug Features
+### Debug Features
 
-### Debug Toggle
-- **Location**: Checkbox in popup header next to title
-- **Function**: Enables/disables all debug console logs
+### Log Level Buttons
+- **Location**: Rounded button group in popup header next to title
+- **Function**: Controls logging verbosity with four colored buttons:
+  - **ERROR** (Red): Only critical errors
+  - **INFO** (Blue): Errors + important events (default)
+  - **DEBUG** (Green): Info + detailed debugging
+  - **TRACE** (Amber): Debug + very verbose tracing
+- **Visual Design**: Rounded rectangle container with light-colored buttons that turn dark when selected
 - **Persistence**: Setting saves across browser sessions
 - **Scope**: Controls logs from popup, service worker, messaging, and search engine
 
 ### Debug Checklist
-1. **Open popup** and check "Debug" box
+1. **Open popup** and click desired log level button (INFO is default)
 2. **Open DevTools** (F12) → Console tab
 3. **Service Worker logs**:
-   - `[DEBUG] Service worker script starting`
-   - `[DEBUG] Database opened successfully`
-   - `[DEBUG] Service worker ready`
+   - `[INFO] Initializing service worker…`
+   - `[DEBUG] Database opened successfully` (if DEBUG/TRACE selected)
+   - `[INFO] Service worker ready.`
 4. **Search logs** (when typing):
-   - `[DEBUG] doSearch called with: [query]`
-   - `[DEBUG] Search response received`
-   - `[DEBUG] Setting results: X items`
+   - `[DEBUG] doSearch called with: [query]` (if DEBUG/TRACE selected)
+   - `[DEBUG] Search response received` (if DEBUG/TRACE selected)
+   - `[DEBUG] Setting results: X items` (if DEBUG/TRACE selected)
 5. **Popup logs**:
-   - `[DEBUG] Popup script starting execution`
-   - `[DEBUG] Elements retrieved`
-   - `[DEBUG] renderResults called`
+   - `[DEBUG] Window load event fired` (if DEBUG/TRACE selected)
+   - `[DEBUG] renderResults called` (if DEBUG/TRACE selected)
 
-### Debug Commands
-- **Uncheck debug** to disable all logs
-- **Check debug** to enable comprehensive logging
-- **Console filtering**: Use "DEBUG" filter in DevTools
+### Log Level Controls
+- **Click any button** to instantly change log level
+- **Visual feedback**: Selected button becomes dark, others stay light
+- **INFO is default**: Balanced logging for normal usage
+- **DEBUG for development**: Detailed information for troubleshooting
+- **TRACE for deep debugging**: Maximum verbosity
+- **ERROR for production**: Minimal logging, only critical issues
 
 ---
 
@@ -145,11 +152,11 @@ npm run build
 - **Fix**: Check `dist/popup/popup.html` exists
 - **Verify**: Manifest points to correct popup path
 
-### Debug Toggle Not Working
-- **Symptom**: Checking box doesn't change logs
-- **Check**: Console shows "Debug logging enabled/disabled"
+### Log Level Buttons Not Working
+- **Symptom**: Clicking buttons doesn't change console output or visual state
+- **Check**: Console shows level change confirmation: "Log level changed to: DEBUG"
 - **Fix**: Reload extension after changing setting
-- **Verify**: Setting persists across browser restarts
+- **Verify**: Selected button appears dark, others light; setting persists across browser restarts and popup openings
 
 ### Build Errors
 - **Symptom**: `npm run build` fails
@@ -179,7 +186,7 @@ npm run build
 ### Pre-Release
 - [ ] `npm run build` (development build with source maps)
 - [ ] Test all functionality with development build
-- [ ] Disable debug logging by default
+- [ ] Set default log level to INFO for production (not DEBUG)
 - [ ] Verify manifest.json is valid
 - [ ] Test on clean browser profile
 
