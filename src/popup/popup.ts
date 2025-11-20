@@ -319,8 +319,8 @@ async function initializePopup() {
     // Ctrl+Enter -> new tab (handled via modifier in openResult)
     // Shift+Enter -> background tab
 
-    // quick markdown copy: key "m" or "M"
-    if (e.key.toLowerCase() === "m") {
+    // quick markdown copy: Ctrl+M
+    if (e.key.toLowerCase() === "m" && e.ctrlKey) {
       e.preventDefault();
       if (results.length === 0) return;
       copyMarkdown(activeIndex);
