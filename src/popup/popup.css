@@ -1,21 +1,87 @@
 /* popup.css - minimal, clean, keyboard-first styling */
 
 :root {
-  --bg: #0f1724;
-  --card: #0b1220;
-  --muted: #9aa4b2;
-  --accent: #7dd3fc;
-  --text: #e6eef6;
-  --chip: #122633;
-  --hover: #0e1a26;
+  --bg: #ffffff;
+  --card: #f8fafc;
+  --muted: #64748b;
+  --accent: #3b82f6;
+  --text: #1e293b;
+  --chip: #e2e8f0;
+  --hover: #f1f5f9;
+  --border: #e2e8f0;
+  --error-light: #fef2f2;
+  --error-dark: #dc2626;
+  --info-light: #eff6ff;
+  --info-dark: #2563eb;
+  --debug-light: #f0fdf4;
+  --debug-dark: #16a34a;
+  --trace-light: #fef3c7;
+  --trace-dark: #d97706;
 }
 
 * { box-sizing: border-box; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-html,body { margin:0; padding:0; width:360px; height:560px; color:var(--text); background:var(--bg); }
+html,body { margin:0; padding:0; width:380px; height:560px; color:var(--text); background:var(--bg); }
 .app { display:flex; flex-direction:column; height:100%; padding:10px; gap:8px; }
 .header { display:flex; align-items:center; gap:10px; padding:6px 4px; }
-.brand { display:flex; gap:8px; align-items:center; }
-.logo { width:40px; height:40px; border-radius:6px; object-fit:cover; }
+.brand { display:flex; gap:8px; align-items:center; flex:1; }
+.controls { display:flex; gap:8px; align-items:center; }
+.control-group { display:flex; align-items:center; gap:4px; }
+.control-group label { font-size:11px; color:var(--muted); white-space:nowrap; }
+.log-level-buttons {
+  display: flex;
+  gap: 1px;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 1px;
+  border: 1px solid var(--border);
+}
+.log-btn {
+  padding: 3px 6px;
+  border: none;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+  min-width: 40px;
+}
+.log-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.error-btn {
+  background: var(--error-light);
+  color: var(--error-dark);
+}
+.error-btn.active {
+  background: var(--error-dark);
+  color: white;
+}
+.info-btn {
+  background: var(--info-light);
+  color: var(--info-dark);
+}
+.info-btn.active {
+  background: var(--info-dark);
+  color: white;
+}
+.debug-btn {
+  background: var(--debug-light);
+  color: var(--debug-dark);
+}
+.debug-btn.active {
+  background: var(--debug-dark);
+  color: white;
+}
+.trace-btn {
+  background: var(--trace-light);
+  color: var(--trace-dark);
+}
+.trace-btn.active {
+  background: var(--trace-dark);
+  color: white;
+}
 .title { font-weight:700; font-size:14px; }
 .subtitle { font-size:11px; color:var(--muted); margin-top:2px; }
 

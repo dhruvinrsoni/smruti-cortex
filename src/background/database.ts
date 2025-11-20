@@ -3,6 +3,7 @@
 import { browserAPI } from "../core/helpers";
 import { IndexedItem } from "./schema";
 import { DB_NAME } from "../core/constants";
+import { Logger } from "../core/logger";
 
 const DB_VERSION = 1;
 const STORE_NAME = "pages";
@@ -14,16 +15,16 @@ let dbInstance: IDBDatabase | null = null;
 // ------------------------------
 export function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-        console.log("[Database] Opening database...");
+        Logger.db("Opening database...");
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = () => {
-            console.error("[Database] Open error:", request.error);
+            Logger.error("Open error:", request.error);
             reject(request.error);
         };
         request.onsuccess = () => {
             dbInstance = request.result;
-            console.log("[Database] Database opened successfully");
+            Logger.db("Database opened successfully");
             resolve(dbInstance);
         };
 
