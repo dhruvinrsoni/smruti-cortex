@@ -52,6 +52,12 @@ export class Logger {
         }
     }
 
+    static warn(...args: any[]): void {
+        if (this.currentLevel >= LogLevel.INFO) {
+            console.warn('[WARN]', ...args);
+        }
+    }
+
     static debug(...args: any[]): void {
         if (this.currentLevel >= LogLevel.DEBUG) {
             console.log('[DEBUG]', ...args);

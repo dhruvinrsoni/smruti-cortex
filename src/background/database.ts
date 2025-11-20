@@ -15,7 +15,7 @@ let dbInstance: IDBDatabase | null = null;
 // ------------------------------
 export function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-        Logger.db("Opening database...");
+        Logger.debug("Opening database...");
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = () => {
@@ -24,11 +24,12 @@ export function openDatabase(): Promise<IDBDatabase> {
         };
         request.onsuccess = () => {
             dbInstance = request.result;
-            Logger.db("Database opened successfully");
+            Logger.debug("Database opened successfully");
             resolve(dbInstance);
         };
 
         request.onupgradeneeded = () => {
+            Logger.trace("Database upgrade needed, creating object store");
             const db = request.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 const store = db.createObjectStore(STORE_NAME, { keyPath: "url" });
@@ -36,6 +37,7 @@ export function openDatabase(): Promise<IDBDatabase> {
                 store.createIndex("hostname", "hostname", { unique: false });
                 store.createIndex("lastVisit", "lastVisit", { unique: false });
                 store.createIndex("visitCount", "visitCount", { unique: false });
+                Logger.trace("Object store and indexes created");
             }
         };
     });
