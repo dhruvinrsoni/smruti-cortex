@@ -1,222 +1,294 @@
 // service-worker.ts — Core brain of SmrutiCortex
 
+Logger.info("[SmrutiCortex] Service worker script loading");
+
 import { BRAND_NAME } from "../core/constants";
 import { openDatabase } from "./database";
 import { ingestHistory } from "./indexing";
 import { runSearch } from "./search/search-engine";
 import { mergeMetadata } from "./indexing";
 import { browserAPI } from "../core/helpers";
+import { Logger } from "../core/logger";
 
-console.log("[DEBUG] Service worker script starting");
+let initialized = false;
 
-(async function init() {
-    console.log("[DEBUG] Init function called");
+(async function initLogger() {
+  Logger.info("[SmrutiCortex] Initializing logger");
+  await Logger.init();
+  Logger.info("[SmrutiCortex] Logger initialized, starting main init");
+  Logger.debug("Service worker script starting");
+
+  // Set up messaging immediately
+  Logger.info("[SmrutiCortex] Setting up message listeners");
+  browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    Logger.debug("Message listener triggered with message:", msg);
+    Logger.trace("Sender:", sender);
+    (async () => {
+      Logger.debug("Processing message asynchronously");
+      try {
+        Logger.debug("Message type:", msg.type);
+        switch (msg.type) {
+          case "PING":
+            Logger.debug("Handling PING");
+            sendResponse({ status: "ok" });
+            break;
+          case "SET_LOG_LEVEL":
+            Logger.info("[SmrutiCortex] Handling SET_LOG_LEVEL:", msg.level);
+            Logger.setLevel(msg.level);
+            Logger.info("[SmrutiCortex] Log level set to", Logger.getLevel());
+            sendResponse({ status: "ok" });
+            break;
+          default:
+            // For other messages, check if initialized
+            if (!initialized) {
+              Logger.debug("Service worker not initialized yet, rejecting message:", msg.type);
+              sendResponse({ error: "Service worker not ready" });
+              break;
+            }
+            switch (msg.type) {
+              case "SEARCH_QUERY":
+                Logger.debug("Handling SEARCH_QUERY for:", msg.query);
+                const results = await runSearch(msg.query);
+                Logger.debug("Search completed, results:", results);
+                sendResponse({ results });
+                break;
+
+              case "REBUILD_INDEX":
+                Logger.debug("Handling REBUILD_INDEX");
+                await ingestHistory();
+                sendResponse({ status: "OK" });
+                break;
+
+              // inside messaging onMessage handler
+              case "METADATA_CAPTURE": {
+                Logger.debug("Handling METADATA_CAPTURE for:", msg.payload.url);
+                const { payload } = msg;
+                // call mergeMetadata (implementation in indexing.ts)
+                await mergeMetadata(payload.url, {
+                  description: payload.metaDescription,
+                  keywords: payload.metaKeywords
+                });
+                sendResponse({ status: "ok" });
+                break;
+              }
+
+              default:
+                Logger.debug("Unknown message type:", msg.type);
+                sendResponse({ error: "Unknown message type" });
+            }
+        }
+        Logger.debug("Message processing completed");
+      } catch (error) {
+        Logger.error("Error processing message:", error);
+        sendResponse({ error: error.message });
+      }
+    })();
+    Logger.debug("Returning true for async response");
+    return true; // async response
+  });
+
+  // Now start the main initialization
+  await init();
+})();
+
+async function init() {
+    Logger.info("[SmrutiCortex] Init function called");
     try {
-        console.log("[DEBUG] Initializing service worker…");
+        Logger.info("Initializing service worker…");
 
-        console.log("[DEBUG] Calling openDatabase");
+        Logger.debug("Calling openDatabase");
+        Logger.info("[SmrutiCortex] Opening database");
         await openDatabase();
-        console.log("[DEBUG] Database opened successfully");
+        Logger.info("[SmrutiCortex] Database opened");
+        Logger.debug("Database opened successfully");
 
         // First run: full indexing
-        console.log("[DEBUG] Checking if already indexed");
+        Logger.debug("Checking if already indexed");
         const alreadyIndexed = await new Promise<boolean>((resolve) => {
-            console.log("[DEBUG] Getting indexedOnce from storage");
+            Logger.debug("Getting indexedOnce from storage");
             browserAPI.storage.local.get(["indexedOnce"], (data) => {
-                console.log("[DEBUG] Storage get result:", data);
+                Logger.debug("Storage get result:", data);
                 resolve(Boolean(data.indexedOnce));
             });
         });
-        console.log("[DEBUG] Already indexed:", alreadyIndexed);
+        Logger.debug("Already indexed:", alreadyIndexed);
 
         if (!alreadyIndexed) {
-            console.log("[DEBUG] Starting history ingestion");
+            Logger.info("Starting history ingestion");
             await ingestHistory();
-            console.log("[DEBUG] Setting indexedOnce to true");
+            Logger.debug("Setting indexedOnce to true");
             browserAPI.storage.local.set({ indexedOnce: true });
         } else {
-            console.log("[DEBUG] Skipping indexing, already done");
+            Logger.debug("Skipping indexing, already done");
         }
 
         // Listen for new visits
-        console.log("[DEBUG] Setting up history listener");
+        Logger.debug("Setting up history listener");
         browserAPI.history.onVisited.addListener(async (item) => {
-            console.log("[DEBUG] New visit detected:", item.url);
+            Logger.debug("New visit detected:", item.url);
             await ingestHistory(); // lightweight incremental indexing
         });
 
         // Set up messaging
-        console.log("[DEBUG] Setting up messaging");
-        browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-            console.log("[DEBUG] Message listener triggered with message:", msg);
-            console.log("[DEBUG] Sender:", sender);
-            (async () => {
-                console.log("[DEBUG] Processing message asynchronously");
-                try {
-                    console.log("[DEBUG] Message type:", msg.type);
-                    switch (msg.type) {
-                        case "SEARCH_QUERY":
-                            console.log("[DEBUG] Handling SEARCH_QUERY for:", msg.query);
-                            const results = await runSearch(msg.query);
-                            console.log("[DEBUG] Search completed, results:", results);
-                            sendResponse({ results });
-                            break;
+        Logger.debug("Setting up messaging");
 
-                        case "REBUILD_INDEX":
-                            console.log("[DEBUG] Handling REBUILD_INDEX");
-                            await ingestHistory();
-                            sendResponse({ status: "OK" });
-                            break;
-
-                        case "PING":
-                            console.log("[DEBUG] Handling PING");
-                            sendResponse({ status: "ok" });
-                            break;
-
-                        // inside messaging onMessage handler
-                        case "METADATA_CAPTURE": {
-                            console.log("[DEBUG] Handling METADATA_CAPTURE for:", msg.payload.url);
-                            const { payload } = msg;
-                            // call mergeMetadata (implementation in indexing.ts)
-                            await mergeMetadata(payload.url, {
-                                description: payload.metaDescription,
-                                keywords: payload.metaKeywords
-                            });
-                            sendResponse({ status: "ok" });
-                            break;
-                        }
-
-                        default:
-                            console.log("[DEBUG] Unknown message type:", msg.type);
-                            sendResponse({ error: "Unknown message type" });
-                    }
-                    console.log("[DEBUG] Message processing completed");
-                } catch (error) {
-                    console.error("[DEBUG] Error processing message:", error);
-                    sendResponse({ error: error.message });
-                }
-            })();
-            console.log("[DEBUG] Returning true for async response");
-            return true; // async response
-        });
-
+        initialized = true;
+        Logger.debug("Service worker initialized flag set");
         // Listen for keyboard commands
-        console.log("[DEBUG] Setting up command listener");
+        Logger.debug("Setting up command listener");
         try {
             if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                console.log("[DEBUG] Commands API is available, setting up listener");
+                Logger.debug("Commands API is available, setting up listener");
                 browserAPI.commands.onCommand.addListener(async (command) => {
-                    console.log("[DEBUG] Command received:", command);
+                    Logger.debug("Command received:", command);
                     if (command === "open-popup") {
-                        console.log("[DEBUG] Opening popup via keyboard shortcut");
+                        Logger.info("Opening popup via keyboard shortcut");
 
                         // Check if popup is already open by trying to send a message first
-                        try {
-                            console.log("[DEBUG] Checking if popup is already open");
-                            await browserAPI.runtime.sendMessage({ type: "PING" });
-                            console.log("[DEBUG] Popup is already open, sending focus message");
-                            // If we get here, popup is open, just send the focus message
-                            browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                        const isPopupOpen = await new Promise<boolean>((resolve) => {
+                            Logger.debug("Checking if popup is already open");
+                            browserAPI.runtime.sendMessage({ type: "PING" }, (response) => {
+                                if (browserAPI.runtime.lastError) {
+                                    Logger.debug("Popup not open:", browserAPI.runtime.lastError);
+                                    resolve(false);
+                                } else {
+                                    Logger.debug("Popup is open, response:", response);
+                                    resolve(true);
+                                }
+                            });
+                        });
+
+                        if (isPopupOpen) {
+                            Logger.debug("Popup is already open, sending focus message");
+                            // Send the focus message
+                            browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
+                                if (browserAPI.runtime.lastError) {
+                                    Logger.debug("Failed to send focus message:", browserAPI.runtime.lastError);
+                                }
+                            });
                             return;
-                        } catch (pingError) {
-                            console.log("[DEBUG] Popup not open or not responding, attempting to open it");
+                        } else {
+                            Logger.debug("Popup not open, attempting to open it");
                         }
 
                         // Open the popup with keyboard shortcut flag
                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                            console.log("[DEBUG] Using action.openPopup()");
+                            Logger.debug("Using action.openPopup()");
                             try {
                                 await browserAPI.action.openPopup();
-                                console.log("[DEBUG] Popup opened successfully");
+                                Logger.debug("Popup opened successfully");
                                 // Send message to popup to focus appropriately
                                 setTimeout(() => {
-                                    console.log("[DEBUG] Sending KEYBOARD_SHORTCUT_OPEN message to popup");
-                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                                    Logger.debug("Sending KEYBOARD_SHORTCUT_OPEN message to popup");
+                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
+                                        if (browserAPI.runtime.lastError) {
+                                            Logger.debug("Failed to send KEYBOARD_SHORTCUT_OPEN:", browserAPI.runtime.lastError);
+                                        }
+                                    });
                                 }, 100);
                             } catch (error) {
-                                console.error("[DEBUG] Failed to open popup with action.openPopup():", error);
-                                console.log("[DEBUG] Using final fallback: opening in new tab");
+                                Logger.error("Failed to open popup with action.openPopup():", error);
+                                Logger.debug("Using final fallback: opening in new tab");
                                 // Final fallback: create a new tab with the extension URL
                                 browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                             }
                         } else {
-                            console.log("[DEBUG] action.openPopup not available, using fallback: opening in new tab");
+                            Logger.debug("action.openPopup not available, using fallback: opening in new tab");
                             // Fallback: create a new tab with the extension URL
                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                         }
                     } else {
-                        console.log("[DEBUG] Unknown command received:", command);
+                        Logger.debug("Unknown command received:", command);
                     }
                 });
-                console.log("[DEBUG] Commands listener set up successfully");
+                Logger.debug("Commands listener set up successfully");
             } else {
-                console.warn("[DEBUG] Commands API not available during init - this may be normal");
-                console.log("[DEBUG] browserAPI.commands exists:", !!browserAPI.commands);
+                Logger.info("Commands API not available during init - this may be normal");
+                Logger.debug("browserAPI.commands exists:", !!browserAPI.commands);
                 if (browserAPI.commands) {
-                    console.log("[DEBUG] browserAPI.commands properties:", Object.keys(browserAPI.commands));
-                    console.log("[DEBUG] browserAPI.commands.onCommand:", browserAPI.commands.onCommand);
+                    Logger.debug("browserAPI.commands properties:", Object.keys(browserAPI.commands));
+                    Logger.debug("browserAPI.commands.onCommand:", browserAPI.commands.onCommand);
                 }
-                console.log("[DEBUG] Will retry commands setup later");
+                Logger.debug("Will retry commands setup later");
 
                 // Try to set up commands listener after a delay
                 setTimeout(() => {
-                    console.log("[DEBUG] Retrying commands setup after delay");
+                    Logger.debug("Retrying commands setup after delay");
                     try {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                            console.log("[DEBUG] Commands API now available, setting up listener");
+                            Logger.debug("Commands API now available, setting up listener");
                             browserAPI.commands.onCommand.addListener(async (command) => {
-                                console.log("[DEBUG] Command received (delayed setup):", command);
+                                Logger.debug("Command received (delayed setup):", command);
                                 // ... same command handling code ...
                                 if (command === "open-popup") {
-                                    console.log("[DEBUG] Opening popup via keyboard shortcut (delayed)");
+                                    Logger.info("Opening popup via keyboard shortcut (delayed)");
 
-                                    try {
-                                        console.log("[DEBUG] Checking if popup is already open (delayed)");
-                                        await browserAPI.runtime.sendMessage({ type: "PING" });
-                                        console.log("[DEBUG] Popup is already open, sending focus message (delayed)");
-                                        browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                                    const isPopupOpen = await new Promise<boolean>((resolve) => {
+                                        Logger.debug("Checking if popup is already open (delayed)");
+                                        browserAPI.runtime.sendMessage({ type: "PING" }, (response) => {
+                                            if (browserAPI.runtime.lastError) {
+                                                Logger.debug("Popup not open (delayed):", browserAPI.runtime.lastError);
+                                                resolve(false);
+                                            } else {
+                                                Logger.debug("Popup is open (delayed), response:", response);
+                                                resolve(true);
+                                            }
+                                        });
+                                    });
+
+                                    if (isPopupOpen) {
+                                        Logger.debug("Popup is already open, sending focus message (delayed)");
+                                        browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
+                                            if (browserAPI.runtime.lastError) {
+                                                Logger.debug("Failed to send focus message (delayed):", browserAPI.runtime.lastError);
+                                            }
+                                        });
                                         return;
-                                    } catch (pingError) {
-                                        console.log("[DEBUG] Popup not open or not responding, attempting to open it (delayed)");
                                     }
 
                                     if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                        console.log("[DEBUG] Using action.openPopup() (delayed)");
+                                        Logger.debug("Using action.openPopup() (delayed)");
                                         try {
                                             await browserAPI.action.openPopup();
-                                            console.log("[DEBUG] Popup opened successfully (delayed)");
+                                            Logger.debug("Popup opened successfully (delayed)");
                                             setTimeout(() => {
-                                                console.log("[DEBUG] Sending KEYBOARD_SHORTCUT_OPEN message to popup (delayed)");
-                                                browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" });
+                                                Logger.debug("Sending KEYBOARD_SHORTCUT_OPEN message to popup (delayed)");
+                                                browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
+                                                    if (browserAPI.runtime.lastError) {
+                                                        Logger.debug("Failed to send KEYBOARD_SHORTCUT_OPEN (delayed):", browserAPI.runtime.lastError);
+                                                    }
+                                                });
                                             }, 100);
                                         } catch (error) {
-                                            console.error("[DEBUG] Failed to open popup with action.openPopup() (delayed):", error);
-                                            console.log("[DEBUG] Using final fallback: opening in new tab (delayed)");
+                                            Logger.error("Failed to open popup with action.openPopup() (delayed):", error);
+                                            Logger.debug("Using final fallback: opening in new tab (delayed)");
                                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                                         }
                                     } else {
-                                        console.log("[DEBUG] action.openPopup not available, using fallback: opening in new tab (delayed)");
+                                        Logger.debug("action.openPopup not available, using fallback: opening in new tab (delayed)");
                                         browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                                     }
                                 } else {
-                                    console.log("[DEBUG] Unknown command received (delayed):", command);
+                                    Logger.debug("Unknown command received (delayed):", command);
                                 }
                             });
-                            console.log("[DEBUG] Commands listener set up successfully (delayed)");
+                            Logger.debug("Commands listener set up successfully (delayed)");
                         } else {
-                            console.warn("[DEBUG] Commands API still not available after delay - keyboard shortcuts disabled");
+                            Logger.info("Commands API still not available after delay - keyboard shortcuts disabled");
                         }
                     } catch (retryError) {
-                        console.error("[DEBUG] Error setting up commands listener (delayed):", retryError);
+                        Logger.error("Error setting up commands listener (delayed):", retryError);
                     }
                 }, 1000);
             }
         } catch (error) {
-            console.error("[DEBUG] Error setting up commands listener:", error);
+            Logger.error("Error setting up commands listener:", error);
         }
 
-        console.log("[DEBUG] Service worker ready.");
+        Logger.info("Service worker ready.");
+        Logger.info("[SmrutiCortex] Service worker ready");
     } catch (error) {
-        console.error("[DEBUG] Init error:", error);
+        Logger.error("Init error:", error);
+        Logger.error("[SmrutiCortex] Init error:", error);
     }
-})();
+}

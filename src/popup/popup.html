@@ -15,11 +15,16 @@
           <div class="title">SmrutiCortex</div>
           <div class="subtitle">Instant browser memory search</div>
         </div>
-        <div class="debug-toggle">
-          <label>
-            <input type="checkbox" id="debug-toggle" />
-            Debug
-          </label>
+        <div class="controls">
+          <div class="control-group">
+            <label for="log-level">Log Level:</label>
+            <div id="log-level-buttons" class="log-level-buttons">
+              <button data-level="0" class="log-btn error-btn">ERROR</button>
+              <button data-level="1" class="log-btn info-btn">INFO</button>
+              <button data-level="2" class="log-btn debug-btn">DEBUG</button>
+              <button data-level="3" class="log-btn trace-btn">TRACE</button>
+            </div>
+          </div>
         </div>
       </div>
     </header>

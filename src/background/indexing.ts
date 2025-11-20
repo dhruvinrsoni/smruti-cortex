@@ -6,17 +6,18 @@ import { tokenize } from "./search/tokenizer";
 import { IndexedItem } from "./schema";
 import { BRAND_NAME } from "../core/constants";
 import { getIndexedItem } from "./database";
+import { Logger } from "../core/logger";
 
 
 export async function ingestHistory(): Promise<void> {
-    console.log("[Indexing] Starting history ingestion...");
+    Logger.info("[Indexing] Starting history ingestion...");
     const historyItems = await new Promise<any[]>((resolve) => {
         browserAPI.history.search(
             { text: "", maxResults: 50000 },
             (results) => resolve(results)
         );
     });
-    console.log("[Indexing] Found", historyItems.length, "history items");
+    Logger.info("[Indexing] Found", historyItems.length, "history items");
 
     for (const item of historyItems) {
         const indexed: IndexedItem = {
@@ -75,6 +76,6 @@ export async function mergeMetadata(
         // Save updated item
         await saveIndexedItem(item);
     } catch (err) {
-        console.error(`[${BRAND_NAME}] mergeMetadata error:`, err);
+        Logger.error(`[${BRAND_NAME}] mergeMetadata error:`, err);
     }
 }
