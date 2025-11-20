@@ -19,6 +19,7 @@ export async function ingestHistory(): Promise<void> {
     });
     Logger.info("[Indexing] Found", historyItems.length, "history items");
 
+    Logger.debug("Processing history items for indexing");
     for (const item of historyItems) {
         const indexed: IndexedItem = {
             url: item.url,
@@ -31,8 +32,10 @@ export async function ingestHistory(): Promise<void> {
             tokens: tokenize(item.title + " " + item.url),
         };
 
+        Logger.trace("Saving indexed item:", item.url);
         await saveIndexedItem(indexed);
     }
+    Logger.info("[Indexing] History ingestion completed");
 }
 
 // Called by content script metadata updates
@@ -45,6 +48,7 @@ export async function mergeMetadata(
     meta: { description?: string; keywords?: string[]; title?: string }
 ): Promise<void> {
     try {
+        Logger.debug("Merging metadata for URL:", url);
         // Try canonical normalization (if needed)
         const normalizedUrl = url;
 
@@ -52,6 +56,7 @@ export async function mergeMetadata(
         let item = await getIndexedItem(normalizedUrl);
 
         if (!item) {
+            Logger.debug("No existing item found, creating new item with metadata");
             // If no existing item, create a minimal item so metadata isn't lost
             item = {
                 url: normalizedUrl,
@@ -64,6 +69,7 @@ export async function mergeMetadata(
                 tokens: tokenize((meta.title || "") + " " + (meta.description || "") + " " + normalizedUrl),
             };
         } else {
+            Logger.trace("Updating existing item with new metadata");
             // merge fields (prefer existing title unless meta.title is present)
             item.title = meta.title && meta.title.length ? meta.title : item.title;
             item.metaDescription = meta.description && meta.description.length ? meta.description : item.metaDescription;
@@ -74,7 +80,9 @@ export async function mergeMetadata(
         }
 
         // Save updated item
+        Logger.trace("Saving updated item to database");
         await saveIndexedItem(item);
+        Logger.debug("Metadata merge completed for:", url);
     } catch (err) {
         Logger.error(`[${BRAND_NAME}] mergeMetadata error:`, err);
     }

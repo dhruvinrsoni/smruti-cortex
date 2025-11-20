@@ -1,7 +1,5 @@
 // service-worker.ts — Core brain of SmrutiCortex
 
-Logger.info("[SmrutiCortex] Service worker script loading");
-
 import { BRAND_NAME } from "../core/constants";
 import { openDatabase } from "./database";
 import { ingestHistory } from "./indexing";
@@ -9,6 +7,8 @@ import { runSearch } from "./search/search-engine";
 import { mergeMetadata } from "./indexing";
 import { browserAPI } from "../core/helpers";
 import { Logger } from "../core/logger";
+
+Logger.info("[SmrutiCortex] Service worker script loading");
 
 let initialized = false;
 
@@ -19,7 +19,7 @@ let initialized = false;
   Logger.debug("Service worker script starting");
 
   // Set up messaging immediately
-  Logger.info("[SmrutiCortex] Setting up message listeners");
+  Logger.debug("[SmrutiCortex] Setting up message listeners");
   browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     Logger.debug("Message listener triggered with message:", msg);
     Logger.trace("Sender:", sender);
@@ -73,7 +73,7 @@ let initialized = false;
               }
 
               default:
-                Logger.debug("Unknown message type:", msg.type);
+                Logger.warn("Unknown message type received:", msg.type);
                 sendResponse({ error: "Unknown message type" });
             }
         }
@@ -94,28 +94,28 @@ let initialized = false;
 async function init() {
     Logger.info("[SmrutiCortex] Init function called");
     try {
-        Logger.info("Initializing service worker…");
+        Logger.debug("Initializing service worker…");
 
         Logger.debug("Calling openDatabase");
         Logger.info("[SmrutiCortex] Opening database");
         await openDatabase();
         Logger.info("[SmrutiCortex] Database opened");
-        Logger.debug("Database opened successfully");
 
         // First run: full indexing
         Logger.debug("Checking if already indexed");
         const alreadyIndexed = await new Promise<boolean>((resolve) => {
             Logger.debug("Getting indexedOnce from storage");
             browserAPI.storage.local.get(["indexedOnce"], (data) => {
-                Logger.debug("Storage get result:", data);
+                Logger.trace("Storage get result:", data);
                 resolve(Boolean(data.indexedOnce));
             });
         });
         Logger.debug("Already indexed:", alreadyIndexed);
 
         if (!alreadyIndexed) {
-            Logger.info("Starting history ingestion");
+            Logger.info("Starting initial history ingestion");
             await ingestHistory();
+            Logger.info("Initial history ingestion completed");
             Logger.debug("Setting indexedOnce to true");
             browserAPI.storage.local.set({ indexedOnce: true });
         } else {
@@ -125,7 +125,7 @@ async function init() {
         // Listen for new visits
         Logger.debug("Setting up history listener");
         browserAPI.history.onVisited.addListener(async (item) => {
-            Logger.debug("New visit detected:", item.url);
+            Logger.trace("New visit detected:", item.url);
             await ingestHistory(); // lightweight incremental indexing
         });
 
@@ -142,7 +142,7 @@ async function init() {
                 browserAPI.commands.onCommand.addListener(async (command) => {
                     Logger.debug("Command received:", command);
                     if (command === "open-popup") {
-                        Logger.info("Opening popup via keyboard shortcut");
+                        Logger.debug("Opening popup via keyboard shortcut");
 
                         // Check if popup is already open by trying to send a message first
                         const isPopupOpen = await new Promise<boolean>((resolve) => {
@@ -203,7 +203,7 @@ async function init() {
                 });
                 Logger.debug("Commands listener set up successfully");
             } else {
-                Logger.info("Commands API not available during init - this may be normal");
+                Logger.warn("Commands API not available during init - this may be normal");
                 Logger.debug("browserAPI.commands exists:", !!browserAPI.commands);
                 if (browserAPI.commands) {
                     Logger.debug("browserAPI.commands properties:", Object.keys(browserAPI.commands));
@@ -221,7 +221,7 @@ async function init() {
                                 Logger.debug("Command received (delayed setup):", command);
                                 // ... same command handling code ...
                                 if (command === "open-popup") {
-                                    Logger.info("Opening popup via keyboard shortcut (delayed)");
+                                    Logger.debug("Opening popup via keyboard shortcut (delayed)");
 
                                     const isPopupOpen = await new Promise<boolean>((resolve) => {
                                         Logger.debug("Checking if popup is already open (delayed)");
@@ -274,7 +274,7 @@ async function init() {
                             });
                             Logger.debug("Commands listener set up successfully (delayed)");
                         } else {
-                            Logger.info("Commands API still not available after delay - keyboard shortcuts disabled");
+                            Logger.warn("Commands API still not available after delay - keyboard shortcuts disabled");
                         }
                     } catch (retryError) {
                         Logger.error("Error setting up commands listener (delayed):", retryError);

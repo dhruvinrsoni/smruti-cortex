@@ -11,17 +11,17 @@ import { Logger } from "../../core/logger";
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     Logger.debug("runSearch called with query:", query);
     const q = query.trim().toLowerCase();
-    Logger.debug("Trimmed and lowercased query:", q);
+    Logger.trace("Trimmed and lowercased query:", q);
     if (!q) {
-        Logger.debug("Query is empty, returning empty array");
+        Logger.trace("Query is empty, returning empty array");
         return [];
     }
 
-    Logger.debug("Tokenizing query");
+    Logger.trace("Tokenizing query");
     const tokens = tokenize(q);
-    Logger.debug("Tokens:", tokens);
+    Logger.trace("Tokens:", tokens);
     const scorers = getAllScorers();
-    Logger.debug("Got scorers:", scorers.length);
+    Logger.trace("Got scorers:", scorers.length);
 
     Logger.debug("Getting all indexed items from database");
     const items = await getAllIndexedItems();
@@ -31,7 +31,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         Logger.debug("No indexed items, using browser history fallback");
         // Fallback to browser history search
         const historyItems = await new Promise<any[]>((resolve) => {
-            Logger.debug("Searching browser history for:", q);
+            Logger.trace("Searching browser history for:", q);
             browserAPI.history.search({ text: q, maxResults: 50 }, resolve);
         });
         Logger.debug("Browser history returned:", historyItems.length, "items");
@@ -45,7 +45,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             lastVisit: item.lastVisitTime || Date.now(),
             tokens: tokenize((item.title || "") + " " + item.url)
         }));
-        Logger.debug("Converted to IndexedItem format:", fallbackItems.length);
+        Logger.trace("Converted to IndexedItem format:", fallbackItems.length);
         return fallbackItems;
     }
 
@@ -53,25 +53,25 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const results: Array<{ item: IndexedItem; finalScore: number }> = [];
 
     for (const item of items) {
-        Logger.debug("Processing item:", item.url);
+        Logger.trace("Processing item:", item.url);
         // Base filter: quick check before scoring
         const haystack = (item.title + " " + item.url).toLowerCase();
-        Logger.debug("Haystack:", haystack);
+        Logger.trace("Haystack:", haystack);
         if (!tokens.every(t => haystack.includes(t))) {
-            Logger.debug("Item doesn't match all tokens, skipping");
+            Logger.trace("Item doesn't match all tokens, skipping");
             continue;
         }
 
-        Logger.debug("Item matches, calculating score");
+        Logger.trace("Item matches, calculating score");
         // Run each scorer
         let score = 0;
         for (const scorer of scorers) {
             const scorerScore = scorer.weight * scorer.score(item, q);
-            Logger.debug("Scorer", scorer.name, "gave score:", scorerScore);
+            Logger.trace("Scorer", scorer.name, "gave score:", scorerScore);
             score += scorerScore;
         }
 
-        Logger.debug("Final score for item:", score);
+        Logger.trace("Final score for item:", score);
         results.push({ item, finalScore: score });
     }
 

@@ -72,7 +72,7 @@ async function initializePopup() {
 
   if (!input || !resultsNode || !resultCountNode) {
     Logger.error("CRITICAL: Missing DOM elements!");
-    Logger.trace("ERROR: Missing DOM elements! Check console.");
+    Logger.error("Missing DOM elements! Check console for details.");
   } else {
     Logger.debug("All elements found, proceeding");
   }
@@ -100,7 +100,7 @@ async function initializePopup() {
           Logger.trace("Runtime sendMessage callback received:", resp);
           // Check for runtime errors
           if (chrome && chrome.runtime && chrome.runtime.lastError) {
-            Logger.debug("Runtime error in sendMessage:", chrome.runtime.lastError.message || chrome.runtime.lastError);
+            Logger.error("Runtime error in sendMessage:", chrome.runtime.lastError.message || chrome.runtime.lastError);
             reject(new Error(chrome.runtime.lastError.message || 'Runtime error'));
             return;
           }
@@ -161,7 +161,7 @@ async function initializePopup() {
         Logger.debug("Search response received:", resp);
         break; // Success, exit retry loop
       } catch (error) {
-        Logger.debug(`Search attempt failed (${4 - retries}/3), retries left: ${retries - 1}`, error);
+        Logger.warn(`Search attempt failed (${4 - retries}/3), retries left: ${retries - 1}`, error);
         retries--;
         if (retries > 0) {
           // Wait a bit before retrying
@@ -382,14 +382,14 @@ async function initializePopup() {
         const newLevel = parseInt(target.dataset.level || '2');
         Logger.setLevel(newLevel);
         updateButtonStates();
-        Logger.info("Log level changed to:", LogLevel[newLevel]);
+        Logger.debug("Log level changed to:", LogLevel[newLevel]);
 
         // Notify service worker of level change
-        Logger.info("[Popup] Sending SET_LOG_LEVEL", newLevel);
+        Logger.debug("[Popup] Sending SET_LOG_LEVEL", newLevel);
         sendMessage({ type: "SET_LOG_LEVEL", level: newLevel }).then(() => {
-          Logger.info("[Popup] SET_LOG_LEVEL sent successfully");
+          Logger.debug("[Popup] SET_LOG_LEVEL sent successfully");
         }).catch((error) => {
-          Logger.info("[Popup] SET_LOG_LEVEL send failed", error);
+          Logger.error("[Popup] SET_LOG_LEVEL send failed", error);
         });
       }
     });
