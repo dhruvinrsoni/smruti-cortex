@@ -3,16 +3,17 @@
 
 import { BRAND_NAME } from "../core/constants";
 import { Logger, LogLevel } from "../core/logger";
+import { SettingsManager, DisplayMode } from "../core/settings";
 
 declare const browser: any;
 
-// Initialize logger
+// Initialize logger and settings
 (async function initPopup() {
   await Logger.init();
+  await SettingsManager.init();
   Logger.info("Popup script initialized with log level:", LogLevel[Logger.getLevel()]);
 
   // Now continue with popup initialization
-  await Logger.init();
   initializePopup();
 })();
 
@@ -61,21 +62,14 @@ async function initializePopup() {
   const input = $("search-input") as HTMLInputElement;
   const resultsNode = $("results") as HTMLUListElement;
   const resultCountNode = $("result-count") as HTMLDivElement;
-  const logLevelButtons = $("log-level-buttons") as HTMLDivElement;
+  const settingsButton = $("settings-button") as HTMLButtonElement;
 
   Logger.debug("Elements retrieved:", {
     input: !!input,
     resultsNode: !!resultsNode,
     resultCountNode: !!resultCountNode,
-    logLevelButtons: !!logLevelButtons
+    settingsButton: !!settingsButton
   });
-
-  if (!input || !resultsNode || !resultCountNode) {
-    Logger.error("CRITICAL: Missing DOM elements!");
-    Logger.error("Missing DOM elements! Check console for details.");
-  } else {
-    Logger.debug("All elements found, proceeding");
-  }
 
   let results: IndexedItem[] = [];
   let activeIndex = -1;
@@ -100,14 +94,14 @@ async function initializePopup() {
           Logger.trace("Runtime sendMessage callback received:", resp);
           // Check for runtime errors
           if (chrome && chrome.runtime && chrome.runtime.lastError) {
-            Logger.error("Runtime error in sendMessage:", chrome.runtime.lastError.message || chrome.runtime.lastError);
+            Logger.debug("Runtime connection issue (expected during startup):", chrome.runtime.lastError.message || chrome.runtime.lastError);
             reject(new Error(chrome.runtime.lastError.message || 'Runtime error'));
             return;
           }
           resolve(resp);
         });
       } catch (e) {
-        Logger.error("Send message error:", e);
+        Logger.debug("Send message connection issue (expected during startup):", e);
         reject(e);
       }
     });
@@ -171,7 +165,7 @@ async function initializePopup() {
     }
 
     if (!resp) {
-      Logger.error("All search attempts failed, showing empty results");
+      Logger.debug("All search attempts failed (service worker may not be ready), showing empty results");
       resp = { results: [] };
     }
 
@@ -184,6 +178,9 @@ async function initializePopup() {
   // Render results list
   function renderResults() {
     Logger.trace("renderResults called, results length:", results.length);
+    const displayMode = SettingsManager.getSetting('displayMode');
+    Logger.debug("Rendering results in mode:", DisplayMode[displayMode]);
+
     resultsNode.innerHTML = "";
     resultCountNode.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
 
@@ -197,55 +194,108 @@ async function initializePopup() {
       return;
     }
 
-    Logger.debug("Rendering", results.length, "results");
-    results.forEach((item, idx) => {
-      Logger.trace("Rendering item", idx, item.title);
-      const li = document.createElement("li");
-      li.tabIndex = 0;
-      li.dataset.index = String(idx);
-      if (idx === activeIndex) li.classList.add("active");
+    Logger.debug("Rendering", results.length, "results in", DisplayMode[displayMode], "mode");
 
-      // favicon
-      const fav = document.createElement("img");
-      fav.className = "favicon";
-      // use google favicon service for quick preview (works in extension popup)
-      try {
-        const d = new URL(item.url).hostname;
-        fav.src = `https://www.google.com/s2/favicons?domain=${d}&sz=64`;
-      } catch {
-        fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
-      }
+    if (displayMode === DisplayMode.CARDS) {
+      // Horizontal card layout
+      results.forEach((item, idx) => {
+        Logger.trace("Rendering card item", idx, item.title);
+        const card = document.createElement("div");
+        card.className = "result-card";
+        card.tabIndex = 0;
+        card.dataset.index = String(idx);
+        if (idx === activeIndex) card.classList.add("active");
 
-      // details
-      const details = document.createElement("div");
-      details.className = "result-details";
+        // favicon
+        const fav = document.createElement("img");
+        fav.className = "card-favicon";
+        try {
+          const d = new URL(item.url).hostname;
+          fav.src = `https://www.google.com/s2/favicons?domain=${d}&sz=64`;
+        } catch {
+          fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
+        }
 
-      const title = document.createElement("div");
-      title.className = "result-title";
-      title.textContent = item.title || item.url;
+        // details
+        const details = document.createElement("div");
+        details.className = "card-details";
 
-      const url = document.createElement("div");
-      url.className = "result-url";
-      url.textContent = item.url;
+        const title = document.createElement("div");
+        title.className = "card-title";
+        title.textContent = item.title || item.url;
 
-      details.appendChild(title);
-      details.appendChild(url);
+        const url = document.createElement("div");
+        url.className = "card-url";
+        url.textContent = item.url;
 
-      li.appendChild(fav);
-      li.appendChild(details);
+        details.appendChild(title);
+        details.appendChild(url);
 
-      // click handler
-      li.addEventListener("click", (e) => {
-        openResult(idx, e as MouseEvent);
+        card.appendChild(fav);
+        card.appendChild(details);
+
+        // click handler
+        card.addEventListener("click", (e) => {
+          openResult(idx, e as MouseEvent);
+        });
+
+        // keyboard focus
+        card.addEventListener("keydown", (ev) => {
+          handleKeydown(ev as KeyboardEvent);
+        });
+
+        resultsNode.appendChild(card);
       });
+    } else {
+      // Vertical list layout (default)
+      results.forEach((item, idx) => {
+        Logger.trace("Rendering list item", idx, item.title);
+        const li = document.createElement("li");
+        li.tabIndex = 0;
+        li.dataset.index = String(idx);
+        if (idx === activeIndex) li.classList.add("active");
 
-      // keyboard focus
-      li.addEventListener("keydown", (ev) => {
-        handleKeydown(ev as KeyboardEvent);
+        // favicon
+        const fav = document.createElement("img");
+        fav.className = "favicon";
+        try {
+          const d = new URL(item.url).hostname;
+          fav.src = `https://www.google.com/s2/favicons?domain=${d}&sz=64`;
+        } catch {
+          fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
+        }
+
+        // details
+        const details = document.createElement("div");
+        details.className = "result-details";
+
+        const title = document.createElement("div");
+        title.className = "result-title";
+        title.textContent = item.title || item.url;
+
+        const url = document.createElement("div");
+        url.className = "result-url";
+        url.textContent = item.url;
+
+        details.appendChild(title);
+        details.appendChild(url);
+
+        li.appendChild(fav);
+        li.appendChild(details);
+
+        // click handler
+        li.addEventListener("click", (e) => {
+          openResult(idx, e as MouseEvent);
+        });
+
+        // keyboard focus
+        li.addEventListener("keydown", (ev) => {
+          handleKeydown(ev as KeyboardEvent);
+        });
+
+        resultsNode.appendChild(li);
       });
-
-      resultsNode.appendChild(li);
-    });
+    }
   }
 
   // Open a result according to modifiers
@@ -293,7 +343,7 @@ async function initializePopup() {
       return;
     }
 
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowRight") {
       e.preventDefault();
       if (results.length === 0) return;
       activeIndex = Math.min(results.length - 1, activeIndex + 1);
@@ -301,7 +351,7 @@ async function initializePopup() {
       return;
     }
 
-    if (e.key === "ArrowUp") {
+    if (e.key === "ArrowLeft") {
       e.preventDefault();
       if (results.length === 0) return;
       activeIndex = Math.max(0, activeIndex - 1);
@@ -330,12 +380,344 @@ async function initializePopup() {
 
   // Highlight active li visually and ensure into view
   function highlightActive() {
-    const lis = Array.from(resultsNode.querySelectorAll("li"));
-    lis.forEach((li) => li.classList.remove("active"));
-    const active = lis[activeIndex];
+    const displayMode = SettingsManager.getSetting('displayMode');
+    const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+    const items = Array.from(resultsNode.querySelectorAll(selector));
+    items.forEach((item) => item.classList.remove("active"));
+    const active = items[activeIndex];
     if (active) {
       active.classList.add("active");
-      active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      active.scrollIntoView({ inline: "center", behavior: "smooth" });
+    }
+  }
+
+  // Open settings page as modal overlay
+  function openSettingsPage() {
+    Logger.debug("Opening settings modal");
+
+    // Check if modal already exists
+    const existingModal = document.querySelector('.settings-modal-overlay');
+    if (existingModal) {
+      Logger.debug("Modal already exists, removing it");
+      existingModal.remove();
+    }
+
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'settings-modal-overlay';
+
+    // Create modal content programmatically
+    const modalContent = document.createElement('div');
+    modalContent.className = 'settings-modal';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'settings-modal-header';
+
+    const title = document.createElement('h2');
+    title.textContent = 'Settings';
+    header.appendChild(title);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'settings-modal-close';
+    closeBtn.title = 'Close';
+    closeBtn.textContent = '×';
+    header.appendChild(closeBtn);
+
+    modalContent.appendChild(header);
+
+    // Content
+    const content = document.createElement('div');
+    content.className = 'settings-modal-content';
+
+    // Display Mode Section
+    const displaySection = document.createElement('div');
+    displaySection.className = 'settings-section';
+
+    const displayTitle = document.createElement('h3');
+    displayTitle.textContent = 'Display Mode';
+    displaySection.appendChild(displayTitle);
+
+    const displayDesc = document.createElement('p');
+    displayDesc.textContent = 'Choose how search results are displayed.';
+    displaySection.appendChild(displayDesc);
+
+    const displayOptions = document.createElement('div');
+    displayOptions.className = 'setting-options';
+
+    // List View Option
+    const listLabel = document.createElement('label');
+    listLabel.className = 'setting-option';
+
+    const listInput = document.createElement('input');
+    listInput.type = 'radio';
+    listInput.name = 'modal-displayMode';
+    listInput.value = 'list';
+
+    const listIndicator = document.createElement('span');
+    listIndicator.className = 'option-indicator';
+
+    const listContent = document.createElement('div');
+    listContent.className = 'option-content';
+
+    const listStrong = document.createElement('strong');
+    listStrong.textContent = 'List View';
+    listContent.appendChild(listStrong);
+
+    const listSmall = document.createElement('small');
+    listSmall.textContent = 'Vertical list layout - compact';
+    listContent.appendChild(listSmall);
+
+    listLabel.appendChild(listInput);
+    listLabel.appendChild(listIndicator);
+    listLabel.appendChild(listContent);
+    displayOptions.appendChild(listLabel);
+
+    // Card View Option
+    const cardLabel = document.createElement('label');
+    cardLabel.className = 'setting-option';
+
+    const cardInput = document.createElement('input');
+    cardInput.type = 'radio';
+    cardInput.name = 'modal-displayMode';
+    cardInput.value = 'cards';
+
+    const cardIndicator = document.createElement('span');
+    cardIndicator.className = 'option-indicator';
+
+    const cardContent = document.createElement('div');
+    cardContent.className = 'option-content';
+
+    const cardStrong = document.createElement('strong');
+    cardStrong.textContent = 'Card View';
+    cardContent.appendChild(cardStrong);
+
+    const cardSmall = document.createElement('small');
+    cardSmall.textContent = 'Horizontal cards - shows full URLs';
+    cardContent.appendChild(cardSmall);
+
+    cardLabel.appendChild(cardInput);
+    cardLabel.appendChild(cardIndicator);
+    cardLabel.appendChild(cardContent);
+    displayOptions.appendChild(cardLabel);
+
+    displaySection.appendChild(displayOptions);
+    content.appendChild(displaySection);
+
+    // Log Level Section
+    const logSection = document.createElement('div');
+    logSection.className = 'settings-section';
+
+    const logTitle = document.createElement('h3');
+    logTitle.textContent = 'Log Level';
+    logSection.appendChild(logTitle);
+
+    const logDesc = document.createElement('p');
+    logDesc.textContent = 'Control extension logging verbosity.';
+    logSection.appendChild(logDesc);
+
+    const logOptions = document.createElement('div');
+    logOptions.className = 'setting-options';
+
+    const logLevels = [
+      { value: 0, label: 'Error Only', desc: 'Show only errors' },
+      { value: 1, label: 'Info', desc: 'Show general information' },
+      { value: 2, label: 'Debug', desc: 'Show detailed debugging info' },
+      { value: 3, label: 'Trace', desc: 'Show all internal operations' }
+    ];
+
+    logLevels.forEach(level => {
+      const label = document.createElement('label');
+      label.className = 'setting-option';
+
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'modal-logLevel';
+      input.value = level.value.toString();
+
+      const indicator = document.createElement('span');
+      indicator.className = 'option-indicator';
+
+      const optionContent = document.createElement('div');
+      optionContent.className = 'option-content';
+
+      const strong = document.createElement('strong');
+      strong.textContent = level.label;
+      optionContent.appendChild(strong);
+
+      const small = document.createElement('small');
+      small.textContent = level.desc;
+      optionContent.appendChild(small);
+
+      label.appendChild(input);
+      label.appendChild(indicator);
+      label.appendChild(optionContent);
+      logOptions.appendChild(label);
+    });
+
+    logSection.appendChild(logOptions);
+    content.appendChild(logSection);
+
+    // Actions Section
+    const actionsSection = document.createElement('div');
+    actionsSection.className = 'settings-section';
+
+    const actionsTitle = document.createElement('h3');
+    actionsTitle.textContent = 'Actions';
+    actionsSection.appendChild(actionsTitle);
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'setting-actions';
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'action-btn secondary';
+    resetBtn.id = 'modal-reset';
+    resetBtn.textContent = 'Reset to Defaults';
+    actionsDiv.appendChild(resetBtn);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'action-btn danger';
+    clearBtn.id = 'modal-clear';
+    clearBtn.textContent = 'Clear All Data';
+    actionsDiv.appendChild(clearBtn);
+
+    actionsSection.appendChild(actionsDiv);
+    content.appendChild(actionsSection);
+
+    modalContent.appendChild(content);
+    modal.appendChild(modalContent);
+
+    document.body.appendChild(modal);
+
+    Logger.debug("Modal created programmatically and appended to body");
+
+    // Load current settings
+    const currentDisplayMode = SettingsManager.getSetting('displayMode');
+    const currentLogLevel = SettingsManager.getSetting('logLevel');
+
+    const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
+    const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
+
+    Logger.debug("Found display inputs:", displayInputs.length, "log inputs:", logInputs.length);
+
+    displayInputs.forEach(input => {
+      if ((input as HTMLInputElement).value === currentDisplayMode) {
+        (input as HTMLInputElement).checked = true;
+      }
+    });
+
+    logInputs.forEach(input => {
+      if (parseInt((input as HTMLInputElement).value) === currentLogLevel) {
+        (input as HTMLInputElement).checked = true;
+      }
+    });
+
+    // Event handlers
+    const overlay = modal; // The modal itself is the overlay
+
+    Logger.debug("Close button element:", closeBtn);
+    Logger.debug("Close button found:", !!closeBtn);
+
+    const closeModal = () => {
+      modal.remove();
+    };
+
+    if (closeBtn) {
+      Logger.debug("Adding close button event listener");
+      closeBtn.addEventListener('click', closeModal);
+    } else {
+      Logger.error("Close button not found!");
+    }
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+
+    // Display mode change
+    displayInputs.forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+          await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
+          Logger.info("Display mode changed to:", target.value);
+          showToast("Display mode updated");
+        }
+      });
+    });
+
+    // Log level change
+    logInputs.forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+          const level = parseInt(target.value);
+          await SettingsManager.setSetting('logLevel', level);
+          await Logger.setLevel(level);
+          Logger.info("Log level changed to:", LogLevel[level]);
+          showToast("Log level updated");
+        }
+      });
+    });
+
+    // Action buttons
+    Logger.debug("Reset button element:", resetBtn);
+    Logger.debug("Reset button found:", !!resetBtn, "Clear button found:", !!clearBtn);
+
+    if (resetBtn) {
+      Logger.debug("Adding reset button event listener");
+      resetBtn.addEventListener('click', async () => {
+        if (confirm('Reset all settings to defaults?')) {
+          await SettingsManager.resetToDefaults();
+          await Logger.setLevel(SettingsManager.getSetting('logLevel'));
+          closeModal();
+          Logger.info("Settings reset to defaults");
+          showToast("Settings reset to defaults");
+        }
+      });
+    }
+
+    if (clearBtn) {
+      Logger.debug("Adding clear button event listener");
+      clearBtn.addEventListener('click', async () => {
+        if (confirm('Clear all extension data? This will delete your browsing history.')) {
+          try {
+            await clearIndexedDB();
+            await SettingsManager.resetToDefaults();
+            await Logger.setLevel(SettingsManager.getSetting('logLevel'));
+            closeModal();
+            Logger.info("All data cleared");
+            showToast("All data cleared");
+          } catch (error) {
+            Logger.error("Failed to clear data:", error);
+            showToast("Failed to clear data", true);
+          }
+        }
+      });
+    }
+
+    // Helper functions
+    function showToast(message: string, isError = false) {
+      const existingToast = document.querySelector('.toast');
+      if (existingToast) existingToast.remove();
+
+      const toast = document.createElement('div');
+      toast.className = `toast ${isError ? 'error' : 'success'}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.classList.add('show'), 100);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    async function clearIndexedDB(): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.deleteDatabase('SmrutiCortexDB');
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error('Database deletion blocked'));
+      });
     }
   }
 
@@ -357,50 +739,24 @@ async function initializePopup() {
     Logger.error("Input element not found, not adding listeners");
   }
 
-  // Log level buttons handler
-  if (logLevelButtons) {
-    // Function to update button states
-    const updateButtonStates = () => {
-      const currentLevel = Logger.getLevel();
-      const buttons = logLevelButtons.querySelectorAll('.log-btn');
-      buttons.forEach((btn, index) => {
-        if (index === currentLevel) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      });
-    };
-
-    // Initialize buttons with current level
-    updateButtonStates();
-
-    // Add click handlers to buttons
-    logLevelButtons.addEventListener("click", (event) => {
-      const target = event.target as HTMLElement;
-      if (target.classList.contains('log-btn')) {
-        const newLevel = parseInt(target.dataset.level || '2');
-        Logger.setLevel(newLevel);
-        updateButtonStates();
-        Logger.debug("Log level changed to:", LogLevel[newLevel]);
-
-        // Notify service worker of level change
-        Logger.debug("[Popup] Sending SET_LOG_LEVEL", newLevel);
-        sendMessage({ type: "SET_LOG_LEVEL", level: newLevel }).then(() => {
-          Logger.debug("[Popup] SET_LOG_LEVEL sent successfully");
-        }).catch((error) => {
-          Logger.error("[Popup] SET_LOG_LEVEL send failed", error);
-        });
-      }
+  // Settings button handler
+  if (settingsButton) {
+    Logger.debug("Adding settings button event listener");
+    settingsButton.addEventListener("click", () => {
+      Logger.debug("Settings button clicked");
+      openSettingsPage();
     });
   } else {
-    Logger.error("Log level buttons not found");
+    Logger.error("Settings button not found");
   }
 
   // Focus the input on load
   Logger.debug("Adding window load event listener");
   window.addEventListener("load", async () => {
     Logger.debug("Window load event fired");
+
+    // Give service worker a moment to initialize
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Check service worker status
     const isServiceWorkerReady = await checkServiceWorkerStatus();
@@ -447,7 +803,9 @@ async function initializePopup() {
       // Focus on first result
       activeIndex = 0;
       highlightActive();
-      const firstResult = resultsNode.querySelector("li");
+      const displayMode = SettingsManager.getSetting('displayMode');
+      const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+      const firstResult = resultsNode.querySelector(selector);
       if (firstResult) {
         (firstResult as HTMLElement).focus();
       }
@@ -464,7 +822,7 @@ async function initializePopup() {
   document.addEventListener("keydown", () => { hasUserInteracted = true; });
   document.addEventListener("click", () => { hasUserInteracted = true; });
 
-  // Listen for keyboard shortcut message from background
+  // Listen for settings changes
   if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       Logger.debug("Popup received message:", message);
@@ -474,6 +832,11 @@ async function initializePopup() {
         sendResponse({ status: "ok" });
       } else if (message.type === "PING") {
         Logger.debug("Handling ping from background");
+        sendResponse({ status: "ok" });
+      } else if (message.type === "SETTINGS_CHANGED") {
+        Logger.debug("Handling settings changed:", message.settings);
+        // Re-render results with new display mode
+        renderResults();
         sendResponse({ status: "ok" });
       }
     });
@@ -486,6 +849,11 @@ async function initializePopup() {
         sendResponse({ status: "ok" });
       } else if (message.type === "PING") {
         Logger.debug("Handling ping from background");
+        sendResponse({ status: "ok" });
+      } else if (message.type === "SETTINGS_CHANGED") {
+        Logger.debug("Handling settings changed:", message.settings);
+        // Re-render results with new display mode
+        renderResults();
         sendResponse({ status: "ok" });
       }
     });

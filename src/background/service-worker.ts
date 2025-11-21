@@ -7,15 +7,17 @@ import { runSearch } from "./search/search-engine";
 import { mergeMetadata } from "./indexing";
 import { browserAPI } from "../core/helpers";
 import { Logger } from "../core/logger";
+import { SettingsManager } from "../core/settings";
 
 Logger.info("[SmrutiCortex] Service worker script loading");
 
 let initialized = false;
 
 (async function initLogger() {
-  Logger.info("[SmrutiCortex] Initializing logger");
+  Logger.info("[SmrutiCortex] Initializing logger and settings");
   await Logger.init();
-  Logger.info("[SmrutiCortex] Logger initialized, starting main init");
+  await SettingsManager.init();
+  Logger.info("[SmrutiCortex] Logger and settings initialized, starting main init");
   Logger.debug("Service worker script starting");
 
   // Set up messaging immediately
@@ -34,8 +36,12 @@ let initialized = false;
             break;
           case "SET_LOG_LEVEL":
             Logger.info("[SmrutiCortex] Handling SET_LOG_LEVEL:", msg.level);
-            Logger.setLevel(msg.level);
+            await Logger.setLevel(msg.level);
             Logger.info("[SmrutiCortex] Log level set to", Logger.getLevel());
+            sendResponse({ status: "ok" });
+            break;
+          case "SETTINGS_CHANGED":
+            Logger.debug("Handling SETTINGS_CHANGED (no action needed)");
             sendResponse({ status: "ok" });
             break;
           default:
