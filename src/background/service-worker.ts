@@ -181,7 +181,7 @@ async function init() {
                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                             Logger.debug("Using action.openPopup()");
                             try {
-                                await browserAPI.action.openPopup();
+                                browserAPI.action.openPopup();
                                 Logger.debug("Popup opened successfully");
                                 // Send message to popup to focus appropriately
                                 setTimeout(() => {
@@ -255,7 +255,7 @@ async function init() {
                                     if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                         Logger.debug("Using action.openPopup() (delayed)");
                                         try {
-                                            await browserAPI.action.openPopup();
+                                            browserAPI.action.openPopup();
                                             Logger.debug("Popup opened successfully (delayed)");
                                             setTimeout(() => {
                                                 Logger.debug("Sending KEYBOARD_SHORTCUT_OPEN message to popup (delayed)");

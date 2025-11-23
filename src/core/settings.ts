@@ -29,8 +29,6 @@ export class SettingsManager {
      * Initialize settings from storage
      */
     static async init(): Promise<void> {
-        if (this.initialized) return;
-
         console.log('[Settings] Starting SettingsManager.init()');
         try {
             Logger.debug('[Settings] Initializing settings manager');
@@ -45,6 +43,11 @@ export class SettingsManager {
                 console.log('[Settings] No stored settings found, using defaults:', this.settings);
                 Logger.debug('[Settings] No stored settings found, using defaults:', this.settings);
             }
+
+            // Ensure displayMode always defaults to list
+            this.settings.displayMode = DisplayMode.LIST;
+            console.log('[Settings] Ensured displayMode defaults to list, final settings:', this.settings);
+            Logger.debug('[Settings] Ensured displayMode defaults to list');
 
             // Apply current settings
             await this.applySettings();
