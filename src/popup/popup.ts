@@ -151,6 +151,23 @@ async function initializePopup() {
       renderResults();
       return;
     }
+
+    // Check if service worker is ready before attempting search
+    const isServiceWorkerReady = await checkServiceWorkerStatus();
+    if (!isServiceWorkerReady) {
+      Logger.debug("Service worker not ready, showing initialization message");
+      results = [];
+      renderResults();
+      resultCountNode.textContent = "Initializing... Please wait.";
+      resultsNode.innerHTML = "";
+      const warning = document.createElement("div");
+      warning.textContent = "Extension is starting up. Search will be available shortly.";
+      warning.style.padding = "8px";
+      warning.style.color = "#f59e0b";
+      resultsNode.appendChild(warning);
+      return;
+    }
+
     Logger.debug("Query is valid, calling sendMessage");
 
     // Retry logic for service worker connection
@@ -192,6 +209,9 @@ async function initializePopup() {
     Logger.debug("Rendering results in mode:", DisplayMode[displayMode], "raw value:", displayMode);
     Logger.debug("DisplayMode enum values - LIST:", DisplayMode.LIST, "CARDS:", DisplayMode.CARDS);
     Logger.debug("Current settings:", SettingsManager.getSettings());
+
+    // Set class on results container based on display mode
+    resultsNode.className = displayMode === DisplayMode.CARDS ? "results cards" : "results list";
 
     resultsNode.innerHTML = "";
     resultCountNode.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
