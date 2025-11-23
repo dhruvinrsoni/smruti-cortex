@@ -36,10 +36,10 @@
   "commands": {
     "open-popup": {
       "suggested_key": {
-        "default": "Ctrl+Shift+E",
-        "mac": "Command+Shift+E"
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
       },
-      "description": "Open SmrutiCortex popup and focus search box"
+      "description": "Open SmrutiCortex search popup"
     }
   },
   "icons": {

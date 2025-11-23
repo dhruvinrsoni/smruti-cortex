@@ -31,21 +31,28 @@ export class SettingsManager {
     static async init(): Promise<void> {
         if (this.initialized) return;
 
+        console.log('[Settings] Starting SettingsManager.init()');
         try {
             Logger.debug('[Settings] Initializing settings manager');
             const stored = await this.loadFromStorage();
+            console.log('[Settings] Loaded from storage:', stored);
+            Logger.debug('[Settings] Loaded from storage:', stored);
             if (stored) {
                 this.settings = { ...this.settings, ...stored };
-                Logger.debug('[Settings] Loaded settings from storage:', this.settings);
+                console.log('[Settings] Applied stored settings, final settings:', this.settings);
+                Logger.debug('[Settings] Applied stored settings, final settings:', this.settings);
             } else {
-                Logger.debug('[Settings] No stored settings found, using defaults');
+                console.log('[Settings] No stored settings found, using defaults:', this.settings);
+                Logger.debug('[Settings] No stored settings found, using defaults:', this.settings);
             }
 
             // Apply current settings
             await this.applySettings();
             this.initialized = true;
-            Logger.info('[Settings] Settings manager initialized');
+            console.log('[Settings] SettingsManager.init() completed successfully');
+            Logger.info('[Settings] Settings manager initialized with:', this.settings);
         } catch (error) {
+            console.error('[Settings] Failed to initialize settings:', error);
             Logger.error('[Settings] Failed to initialize settings:', error);
             // Continue with defaults
         }
@@ -107,18 +114,25 @@ export class SettingsManager {
     private static async loadFromStorage(): Promise<AppSettings | null> {
         return new Promise((resolve) => {
             if (!browserAPI.storage) {
+                Logger.warn('[Settings] Storage API not available');
                 resolve(null);
                 return;
             }
 
+            Logger.debug('[Settings] Loading from storage with key:', this.STORAGE_KEY);
             browserAPI.storage.local.get([this.STORAGE_KEY], (result) => {
+                Logger.debug('[Settings] Storage get result:', result);
+                Logger.debug('[Settings] chrome.runtime.lastError:', browserAPI.runtime.lastError);
                 try {
                     const stored = result[this.STORAGE_KEY];
+                    Logger.debug('[Settings] Raw stored value:', stored);
                     if (stored && typeof stored === 'object') {
                         // Validate the stored settings
                         const validated = this.validateSettings(stored);
+                        Logger.debug('[Settings] Validated settings:', validated);
                         resolve(validated);
                     } else {
+                        Logger.debug('[Settings] No valid stored settings found');
                         resolve(null);
                     }
                 } catch (error) {
@@ -135,14 +149,19 @@ export class SettingsManager {
     private static async saveToStorage(): Promise<void> {
         return new Promise((resolve, reject) => {
             if (!browserAPI.storage) {
+                Logger.error('[Settings] Storage API not available for saving');
                 reject(new Error('Storage API not available'));
                 return;
             }
 
+            Logger.debug('[Settings] Saving to storage:', this.settings);
             browserAPI.storage.local.set({ [this.STORAGE_KEY]: this.settings }, () => {
+                Logger.debug('[Settings] chrome.runtime.lastError after save:', browserAPI.runtime.lastError);
                 if (browserAPI.runtime.lastError) {
+                    Logger.error('[Settings] Failed to save settings:', browserAPI.runtime.lastError.message);
                     reject(new Error(browserAPI.runtime.lastError.message));
                 } else {
+                    Logger.debug('[Settings] Settings saved successfully');
                     resolve();
                 }
             });
@@ -203,18 +222,29 @@ export class SettingsManager {
                 logLevel: 1,
             };
 
+            Logger.debug('[Settings] Validating settings object:', settings);
+            Logger.debug('[Settings] DisplayMode values:', Object.values(DisplayMode));
+            Logger.debug('[Settings] settings.displayMode type:', typeof settings.displayMode, 'value:', settings.displayMode);
+
             // Validate displayMode
             if (settings.displayMode && Object.values(DisplayMode).includes(settings.displayMode)) {
                 validated.displayMode = settings.displayMode;
+                Logger.debug('[Settings] DisplayMode validated successfully:', validated.displayMode);
+            } else {
+                Logger.debug('[Settings] DisplayMode validation failed, using default:', validated.displayMode);
             }
 
             // Validate logLevel
             if (typeof settings.logLevel === 'number' && settings.logLevel >= 0 && settings.logLevel <= 3) {
                 validated.logLevel = settings.logLevel;
+                Logger.debug('[Settings] LogLevel validated successfully:', validated.logLevel);
+            } else {
+                Logger.debug('[Settings] LogLevel validation failed, using default:', validated.logLevel);
             }
 
             // Future: validate other settings
 
+            Logger.debug('[Settings] Final validated settings:', validated);
             return validated;
         } catch (error) {
             Logger.warn('[Settings] Settings validation failed:', error);

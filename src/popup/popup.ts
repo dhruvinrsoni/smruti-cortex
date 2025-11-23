@@ -1,16 +1,23 @@
 // popup.ts — lightweight UI logic for SmrutiCortex popup
 // Compiled by webpack to dist/popup/popup.js
 
+console.log("=== POPUP SCRIPT STARTING ===");
+
 import { BRAND_NAME } from "../core/constants";
 import { Logger, LogLevel } from "../core/logger";
 import { SettingsManager, DisplayMode } from "../core/settings";
+
+console.log("=== IMPORTS LOADED ===");
 
 declare const browser: any;
 
 // Initialize logger and settings
 (async function initPopup() {
+  console.log("=== initPopup() STARTING ===");
   await Logger.init();
+  console.log("=== Logger.init() COMPLETED ===");
   await SettingsManager.init();
+  console.log("=== SettingsManager.init() COMPLETED ===");
   Logger.info("Popup script initialized with log level:", LogLevel[Logger.getLevel()]);
 
   // Now continue with popup initialization
@@ -18,6 +25,7 @@ declare const browser: any;
 })();
 
 async function initializePopup() {
+  console.log("=== initializePopup() STARTING ===");
   Logger.info("Popup script starting execution");
 
   type IndexedItem = {
@@ -177,9 +185,13 @@ async function initializePopup() {
 
   // Render results list
   function renderResults() {
+    console.log('renderResults called');
     Logger.trace("renderResults called, results length:", results.length);
     const displayMode = SettingsManager.getSetting('displayMode');
-    Logger.debug("Rendering results in mode:", DisplayMode[displayMode]);
+    console.log('Current displayMode from SettingsManager:', displayMode);
+    Logger.debug("Rendering results in mode:", DisplayMode[displayMode], "raw value:", displayMode);
+    Logger.debug("DisplayMode enum values - LIST:", DisplayMode.LIST, "CARDS:", DisplayMode.CARDS);
+    Logger.debug("Current settings:", SettingsManager.getSettings());
 
     resultsNode.innerHTML = "";
     resultCountNode.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
@@ -595,6 +607,11 @@ async function initializePopup() {
     const currentDisplayMode = SettingsManager.getSetting('displayMode');
     const currentLogLevel = SettingsManager.getSetting('logLevel');
 
+    console.log("Modal loading current settings - displayMode:", currentDisplayMode, "logLevel:", currentLogLevel);
+    console.log("All current settings:", SettingsManager.getSettings());
+    Logger.debug("Modal loading current settings - displayMode:", currentDisplayMode, "logLevel:", currentLogLevel);
+    Logger.debug("All current settings:", SettingsManager.getSettings());
+
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
 
@@ -637,7 +654,11 @@ async function initializePopup() {
       input.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
+          console.log("Display mode change detected, new value:", target.value);
+          Logger.debug("Display mode change detected, new value:", target.value);
           await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
+          console.log("Display mode setting updated, current settings:", SettingsManager.getSettings());
+          Logger.debug("Display mode setting updated, current settings:", SettingsManager.getSettings());
           Logger.info("Display mode changed to:", target.value);
           showToast("Display mode updated");
         }
@@ -753,6 +774,7 @@ async function initializePopup() {
   // Focus the input on load
   Logger.debug("Adding window load event listener");
   window.addEventListener("load", async () => {
+    console.log("=== WINDOW LOAD EVENT FIRED ===");
     Logger.debug("Window load event fired");
 
     // Give service worker a moment to initialize
@@ -835,6 +857,7 @@ async function initializePopup() {
         sendResponse({ status: "ok" });
       } else if (message.type === "SETTINGS_CHANGED") {
         Logger.debug("Handling settings changed:", message.settings);
+        Logger.debug("Re-rendering results after settings change");
         // Re-render results with new display mode
         renderResults();
         sendResponse({ status: "ok" });
@@ -852,6 +875,7 @@ async function initializePopup() {
         sendResponse({ status: "ok" });
       } else if (message.type === "SETTINGS_CHANGED") {
         Logger.debug("Handling settings changed:", message.settings);
+        Logger.debug("Re-rendering results after settings change");
         // Re-render results with new display mode
         renderResults();
         sendResponse({ status: "ok" });
