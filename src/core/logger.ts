@@ -20,19 +20,15 @@ export class Logger {
         if (this.initialized) return;
 
         try {
-            // Wait for settings to be initialized
-            await SettingsManager.init();
-
-            // Get log level from settings
-            const logLevel = SettingsManager.getSetting('logLevel');
-            this.currentLevel = logLevel;
+            // Start with default level, will be updated by SettingsManager later
+            this.currentLevel = LogLevel.INFO;
             this.initialized = true;
 
-            Logger.info("[Logger] Logger initialized with level:", LogLevel[this.currentLevel]);
+            Logger.info("[Logger] Logger initialized with default level:", LogLevel[this.currentLevel]);
         } catch (error) {
             // Fallback to default
             this.currentLevel = LogLevel.INFO;
-            console.warn("[Logger] Failed to initialize from settings, using defaults:", error);
+            console.warn("[Logger] Failed to initialize:", error);
         }
     }
 

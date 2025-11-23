@@ -11,7 +11,7 @@ Each item can be converted into GitHub Issues.
 - [x] **First result auto-focus** - Search results automatically focus first item
 - [x] **Omnibox integration** - "sc " keyword for address bar quick access
 - [x] **Enhanced keyboard navigation** - Full arrow key support, modifier keys
-- [x] **Global keyboard shortcut** - Ctrl+Shift+E to open popup instantly
+- [x] **Global keyboard shortcut** - Ctrl+Shift+S to open popup instantly
 - [x] **Comprehensive documentation** - Updated README, testing guide, user instructions
 
 ---
