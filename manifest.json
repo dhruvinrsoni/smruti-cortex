@@ -22,7 +22,9 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "SmrutiCortex"
+    "default_title": "SmrutiCortex",
+    "default_popup_width": 1200,
+    "default_popup_height": 350
   },
   "content_scripts": [
     {

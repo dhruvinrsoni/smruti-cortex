@@ -1,4 +1,4 @@
-/* popup.css - minimal, clean, keyboard-first styling */
+/* popup.css - simple, clean styling */
 
 :root {
   --bg: #ffffff;
@@ -17,6 +17,23 @@
   --debug-dark: #16a34a;
   --trace-light: #fef3c7;
   --trace-dark: #d97706;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.app {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 * { box-sizing: border-box; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
