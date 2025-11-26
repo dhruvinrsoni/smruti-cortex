@@ -1,32 +1,31 @@
 // popup.ts — lightweight UI logic for SmrutiCortex popup
 // Compiled by webpack to dist/popup/popup.js
 
-console.log("=== POPUP SCRIPT STARTING ===");
-
 import { BRAND_NAME } from "../core/constants";
-import { Logger, LogLevel } from "../core/logger";
+import { Logger, LogLevel, ComponentLogger } from "../core/logger";
 import { SettingsManager, DisplayMode } from "../core/settings";
-
-console.log("=== IMPORTS LOADED ===");
 
 declare const browser: any;
 
+// Create component logger for structured logging
+const logger = Logger.forComponent("PopupScript");
+
 // Initialize logger and settings
 (async function initPopup() {
-  console.log("=== initPopup() STARTING ===");
+  logger.info("initPopup", "Starting popup script initialization");
   await Logger.init();
-  console.log("=== Logger.init() COMPLETED ===");
   await SettingsManager.init();
-  console.log("=== SettingsManager.init() COMPLETED ===");
-  Logger.info("Popup script initialized with log level:", LogLevel[Logger.getLevel()]);
+  logger.info("initPopup", "Logger and SettingsManager initialized", {
+    logLevel: LogLevel[Logger.getLevel()],
+    displayMode: SettingsManager.getSetting('displayMode')
+  });
 
   // Now continue with popup initialization
   initializePopup();
 })();
 
 async function initializePopup() {
-  console.log("=== initializePopup() STARTING ===");
-  Logger.info("Popup script starting execution");
+  logger.info("initializePopup", "Starting popup initialization");
 
   type IndexedItem = {
     url: string;
@@ -44,7 +43,7 @@ async function initializePopup() {
 
   function debugLog(...args: any[]) {
     // Replaced with Logger.trace for detailed UI logging
-    Logger.trace('[UI]', ...args);
+    logger.trace("debugLog", "Debug log", { args });
   }
 
   // Load debug setting from storage - replaced with log level
@@ -57,22 +56,22 @@ async function initializePopup() {
 
   // Helper
   const $ = <T extends HTMLElement>(id: string) => {
-    Logger.trace("Looking for element with id:", id);
+    logger.trace("helper", "Looking for element", { id });
     const el = document.getElementById(id) as T;
-    Logger.trace("Element found:", el);
+    logger.trace("helper", "Element found", { found: !!el });
     return el;
   };
 
-  Logger.debug("Helper function defined");
+  logger.debug("initializePopup", "Helper function defined");
 
   // Elements
-  Logger.debug("About to get elements");
+  logger.debug("initializePopup", "Retrieving DOM elements");
   const input = $("search-input") as HTMLInputElement;
   const resultsNode = $("results") as HTMLUListElement;
   const resultCountNode = $("result-count") as HTMLDivElement;
   const settingsButton = $("settings-button") as HTMLButtonElement;
 
-  Logger.debug("Elements retrieved:", {
+  logger.debug("initializePopup", "Elements retrieved", {
     input: !!input,
     resultsNode: !!resultsNode,
     resultCountNode: !!resultCountNode,
@@ -85,31 +84,33 @@ async function initializePopup() {
 
   // Helper to send messages to background in a cross-browser safe way
   function sendMessage(msg: any): Promise<any> {
-    Logger.trace("sendMessage called with:", msg);
+    logger.trace("sendMessage", "Sending message to background", { type: msg.type });
     return new Promise((resolve, reject) => {
-      Logger.trace("Creating promise for sendMessage");
+      logger.trace("sendMessage", "Creating promise for sendMessage");
       try {
-        Logger.trace("Checking for chrome/browser runtime");
+        logger.trace("sendMessage", "Checking for chrome/browser runtime");
         const runtime = (typeof chrome !== "undefined" && chrome.runtime) ? chrome.runtime : (typeof browser !== "undefined" ? browser.runtime : null);
-        Logger.trace("Runtime found:", !!runtime);
+        logger.trace("sendMessage", "Runtime found", { found: !!runtime });
         if (!runtime || !runtime.sendMessage) {
-          Logger.trace("No runtime API found, resolving with empty results");
+          logger.trace("sendMessage", "No runtime API found, resolving with empty results");
           resolve({ results: [] });
           return;
         }
-        Logger.trace("Calling runtime.sendMessage");
+        logger.trace("sendMessage", "Calling runtime.sendMessage");
         runtime.sendMessage(msg, (resp: any) => {
-          Logger.trace("Runtime sendMessage callback received:", resp);
+          logger.trace("sendMessage", "Runtime sendMessage callback received", { hasResponse: !!resp });
           // Check for runtime errors
           if (chrome && chrome.runtime && chrome.runtime.lastError) {
-            Logger.debug("Runtime connection issue (expected during startup):", chrome.runtime.lastError.message || chrome.runtime.lastError);
+            logger.debug("sendMessage", "Runtime connection issue (expected during startup)", {
+              error: chrome.runtime.lastError.message || chrome.runtime.lastError
+            });
             reject(new Error(chrome.runtime.lastError.message || 'Runtime error'));
             return;
           }
           resolve(resp);
         });
       } catch (e) {
-        Logger.debug("Send message connection issue (expected during startup):", e);
+        logger.debug("sendMessage", "Send message connection issue (expected during startup)", { error: e });
         reject(e);
       }
     });
@@ -117,36 +118,36 @@ async function initializePopup() {
 
   // Check if service worker is available
   async function checkServiceWorkerStatus(): Promise<boolean> {
-    Logger.debug("Checking service worker status");
+    logger.debug("checkServiceWorkerStatus", "Checking service worker status");
     try {
       const resp = await sendMessage({ type: "PING" });
-      Logger.debug("Service worker ping response:", resp);
+      logger.debug("checkServiceWorkerStatus", "Service worker ping response", { status: resp?.status });
       return resp && resp.status === "ok";
     } catch (error) {
-      Logger.debug("Service worker ping failed:", error);
+      logger.debug("checkServiceWorkerStatus", "Service worker ping failed", { error });
       return false;
     }
   }
 
   // Debounce helper
   function debounceSearch(q: string) {
-    Logger.trace("debounceSearch called with:", q);
+    logger.trace("debounceSearch", "Debouncing search", { query: q });
     if (debounceTimer) {
-      Logger.trace("Clearing existing timer");
+      logger.trace("debounceSearch", "Clearing existing timer");
       window.clearTimeout(debounceTimer);
     }
-    Logger.trace("Setting new timer for doSearch");
+    logger.trace("debounceSearch", "Setting new timer for doSearch");
     debounceTimer = window.setTimeout(() => {
-      Logger.trace("Timer fired, calling doSearch");
+      logger.trace("debounceSearch", "Timer fired, calling doSearch");
       doSearch(q);
     }, 120);
   }
 
   // Do the actual search (ask background worker)
   async function doSearch(q: string) {
-    Logger.debug("doSearch called with:", q);
+    logger.debug("doSearch", "Starting search", { query: q });
     if (!q || q.trim() === "") {
-      Logger.trace("Query is empty, clearing results");
+      logger.trace("doSearch", "Query is empty, clearing results");
       results = [];
       renderResults();
       return;
@@ -155,7 +156,7 @@ async function initializePopup() {
     // Check if service worker is ready before attempting search
     const isServiceWorkerReady = await checkServiceWorkerStatus();
     if (!isServiceWorkerReady) {
-      Logger.debug("Service worker not ready, showing initialization message");
+      logger.debug("doSearch", "Service worker not ready, showing initialization message");
       results = [];
       renderResults();
       resultCountNode.textContent = "Initializing... Please wait.";
@@ -168,7 +169,7 @@ async function initializePopup() {
       return;
     }
 
-    Logger.debug("Query is valid, calling sendMessage");
+    logger.debug("doSearch", "Query is valid, calling sendMessage");
 
     // Retry logic for service worker connection
     let retries = 3;
@@ -177,10 +178,14 @@ async function initializePopup() {
     while (retries > 0) {
       try {
         resp = await sendMessage({ type: "SEARCH_QUERY", query: q });
-        Logger.debug("Search response received:", resp);
+        logger.debug("doSearch", "Search response received", { resultCount: resp?.results?.length });
         break; // Success, exit retry loop
       } catch (error) {
-        Logger.warn(`Search attempt failed (${4 - retries}/3), retries left: ${retries - 1}`, error);
+        logger.warn("doSearch", "Search attempt failed", {
+          attempt: 4 - retries,
+          retriesLeft: retries - 1,
+          error: error.message
+        });
         retries--;
         if (retries > 0) {
           // Wait a bit before retrying
@@ -190,25 +195,28 @@ async function initializePopup() {
     }
 
     if (!resp) {
-      Logger.debug("All search attempts failed (service worker may not be ready), showing empty results");
+      logger.debug("doSearch", "All search attempts failed (service worker may not be ready), showing empty results");
       resp = { results: [] };
     }
 
     results = (resp && resp.results) ? resp.results : [];
     activeIndex = results.length ? 0 : -1;
-    Logger.debug("Setting results:", results.length, "items");
+    logger.debug("doSearch", "Setting results", { count: results.length });
     renderResults();
   }
 
   // Render results list
   function renderResults() {
-    console.log('renderResults called');
-    Logger.trace("renderResults called, results length:", results.length);
+    logger.trace("renderResults", "Render results called");
     const displayMode = SettingsManager.getSetting('displayMode');
-    console.log('Current displayMode from SettingsManager:', displayMode);
-    Logger.debug("Rendering results in mode:", DisplayMode[displayMode], "raw value:", displayMode);
-    Logger.debug("DisplayMode enum values - LIST:", DisplayMode.LIST, "CARDS:", DisplayMode.CARDS);
-    Logger.debug("Current settings:", SettingsManager.getSettings());
+    logger.trace("renderResults", "Current displayMode from SettingsManager", { displayMode });
+    logger.debug("renderResults", "Rendering results in mode", {
+      displayMode,
+      rawValue: displayMode,
+      listEnum: DisplayMode.LIST,
+      cardsEnum: DisplayMode.CARDS
+    });
+    logger.debug("renderResults", "Current settings", SettingsManager.getSettings());
 
     // Set class on results container based on display mode
     resultsNode.className = displayMode === DisplayMode.CARDS ? "results cards" : "results list";
@@ -217,7 +225,7 @@ async function initializePopup() {
     resultCountNode.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
 
     if (results.length === 0) {
-      Logger.trace("No results, showing empty message");
+      logger.trace("renderResults", "No results, showing empty message");
       const empty = document.createElement("div");
       empty.textContent = "No matches — try different keywords";
       empty.style.padding = "8px";
@@ -226,12 +234,16 @@ async function initializePopup() {
       return;
     }
 
-    Logger.debug("Rendering", results.length, "results in", DisplayMode[displayMode], "mode");
+    logger.debug("renderResults", "Rendering results", {
+      count: results.length,
+      displayMode,
+      mode: displayMode
+    });
 
     if (displayMode === DisplayMode.CARDS) {
       // Horizontal card layout
       results.forEach((item, idx) => {
-        Logger.trace("Rendering card item", idx, item.title);
+        logger.trace("renderResults", "Rendering card item", { index: idx, title: item.title });
         const card = document.createElement("div");
         card.className = "result-card";
         card.tabIndex = 0;
@@ -281,7 +293,7 @@ async function initializePopup() {
     } else {
       // Vertical list layout (default)
       results.forEach((item, idx) => {
-        Logger.trace("Rendering list item", idx, item.title);
+        logger.trace("renderResults", "Rendering list item", { index: idx, title: item.title });
         const li = document.createElement("li");
         li.tabIndex = 0;
         li.dataset.index = String(idx);
@@ -425,12 +437,12 @@ async function initializePopup() {
 
   // Open settings page as modal overlay
   function openSettingsPage() {
-    Logger.debug("Opening settings modal");
+    logger.debug("openSettingsPage", "Opening settings modal");
 
     // Check if modal already exists
     const existingModal = document.querySelector('.settings-modal-overlay');
     if (existingModal) {
-      Logger.debug("Modal already exists, removing it");
+      logger.debug("openSettingsPage", "Modal already exists, removing it");
       existingModal.remove();
     }
 
@@ -552,10 +564,11 @@ async function initializePopup() {
     logOptions.className = 'setting-options';
 
     const logLevels = [
-      { value: 0, label: 'Error Only', desc: 'Show only errors' },
-      { value: 1, label: 'Info', desc: 'Show general information' },
-      { value: 2, label: 'Debug', desc: 'Show detailed debugging info' },
-      { value: 3, label: 'Trace', desc: 'Show all internal operations' }
+      { value: 0, label: 'Error', desc: 'Show only errors' },
+      { value: 1, label: 'Warn', desc: 'Show warnings and errors' },
+      { value: 2, label: 'Info', desc: 'Show general information' },
+      { value: 3, label: 'Debug', desc: 'Show detailed debugging info' },
+      { value: 4, label: 'Trace', desc: 'Show all internal operations' }
     ];
 
     logLevels.forEach(level => {
@@ -627,15 +640,19 @@ async function initializePopup() {
     const currentDisplayMode = SettingsManager.getSetting('displayMode');
     const currentLogLevel = SettingsManager.getSetting('logLevel');
 
-    console.log("Modal loading current settings - displayMode:", currentDisplayMode, "logLevel:", currentLogLevel);
-    console.log("All current settings:", SettingsManager.getSettings());
-    Logger.debug("Modal loading current settings - displayMode:", currentDisplayMode, "logLevel:", currentLogLevel);
-    Logger.debug("All current settings:", SettingsManager.getSettings());
+    logger.debug("openSettingsPage", "Modal loading current settings", {
+      displayMode: currentDisplayMode,
+      logLevel: currentLogLevel,
+      allSettings: SettingsManager.getSettings()
+    });
 
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
 
-    Logger.debug("Found display inputs:", displayInputs.length, "log inputs:", logInputs.length);
+    logger.debug("openSettingsPage", "Found input elements", {
+      displayInputs: displayInputs.length,
+      logInputs: logInputs.length
+    });
 
     displayInputs.forEach(input => {
       if ((input as HTMLInputElement).value === currentDisplayMode) {
@@ -652,18 +669,17 @@ async function initializePopup() {
     // Event handlers
     const overlay = modal; // The modal itself is the overlay
 
-    Logger.debug("Close button element:", closeBtn);
-    Logger.debug("Close button found:", !!closeBtn);
+    logger.debug("openSettingsPage", "Close button element", { found: !!closeBtn });
 
     const closeModal = () => {
       modal.remove();
     };
 
     if (closeBtn) {
-      Logger.debug("Adding close button event listener");
+      logger.debug("openSettingsPage", "Adding close button event listener");
       closeBtn.addEventListener('click', closeModal);
     } else {
-      Logger.error("Close button not found!");
+      logger.error("openSettingsPage", "Close button not found");
     }
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) closeModal();
@@ -674,12 +690,12 @@ async function initializePopup() {
       input.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
-          console.log("Display mode change detected, new value:", target.value);
-          Logger.debug("Display mode change detected, new value:", target.value);
+          logger.debug("openSettingsPage", "Display mode change detected", { newValue: target.value });
           await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
-          console.log("Display mode setting updated, current settings:", SettingsManager.getSettings());
-          Logger.debug("Display mode setting updated, current settings:", SettingsManager.getSettings());
-          Logger.info("Display mode changed to:", target.value);
+          logger.debug("openSettingsPage", "Display mode setting updated", {
+            newSettings: SettingsManager.getSettings()
+          });
+          logger.info("openSettingsPage", "Display mode changed", { mode: target.value });
           showToast("Display mode updated");
         }
       });
@@ -693,7 +709,16 @@ async function initializePopup() {
           const level = parseInt(target.value);
           await SettingsManager.setSetting('logLevel', level);
           await Logger.setLevel(level);
-          Logger.info("Log level changed to:", LogLevel[level]);
+
+          // Also notify service worker directly
+          try {
+            await sendMessage({ type: "SET_LOG_LEVEL", level: level });
+            logger.debug("openSettingsPage", "Notified service worker of log level change", { level });
+          } catch (error) {
+            logger.warn("openSettingsPage", "Failed to notify service worker of log level change", { error });
+          }
+
+          logger.info("openSettingsPage", "Log level changed", { level: LogLevel[level] });
           showToast("Log level updated");
         }
       });
@@ -794,15 +819,14 @@ async function initializePopup() {
   // Focus the input on load
   Logger.debug("Adding window load event listener");
   window.addEventListener("load", async () => {
-    console.log("=== WINDOW LOAD EVENT FIRED ===");
-    Logger.debug("Window load event fired");
+    logger.debug("windowLoad", "Window load event fired");
 
     // Give service worker a moment to initialize
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Check service worker status
     const isServiceWorkerReady = await checkServiceWorkerStatus();
-    Logger.info("Service worker ready:", isServiceWorkerReady);
+    logger.info("windowLoad", "Service worker ready", { ready: isServiceWorkerReady });
 
     if (!isServiceWorkerReady) {
       Logger.debug("Service worker not ready, showing warning");
@@ -864,7 +888,6 @@ async function initializePopup() {
   document.addEventListener("keydown", () => { hasUserInteracted = true; });
   document.addEventListener("click", () => { hasUserInteracted = true; });
 
-  // Listen for settings changes
   if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       Logger.debug("Popup received message:", message);
@@ -877,6 +900,18 @@ async function initializePopup() {
         sendResponse({ status: "ok" });
       } else if (message.type === "SETTINGS_CHANGED") {
         Logger.debug("Handling settings changed:", message.settings);
+        // Check if log level changed and update logger if needed
+        if (message.settings && typeof message.settings.logLevel === 'number') {
+          const currentLevel = Logger.getLevel();
+          if (currentLevel !== message.settings.logLevel) {
+            Logger.setLevelInternal(message.settings.logLevel);
+            Logger.info("PopupScript", "Log level updated from SETTINGS_CHANGED", {
+              from: currentLevel,
+              to: message.settings.logLevel,
+              levelName: LogLevel[message.settings.logLevel]
+            });
+          }
+        }
         Logger.debug("Re-rendering results after settings change");
         // Re-render results with new display mode
         renderResults();
@@ -895,6 +930,18 @@ async function initializePopup() {
         sendResponse({ status: "ok" });
       } else if (message.type === "SETTINGS_CHANGED") {
         Logger.debug("Handling settings changed:", message.settings);
+        // Check if log level changed and update logger if needed
+        if (message.settings && typeof message.settings.logLevel === 'number') {
+          const currentLevel = Logger.getLevel();
+          if (currentLevel !== message.settings.logLevel) {
+            Logger.setLevelInternal(message.settings.logLevel);
+            Logger.info("PopupScript", "Log level updated from SETTINGS_CHANGED", {
+              from: currentLevel,
+              to: message.settings.logLevel,
+              levelName: LogLevel[message.settings.logLevel]
+            });
+          }
+        }
         Logger.debug("Re-rendering results after settings change");
         // Re-render results with new display mode
         renderResults();

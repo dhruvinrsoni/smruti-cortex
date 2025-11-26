@@ -6,15 +6,15 @@ import { ingestHistory } from "./indexing";
 import { runSearch } from "./search/search-engine";
 import { mergeMetadata } from "./indexing";
 import { browserAPI } from "../core/helpers";
-import { Logger } from "../core/logger";
+import { Logger, LogLevel } from "../core/logger";
 import { SettingsManager } from "../core/settings";
 
-Logger.info("[SmrutiCortex] Service worker script loading");
+// Logger will be initialized below - don't log before that
 
 let initialized = false;
 
 (async function initLogger() {
-  Logger.info("[SmrutiCortex] Initializing logger and settings");
+  // Initialize logger first, then start logging
   await Logger.init();
   await SettingsManager.init();
   Logger.info("[SmrutiCortex] Logger and settings initialized, starting main init");
@@ -41,7 +41,19 @@ let initialized = false;
             sendResponse({ status: "ok" });
             break;
           case "SETTINGS_CHANGED":
-            Logger.debug("Handling SETTINGS_CHANGED (no action needed)");
+            Logger.debug("Handling SETTINGS_CHANGED:", msg.settings);
+            // Check if log level changed and update logger if needed
+            if (msg.settings && typeof msg.settings.logLevel === 'number') {
+              const currentLevel = Logger.getLevel();
+              if (currentLevel !== msg.settings.logLevel) {
+                Logger.setLevelInternal(msg.settings.logLevel);
+                Logger.info("[SmrutiCortex] Log level updated from SETTINGS_CHANGED", {
+                  from: currentLevel,
+                  to: msg.settings.logLevel,
+                  levelName: LogLevel[msg.settings.logLevel]
+                });
+              }
+            }
             sendResponse({ status: "ok" });
             break;
           default:

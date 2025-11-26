@@ -1,7 +1,7 @@
 // settings.ts — Centralized settings management with type safety and validation
 
 import { browserAPI } from "./helpers";
-import { Logger } from "./logger";
+import { Logger, ComponentLogger } from "./logger";
 
 export enum DisplayMode {
     LIST = 'list',
@@ -20,43 +20,48 @@ export class SettingsManager {
     private static readonly STORAGE_KEY = 'smrutiCortexSettings';
     private static settings: AppSettings = {
         displayMode: DisplayMode.LIST, // Default to list
-        logLevel: 1, // INFO level
+        logLevel: 2, // INFO level
     };
 
     private static initialized = false;
+    private static _logger: ComponentLogger | null = null;
+
+    /**
+     * Get the component logger (lazy initialization)
+     */
+    private static get logger(): ComponentLogger {
+        if (!this._logger) {
+            this._logger = Logger.forComponent("SettingsManager");
+        }
+        return this._logger;
+    }
 
     /**
      * Initialize settings from storage
      */
     static async init(): Promise<void> {
-        console.log('[Settings] Starting SettingsManager.init()');
+        this.logger.info("init", "Starting SettingsManager.init()");
         try {
-            Logger.debug('[Settings] Initializing settings manager');
+            this.logger.debug("init", "Initializing settings manager");
             const stored = await this.loadFromStorage();
-            console.log('[Settings] Loaded from storage:', stored);
-            Logger.debug('[Settings] Loaded from storage:', stored);
+            this.logger.debug("init", "Loaded from storage:", stored);
             if (stored) {
                 this.settings = { ...this.settings, ...stored };
-                console.log('[Settings] Applied stored settings, final settings:', this.settings);
-                Logger.debug('[Settings] Applied stored settings, final settings:', this.settings);
+                this.logger.debug("init", "Applied stored settings, final settings:", this.settings);
             } else {
-                console.log('[Settings] No stored settings found, using defaults:', this.settings);
-                Logger.debug('[Settings] No stored settings found, using defaults:', this.settings);
+                this.logger.debug("init", "No stored settings found, using defaults:", this.settings);
             }
 
             // Ensure displayMode always defaults to list
             this.settings.displayMode = DisplayMode.LIST;
-            console.log('[Settings] Ensured displayMode defaults to list, final settings:', this.settings);
-            Logger.debug('[Settings] Ensured displayMode defaults to list');
+            this.logger.debug("init", "Ensured displayMode defaults to list");
 
             // Apply current settings
             await this.applySettings();
             this.initialized = true;
-            console.log('[Settings] SettingsManager.init() completed successfully');
-            Logger.info('[Settings] Settings manager initialized with:', this.settings);
+            this.logger.info("init", "SettingsManager.init() completed successfully");
         } catch (error) {
-            console.error('[Settings] Failed to initialize settings:', error);
-            Logger.error('[Settings] Failed to initialize settings:', error);
+            this.logger.error("init", "Failed to initialize settings:", error);
             // Continue with defaults
         }
     }
@@ -105,7 +110,7 @@ export class SettingsManager {
         Logger.info('[Settings] Resetting to default settings');
         this.settings = {
             displayMode: DisplayMode.LIST,
-            logLevel: 1,
+            logLevel: 2, // INFO level
         };
         await this.saveToStorage();
         await this.applySettings();
@@ -117,29 +122,29 @@ export class SettingsManager {
     private static async loadFromStorage(): Promise<AppSettings | null> {
         return new Promise((resolve) => {
             if (!browserAPI.storage) {
-                Logger.warn('[Settings] Storage API not available');
+                this.logger.warn("loadFromStorage", "Storage API not available");
                 resolve(null);
                 return;
             }
 
-            Logger.debug('[Settings] Loading from storage with key:', this.STORAGE_KEY);
+            this.logger.debug("loadFromStorage", "Loading from storage with key:", this.STORAGE_KEY);
             browserAPI.storage.local.get([this.STORAGE_KEY], (result) => {
-                Logger.debug('[Settings] Storage get result:', result);
-                Logger.debug('[Settings] chrome.runtime.lastError:', browserAPI.runtime.lastError);
+                this.logger.debug("loadFromStorage", "Storage get result:", result);
+                this.logger.debug("loadFromStorage", "chrome.runtime.lastError:", browserAPI.runtime.lastError);
                 try {
                     const stored = result[this.STORAGE_KEY];
-                    Logger.debug('[Settings] Raw stored value:', stored);
+                    this.logger.debug("loadFromStorage", "Raw stored value:", stored);
                     if (stored && typeof stored === 'object') {
                         // Validate the stored settings
                         const validated = this.validateSettings(stored);
-                        Logger.debug('[Settings] Validated settings:', validated);
+                        this.logger.debug("loadFromStorage", "Validated settings:", validated);
                         resolve(validated);
                     } else {
-                        Logger.debug('[Settings] No valid stored settings found');
+                        this.logger.debug("loadFromStorage", "No valid stored settings found");
                         resolve(null);
                     }
                 } catch (error) {
-                    Logger.warn('[Settings] Invalid stored settings, ignoring:', error);
+                    this.logger.warn("loadFromStorage", "Invalid stored settings, ignoring:", error);
                     resolve(null);
                 }
             });
@@ -152,19 +157,19 @@ export class SettingsManager {
     private static async saveToStorage(): Promise<void> {
         return new Promise((resolve, reject) => {
             if (!browserAPI.storage) {
-                Logger.error('[Settings] Storage API not available for saving');
+                this.logger.error("saveToStorage", "Storage API not available for saving");
                 reject(new Error('Storage API not available'));
                 return;
             }
 
-            Logger.debug('[Settings] Saving to storage:', this.settings);
+            this.logger.debug("saveToStorage", "Saving to storage:", this.settings);
             browserAPI.storage.local.set({ [this.STORAGE_KEY]: this.settings }, () => {
-                Logger.debug('[Settings] chrome.runtime.lastError after save:', browserAPI.runtime.lastError);
+                this.logger.debug("saveToStorage", "chrome.runtime.lastError after save:", browserAPI.runtime.lastError);
                 if (browserAPI.runtime.lastError) {
-                    Logger.error('[Settings] Failed to save settings:', browserAPI.runtime.lastError.message);
+                    this.logger.error("saveToStorage", "Failed to save settings:", browserAPI.runtime.lastError.message);
                     reject(new Error(browserAPI.runtime.lastError.message));
                 } else {
-                    Logger.debug('[Settings] Settings saved successfully');
+                    this.logger.debug("saveToStorage", "Settings saved successfully");
                     resolve();
                 }
             });
@@ -222,35 +227,35 @@ export class SettingsManager {
         try {
             const validated: AppSettings = {
                 displayMode: DisplayMode.LIST,
-                logLevel: 1,
+                logLevel: 2, // INFO level
             };
 
-            Logger.debug('[Settings] Validating settings object:', settings);
-            Logger.debug('[Settings] DisplayMode values:', Object.values(DisplayMode));
-            Logger.debug('[Settings] settings.displayMode type:', typeof settings.displayMode, 'value:', settings.displayMode);
+            this.logger.debug("validateSettings", "Validating settings object:", settings);
+            this.logger.debug("validateSettings", `DisplayMode values: ${Object.values(DisplayMode)}`);
+            this.logger.debug("validateSettings", `settings.displayMode type: ${typeof settings.displayMode}, value: ${settings.displayMode}`);
 
             // Validate displayMode
             if (settings.displayMode && Object.values(DisplayMode).includes(settings.displayMode)) {
                 validated.displayMode = settings.displayMode;
-                Logger.debug('[Settings] DisplayMode validated successfully:', validated.displayMode);
+                this.logger.debug("validateSettings", "DisplayMode validated successfully:", validated.displayMode);
             } else {
-                Logger.debug('[Settings] DisplayMode validation failed, using default:', validated.displayMode);
+                this.logger.debug("validateSettings", "DisplayMode validation failed, using default:", validated.displayMode);
             }
 
             // Validate logLevel
-            if (typeof settings.logLevel === 'number' && settings.logLevel >= 0 && settings.logLevel <= 3) {
+            if (typeof settings.logLevel === 'number' && settings.logLevel >= 0 && settings.logLevel <= 4) {
                 validated.logLevel = settings.logLevel;
-                Logger.debug('[Settings] LogLevel validated successfully:', validated.logLevel);
+                this.logger.debug("validateSettings", "LogLevel validated successfully:", validated.logLevel);
             } else {
-                Logger.debug('[Settings] LogLevel validation failed, using default:', validated.logLevel);
+                this.logger.debug("validateSettings", "LogLevel validation failed, using default:", validated.logLevel);
             }
 
             // Future: validate other settings
 
-            Logger.debug('[Settings] Final validated settings:', validated);
+            this.logger.debug("validateSettings", "Final validated settings:", validated);
             return validated;
         } catch (error) {
-            Logger.warn('[Settings] Settings validation failed:', error);
+            this.logger.warn("validateSettings", "Settings validation failed:", error);
             return null;
         }
     }
