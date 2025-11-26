@@ -1,56 +1,99 @@
-// logging.ts — Centralized logging utility with configurable levels
+// logging.ts — Spring Boot-style centralized logging with enforced patterns
 
 import { SettingsManager } from "./settings";
 
 export enum LogLevel {
     ERROR = 0,
-    INFO = 1,
-    DEBUG = 2,
-    TRACE = 3
+    WARN = 1,
+    INFO = 2,
+    DEBUG = 3,
+    TRACE = 4
+}
+
+export interface LogContext {
+    className: string;
+    methodName?: string;
+    userId?: string;
+    sessionId?: string;
+    correlationId?: string;
+}
+
+export interface LogEntry {
+    timestamp: string;
+    level: LogLevel;
+    levelName: string;
+    context: LogContext;
+    message: string;
+    data?: any;
+    error?: Error;
 }
 
 export class Logger {
-    private static currentLevel: LogLevel = LogLevel.INFO;
+    private static currentLevel: LogLevel = LogLevel.DEBUG; // Changed from INFO to DEBUG
     private static initialized = false;
+    private static logBuffer: LogEntry[] = [];
+    private static readonly MAX_BUFFER_SIZE = 1000;
 
     /**
-     * Initialize logger with settings
+     * Initialize logger with Spring Boot-style configuration
      */
     static async init(): Promise<void> {
         if (this.initialized) return;
 
         try {
-            // Start with default level, will be updated by SettingsManager later
+            // Set default level initially to INFO (changed from DEBUG)
             this.currentLevel = LogLevel.INFO;
+
+            // Try to load saved log level from settings
+            try {
+                await SettingsManager.init();
+                const savedLogLevel = SettingsManager.getSetting('logLevel');
+                if (typeof savedLogLevel === 'number' && savedLogLevel >= 0 && savedLogLevel <= 4) {
+                    this.currentLevel = savedLogLevel;
+                }
+            } catch (error) {
+                // Settings not available yet, keep default INFO level
+                console.warn("[Logger] Could not load saved log level, using default INFO:", error);
+            }
+
             this.initialized = true;
 
-            Logger.info("[Logger] Logger initialized with default level:", LogLevel[this.currentLevel]);
+            this.info("Logger", "init", "Logger initialized with Spring Boot-style logging", {
+                currentLevel: LogLevel[this.currentLevel],
+                pattern: "timestamp [LEVEL] [className.methodName] - message"
+            });
         } catch (error) {
-            // Fallback to default
+            console.error("[FALLBACK] Logger initialization failed:", error);
             this.currentLevel = LogLevel.INFO;
-            console.warn("[Logger] Failed to initialize:", error);
         }
     }
 
     /**
-     * Set logging level and persist to settings
+     * Set logging level with persistence
      */
     static async setLevel(level: LogLevel): Promise<void> {
+        const oldLevel = this.currentLevel;
         this.currentLevel = level;
+
         try {
             await SettingsManager.setSetting('logLevel', level);
-            Logger.debug("[Logger] Log level set to:", LogLevel[level]);
+            this.info("Logger", "setLevel", "Log level changed", {
+                from: LogLevel[oldLevel],
+                to: LogLevel[level]
+            });
         } catch (error) {
-            Logger.error("[Logger] Failed to persist log level:", error);
+            this.error("Logger", "setLevel", "Failed to persist log level", { error: error.message });
         }
     }
 
     /**
-     * Set logging level without persisting to settings (for internal use)
+     * Set logging level internally (no persistence)
      */
     static setLevelInternal(level: LogLevel): void {
         this.currentLevel = level;
-        Logger.debug("[Logger] Log level set internally to:", LogLevel[level]);
+        this.debug("Logger", "setLevelInternal", "Log level set internally", {
+            level: LogLevel[level]
+        });
     }
 
     /**
@@ -68,100 +111,212 @@ export class Logger {
     }
 
     /**
-     * Format log message with timestamp and level
+     * Format log entry in Spring Boot style
      */
-    private static formatMessage(level: string, args: any[]): string {
-        const timestamp = new Date().toISOString().substr(11, 8); // HH:MM:SS
-        return `[${timestamp}] [${level}]`;
+    private static formatLogEntry(entry: LogEntry): string {
+        const contextStr = entry.context.methodName
+            ? `${entry.context.className}.${entry.context.methodName}`
+            : entry.context.className;
+
+        let formatted = `${entry.timestamp} [${entry.levelName}] [${contextStr}] - ${entry.message}`;
+
+        if (entry.data) {
+            formatted += ` | data=${JSON.stringify(entry.data)}`;
+        }
+
+        if (entry.error) {
+            formatted += ` | error=${entry.error.message}`;
+        }
+
+        return formatted;
     }
 
     /**
-     * Log error messages
+     * Create and log an entry
+     */
+    private static log(level: LogLevel, context: LogContext, message: string, data?: any, error?: Error): void {
+        if (!this.shouldLog(level)) return;
+
+        const entry: LogEntry = {
+            timestamp: new Date().toISOString(),
+            level,
+            levelName: LogLevel[level],
+            context,
+            message,
+            data,
+            error
+        };
+
+        // Buffer for potential future use (metrics, etc.)
+        this.logBuffer.push(entry);
+        if (this.logBuffer.length > this.MAX_BUFFER_SIZE) {
+            this.logBuffer.shift();
+        }
+
+        // Output to console with appropriate method
+        const formatted = this.formatLogEntry(entry);
+
+        switch (level) {
+            case LogLevel.ERROR:
+                console.error(formatted);
+                break;
+            case LogLevel.WARN:
+                console.warn(formatted);
+                break;
+            case LogLevel.INFO:
+                console.info(formatted);
+                break;
+            case LogLevel.DEBUG:
+            case LogLevel.TRACE:
+                console.log(formatted); // Changed from console.debug() to console.log() for better visibility
+                break;
+        }
+    }
+
+    // ===== SPRING BOOT-STYLE LOGGING METHODS =====
+
+    /**
+     * Log ERROR level message
+     * Pattern: timestamp [ERROR] [className.methodName] - message | data={} | error=message
      */
     static error(...args: any[]): void {
-        if (this.shouldLog(LogLevel.ERROR)) {
-            console.error(this.formatMessage('ERROR', args), ...args);
+        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+            // New pattern: error(className, methodName, message, data?, error?)
+            this.log(LogLevel.ERROR, { className: args[0], methodName: args[1] }, args[2], args[3], args[4]);
+        } else {
+            // Old pattern: error(message, data?, error?) - use "Unknown" as className
+            this.log(LogLevel.ERROR, { className: "Unknown", methodName: "unknown" }, args[0], args[1], args[2]);
         }
     }
 
     /**
-     * Log info messages
-     */
-    static info(...args: any[]): void {
-        if (this.shouldLog(LogLevel.INFO)) {
-            console.log(this.formatMessage('INFO', args), ...args);
-        }
-    }
-
-    /**
-     * Log warning messages
+     * Log WARN level message
+     * Pattern: timestamp [WARN] [className.methodName] - message | data={}
      */
     static warn(...args: any[]): void {
-        if (this.shouldLog(LogLevel.INFO)) { // Warnings show at INFO level
-            console.warn(this.formatMessage('WARN', args), ...args);
+        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+            // New pattern: warn(className, methodName, message, data?)
+            this.log(LogLevel.WARN, { className: args[0], methodName: args[1] }, args[2], args[3]);
+        } else {
+            // Old pattern: warn(message, data?) - use "Unknown" as className
+            this.log(LogLevel.WARN, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
         }
     }
 
     /**
-     * Log debug messages
+     * Log INFO level message
+     * Pattern: timestamp [INFO] [className.methodName] - message | data={}
+     */
+    static info(...args: any[]): void {
+        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+            // New pattern: info(className, methodName, message, data?)
+            this.log(LogLevel.INFO, { className: args[0], methodName: args[1] }, args[2], args[3]);
+        } else {
+            // Old pattern: info(message, data?) - use "Unknown" as className
+            this.log(LogLevel.INFO, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
+        }
+    }
+
+    /**
+     * Log DEBUG level message
+     * Pattern: timestamp [DEBUG] [className.methodName] - message | data={}
      */
     static debug(...args: any[]): void {
-        if (this.shouldLog(LogLevel.DEBUG)) {
-            console.log(this.formatMessage('DEBUG', args), ...args);
+        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+            // New pattern: debug(className, methodName, message, data?)
+            this.log(LogLevel.DEBUG, { className: args[0], methodName: args[1] }, args[2], args[3]);
+        } else {
+            // Old pattern: debug(message, data?) - use "Unknown" as className
+            this.log(LogLevel.DEBUG, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
         }
     }
 
     /**
-     * Log trace messages
+     * Log TRACE level message
+     * Pattern: timestamp [TRACE] [className.methodName] - message | data={}
      */
     static trace(...args: any[]): void {
-        if (this.shouldLog(LogLevel.TRACE)) {
-            console.log(this.formatMessage('TRACE', args), ...args);
+        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+            // New pattern: trace(className, methodName, message, data?)
+            this.log(LogLevel.TRACE, { className: args[0], methodName: args[1] }, args[2], args[3]);
+        } else {
+            // Old pattern: trace(message, data?) - use "Unknown" as className
+            this.log(LogLevel.TRACE, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
         }
     }
 
-    // Context-specific convenience methods
-    static db(...args: any[]): void {
-        this.debug('[Database]', ...args);
-    }
-
-    static search(...args: any[]): void {
-        this.debug('[Search]', ...args);
-    }
-
-    static ui(...args: any[]): void {
-        this.debug('[UI]', ...args);
-    }
-
-    static cmd(...args: any[]): void {
-        this.debug('[Command]', ...args);
-    }
-
-    static settings(...args: any[]): void {
-        this.debug('[Settings]', ...args);
-    }
+    // ===== COMPONENT-SPECIFIC LOGGERS =====
 
     /**
-     * Create a contextual logger for a specific component
+     * Create a component-specific logger (Spring Boot style)
+     * Usage: const logger = Logger.forComponent("PopupScript");
+     *        logger.info("initialize", "Popup initialized", { version: "1.0" });
      */
-    static createContextLogger(context: string) {
-        return {
-            error: (...args: any[]) => this.error(`[${context}]`, ...args),
-            info: (...args: any[]) => this.info(`[${context}]`, ...args),
-            warn: (...args: any[]) => this.warn(`[${context}]`, ...args),
-            debug: (...args: any[]) => this.debug(`[${context}]`, ...args),
-            trace: (...args: any[]) => this.trace(`[${context}]`, ...args),
-        };
+    static forComponent(className: string): ComponentLogger {
+        return new ComponentLogger(className);
     }
 
     /**
-     * Get logger statistics (for debugging)
+     * Get logger statistics
      */
     static getStats() {
         return {
             currentLevel: this.currentLevel,
             levelName: LogLevel[this.currentLevel],
             initialized: this.initialized,
+            bufferSize: this.logBuffer.length,
+            maxBufferSize: this.MAX_BUFFER_SIZE
         };
     }
+
+    /**
+     * Clear log buffer
+     */
+    static clearBuffer(): void {
+        this.logBuffer = [];
+    }
+
+    /**
+     * Get recent log entries
+     */
+    static getRecentLogs(count: number = 50): LogEntry[] {
+        return this.logBuffer.slice(-count);
+    }
+}
+
+/**
+ * Component-specific logger following Spring Boot patterns
+ */
+export class ComponentLogger {
+    constructor(private className: string) {}
+
+    error(methodName: string, message: string, data?: any, error?: Error): void {
+        Logger.error(this.className, methodName, message, data, error);
+    }
+
+    warn(methodName: string, message: string, data?: any): void {
+        Logger.warn(this.className, methodName, message, data);
+    }
+
+    info(methodName: string, message: string, data?: any): void {
+        Logger.info(this.className, methodName, message, data);
+    }
+
+    debug(methodName: string, message: string, data?: any): void {
+        Logger.debug(this.className, methodName, message, data);
+    }
+
+    trace(methodName: string, message: string, data?: any): void {
+        Logger.trace(this.className, methodName, message, data);
+    }
+}
+
+// ===== LEGACY COMPATIBILITY METHODS =====
+// These maintain backward compatibility but are deprecated
+
+/**
+ * @deprecated Use Logger.forComponent("ComponentName").info() instead
+ */
+export function createContextLogger(context: string) {
+    return Logger.forComponent(context);
 }
