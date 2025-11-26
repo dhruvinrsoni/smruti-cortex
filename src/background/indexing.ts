@@ -7,23 +7,22 @@ import { IndexedItem } from "./schema";
 import { BRAND_NAME } from "../core/constants";
 import { Logger } from "../core/logger";
 
-/**
- * Smart history ingestion with version tracking and incremental updates
- */
+const logger = Logger.forComponent("Indexing");
+
 export async function ingestHistory(): Promise<void> {
-    Logger.info("[Indexing] Starting smart history ingestion...");
+    logger.info("ingestHistory", "[Indexing] Starting smart history ingestion...");
 
     // Check extension version for re-indexing decision
     const currentVersion = chrome.runtime.getManifest().version;
     const lastIndexedVersion = await getSetting<string>('lastIndexedVersion', '0.0.0');
 
-    Logger.debug("[Indexing] Version check", { currentVersion, lastIndexedVersion });
+    logger.debug("ingestHistory", "[Indexing] Version check", { currentVersion, lastIndexedVersion });
 
     // If version changed, we need to re-index
     const needsFullReindex = compareVersions(currentVersion, lastIndexedVersion) > 0;
 
     if (needsFullReindex) {
-        Logger.info("[Indexing] Extension updated, performing full re-index");
+        logger.info("ingestHistory", "[Indexing] Extension updated, performing full re-index");
         await performFullHistoryIndex();
         await setSetting('lastIndexedVersion', currentVersion);
         await setSetting('lastIndexedTimestamp', Date.now());
@@ -37,36 +36,33 @@ export async function ingestHistory(): Promise<void> {
 
     // Only index if it's been more than 1 hour since last index
     if (timeSinceLastIndex < 60 * 60 * 1000) {
-        Logger.debug("[Indexing] Skipping incremental index, too recent", {
+        logger.debug("ingestHistory", "[Indexing] Skipping incremental index, too recent", {
             timeSinceLastIndex: Math.round(timeSinceLastIndex / 1000 / 60),
             minutes: 'minutes ago'
         });
         return;
     }
 
-    Logger.info("[Indexing] Performing incremental history index");
+    logger.info("ingestHistory", "[Indexing] Performing incremental history index");
     await performIncrementalHistoryIndex(lastIndexedTimestamp);
     await setSetting('lastIndexedTimestamp', now);
 }
 
-/**
- * Perform full history indexing (for new installations or version updates)
- */
 async function performFullHistoryIndex(): Promise<void> {
-    Logger.info("[Indexing] Starting full history index...");
+    logger.info("performFullHistoryIndex", "[Indexing] Starting full history index...");
 
     // Clear any existing data first
     await clearIndexedData();
 
     // Get history in chunks to access older items
     const allHistoryItems = await getFullHistory();
-    Logger.info("[Indexing] Found", allHistoryItems.length, "total history items");
+    logger.info("performFullHistoryIndex", `[Indexing] Found ${allHistoryItems.length} total history items`);
 
     // Process in batches to avoid blocking
     const batchSize = 1000;
     for (let i = 0; i < allHistoryItems.length; i += batchSize) {
         const batch = allHistoryItems.slice(i, i + batchSize);
-        Logger.debug("[Indexing] Processing batch", {
+        logger.debug("performFullHistoryIndex", "[Indexing] Processing batch", {
             batch: `${i + 1}-${Math.min(i + batchSize, allHistoryItems.length)}`,
             total: allHistoryItems.length
         });
@@ -86,7 +82,7 @@ async function performFullHistoryIndex(): Promise<void> {
 
                 await saveIndexedItem(indexed);
             } catch (error) {
-                Logger.warn("[Indexing] Failed to index item", { url: item.url, error: error.message });
+                logger.warn("performFullHistoryIndex", "[Indexing] Failed to index item", { url: item.url, error: error.message });
             }
         }
 
@@ -96,20 +92,20 @@ async function performFullHistoryIndex(): Promise<void> {
         }
     }
 
-    Logger.info("[Indexing] Full history indexing completed");
+    logger.info("performFullHistoryIndex", "[Indexing] Full history indexing completed");
 }
 
 /**
  * Perform incremental history indexing (for regular updates)
  */
 async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<void> {
-    Logger.info("[Indexing] Starting incremental history index", {
+    logger.info("performIncrementalHistoryIndex", "[Indexing] Starting incremental history index", {
         since: new Date(sinceTimestamp).toISOString()
     });
 
     // Get only items visited since the last index
     const newHistoryItems = await getHistorySince(sinceTimestamp);
-    Logger.info("[Indexing] Found", newHistoryItems.length, "potentially new history items");
+    logger.info("performIncrementalHistoryIndex", `[Indexing] Found ${newHistoryItems.length} potentially new history items`);
 
     let updated = 0;
     let added = 0;
@@ -147,11 +143,11 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
                 added++;
             }
         } catch (error) {
-            Logger.warn("[Indexing] Failed to index item", { url: item.url, error: error.message });
+            logger.warn("performIncrementalHistoryIndex", "[Indexing] Failed to index item", { url: item.url, error: error.message });
         }
     }
 
-    Logger.info("[Indexing] Incremental history indexing completed", {
+    logger.info("performIncrementalHistoryIndex", "[Indexing] Incremental history indexing completed", {
         added,
         updated,
         totalProcessed: newHistoryItems.length
@@ -167,14 +163,14 @@ async function getFullHistory(): Promise<any[]> {
     const oneMonthMs = 30 * 24 * 60 * 60 * 1000; // 30 days
     const twoYearsAgo = now - (2 * 365 * 24 * 60 * 60 * 1000); // Go back 2 years
 
-    Logger.debug("[Indexing] Querying full history from", new Date(twoYearsAgo).toISOString(), "to now");
+    logger.debug("getFullHistory", `[Indexing] Querying full history from ${new Date(twoYearsAgo).toISOString()} to now`);
 
     // Query history in monthly chunks going backwards to get maximum coverage
     for (let startTime = now; startTime > twoYearsAgo; startTime -= oneMonthMs) {
         const endTime = startTime;
         const startTimeQuery = Math.max(startTime - oneMonthMs, twoYearsAgo);
 
-        Logger.trace("[Indexing] Querying chunk", {
+        logger.trace("getFullHistory", "[Indexing] Querying chunk", {
             from: new Date(startTimeQuery).toISOString(),
             to: new Date(endTime).toISOString()
         });
@@ -195,7 +191,7 @@ async function getFullHistory(): Promise<any[]> {
 
         // If we got fewer than 10000 results, we've likely reached the end of available history
         if (chunk.length < 10000) {
-            Logger.debug("[Indexing] Reached end of available history at", new Date(startTimeQuery).toISOString());
+            logger.debug("getFullHistory", `[Indexing] Reached end of available history at ${new Date(startTimeQuery).toISOString()}`);
             break;
         }
     }
@@ -215,7 +211,7 @@ async function getFullHistory(): Promise<any[]> {
         return acc;
     }, []);
 
-    Logger.debug("[Indexing] Retrieved unique history items", {
+    logger.debug("getFullHistory", "[Indexing] Retrieved unique history items", {
         total: allItems.length,
         unique: uniqueItems.length,
         coverage: `${Math.round((now - twoYearsAgo) / (1000 * 60 * 60 * 24))} days`
@@ -241,10 +237,10 @@ async function getHistorySince(sinceTimestamp: number): Promise<any[]> {
  * Clear all indexed data (for full re-indexing)
  */
 async function clearIndexedData(): Promise<void> {
-    Logger.info("[Indexing] Clearing existing indexed data");
+    logger.info("clearIndexedData", "[Indexing] Clearing existing indexed data");
     // Note: In a real implementation, you'd need to clear the IndexedDB store
     // For now, we'll rely on the put operation to overwrite existing data
-    Logger.debug("[Indexing] Indexed data clearing completed (using overwrite strategy)");
+    logger.debug("clearIndexedData", "[Indexing] Indexed data clearing completed (using overwrite strategy)");
 }
 
 /**
@@ -275,7 +271,7 @@ export async function mergeMetadata(
     meta: { description?: string; keywords?: string[]; title?: string }
 ): Promise<void> {
     try {
-        Logger.debug("Merging metadata for URL:", url);
+        logger.debug("mergeMetadata", "Merging metadata for URL:", url);
         // Try canonical normalization (if needed)
         const normalizedUrl = url;
 
@@ -283,7 +279,7 @@ export async function mergeMetadata(
         let item = await getIndexedItem(normalizedUrl);
 
         if (!item) {
-            Logger.debug("No existing item found, creating new item with metadata");
+            logger.debug("mergeMetadata", "No existing item found, creating new item with metadata");
             // If no existing item, create a minimal item so metadata isn't lost
             item = {
                 url: normalizedUrl,
@@ -296,7 +292,7 @@ export async function mergeMetadata(
                 tokens: tokenize((meta.title || "") + " " + (meta.description || "") + " " + normalizedUrl),
             };
         } else {
-            Logger.trace("Updating existing item with new metadata");
+            logger.trace("mergeMetadata", "Updating existing item with new metadata");
             // merge fields (prefer existing title unless meta.title is present)
             item.title = meta.title && meta.title.length ? meta.title : item.title;
             item.metaDescription = meta.description && meta.description.length ? meta.description : item.metaDescription;
@@ -307,10 +303,10 @@ export async function mergeMetadata(
         }
 
         // Save updated item
-        Logger.trace("Saving updated item to database");
+        logger.trace("mergeMetadata", "Saving updated item to database");
         await saveIndexedItem(item);
-        Logger.debug("Metadata merge completed for:", url);
+        logger.debug("mergeMetadata", "Metadata merge completed for:", url);
     } catch (err) {
-        Logger.error(`[${BRAND_NAME}] mergeMetadata error:`, err);
+        logger.error("mergeMetadata", `[${BRAND_NAME}] mergeMetadata error:`, err);
     }
 }
