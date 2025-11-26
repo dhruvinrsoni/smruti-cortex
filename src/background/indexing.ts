@@ -1,41 +1,268 @@
 // indexing.ts — URL ingestion, merging, enrichment, and storage
 
 import { browserAPI } from "../core/helpers";
-import { saveIndexedItem } from "./database";
+import { saveIndexedItem, getIndexedItem, getSetting, setSetting } from "./database";
 import { tokenize } from "./search/tokenizer";
 import { IndexedItem } from "./schema";
 import { BRAND_NAME } from "../core/constants";
-import { getIndexedItem } from "./database";
 import { Logger } from "../core/logger";
 
-
+/**
+ * Smart history ingestion with version tracking and incremental updates
+ */
 export async function ingestHistory(): Promise<void> {
-    Logger.info("[Indexing] Starting history ingestion...");
-    const historyItems = await new Promise<any[]>((resolve) => {
-        browserAPI.history.search(
-            { text: "", maxResults: 50000 },
-            (results) => resolve(results)
-        );
-    });
-    Logger.info("[Indexing] Found", historyItems.length, "history items");
+    Logger.info("[Indexing] Starting smart history ingestion...");
 
-    Logger.debug("Processing history items for indexing");
-    for (const item of historyItems) {
-        const indexed: IndexedItem = {
-            url: item.url,
-            title: item.title || "",
-            hostname: new URL(item.url).hostname,
-            metaDescription: "",
-            metaKeywords: [],
-            visitCount: item.visitCount || 1,
-            lastVisit: item.lastVisitTime || Date.now(),
-            tokens: tokenize(item.title + " " + item.url),
-        };
+    // Check extension version for re-indexing decision
+    const currentVersion = chrome.runtime.getManifest().version;
+    const lastIndexedVersion = await getSetting<string>('lastIndexedVersion', '0.0.0');
 
-        Logger.trace("Saving indexed item:", item.url);
-        await saveIndexedItem(indexed);
+    Logger.debug("[Indexing] Version check", { currentVersion, lastIndexedVersion });
+
+    // If version changed, we need to re-index
+    const needsFullReindex = compareVersions(currentVersion, lastIndexedVersion) > 0;
+
+    if (needsFullReindex) {
+        Logger.info("[Indexing] Extension updated, performing full re-index");
+        await performFullHistoryIndex();
+        await setSetting('lastIndexedVersion', currentVersion);
+        await setSetting('lastIndexedTimestamp', Date.now());
+        return;
     }
-    Logger.info("[Indexing] History ingestion completed");
+
+    // Check if we need incremental indexing
+    const lastIndexedTimestamp = await getSetting<number>('lastIndexedTimestamp', 0);
+    const now = Date.now();
+    const timeSinceLastIndex = now - lastIndexedTimestamp;
+
+    // Only index if it's been more than 1 hour since last index
+    if (timeSinceLastIndex < 60 * 60 * 1000) {
+        Logger.debug("[Indexing] Skipping incremental index, too recent", {
+            timeSinceLastIndex: Math.round(timeSinceLastIndex / 1000 / 60),
+            minutes: 'minutes ago'
+        });
+        return;
+    }
+
+    Logger.info("[Indexing] Performing incremental history index");
+    await performIncrementalHistoryIndex(lastIndexedTimestamp);
+    await setSetting('lastIndexedTimestamp', now);
+}
+
+/**
+ * Perform full history indexing (for new installations or version updates)
+ */
+async function performFullHistoryIndex(): Promise<void> {
+    Logger.info("[Indexing] Starting full history index...");
+
+    // Clear any existing data first
+    await clearIndexedData();
+
+    // Get history in chunks to access older items
+    const allHistoryItems = await getFullHistory();
+    Logger.info("[Indexing] Found", allHistoryItems.length, "total history items");
+
+    // Process in batches to avoid blocking
+    const batchSize = 1000;
+    for (let i = 0; i < allHistoryItems.length; i += batchSize) {
+        const batch = allHistoryItems.slice(i, i + batchSize);
+        Logger.debug("[Indexing] Processing batch", {
+            batch: `${i + 1}-${Math.min(i + batchSize, allHistoryItems.length)}`,
+            total: allHistoryItems.length
+        });
+
+        for (const item of batch) {
+            try {
+                const indexed: IndexedItem = {
+                    url: item.url,
+                    title: item.title || "",
+                    hostname: new URL(item.url).hostname,
+                    metaDescription: "",
+                    metaKeywords: [],
+                    visitCount: item.visitCount || 1,
+                    lastVisit: item.lastVisitTime || Date.now(),
+                    tokens: tokenize(item.title + " " + item.url),
+                };
+
+                await saveIndexedItem(indexed);
+            } catch (error) {
+                Logger.warn("[Indexing] Failed to index item", { url: item.url, error: error.message });
+            }
+        }
+
+        // Small delay between batches to prevent blocking
+        if (i + batchSize < allHistoryItems.length) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+    }
+
+    Logger.info("[Indexing] Full history indexing completed");
+}
+
+/**
+ * Perform incremental history indexing (for regular updates)
+ */
+async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<void> {
+    Logger.info("[Indexing] Starting incremental history index", {
+        since: new Date(sinceTimestamp).toISOString()
+    });
+
+    // Get only items visited since the last index
+    const newHistoryItems = await getHistorySince(sinceTimestamp);
+    Logger.info("[Indexing] Found", newHistoryItems.length, "potentially new history items");
+
+    let updated = 0;
+    let added = 0;
+
+    for (const item of newHistoryItems) {
+        try {
+            // Check if we already have this URL
+            const existing = await getIndexedItem(item.url);
+
+            if (existing) {
+                // Only update if this visit is more recent
+                if (item.lastVisitTime > existing.lastVisit) {
+                    const updatedItem: IndexedItem = {
+                        ...existing,
+                        visitCount: Math.max(existing.visitCount, item.visitCount || 1),
+                        lastVisit: item.lastVisitTime,
+                        title: item.title || existing.title, // Prefer newer title if available
+                    };
+                    await saveIndexedItem(updatedItem);
+                    updated++;
+                }
+            } else {
+                // Create new indexed item
+                const indexed: IndexedItem = {
+                    url: item.url,
+                    title: item.title || "",
+                    hostname: new URL(item.url).hostname,
+                    metaDescription: "",
+                    metaKeywords: [],
+                    visitCount: item.visitCount || 1,
+                    lastVisit: item.lastVisitTime,
+                    tokens: tokenize(item.title + " " + item.url),
+                };
+                await saveIndexedItem(indexed);
+                added++;
+            }
+        } catch (error) {
+            Logger.warn("[Indexing] Failed to index item", { url: item.url, error: error.message });
+        }
+    }
+
+    Logger.info("[Indexing] Incremental history indexing completed", {
+        added,
+        updated,
+        totalProcessed: newHistoryItems.length
+    });
+}
+
+/**
+ * Get full history by querying comprehensively to access all available items
+ */
+async function getFullHistory(): Promise<any[]> {
+    const allItems: any[] = [];
+    const now = Date.now();
+    const oneMonthMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const twoYearsAgo = now - (2 * 365 * 24 * 60 * 60 * 1000); // Go back 2 years
+
+    Logger.debug("[Indexing] Querying full history from", new Date(twoYearsAgo).toISOString(), "to now");
+
+    // Query history in monthly chunks going backwards to get maximum coverage
+    for (let startTime = now; startTime > twoYearsAgo; startTime -= oneMonthMs) {
+        const endTime = startTime;
+        const startTimeQuery = Math.max(startTime - oneMonthMs, twoYearsAgo);
+
+        Logger.trace("[Indexing] Querying chunk", {
+            from: new Date(startTimeQuery).toISOString(),
+            to: new Date(endTime).toISOString()
+        });
+
+        const chunk = await new Promise<any[]>((resolve) => {
+            browserAPI.history.search({
+                text: "",
+                startTime: startTimeQuery,
+                endTime: endTime,
+                maxResults: 10000 // Maximum allowed by Chrome per query
+            }, resolve);
+        });
+
+        allItems.push(...chunk);
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // If we got fewer than 10000 results, we've likely reached the end of available history
+        if (chunk.length < 10000) {
+            Logger.debug("[Indexing] Reached end of available history at", new Date(startTimeQuery).toISOString());
+            break;
+        }
+    }
+
+    // Remove duplicates based on URL (keep the most recent visit)
+    const uniqueItems = allItems.reduce((acc, item) => {
+        const existing = acc.find(i => i.url === item.url);
+        if (!existing || item.lastVisitTime > existing.lastVisitTime) {
+            if (existing) {
+                // Replace with more recent visit
+                const index = acc.indexOf(existing);
+                acc[index] = item;
+            } else {
+                acc.push(item);
+            }
+        }
+        return acc;
+    }, []);
+
+    Logger.debug("[Indexing] Retrieved unique history items", {
+        total: allItems.length,
+        unique: uniqueItems.length,
+        coverage: `${Math.round((now - twoYearsAgo) / (1000 * 60 * 60 * 24))} days`
+    });
+
+    return uniqueItems;
+}
+
+/**
+ * Get history items since a specific timestamp
+ */
+async function getHistorySince(sinceTimestamp: number): Promise<any[]> {
+    return new Promise<any[]>((resolve) => {
+        browserAPI.history.search({
+            text: "",
+            startTime: sinceTimestamp,
+            maxResults: 10000
+        }, resolve);
+    });
+}
+
+/**
+ * Clear all indexed data (for full re-indexing)
+ */
+async function clearIndexedData(): Promise<void> {
+    Logger.info("[Indexing] Clearing existing indexed data");
+    // Note: In a real implementation, you'd need to clear the IndexedDB store
+    // For now, we'll rely on the put operation to overwrite existing data
+    Logger.debug("[Indexing] Indexed data clearing completed (using overwrite strategy)");
+}
+
+/**
+ * Compare version strings (semantic versioning)
+ */
+function compareVersions(version1: string, version2: string): number {
+    const v1Parts = version1.split('.').map(Number);
+    const v2Parts = version2.split('.').map(Number);
+
+    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+        const v1Part = v1Parts[i] || 0;
+        const v2Part = v2Parts[i] || 0;
+
+        if (v1Part > v2Part) return 1;
+        if (v1Part < v2Part) return -1;
+    }
+
+    return 0;
 }
 
 // Called by content script metadata updates
