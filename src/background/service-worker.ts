@@ -119,32 +119,34 @@ async function init() {
         await openDatabase();
         Logger.info("[SmrutiCortex] Database opened");
 
-        // First run: full indexing
-        Logger.debug("Checking if already indexed");
-        const alreadyIndexed = await new Promise<boolean>((resolve) => {
-            Logger.debug("Getting indexedOnce from storage");
-            browserAPI.storage.local.get(["indexedOnce"], (data) => {
-                Logger.trace("Storage get result:", data);
-                resolve(Boolean(data.indexedOnce));
+        // Smart indexing based on version and incremental updates
+        Logger.debug("Checking indexing status");
+        const currentVersion = chrome.runtime.getManifest().version;
+        const lastIndexedVersion = await new Promise<string>((resolve) => {
+            browserAPI.storage.local.get(["lastIndexedVersion"], (data) => {
+                resolve(data.lastIndexedVersion || "0.0.0");
             });
         });
-        Logger.debug("Already indexed:", alreadyIndexed);
 
-        if (!alreadyIndexed) {
-            Logger.info("Starting initial history ingestion");
-            await ingestHistory();
-            Logger.info("Initial history ingestion completed");
-            Logger.debug("Setting indexedOnce to true");
-            browserAPI.storage.local.set({ indexedOnce: true });
-        } else {
-            Logger.debug("Skipping indexing, already done");
-        }
+        Logger.debug("Version check for indexing", { currentVersion, lastIndexedVersion });
 
-        // Listen for new visits
-        Logger.debug("Setting up history listener");
+        // Always perform indexing on startup (smart indexing will decide what to do)
+        Logger.info("Starting smart history indexing");
+        await ingestHistory();
+        Logger.info("Smart history indexing completed");
+
+        // Listen for new visits (incremental updates with debouncing)
+        Logger.debug("Setting up history listener for incremental updates");
         browserAPI.history.onVisited.addListener(async (item) => {
-            Logger.trace("New visit detected:", item.url);
-            await ingestHistory(); // lightweight incremental indexing
+            Logger.trace("New visit detected, scheduling incremental index:", item.url);
+            // Debounce incremental indexing to avoid too frequent updates
+            if (this.indexingTimeout) {
+                clearTimeout(this.indexingTimeout);
+            }
+            this.indexingTimeout = setTimeout(async () => {
+                Logger.debug("Performing debounced incremental indexing");
+                await ingestHistory();
+            }, 10000); // Wait 10 seconds after last visit before indexing
         });
 
         // Set up messaging
