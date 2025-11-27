@@ -1,4 +1,5 @@
 import { Scorer } from "../../../core/scorer-types";
+import { tokenize } from "../tokenizer";
 
 const metaScorer: Scorer = {
     name: "meta",
@@ -8,12 +9,13 @@ const metaScorer: Scorer = {
         const keywords = (item.metaKeywords || []).join(" ").toLowerCase();
         const text = desc + " " + keywords;
 
-        if (!text) return 0;
-        if (text.includes(query)) return 1;
+        if (!text.trim()) return 0;
 
-        const tokens = query.split(" ");
-        const matches = tokens.filter(t => text.includes(t)).length;
-        return matches / tokens.length;
+        const queryTokens = tokenize(query);
+        if (queryTokens.length === 0) return 0;
+
+        const matches = queryTokens.filter(token => text.includes(token)).length;
+        return matches / queryTokens.length;
     },
 };
 

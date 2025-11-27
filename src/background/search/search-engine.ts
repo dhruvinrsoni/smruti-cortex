@@ -3,87 +3,92 @@
 import { BRAND_NAME } from "../../core/constants";
 import { getAllIndexedItems } from "../database";
 import { getAllScorers } from "./scorer-manager";
-import { IndexedItem } from "../../background/schema";
+import { IndexedItem } from "../schema";
 import { tokenize } from "./tokenizer";
 import { browserAPI } from "../../core/helpers";
 import { Logger } from "../../core/logger";
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
-    Logger.debug("runSearch called with query:", query);
+    const logger = Logger.forComponent("SearchEngine");
+    logger.debug("runSearch", "Search called with query:", query);
+
     const q = query.trim().toLowerCase();
-    Logger.trace("Trimmed and lowercased query:", q);
     if (!q) {
-        Logger.trace("Query is empty, returning empty array");
+        logger.trace("runSearch", "Query is empty, returning empty array");
         return [];
     }
 
-    Logger.trace("Tokenizing query");
     const tokens = tokenize(q);
-    Logger.trace("Tokens:", tokens);
-    const scorers = getAllScorers();
-    Logger.trace("Got scorers:", scorers.length);
+    logger.debug("runSearch", "Query tokens:", tokens);
 
-    Logger.debug("Getting all indexed items from database");
+    const scorers = getAllScorers();
+    logger.trace("runSearch", "Loaded scorers:", scorers.length);
+
+    // Get all indexed items
     const items = await getAllIndexedItems();
-    Logger.debug("Retrieved items from DB:", items.length);
+    logger.info("runSearch", `Searching through ${items.length} indexed items`);
 
     if (items.length === 0) {
-        Logger.debug("No indexed items, using browser history fallback");
-        // Fallback to browser history search
+        logger.warn("runSearch", "No indexed items found, falling back to browser history");
+        // Fallback to browser history search with higher limit
         const historyItems = await new Promise<any[]>((resolve) => {
-            Logger.trace("Searching browser history for:", q);
-            browserAPI.history.search({ text: q, maxResults: 50 }, resolve);
+            browserAPI.history.search({
+                text: q,
+                maxResults: 200, // Increased from 50
+                startTime: 0 // Search all history
+            }, resolve);
         });
-        Logger.debug("Browser history returned:", historyItems.length, "items");
+        logger.info("runSearch", `Browser history fallback returned ${historyItems.length} items`);
+
         // Convert to IndexedItem format
         const fallbackItems: IndexedItem[] = historyItems.map(item => ({
             url: item.url,
             title: item.title || "",
             hostname: (() => { try { return new URL(item.url).hostname; } catch { return ""; } })(),
+            metaDescription: "",
             metaKeywords: [],
             visitCount: item.visitCount || 1,
             lastVisit: item.lastVisitTime || Date.now(),
             tokens: tokenize((item.title || "") + " " + item.url)
         }));
-        Logger.trace("Converted to IndexedItem format:", fallbackItems.length);
         return fallbackItems;
     }
 
-    Logger.debug("Processing indexed items for scoring");
+    logger.debug("runSearch", "Processing items for scoring");
     const results: Array<{ item: IndexedItem; finalScore: number }> = [];
 
     for (const item of items) {
-        Logger.trace("Processing item:", item.url);
-        // Base filter: quick check before scoring
-        const haystack = (item.title + " " + item.url).toLowerCase();
-        Logger.trace("Haystack:", haystack);
-        if (!tokens.every(t => haystack.includes(t))) {
-            Logger.trace("Item doesn't match all tokens, skipping");
-            continue;
+        // More flexible matching: ANY token match (not ALL tokens required)
+        const haystack = (item.title + " " + item.url + " " + item.hostname).toLowerCase();
+        const hasAnyMatch = tokens.some(token => haystack.includes(token));
+
+        if (!hasAnyMatch) {
+            continue; // Skip items that don't match any token
         }
 
-        Logger.trace("Item matches, calculating score");
-        // Run each scorer
+        // Calculate score using all scorers
         let score = 0;
         for (const scorer of scorers) {
             const scorerScore = scorer.weight * scorer.score(item, q);
-            Logger.trace("Scorer", scorer.name, "gave score:", scorerScore);
             score += scorerScore;
         }
 
-        Logger.trace("Final score for item:", score);
-        results.push({ item, finalScore: score });
+        // Only include items with meaningful scores
+        if (score > 0.01) { // Very low threshold to include more results
+            results.push({ item, finalScore: score });
+        }
     }
 
-    Logger.debug("Sorting results by score");
-    // Sort by score DESC
+    logger.debug("runSearch", `Found ${results.length} matching items before sorting`);
+
+    // Sort by score (highest first)
     results.sort((a, b) => b.finalScore - a.finalScore);
 
-    Logger.debug("Diversifying results to avoid similar URLs");
-    // Diversify: limit to max 3 results per domain for variety
+    // Less restrictive diversification for power users - allow more results per domain
     const diversified: Array<{ item: IndexedItem; finalScore: number }> = [];
     const domainCount = new Map<string, number>();
-    const maxPerDomain = 3;
+    const maxPerDomain = 10; // Increased from 3 to 10 for power users
+
     for (const res of results) {
         const domain = res.item.hostname || "unknown";
         const count = domainCount.get(domain) || 0;
@@ -93,7 +98,8 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         }
     }
 
-    Logger.debug("Returning top 50 diversified results");
-    // Return top 50 for speed
-    return diversified.slice(0, 50).map(r => r.item);
+    const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
+    logger.info("runSearch", `Returning ${finalResults.length} results (from ${results.length} matches)`);
+
+    return finalResults;
 }

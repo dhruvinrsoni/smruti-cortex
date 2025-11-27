@@ -1,19 +1,18 @@
 import { Scorer } from "../../../core/scorer-types";
+import { tokenize } from "../tokenizer";
 
 const titleScorer: Scorer = {
     name: "title",
     weight: 0.40,
     score: (item, query) => {
         const title = item.title.toLowerCase();
-        if (title === query) return 1;
-        if (title.includes(query)) return 0.8;
+        const queryTokens = tokenize(query);
 
-        let score = 0;
-        const qTokens = query.split(" ");
-        const matches = qTokens.filter(t => title.includes(t)).length;
-        score = matches / qTokens.length;
+        if (queryTokens.length === 0) return 0;
 
-        return score;
+        // Pure relevance scoring: count matching tokens in title
+        const matches = queryTokens.filter(token => title.includes(token)).length;
+        return matches / queryTokens.length;
     },
 };
 
