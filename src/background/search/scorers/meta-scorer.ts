@@ -4,7 +4,7 @@ import { tokenize } from "../tokenizer";
 const metaScorer: Scorer = {
     name: "meta",
     weight: 0.10,
-    score: (item, query) => {
+    score: (item, query, allItems) => {
         const desc = (item.metaDescription || "").toLowerCase();
         const keywords = (item.metaKeywords || []).join(" ").toLowerCase();
         const text = desc + " " + keywords;
