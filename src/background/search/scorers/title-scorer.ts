@@ -4,15 +4,26 @@ import { tokenize } from "../tokenizer";
 const titleScorer: Scorer = {
     name: "title",
     weight: 0.40,
-    score: (item, query) => {
+    score: (item, query, allItems) => {
         const title = item.title.toLowerCase();
         const queryTokens = tokenize(query);
 
         if (queryTokens.length === 0) return 0;
 
-        // Pure relevance scoring: count matching tokens in title
+        // Exact title match (highest relevance)
+        if (title === query) return 1;
+
+        // Count token matches in title
         const matches = queryTokens.filter(token => title.includes(token)).length;
-        return matches / queryTokens.length;
+        const matchRatio = matches / queryTokens.length;
+
+        // Boost for titles that start with query tokens (more prominent content)
+        const startsWithBonus = queryTokens.some(token => title.startsWith(token)) ? 0.1 : 0;
+
+        // Boost for titles containing multiple query tokens (better relevance)
+        const multiTokenBonus = matches > 1 ? 0.1 : 0;
+
+        return Math.min(1.0, matchRatio + startsWithBonus + multiTokenBonus);
     },
 };
 

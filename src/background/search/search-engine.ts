@@ -69,7 +69,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         // Calculate score using all scorers
         let score = 0;
         for (const scorer of scorers) {
-            const scorerScore = scorer.weight * scorer.score(item, q);
+            const scorerScore = scorer.weight * scorer.score(item, q, items);
             score += scorerScore;
         }
 

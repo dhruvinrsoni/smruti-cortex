@@ -5,5 +5,5 @@ import { IndexedItem } from "../background/schema";
 export interface Scorer {
     name: string;                   // unique name
     weight: number;                 // 0–1 normalized weight
-    score: (item: IndexedItem, query: string) => number;
+    score: (item: IndexedItem, query: string, allItems?: IndexedItem[]) => number;
 }
