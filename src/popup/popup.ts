@@ -149,6 +149,7 @@ async function initializePopup() {
     if (!q || q.trim() === "") {
       logger.trace("doSearch", "Query is empty, clearing results");
       results = [];
+      activeIndex = -1;
       renderResults();
       return;
     }
@@ -158,6 +159,7 @@ async function initializePopup() {
     if (!isServiceWorkerReady) {
       logger.debug("doSearch", "Service worker not ready, showing initialization message");
       results = [];
+      activeIndex = -1;
       renderResults();
       resultCountNode.textContent = "Initializing... Please wait.";
       resultsNode.innerHTML = "";
@@ -203,6 +205,9 @@ async function initializePopup() {
     activeIndex = results.length ? 0 : -1;
     logger.debug("doSearch", "Setting results", { count: results.length });
     renderResults();
+
+    // Removed auto-focus to allow uninterrupted typing
+    // Focus will only move to results when user explicitly navigates with arrow keys
   }
 
   // Render results list
@@ -379,11 +384,46 @@ async function initializePopup() {
 
   // Keyboard handling in popup
   function handleKeydown(e: KeyboardEvent) {
+    // Handle input field navigation
+    if (document.activeElement === input) {
+      if (e.key === "ArrowDown" && results.length > 0) {
+        e.preventDefault();
+        logger.debug("handleKeydown", "Moving focus from input to first result");
+        activeIndex = 0;
+        const displayMode = SettingsManager.getSetting('displayMode');
+        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const firstResult = resultsNode.querySelector(selector);
+        if (firstResult) {
+          (firstResult as HTMLElement).focus();
+          highlightActive();
+        }
+        return;
+      }
+      // Let other keys (like typing) pass through normally
+      return;
+    }
+
     if (e.key === "Escape") {
       input.value = "";
       results = [];
       renderResults();
       input.focus();
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (results.length === 0) return;
+      activeIndex = Math.min(results.length - 1, activeIndex + 1);
+      highlightActive();
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (results.length === 0) return;
+      activeIndex = Math.max(0, activeIndex - 1);
+      highlightActive();
       return;
     }
 
@@ -805,6 +845,17 @@ async function initializePopup() {
     Logger.error("Input element not found, not adding listeners");
   }
 
+  // Global keyboard listener for arrow key navigation (fallback)
+  document.addEventListener("keydown", (ev) => {
+    // Only handle arrow keys if we have results and focus is not on input
+    if (results.length > 0 && document.activeElement !== input) {
+      if (ev.key === "ArrowUp" || ev.key === "ArrowDown" || ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+        Logger.trace("Global keydown event fired, key:", ev.key);
+        handleKeydown(ev);
+      }
+    }
+  });
+
   // Settings button handler
   if (settingsButton) {
     Logger.debug("Adding settings button event listener");
@@ -816,13 +867,19 @@ async function initializePopup() {
     Logger.error("Settings button not found");
   }
 
-  // Focus the input on load
+  // Focus the input on load - immediately for fast keyboard shortcut response
   Logger.debug("Adding window load event listener");
   window.addEventListener("load", async () => {
     logger.debug("windowLoad", "Window load event fired");
 
+    // Focus input immediately for fast keyboard shortcut response
+    if (input) {
+      Logger.debug("Focusing input immediately");
+      input.focus();
+    }
+
     // Give service worker a moment to initialize
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Check service worker status
     const isServiceWorkerReady = await checkServiceWorkerStatus();
@@ -849,15 +906,9 @@ async function initializePopup() {
           Logger.error("Service worker still not ready after retry");
           resultCountNode.textContent = "Extension error. Please reload.";
         }
-      }, 5000);
+      }, 2000);
     }
 
-    if (input) {
-      Logger.debug("Focusing input");
-      input.focus();
-    } else {
-      Logger.error("Input not found, cannot focus");
-    }
     // small initial query attempt: show nothing
     Logger.debug("Calling initial renderResults");
     renderResults();
@@ -865,20 +916,24 @@ async function initializePopup() {
 
   // Handle keyboard shortcut opening - focus search box or first result if available
   function handleKeyboardShortcut() {
+    logger.debug("handleKeyboardShortcut", "Handling keyboard shortcut focus", { hasResults: results.length > 0 });
     if (results.length > 0) {
-      // Focus on first result
+      // Focus on first result immediately
       activeIndex = 0;
-      highlightActive();
       const displayMode = SettingsManager.getSetting('displayMode');
       const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
       const firstResult = resultsNode.querySelector(selector);
       if (firstResult) {
+        logger.debug("handleKeyboardShortcut", "Focusing first result");
         (firstResult as HTMLElement).focus();
+        highlightActive();
       }
     } else {
-      // Focus on search input
+      // Focus on search input immediately
+      logger.debug("handleKeyboardShortcut", "Focusing search input");
       if (input) {
         input.focus();
+        input.select(); // Select all text for easy replacement
       }
     }
   }
@@ -949,11 +1004,4 @@ async function initializePopup() {
       }
     });
   }
-
-  // After a short delay, if no interaction, assume keyboard shortcut
-  setTimeout(() => {
-    if (!hasUserInteracted && results.length > 0) {
-      handleKeyboardShortcut();
-    }
-  }, 100);
 }
