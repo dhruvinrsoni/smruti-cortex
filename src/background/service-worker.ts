@@ -14,6 +14,28 @@ import { SettingsManager } from "../core/settings";
 let initialized = false;
 const logger = Logger.forComponent("ServiceWorker");
 
+// Keep service worker alive to reduce cold start delays
+function keepServiceWorkerAlive() {
+  // Use a periodic alarm to keep the service worker active
+  browserAPI.alarms.create('keep-alive', { delayInMinutes: 1, periodInMinutes: 1 });
+
+  browserAPI.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'keep-alive') {
+      // This keeps the service worker alive by doing minimal work
+      logger.trace("keepServiceWorkerAlive", "Service worker keep-alive ping");
+    }
+  });
+
+  // Also listen for any extension events to stay active
+  browserAPI.runtime.onStartup.addListener(() => {
+    logger.debug("keepServiceWorkerAlive", "Extension startup detected");
+  });
+
+  browserAPI.runtime.onInstalled.addListener(() => {
+    logger.debug("keepServiceWorkerAlive", "Extension installed/updated");
+  });
+}
+
 (async function initLogger() {
   // Initialize logger first, then start logging
   await Logger.init();
@@ -155,71 +177,38 @@ async function init() {
 
         initialized = true;
         logger.debug("init", "Service worker initialized flag set");
+
+        // Keep service worker alive to reduce cold start delays for keyboard shortcuts
+        keepServiceWorkerAlive();
+
         // Listen for keyboard commands
         logger.debug("init", "Setting up command listener");
         try {
             if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                 logger.debug("init", "Commands API is available, setting up listener");
                 browserAPI.commands.onCommand.addListener(async (command) => {
-                    logger.debug("onCommand", "Command received:", command);
                     if (command === "open-popup") {
-                        logger.debug("onCommand", "Opening popup via keyboard shortcut");
-
-                        // Check if popup is already open by trying to send a message first
-                        const isPopupOpen = await new Promise<boolean>((resolve) => {
-                            logger.debug("onCommand", "Checking if popup is already open");
-                            browserAPI.runtime.sendMessage({ type: "PING" }, (response) => {
-                                if (browserAPI.runtime.lastError) {
-                                    logger.debug("onCommand", "Popup not open:", browserAPI.runtime.lastError);
-                                    resolve(false);
-                                } else {
-                                    logger.debug("onCommand", "Popup is open, response:", response);
-                                    resolve(true);
-                                }
-                            });
-                        });
-
-                        if (isPopupOpen) {
-                            logger.debug("onCommand", "Popup is already open, sending focus message");
-                            // Send the focus message
-                            browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
-                                if (browserAPI.runtime.lastError) {
-                                    logger.debug("onCommand", "Failed to send focus message:", browserAPI.runtime.lastError);
-                                }
-                            });
-                            return;
-                        } else {
-                            logger.debug("onCommand", "Popup not open, attempting to open it");
-                        }
-
-                        // Open the popup with keyboard shortcut flag
-                        if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                            logger.debug("onCommand", "Using action.openPopup()");
-                            try {
+                        // Ultra-fast popup opening - minimize logging and async operations
+                        try {
+                            // Try to open popup immediately without checking if it's already open
+                            // This reduces latency significantly
+                            if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                 browserAPI.action.openPopup();
-                                logger.debug("onCommand", "Popup opened successfully");
-                                // Send message to popup to focus appropriately
+                                // Send focus message with minimal delay
                                 setTimeout(() => {
-                                    logger.debug("onCommand", "Sending KEYBOARD_SHORTCUT_OPEN message to popup");
-                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
-                                        if (browserAPI.runtime.lastError) {
-                                            logger.debug("onCommand", "Failed to send KEYBOARD_SHORTCUT_OPEN:", browserAPI.runtime.lastError);
-                                        }
+                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {
+                                        // Ignore errors - popup might not be ready yet
                                     });
-                                }, 100);
-                            } catch (error) {
-                                logger.error("onCommand", "Failed to open popup with action.openPopup():", error);
-                                logger.debug("onCommand", "Using final fallback: opening in new tab");
-                                // Final fallback: create a new tab with the extension URL
+                                }, 50);
+                            } else {
+                                // Fallback for browsers without openPopup API
                                 browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                             }
-                        } else {
-                            logger.debug("onCommand", "action.openPopup not available, using fallback: opening in new tab");
-                            // Fallback: create a new tab with the extension URL
+                        } catch (error) {
+                            logger.error("onCommand", "Failed to open popup:", error);
+                            // Final fallback
                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                         }
-                    } else {
-                        logger.debug("onCommand", "Unknown command received:", command);
                     }
                 });
                 logger.debug("init", "Commands listener set up successfully");
@@ -234,68 +223,24 @@ async function init() {
 
                 // Try to set up commands listener after a delay
                 setTimeout(() => {
-                    logger.debug("init", "Retrying commands setup after delay");
                     try {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                            logger.debug("init", "Commands API now available, setting up listener");
                             browserAPI.commands.onCommand.addListener(async (command) => {
-                                logger.debug("onCommand", "Command received (delayed setup):", command);
-                                // ... same command handling code ...
                                 if (command === "open-popup") {
-                                    logger.debug("onCommand", "Opening popup via keyboard shortcut (delayed)");
-
-                                    const isPopupOpen = await new Promise<boolean>((resolve) => {
-                                        logger.debug("onCommand", "Checking if popup is already open (delayed)");
-                                        browserAPI.runtime.sendMessage({ type: "PING" }, (response) => {
-                                            if (browserAPI.runtime.lastError) {
-                                                logger.debug("onCommand", "Popup not open (delayed):", browserAPI.runtime.lastError);
-                                                resolve(false);
-                                            } else {
-                                                logger.debug("onCommand", "Popup is open (delayed), response:", response);
-                                                resolve(true);
-                                            }
-                                        });
-                                    });
-
-                                    if (isPopupOpen) {
-                                        logger.debug("onCommand", "Popup is already open, sending focus message (delayed)");
-                                        browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
-                                            if (browserAPI.runtime.lastError) {
-                                                logger.debug("onCommand", "Failed to send focus message (delayed):", browserAPI.runtime.lastError);
-                                            }
-                                        });
-                                        return;
-                                    }
-
-                                    if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                        logger.debug("onCommand", "Using action.openPopup() (delayed)");
-                                        try {
+                                    try {
+                                        if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                             browserAPI.action.openPopup();
-                                            logger.debug("onCommand", "Popup opened successfully (delayed)");
                                             setTimeout(() => {
-                                                logger.debug("onCommand", "Sending KEYBOARD_SHORTCUT_OPEN message to popup (delayed)");
-                                                browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }, () => {
-                                                    if (browserAPI.runtime.lastError) {
-                                                        logger.debug("onCommand", "Failed to send KEYBOARD_SHORTCUT_OPEN (delayed):", browserAPI.runtime.lastError);
-                                                    }
-                                                });
-                                            }, 100);
-                                        } catch (error) {
-                                            logger.error("onCommand", "Failed to open popup with action.openPopup() (delayed):", error);
-                                            logger.debug("onCommand", "Using final fallback: opening in new tab (delayed)");
+                                                browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
+                                            }, 50);
+                                        } else {
                                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                                         }
-                                    } else {
-                                        logger.debug("onCommand", "action.openPopup not available, using fallback: opening in new tab (delayed)");
+                                    } catch (error) {
                                         browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                                     }
-                                } else {
-                                    logger.debug("onCommand", "Unknown command received (delayed):", command);
                                 }
                             });
-                            logger.debug("init", "Commands listener set up successfully (delayed)");
-                        } else {
-                            logger.warn("init", "Commands API still not available after delay - keyboard shortcuts disabled");
                         }
                     } catch (retryError) {
                         logger.error("init", "Error setting up commands listener (delayed):", retryError);
