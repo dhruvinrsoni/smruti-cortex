@@ -101,9 +101,9 @@ function keepServiceWorkerAlive() {
             }
             switch (msg.type) {
               case "SEARCH_QUERY":
-                logger.debug("onMessage", "Handling SEARCH_QUERY for:", msg.query);
+                logger.info("onMessage", `Popup search: "${msg.query}"`);
                 const results = await runSearch(msg.query);
-                logger.debug("onMessage", "Search completed, results:", results);
+                logger.debug("onMessage", "Search completed, results:", results.length);
                 sendResponse({ results });
                 break;
 

@@ -26,10 +26,10 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
     // Get all indexed items
     const items = await getAllIndexedItems();
-    logger.info("runSearch", `Searching through ${items.length} indexed items`);
+    logger.info("runSearch", `Search "${q}" through ${items.length} indexed items`);
 
     if (items.length === 0) {
-        logger.warn("runSearch", "No indexed items found, falling back to browser history");
+        logger.warn("runSearch", `No indexed items found for "${q}", falling back to browser history`);
         // Fallback to browser history search with higher limit
         const historyItems = await new Promise<any[]>((resolve) => {
             browserAPI.history.search({
@@ -38,7 +38,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 startTime: 0 // Search all history
             }, resolve);
         });
-        logger.info("runSearch", `Browser history fallback returned ${historyItems.length} items`);
+        logger.info("runSearch", `Browser history fallback for "${q}" returned ${historyItems.length} items`);
 
         // Convert to IndexedItem format
         const fallbackItems: IndexedItem[] = historyItems.map(item => ({
@@ -99,7 +99,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     }
 
     const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
-    logger.info("runSearch", `Returning ${finalResults.length} results (from ${results.length} matches)`);
+    logger.info("runSearch", `Search "${q}" returned ${finalResults.length} results (from ${results.length} matches)`);
 
     return finalResults;
 }
