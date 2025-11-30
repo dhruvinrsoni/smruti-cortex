@@ -11,8 +11,7 @@
     "activeTab",
     "tabs",
     "alarms",
-    "commands",
-    "windows"
+    "commands"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -24,8 +23,8 @@
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "SmrutiCortex",
-    "default_popup_width": 1200,
-    "default_popup_height": 350
+    "default_popup_width": 800,
+    "default_popup_height": 500
   },
   "content_scripts": [
     {
