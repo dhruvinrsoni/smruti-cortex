@@ -204,7 +204,7 @@ async function init() {
                         // Ultra-fast popup opening - minimize logging and async operations
                         try {
                             if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                browserAPI.action.openPopup();
+                                await browserAPI.action.openPopup();
                                 setTimeout(() => {
                                     browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
                                 }, 50);
@@ -234,7 +234,7 @@ async function init() {
                                 if (command === "open-popup") {
                                     try {
                                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                            browserAPI.action.openPopup();
+                                            await browserAPI.action.openPopup();
                                             setTimeout(() => {
                                                 browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
                                             }, 50);
