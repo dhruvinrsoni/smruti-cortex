@@ -199,15 +199,11 @@ async function init() {
         try {
             if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                 logger.debug("init", "Commands API is available, setting up listener");
-                browserAPI.commands.onCommand.addListener(async (command) => {
+                browserAPI.commands.onCommand.addListener((command) => {
                     if (command === "open-popup") {
-                        // Ultra-fast popup opening - minimize logging and async operations
                         try {
                             if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                await browserAPI.action.openPopup();
-                                setTimeout(() => {
-                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
-                                }, 50);
+                                browserAPI.action.openPopup();
                             } else {
                                 browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                             }
@@ -230,14 +226,11 @@ async function init() {
                 setTimeout(() => {
                     try {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                            browserAPI.commands.onCommand.addListener(async (command) => {
+                            browserAPI.commands.onCommand.addListener((command) => {
                                 if (command === "open-popup") {
                                     try {
                                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                            await browserAPI.action.openPopup();
-                                            setTimeout(() => {
-                                                browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
-                                            }, 50);
+                                            browserAPI.action.openPopup();
                                         } else {
                                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                                         }
