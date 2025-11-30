@@ -11,6 +11,7 @@ export enum DisplayMode {
 export interface AppSettings {
     displayMode: DisplayMode;
     logLevel: number;
+    highlightMatches: boolean;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -21,6 +22,7 @@ export class SettingsManager {
     private static settings: AppSettings = {
         displayMode: DisplayMode.LIST, // Default to list
         logLevel: 2, // INFO level
+        highlightMatches: true, // Enable match highlighting by default
     };
 
     private static initialized = false;
@@ -111,6 +113,7 @@ export class SettingsManager {
         this.settings = {
             displayMode: DisplayMode.LIST,
             logLevel: 2, // INFO level
+            highlightMatches: true,
         };
         await this.saveToStorage();
         await this.applySettings();
@@ -228,6 +231,7 @@ export class SettingsManager {
             const validated: AppSettings = {
                 displayMode: DisplayMode.LIST,
                 logLevel: 2, // INFO level
+                highlightMatches: true,
             };
 
             this.logger.debug("validateSettings", "Validating settings object:", settings);
@@ -248,6 +252,14 @@ export class SettingsManager {
                 this.logger.debug("validateSettings", "LogLevel validated successfully:", validated.logLevel);
             } else {
                 this.logger.debug("validateSettings", "LogLevel validation failed, using default:", validated.logLevel);
+            }
+
+            // Validate highlightMatches
+            if (typeof settings.highlightMatches === 'boolean') {
+                validated.highlightMatches = settings.highlightMatches;
+                this.logger.debug("validateSettings", "HighlightMatches validated successfully:", validated.highlightMatches);
+            } else {
+                this.logger.debug("validateSettings", "HighlightMatches validation failed, using default:", validated.highlightMatches);
             }
 
             // Future: validate other settings
