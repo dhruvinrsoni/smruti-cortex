@@ -4,6 +4,7 @@
 import { BRAND_NAME } from "../core/constants";
 import { Logger, LogLevel, ComponentLogger } from "../core/logger";
 import { SettingsManager, DisplayMode } from "../core/settings";
+import { tokenize } from "../background/search/tokenizer";
 
 declare const browser: any;
 
@@ -55,6 +56,23 @@ function initializePopup() {
   let activeIndex = -1;
   let debounceTimer: number | undefined;
   let serviceWorkerReady = false;
+  let currentQuery = "";
+
+  // Highlight matching parts in text
+  function highlightMatches(text: string, query: string): string {
+    if (!query.trim() || !SettingsManager.getSetting('highlightMatches')) {
+      return text;
+    }
+    const tokens = tokenize(query);
+    let highlighted = text;
+    for (const token of tokens) {
+      if (token.length < 2) continue; // Skip very short tokens
+      const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedToken})`, 'gi');
+      highlighted = highlighted.replace(regex, '<mark>$1</mark>');
+    }
+    return highlighted;
+  }
 
   // Immediate focus for keyboard shortcut
   if (input) {
@@ -107,6 +125,7 @@ function initializePopup() {
 
   // Fast search
   async function doSearch(q: string) {
+    currentQuery = q;
     if (!q || q.trim() === "") {
       results = [];
       activeIndex = -1;
@@ -175,11 +194,11 @@ function initializePopup() {
 
         const title = document.createElement("div");
         title.className = "card-title";
-        title.textContent = item.title || item.url;
+        title.innerHTML = highlightMatches(item.title || item.url, currentQuery);
 
         const url = document.createElement("div");
         url.className = "card-url";
-        url.textContent = item.url;
+        url.innerHTML = highlightMatches(item.url, currentQuery);
 
         details.appendChild(title);
         details.appendChild(url);
@@ -211,11 +230,11 @@ function initializePopup() {
 
         const title = document.createElement("div");
         title.className = "result-title";
-        title.textContent = item.title || item.url;
+        title.innerHTML = highlightMatches(item.title || item.url, currentQuery);
 
         const url = document.createElement("div");
         url.className = "result-url";
-        url.textContent = item.url;
+        url.innerHTML = highlightMatches(item.url, currentQuery);
 
         details.appendChild(title);
         details.appendChild(url);
@@ -267,6 +286,7 @@ function initializePopup() {
 
     if (e.key === "Escape") {
       input.value = "";
+      currentQuery = "";
       results = [];
       renderResults();
       input.focus();
@@ -405,6 +425,20 @@ function initializePopup() {
             </div>
           </div>
           <div class="settings-section">
+            <h3>Match Highlighting</h3>
+            <p>Highlight matching parts in search results.</p>
+            <div class="setting-options">
+              <label class="setting-option">
+                <input type="checkbox" id="modal-highlightMatches">
+                <span class="option-indicator"></span>
+                <div class="option-content">
+                  <strong>Enable highlighting</strong>
+                  <small>Show what parts of titles and URLs match your search</small>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="settings-section">
             <h3>Actions</h3>
             <div class="setting-actions">
               <button class="action-btn secondary" id="modal-reset">Reset to Defaults</button>
@@ -420,6 +454,7 @@ function initializePopup() {
     // Load current settings
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const currentLogLevel = SettingsManager.getSetting('logLevel') || 2;
+    const currentHighlight = SettingsManager.getSetting('highlightMatches') ?? true;
 
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
@@ -435,6 +470,11 @@ function initializePopup() {
         (input as HTMLInputElement).checked = true;
       }
     });
+
+    const highlightInput = modal.querySelector('#modal-highlightMatches') as HTMLInputElement;
+    if (highlightInput) {
+      highlightInput.checked = currentHighlight;
+    }
 
     // Event handlers
     const closeBtn = modal.querySelector('.settings-modal-close');
@@ -470,6 +510,15 @@ function initializePopup() {
         }
       });
     });
+
+    if (highlightInput) {
+      highlightInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('highlightMatches', target.checked);
+        renderResults();
+        showToast("Match highlighting " + (target.checked ? "enabled" : "disabled"));
+      });
+    }
 
     // Action buttons
     const resetBtn = modal.querySelector('#modal-reset') as HTMLButtonElement;
