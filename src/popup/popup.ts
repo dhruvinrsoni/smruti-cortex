@@ -547,7 +547,7 @@ function initializePopup() {
     settingsButton.addEventListener("click", openSettingsPage);
   }
 
-  // Fast window load - check service worker status
+  // Fast window load - check service worker status and lazy load hints
   window.addEventListener("load", () => {
     // Check service worker status asynchronously (don't block)
     checkServiceWorkerStatus().then(ready => {
@@ -555,6 +555,17 @@ function initializePopup() {
       if (!ready) {
         resultCountNode.textContent = "Initializing...";
         resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
+      }
+    });
+
+    // Lazy load hints after initial render (non-critical)
+    requestIdleCallback(() => {
+      const hintsContainer = document.getElementById('hints-container');
+      if (hintsContainer && !hintsContainer.innerHTML.trim()) {
+        hintsContainer.innerHTML = `
+          <span>Enter: open · Ctrl+Enter: new tab · Shift+Enter: background tab · Ctrl+M: copy markdown</span>
+          <span>↓: navigate results · ↑↓←→: move · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
+        `;
       }
     });
   });

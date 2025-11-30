@@ -16,24 +16,93 @@ const logger = Logger.forComponent("ServiceWorker");
 
 // Keep service worker alive to reduce cold start delays
 function keepServiceWorkerAlive() {
-  // Use a periodic alarm to keep the service worker active
-  browserAPI.alarms.create('keep-alive', { delayInMinutes: 1, periodInMinutes: 1 });
+  // Use multiple overlapping alarms to keep service worker active
+  browserAPI.alarms.create('keep-alive-1', { delayInMinutes: 0.5, periodInMinutes: 0.5 });
+  browserAPI.alarms.create('keep-alive-2', { delayInMinutes: 1, periodInMinutes: 1 });
+  browserAPI.alarms.create('keep-alive-3', { delayInMinutes: 2, periodInMinutes: 2 });
 
   browserAPI.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === 'keep-alive') {
+    if (alarm.name.startsWith('keep-alive')) {
       // This keeps the service worker alive by doing minimal work
-      logger.trace("keepServiceWorkerAlive", "Service worker keep-alive ping");
+      // No logging to avoid performance impact
     }
   });
 
-  // Also listen for any extension events to stay active
+  // Aggressive keep-alive: listen to all possible events
   browserAPI.runtime.onStartup.addListener(() => {
-    logger.debug("keepServiceWorkerAlive", "Extension startup detected");
+    // Re-establish alarms on startup
+    browserAPI.alarms.create('keep-alive-restart', { delayInMinutes: 0.1, periodInMinutes: 0.5 });
   });
 
   browserAPI.runtime.onInstalled.addListener(() => {
-    logger.debug("keepServiceWorkerAlive", "Extension installed/updated");
+    // Ensure alarms are set after install/update
+    browserAPI.alarms.create('keep-alive-install', { delayInMinutes: 0.1, periodInMinutes: 0.5 });
   });
+
+  // Listen to tab events to stay active
+  browserAPI.tabs.onActivated.addListener(() => {
+    // Tab activation keeps us alive
+  });
+
+  browserAPI.tabs.onUpdated.addListener(() => {
+    // Tab updates keep us alive
+  });
+
+  // Create persistent popup window for instant access
+  createPersistentPopup();
+}
+
+// Persistent popup window for instant access
+let persistentPopupWindow: chrome.windows.Window | null = null;
+
+function createPersistentPopup() {
+  // Only create persistent popup if windows API is available
+  if (browserAPI.windows && typeof browserAPI.windows.create === 'function') {
+    try {
+      // Create a minimized popup window that stays in background
+      browserAPI.windows.create({
+        url: browserAPI.runtime.getURL("popup/popup.html"),
+        type: "popup",
+        width: 800,
+        height: 400,
+        left: -1000, // Position off-screen
+        top: -1000,
+        focused: false
+      }, (window) => {
+        if (window) {
+          persistentPopupWindow = window;
+          // Minimize it immediately to keep it hidden but loaded
+          browserAPI.windows.update(window.id!, { state: "minimized" });
+        }
+      });
+    } catch (error) {
+      // Ignore errors - fallback to normal popup opening
+    }
+  }
+}
+
+function showPersistentPopup() {
+  if (persistentPopupWindow && browserAPI.windows) {
+    try {
+      // Show and focus the persistent popup
+      browserAPI.windows.update(persistentPopupWindow.id!, {
+        state: "normal",
+        focused: true,
+        left: Math.round((screen.width - 800) / 2),
+        top: Math.round((screen.height - 400) / 2)
+      });
+      // Send focus message
+      setTimeout(() => {
+        browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
+      }, 10);
+      return true;
+    } catch (error) {
+      // Persistent popup failed, fall back to normal opening
+      persistentPopupWindow = null;
+      return false;
+    }
+  }
+  return false;
 }
 
 (async function initLogger() {
@@ -188,25 +257,22 @@ async function init() {
                 logger.debug("init", "Commands API is available, setting up listener");
                 browserAPI.commands.onCommand.addListener(async (command) => {
                     if (command === "open-popup") {
-                        // Ultra-fast popup opening - minimize logging and async operations
+                        // Try persistent popup first for instant opening
+                        if (showPersistentPopup()) {
+                            return; // Success - persistent popup shown
+                        }
+
+                        // Fallback to normal popup opening
                         try {
-                            // Try to open popup immediately without checking if it's already open
-                            // This reduces latency significantly
                             if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                 browserAPI.action.openPopup();
-                                // Send focus message with minimal delay
                                 setTimeout(() => {
-                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {
-                                        // Ignore errors - popup might not be ready yet
-                                    });
+                                    browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
                                 }, 50);
                             } else {
-                                // Fallback for browsers without openPopup API
                                 browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                             }
                         } catch (error) {
-                            logger.error("onCommand", "Failed to open popup:", error);
-                            // Final fallback
                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                         }
                     }
@@ -227,6 +293,9 @@ async function init() {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                             browserAPI.commands.onCommand.addListener(async (command) => {
                                 if (command === "open-popup") {
+                                    if (showPersistentPopup()) {
+                                        return;
+                                    }
                                     try {
                                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                             browserAPI.action.openPopup();
