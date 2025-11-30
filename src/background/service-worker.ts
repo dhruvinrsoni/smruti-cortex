@@ -47,62 +47,6 @@ function keepServiceWorkerAlive() {
   browserAPI.tabs.onUpdated.addListener(() => {
     // Tab updates keep us alive
   });
-
-  // Create persistent popup window for instant access
-  createPersistentPopup();
-}
-
-// Persistent popup window for instant access
-let persistentPopupWindow: chrome.windows.Window | null = null;
-
-function createPersistentPopup() {
-  // Only create persistent popup if windows API is available
-  if (browserAPI.windows && typeof browserAPI.windows.create === 'function') {
-    try {
-      // Create a minimized popup window that stays in background
-      browserAPI.windows.create({
-        url: browserAPI.runtime.getURL("popup/popup.html"),
-        type: "popup",
-        width: 800,
-        height: 400,
-        left: -1000, // Position off-screen
-        top: -1000,
-        focused: false
-      }, (window) => {
-        if (window) {
-          persistentPopupWindow = window;
-          // Minimize it immediately to keep it hidden but loaded
-          browserAPI.windows.update(window.id!, { state: "minimized" });
-        }
-      });
-    } catch (error) {
-      // Ignore errors - fallback to normal popup opening
-    }
-  }
-}
-
-function showPersistentPopup() {
-  if (persistentPopupWindow && browserAPI.windows) {
-    try {
-      // Show and focus the persistent popup
-      browserAPI.windows.update(persistentPopupWindow.id!, {
-        state: "normal",
-        focused: true,
-        left: Math.round((screen.width - 800) / 2),
-        top: Math.round((screen.height - 400) / 2)
-      });
-      // Send focus message
-      setTimeout(() => {
-        browserAPI.runtime.sendMessage({ type: "KEYBOARD_SHORTCUT_OPEN" }).catch(() => {});
-      }, 10);
-      return true;
-    } catch (error) {
-      // Persistent popup failed, fall back to normal opening
-      persistentPopupWindow = null;
-      return false;
-    }
-  }
-  return false;
 }
 
 (async function initLogger() {
@@ -257,12 +201,7 @@ async function init() {
                 logger.debug("init", "Commands API is available, setting up listener");
                 browserAPI.commands.onCommand.addListener(async (command) => {
                     if (command === "open-popup") {
-                        // Try persistent popup first for instant opening
-                        if (showPersistentPopup()) {
-                            return; // Success - persistent popup shown
-                        }
-
-                        // Fallback to normal popup opening
+                        // Ultra-fast popup opening - minimize logging and async operations
                         try {
                             if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                 browserAPI.action.openPopup();
@@ -293,9 +232,6 @@ async function init() {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                             browserAPI.commands.onCommand.addListener(async (command) => {
                                 if (command === "open-popup") {
-                                    if (showPersistentPopup()) {
-                                        return;
-                                    }
                                     try {
                                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                             browserAPI.action.openPopup();
