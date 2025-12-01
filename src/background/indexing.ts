@@ -10,8 +10,6 @@ import { Logger } from "../core/logger";
 const logger = Logger.forComponent("Indexing");
 
 export async function ingestHistory(): Promise<void> {
-    logger.info("ingestHistory", "[Indexing] Starting smart history ingestion...");
-
     // Check extension version for re-indexing decision
     const currentVersion = chrome.runtime.getManifest().version;
     const lastIndexedVersion = await getSetting<string>('lastIndexedVersion', '0.0.0');
@@ -20,6 +18,12 @@ export async function ingestHistory(): Promise<void> {
 
     // If version changed, we need to re-index
     const needsFullReindex = compareVersions(currentVersion, lastIndexedVersion) > 0;
+
+    logger.info("ingestHistory", "[Indexing] Starting smart history ingestion", {
+        type: needsFullReindex ? 'full-reindex' : 'incremental',
+        currentVersion,
+        lastIndexedVersion
+    });
 
     if (needsFullReindex) {
         logger.info("ingestHistory", "[Indexing] Extension updated, performing full re-index");
