@@ -182,10 +182,10 @@ function initializePopup() {
     }
   }
 
-  // Ultra-fast debounce for instant feel
+  // Smart debounce - wait for user to stop typing before searching
   function debounceSearchLocal(q: string) {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(() => doSearch(q), 50); // Even faster
+    debounceTimer = window.setTimeout(() => doSearch(q), 300); // Wait 300ms after user stops typing
   }
 
   // Assign global
