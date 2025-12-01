@@ -199,16 +199,28 @@ async function init() {
         try {
             if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                 logger.debug("init", "Commands API is available, setting up listener");
-                browserAPI.commands.onCommand.addListener((command) => {
+                browserAPI.commands.onCommand.addListener(async (command) => {
                     if (command === "open-popup") {
                         try {
+                            // Check if there's an active window before trying to open popup
+                            const windows = await new Promise<any[]>((resolve) => {
+                                browserAPI.windows.getAll({}, (windows) => resolve(windows));
+                            });
+                            const hasActiveWindow = windows.some((w: any) => w.focused);
+
+                            if (!hasActiveWindow) {
+                                logger.warn("onCommand", "No active browser window found, skipping popup open");
+                                return;
+                            }
+
                             if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                 browserAPI.action.openPopup();
                             } else {
                                 browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                             }
                         } catch (error) {
-                            browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                            logger.error("onCommand", "Error opening popup:", error);
+                            // Don't try to create tab as fallback since we already checked for active window
                         }
                     }
                 });
@@ -226,16 +238,28 @@ async function init() {
                 setTimeout(() => {
                     try {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                            browserAPI.commands.onCommand.addListener((command) => {
+                            browserAPI.commands.onCommand.addListener(async (command) => {
                                 if (command === "open-popup") {
                                     try {
+                                        // Check if there's an active window before trying to open popup
+                                        const windows = await new Promise<any[]>((resolve) => {
+                                            browserAPI.windows.getAll({}, (windows) => resolve(windows));
+                                        });
+                                        const hasActiveWindow = windows.some((w: any) => w.focused);
+
+                                        if (!hasActiveWindow) {
+                                            logger.warn("onCommand", "No active browser window found, skipping popup open");
+                                            return;
+                                        }
+
                                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
                                             browserAPI.action.openPopup();
                                         } else {
                                             browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
                                         }
                                     } catch (error) {
-                                        browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                                        logger.error("onCommand", "Error opening popup:", error);
+                                        // Don't try to create tab as fallback since we already checked for active window
                                     }
                                 }
                             });

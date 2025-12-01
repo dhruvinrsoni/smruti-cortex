@@ -101,6 +101,18 @@ export async function deleteIndexedItem(url: string): Promise<void> {
     });
 }
 
+// Clear all data from IndexedDB
+export async function clearIndexedDB(): Promise<void> {
+    const db = dbInstance || await openDatabase();
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, "readwrite");
+        const store = txn.objectStore(STORE_NAME);
+        const req = store.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
 // -------------------------------------------------------------------
 // chrome.storage.local for settings (universal across all browsers)
 // -------------------------------------------------------------------
