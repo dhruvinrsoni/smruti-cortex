@@ -20,14 +20,15 @@ export async function ingestHistory(): Promise<void> {
     // If version changed, we need to re-index
     const needsFullReindex = compareVersions(currentVersion, lastIndexedVersion) > 0;
 
-    logger.info("ingestHistory", "[Indexing] Starting smart history ingestion", {
-        type: needsFullReindex ? 'full-reindex' : 'incremental',
-        currentVersion,
-        lastIndexedVersion
-    });
+    // Only log detailed start for full re-indexes, keep incremental quiet
+    if (needsFullReindex) {
+        logger.info("ingestHistory", "🔄 FULL RE-INDEX: Extension updated, rebuilding history index", {
+            fromVersion: lastIndexedVersion,
+            toVersion: currentVersion
+        });
+    }
 
     if (needsFullReindex) {
-        logger.info("ingestHistory", "[Indexing] Extension updated, performing full re-index");
         await performFullHistoryIndex();
         await setSetting('lastIndexedVersion', currentVersion);
         await setSetting('lastIndexedTimestamp', Date.now());
@@ -52,11 +53,10 @@ export async function ingestHistory(): Promise<void> {
     }
 
     const overallDuration = Date.now() - overallStartTime;
-    logger.info("ingestHistory", "[Indexing] History ingestion session completed", {
-        sessionType: needsFullReindex ? 'full-reindex' : 'incremental',
-        totalDurationMs: overallDuration,
-        durationSeconds: Math.round(overallDuration / 1000)
-    });
+    // Only log completion summary for full re-indexes
+    if (needsFullReindex) {
+        logger.info("ingestHistory", `✅ Index rebuild completed in ${Math.round(overallDuration / 1000)}s`);
+    }
 }
 
 async function performFullHistoryIndex(): Promise<void> {
@@ -145,19 +145,12 @@ async function performFullHistoryIndex(): Promise<void> {
  */
 async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<void> {
     const startTime = Date.now();
-    const sinceDate = new Date(sinceTimestamp);
-    logger.info("performIncrementalHistoryIndex", "[Indexing] Starting incremental history index", {
-        since: sinceDate.toISOString(),
-        hoursAgo: Math.round((Date.now() - sinceTimestamp) / (1000 * 60 * 60))
-    });
 
     // Get only items visited since the last index
     const newHistoryItems = await getHistorySince(sinceTimestamp);
-    const retrievalDuration = Date.now() - startTime;
-    logger.info("performIncrementalHistoryIndex", `[Indexing] Found ${newHistoryItems.length} potentially new history items`, {
-        retrievalTimeMs: retrievalDuration,
-        timeRange: `${sinceDate.toISOString()} to ${new Date().toISOString()}`
-    });
+    if (newHistoryItems.length === 0) {
+        return; // Nothing to index
+    }
 
     let updated = 0;
     let added = 0;
@@ -166,19 +159,9 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
     // Process in batches to avoid blocking for large incremental updates
     const batchSize = 1000;
     let processedItems = 0;
-    const processingStartTime = Date.now();
 
     for (let i = 0; i < newHistoryItems.length; i += batchSize) {
         const batch = newHistoryItems.slice(i, i + batchSize);
-        const batchNumber = Math.floor(i / batchSize) + 1;
-        const totalBatches = Math.ceil(newHistoryItems.length / batchSize);
-
-        logger.debug("performIncrementalHistoryIndex", "[Indexing] Processing incremental batch", {
-            batch: `${batchNumber}/${totalBatches}`,
-            items: `${i + 1}-${Math.min(i + batchSize, newHistoryItems.length)}`,
-            total: newHistoryItems.length,
-            progressPercent: Math.round(((i + batch.length) / newHistoryItems.length) * 100)
-        });
 
         for (const item of batch) {
             try {
@@ -226,18 +209,12 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
     }
 
     const totalDuration = Date.now() - startTime;
-    const processingDuration = Date.now() - processingStartTime;
-    logger.info("performIncrementalHistoryIndex", "[Indexing] Incremental history indexing completed", {
-        totalItems: newHistoryItems.length,
-        processedItems,
-        added,
-        updated,
-        failed,
-        totalDurationMs: totalDuration,
-        processingDurationMs: processingDuration,
-        itemsPerSecond: processedItems > 0 ? Math.round((processedItems / processingDuration) * 1000) : 0,
-        timeRangeIndexed: `${Math.round((Date.now() - sinceTimestamp) / (1000 * 60 * 60))} hours`
-    });
+
+    // Only log if there were actual changes
+    if (added > 0 || updated > 0) {
+        const hoursIndexed = Math.round((Date.now() - sinceTimestamp) / (1000 * 60 * 60));
+        logger.info("performIncrementalHistoryIndex", `📈 Indexed ${added} new, ${updated} updated URLs (${hoursIndexed}h) in ${Math.round(totalDuration / 1000)}s`);
+    }
 }
 
 /**

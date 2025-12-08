@@ -150,13 +150,11 @@ async function init() {
     try {
         logger.debug("init", "Initializing service worker…");
 
-        logger.debug("init", "Calling openDatabase");
-        logger.info("init", "[SmrutiCortex] Opening database");
+        logger.info("init", "🗄️ Opening database...");
         await openDatabase();
-        logger.info("init", "[SmrutiCortex] Database opened");
+        logger.info("init", "✅ Database ready");
 
         // Smart indexing based on version and incremental updates
-        logger.debug("init", "Checking indexing status");
         const currentVersion = chrome.runtime.getManifest().version;
         const lastIndexedVersion = await new Promise<string>((resolve) => {
             browserAPI.storage.local.get(["lastIndexedVersion"], (data) => {
@@ -164,12 +162,10 @@ async function init() {
             });
         });
 
-        logger.debug("init", "Version check for indexing", { currentVersion, lastIndexedVersion });
-
         // Always perform indexing on startup (smart indexing will decide what to do)
-        logger.info("init", "Starting smart history indexing");
+        logger.info("init", "🔄 Starting history indexing...");
         await ingestHistory();
-        logger.info("init", "Smart history indexing completed");
+        logger.info("init", "✅ History indexing complete");
 
         // Listen for new visits (incremental updates with debouncing)
         logger.debug("init", "Setting up history listener for incremental updates");
@@ -196,43 +192,42 @@ async function init() {
 
         // Listen for keyboard commands
         logger.debug("init", "Setting up command listener");
+        let popupOpeningInProgress = false; // Prevent multiple simultaneous popup opens
         try {
             if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                 logger.debug("init", "Commands API is available, setting up listener");
                 browserAPI.commands.onCommand.addListener(async (command) => {
+                    logger.debug("onCommand", "Command received", { command });
                     if (command === "open-popup") {
+                        if (popupOpeningInProgress) {
+                            logger.debug("onCommand", "Popup open already in progress, ignoring");
+                            return;
+                        }
+                        popupOpeningInProgress = true;
                         try {
-                            // Check if there's an active window before trying to open popup
-                            let hasActiveWindow = true; // Default to true to allow popup opening
-                            try {
-                                const windows = await new Promise<any[]>((resolve, reject) => {
-                                    browserAPI.windows.getAll({}, (windows) => {
-                                        if (chrome.runtime.lastError) {
-                                            reject(new Error(chrome.runtime.lastError.message));
-                                        } else {
-                                            resolve(windows);
-                                        }
-                                    });
-                                });
-                                hasActiveWindow = windows.some((w: any) => w.focused);
-                            } catch (windowError) {
-                                logger.warn("onCommand", "Could not check for active windows, proceeding anyway", { error: windowError.message });
-                                // Continue with popup opening even if window check fails
-                            }
-
-                            if (!hasActiveWindow) {
-                                logger.warn("onCommand", "No active browser window found, skipping popup open");
-                                return;
-                            }
-
+                            // For popup extensions, skip window checks - popups can open regardless of window focus
                             if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                browserAPI.action.openPopup();
+                                try {
+                                    logger.debug("onCommand", "Attempting to open popup via action API");
+                                    await browserAPI.action.openPopup();
+                                    logger.info("onCommand", "✅ Popup opened successfully via action API");
+                                    return; // Success
+                                } catch (popupError) {
+                                    // For popup extensions, this is often normal - popup might already be open
+                                    // The browser should bring existing popup to focus automatically
+                                    logger.debug("onCommand", "Popup open attempt completed (might already be open)", { error: popupError.message });
+                                    // Don't treat this as an error - it's expected behavior
+                                    return;
+                                }
                             } else {
-                                browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                                logger.error("onCommand", "Action API not available - this is required for popup extensions");
+                                throw new Error("Action API not available for popup extension");
                             }
                         } catch (error) {
-                            logger.error("onCommand", "Error opening popup:", error);
-                            // Don't try to create tab as fallback since we already checked for active window
+                            logger.error("onCommand", "Failed to open popup", error);
+                            // Don't try to create tabs - popup extensions should only open popups
+                        } finally {
+                            popupOpeningInProgress = false;
                         }
                     }
                 });
@@ -251,39 +246,31 @@ async function init() {
                     try {
                         if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
                             browserAPI.commands.onCommand.addListener(async (command) => {
+                                logger.debug("onCommand", "Command received", { command });
                                 if (command === "open-popup") {
                                     try {
-                                        // Check if there's an active window before trying to open popup
-                                        let hasActiveWindow = true; // Default to true to allow popup opening
-                                        try {
-                                            const windows = await new Promise<any[]>((resolve, reject) => {
-                                                browserAPI.windows.getAll({}, (windows) => {
-                                                    if (chrome.runtime.lastError) {
-                                                        reject(new Error(chrome.runtime.lastError.message));
-                                                    } else {
-                                                        resolve(windows);
-                                                    }
-                                                });
-                                            });
-                                            hasActiveWindow = windows.some((w: any) => w.focused);
-                                        } catch (windowError) {
-                                            logger.warn("onCommand", "Could not check for active windows, proceeding anyway", { error: windowError.message });
-                                            // Continue with popup opening even if window check fails
-                                        }
-
-                                        if (!hasActiveWindow) {
-                                            logger.warn("onCommand", "No active browser window found, skipping popup open");
-                                            return;
-                                        }
-
+                                        // For popup extensions, skip window checks - popups can open regardless of window focus
                                         if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                            browserAPI.action.openPopup();
+                                            try {
+                                                logger.debug("onCommand", "Attempting to open popup via action API");
+                                                await browserAPI.action.openPopup();
+                                                logger.info("onCommand", "✅ Popup opened successfully via action API");
+                                                return; // Success - don't fall back to tab
+                                            } catch (popupError) {
+                                                // For popup extensions, this is often normal - popup might already be open
+                                                // The browser should bring existing popup to focus automatically
+                                                logger.debug("onCommand", "Popup open attempt completed (might already be open)", { error: popupError.message });
+                                                // Don't treat this as an error - it's expected behavior
+                                                return;
+                                            }
                                         } else {
-                                            browserAPI.tabs.create({ url: browserAPI.runtime.getURL("popup/popup.html") });
+                                            logger.error("onCommand", "Action API not available - this is required for popup extensions");
+                                            throw new Error("Action API not available for popup extension");
                                         }
                                     } catch (error) {
-                                        logger.error("onCommand", "Error opening popup:", error);
-                                        // Don't try to create tab as fallback since we already checked for active window
+                                        logger.error("onCommand", "Failed to open popup - this is a critical error for popup extensions", error);
+                                        // Don't create tabs for popup extensions - that's not the intended behavior
+                                        // Instead, show an error to the user somehow, or just log the error
                                     }
                                 }
                             });

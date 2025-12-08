@@ -142,6 +142,10 @@ export class Logger {
 
         if (entry.error) {
             formatted += ` | error=${entry.error.message}`;
+            // Include stack trace for DEBUG level and above
+            if (this.currentLevel >= LogLevel.DEBUG && entry.error.stack) {
+                formatted += `\nStack Trace:\n${entry.error.stack}`;
+            }
         }
 
         return formatted;

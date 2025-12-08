@@ -69,21 +69,20 @@ function setupEventListeners() {
   const resultCountNode = $("result-count") as HTMLDivElement;
   const settingsButton = $("settings-button") as HTMLButtonElement;
 
+  // Make results container focusable for keyboard navigation
+  // Removed - individual result items should be focusable instead
+
   if (input) {
     input.addEventListener("input", (ev) => debounceSearch((ev.target as HTMLInputElement).value));
     input.addEventListener("keydown", handleKeydown);
   }
 
-  // Global keyboard listener for navigation
-  document.addEventListener("keydown", (ev) => {
-    if (results.length > 0 && document.activeElement !== input) {
-      if (ev.key === "ArrowUp" || ev.key === "ArrowDown" || ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
-        handleKeydown(ev);
-      }
-    }
-  });
+  if (resultsNode) {
+    resultsNode.addEventListener("keydown", handleKeydown);
+  }
 
   if (settingsButton) {
+    settingsButton.addEventListener("keydown", handleKeydown);
     settingsButton.addEventListener("click", openSettingsPage);
   }
 }
@@ -216,6 +215,13 @@ function initializePopup() {
       resultsLocal = (resp && resp.results) ? resp.results : [];
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
+      // Focus the results container if results exist
+      if (resultsLocal.length > 0) {
+        setTimeout(() => {
+          const resultsNode = $local("results") as HTMLUListElement;
+          resultsNode.focus();
+        }, 0); // Use timeout to ensure DOM is updated
+      }
     } catch (error) {
       resultsLocal = [];
       activeIndex = -1;
@@ -336,68 +342,162 @@ function initializePopup() {
 
   // Fast keyboard handling
   function handleKeydownLocal(e: KeyboardEvent) {
-    if (document.activeElement === input) {
+    const currentElement = document.activeElement;
+    const input = $local("search-input") as HTMLInputElement;
+    const resultsNode = $local("results") as HTMLUListElement;
+    const settingsButton = $local("settings-button") as HTMLButtonElement;
+
+    // Handle Tab navigation between main components
+    if (e.key === "Tab" && !e.shiftKey) {
+      e.preventDefault();
+      if (currentElement === input) {
+        // From search input -> first result item (if results exist)
+        if (resultsLocal.length > 0) {
+          const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+          const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+          const firstResult = resultsNode.querySelector(selector) as HTMLElement;
+          if (firstResult) {
+            activeIndex = 0;
+            highlightActive();
+            firstResult.focus();
+          }
+        } else {
+          // No results, cycle back to search input
+          input.focus();
+          input.select();
+        }
+      } else if (currentElement === settingsButton) {
+        // From settings button -> search input
+        input.focus();
+        input.select();
+      } else if (resultsNode.contains(currentElement)) {
+        // From any result item -> search input (cycle back)
+        input.focus();
+        input.select();
+      }
+      return;
+    }
+
+    // Handle Shift+Tab navigation (reverse)
+    if (e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      if (currentElement === input) {
+        // From search input -> settings button
+        settingsButton.focus();
+      } else if (currentElement === settingsButton) {
+        // From settings button -> last result item (if results exist), or search input
+        if (resultsLocal.length > 0) {
+          const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+          const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+          const results = resultsNode.querySelectorAll(selector);
+          const lastResult = results[results.length - 1] as HTMLElement;
+          if (lastResult) {
+            activeIndex = resultsLocal.length - 1;
+            highlightActive();
+            lastResult.focus();
+          }
+        } else {
+          // No results, go to search input
+          input.focus();
+          input.select();
+        }
+      } else if (resultsNode.contains(currentElement)) {
+        // From any result item -> search input
+        input.focus();
+        input.select();
+      }
+      return;
+    }
+
+    // Handle search input specific keys
+    if (currentElement === input) {
       if (e.key === "ArrowDown" && resultsLocal.length > 0) {
         e.preventDefault();
-        activeIndex = 0;
+        // Move focus to first result item
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
         const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
-        const firstResult = resultsNode.querySelector(selector);
+        const firstResult = resultsNode.querySelector(selector) as HTMLElement;
         if (firstResult) {
-          (firstResult as HTMLElement).focus();
+          activeIndex = 0;
           highlightActive();
+          firstResult.focus();
         }
+        return;
+      }
+      if (e.key === "Escape") {
+        // Don't prevent default - let Escape bubble up to close the popup
+        input.value = "";
+        currentQuery = "";
+        resultsLocal = [];
+        activeIndex = -1;
+        renderResults();
+        // Don't focus input - let popup close naturally
         return;
       }
       return;
     }
 
-    if (e.key === "Escape") {
-      input.value = "";
-      currentQuery = "";
-      resultsLocal = [];
-      renderResults();
-      input.focus();
+    // Handle settings button keys
+    if (currentElement === settingsButton) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openSettingsPage();
+        return;
+      }
       return;
     }
 
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (resultsLocal.length === 0) return;
-      activeIndex = Math.min(resultsLocal.length - 1, activeIndex + 1);
-      highlightActive();
-      return;
-    }
+    // Handle result item navigation
+    if (resultsNode.contains(currentElement)) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (resultsLocal.length === 0) return;
+        activeIndex = Math.min(resultsLocal.length - 1, activeIndex + 1);
+        highlightActive();
+        // Focus the new active result item
+        const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const results = resultsNode.querySelectorAll(selector);
+        const activeResult = results[activeIndex] as HTMLElement;
+        if (activeResult) {
+          activeResult.focus();
+        }
+        return;
+      }
 
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (resultsLocal.length === 0) return;
-      activeIndex = Math.max(0, activeIndex - 1);
-      highlightActive();
-      return;
-    }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (resultsLocal.length === 0) return;
+        activeIndex = Math.max(0, activeIndex - 1);
+        highlightActive();
+        // Focus the new active result item
+        const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const results = resultsNode.querySelectorAll(selector);
+        const activeResult = results[activeIndex] as HTMLElement;
+        if (activeResult) {
+          activeResult.focus();
+        }
+        return;
+      }
 
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      if (resultsLocal.length === 0) return;
-      activeIndex = Math.min(resultsLocal.length - 1, activeIndex + 1);
-      highlightActive();
-      return;
-    }
+      if (e.key === "ArrowRight" || e.key === "Enter") {
+        e.preventDefault();
+        if (resultsLocal.length === 0) return;
+        openResult(activeIndex, e);
+        return;
+      }
 
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      if (resultsLocal.length === 0) return;
-      activeIndex = Math.max(0, activeIndex - 1);
-      highlightActive();
-      return;
-    }
-
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (resultsLocal.length === 0) return;
-      openResult(activeIndex, e);
-      return;
+      if (e.key === "Escape") {
+        // Don't prevent default - let Escape bubble up to close the popup
+        input.value = "";
+        currentQuery = "";
+        resultsLocal = [];
+        activeIndex = -1;
+        renderResults();
+        // Don't focus input - let popup close naturally
+        return;
+      }
     }
 
     if (e.key.toLowerCase() === "m" && e.ctrlKey) {
@@ -418,7 +518,7 @@ function initializePopup() {
   // Assign global
   handleKeydown = handleKeydownLocal;
 
-  // Fast highlighting
+  // Fast highlighting and focusing
   function highlightActive() {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
@@ -427,7 +527,9 @@ function initializePopup() {
     const active = items[activeIndex];
     if (active) {
       active.classList.add("active");
-      active.scrollIntoView({ inline: "center", behavior: "smooth" });
+      // Don't focus individual items - keep focus on results container
+      // Just scroll the active item into view if needed
+      active.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
   }
 

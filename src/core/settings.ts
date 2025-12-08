@@ -42,26 +42,20 @@ export class SettingsManager {
      * Initialize settings from storage
      */
     static async init(): Promise<void> {
-        this.logger.info("init", "Starting SettingsManager.init()");
+        this.logger.debug("init", "⚙️ Initializing settings...");
         try {
-            this.logger.debug("init", "Initializing settings manager");
             const stored = await this.loadFromStorage();
-            this.logger.debug("init", "Loaded from storage:", stored);
             if (stored) {
                 this.settings = { ...this.settings, ...stored };
-                this.logger.debug("init", "Applied stored settings, final settings:", this.settings);
-            } else {
-                this.logger.debug("init", "No stored settings found, using defaults:", this.settings);
             }
 
             // Ensure displayMode always defaults to list
             this.settings.displayMode = DisplayMode.LIST;
-            this.logger.debug("init", "Ensured displayMode defaults to list");
 
             // Apply current settings
             await this.applySettings();
             this.initialized = true;
-            this.logger.info("init", "SettingsManager.init() completed successfully");
+            this.logger.debug("init", "✅ Settings ready");
         } catch (error) {
             this.logger.error("init", "Failed to initialize settings:", error);
             // Continue with defaults

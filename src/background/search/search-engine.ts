@@ -26,10 +26,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
     // Get all indexed items
     const items = await getAllIndexedItems();
-    logger.info("runSearch", `Search "${q}" through ${items.length} indexed items`);
 
     if (items.length === 0) {
-        logger.warn("runSearch", `No indexed items found for "${q}", falling back to browser history`);
+        logger.warn("runSearch", `🔍 "${q}" - No index available, using browser history`);
         // Fallback to browser history search with higher limit
         const historyItems = await new Promise<any[]>((resolve) => {
             browserAPI.history.search({
@@ -38,7 +37,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 startTime: 0 // Search all history
             }, resolve);
         });
-        logger.info("runSearch", `Browser history fallback for "${q}" returned ${historyItems.length} items`);
+        logger.info("runSearch", `📚 History fallback: ${historyItems.length} results for "${q}"`);
 
         // Convert to IndexedItem format
         const fallbackItems: IndexedItem[] = historyItems.map(item => ({
@@ -68,10 +67,18 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
         // Calculate score using all scorers
         let score = 0;
+        const scorerDetails: Array<{ name: string; score: number; weight: number }> = [];
         for (const scorer of scorers) {
             const scorerScore = scorer.weight * scorer.score(item, q, items);
             score += scorerScore;
+            scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
         }
+
+        logger.debug("runSearch", `Item scored: ${item.title.substring(0, 50)}...`, {
+            url: item.url,
+            totalScore: score,
+            scorerBreakdown: scorerDetails
+        });
 
         // Only include items with meaningful scores
         if (score > 0.01) { // Very low threshold to include more results
@@ -98,8 +105,14 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         }
     }
 
+    logger.debug("runSearch", "Diversification completed", {
+        originalResults: results.length,
+        diversifiedResults: diversified.length,
+        domainDistribution: Object.fromEntries(domainCount.entries())
+    });
+
     const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
-    logger.info("runSearch", `Search "${q}" returned ${finalResults.length} results (from ${results.length} matches)`);
+    logger.info("runSearch", `🔍 "${q}" → ${finalResults.length} results (${results.length} matches, ${items.length} indexed)`);
 
     return finalResults;
 }
