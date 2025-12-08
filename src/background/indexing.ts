@@ -10,6 +10,7 @@ import { Logger } from "../core/logger";
 const logger = Logger.forComponent("Indexing");
 
 export async function ingestHistory(): Promise<void> {
+    const overallStartTime = Date.now();
     // Check extension version for re-indexing decision
     const currentVersion = chrome.runtime.getManifest().version;
     const lastIndexedVersion = await getSetting<string>('lastIndexedVersion', '0.0.0');
@@ -30,29 +31,36 @@ export async function ingestHistory(): Promise<void> {
         await performFullHistoryIndex();
         await setSetting('lastIndexedVersion', currentVersion);
         await setSetting('lastIndexedTimestamp', Date.now());
-        return;
+    } else {
+        // Check if we need incremental indexing
+        const lastIndexedTimestamp = await getSetting<number>('lastIndexedTimestamp', 0);
+        const now = Date.now();
+        const timeSinceLastIndex = now - lastIndexedTimestamp;
+
+        // Only index if it's been more than 30 minutes since last index
+        if (timeSinceLastIndex < 30 * 60 * 1000) {
+            logger.debug("ingestHistory", "[Indexing] Skipping incremental index, too recent", {
+                timeSinceLastIndex: Math.round(timeSinceLastIndex / 1000 / 60),
+                minutes: 'minutes ago'
+            });
+            return;
+        }
+
+        logger.info("ingestHistory", "[Indexing] Performing incremental history index");
+        await performIncrementalHistoryIndex(lastIndexedTimestamp);
+        await setSetting('lastIndexedTimestamp', now);
     }
 
-    // Check if we need incremental indexing
-    const lastIndexedTimestamp = await getSetting<number>('lastIndexedTimestamp', 0);
-    const now = Date.now();
-    const timeSinceLastIndex = now - lastIndexedTimestamp;
-
-    // Only index if it's been more than 1 hour since last index
-    if (timeSinceLastIndex < 60 * 60 * 1000) {
-        logger.debug("ingestHistory", "[Indexing] Skipping incremental index, too recent", {
-            timeSinceLastIndex: Math.round(timeSinceLastIndex / 1000 / 60),
-            minutes: 'minutes ago'
-        });
-        return;
-    }
-
-    logger.info("ingestHistory", "[Indexing] Performing incremental history index");
-    await performIncrementalHistoryIndex(lastIndexedTimestamp);
-    await setSetting('lastIndexedTimestamp', now);
+    const overallDuration = Date.now() - overallStartTime;
+    logger.info("ingestHistory", "[Indexing] History ingestion session completed", {
+        sessionType: needsFullReindex ? 'full-reindex' : 'incremental',
+        totalDurationMs: overallDuration,
+        durationSeconds: Math.round(overallDuration / 1000)
+    });
 }
 
 async function performFullHistoryIndex(): Promise<void> {
+    const startTime = Date.now();
     logger.info("performFullHistoryIndex", "[Indexing] Starting full history index...");
 
     // Clear any existing data first
@@ -60,15 +68,38 @@ async function performFullHistoryIndex(): Promise<void> {
 
     // Get history in chunks to access older items
     const allHistoryItems = await getFullHistory();
-    logger.info("performFullHistoryIndex", `[Indexing] Found ${allHistoryItems.length} total history items`);
+    const indexingDuration = Date.now() - startTime;
+    logger.info("performFullHistoryIndex", `[Indexing] History retrieval completed in ${indexingDuration}ms`, {
+        totalItems: allHistoryItems.length,
+        retrievalTimeMs: indexingDuration
+    });
+
+    // Warn if history is very large (potential performance impact)
+    if (allHistoryItems.length > 50000) {
+        const estimatedBatches = Math.ceil(allHistoryItems.length / 2000);
+        const estimatedTimeMinutes = Math.ceil(estimatedBatches * 0.1); // Rough estimate: 100ms per batch
+        logger.warn("performFullHistoryIndex", "[Indexing] Large history detected, indexing may take time", {
+            itemCount: allHistoryItems.length,
+            estimatedBatches,
+            estimatedTimeMinutes: `${estimatedTimeMinutes} minutes`
+        });
+    }
 
     // Process in batches to avoid blocking
-    const batchSize = 1000;
+    const batchSize = 2000;
+    let processedItems = 0;
+    const batchStartTime = Date.now();
+
     for (let i = 0; i < allHistoryItems.length; i += batchSize) {
         const batch = allHistoryItems.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(allHistoryItems.length / batchSize);
+
         logger.debug("performFullHistoryIndex", "[Indexing] Processing batch", {
-            batch: `${i + 1}-${Math.min(i + batchSize, allHistoryItems.length)}`,
-            total: allHistoryItems.length
+            batch: `${batchNumber}/${totalBatches}`,
+            items: `${i + 1}-${Math.min(i + batchSize, allHistoryItems.length)}`,
+            total: allHistoryItems.length,
+            progressPercent: Math.round(((i + batch.length) / allHistoryItems.length) * 100)
         });
 
         for (const item of batch) {
@@ -85,6 +116,7 @@ async function performFullHistoryIndex(): Promise<void> {
                 };
 
                 await saveIndexedItem(indexed);
+                processedItems++;
             } catch (error) {
                 logger.warn("performFullHistoryIndex", "[Indexing] Failed to index item", { url: item.url, error: error.message });
             }
@@ -96,65 +128,115 @@ async function performFullHistoryIndex(): Promise<void> {
         }
     }
 
-    logger.info("performFullHistoryIndex", "[Indexing] Full history indexing completed");
+    const totalDuration = Date.now() - startTime;
+    const processingDuration = Date.now() - batchStartTime;
+    logger.info("performFullHistoryIndex", "[Indexing] Full history indexing completed", {
+        totalItems: allHistoryItems.length,
+        processedItems,
+        failedItems: allHistoryItems.length - processedItems,
+        totalDurationMs: totalDuration,
+        processingDurationMs: processingDuration,
+        itemsPerSecond: Math.round((processedItems / processingDuration) * 1000)
+    });
 }
 
 /**
  * Perform incremental history indexing (for regular updates)
  */
 async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<void> {
+    const startTime = Date.now();
+    const sinceDate = new Date(sinceTimestamp);
     logger.info("performIncrementalHistoryIndex", "[Indexing] Starting incremental history index", {
-        since: new Date(sinceTimestamp).toISOString()
+        since: sinceDate.toISOString(),
+        hoursAgo: Math.round((Date.now() - sinceTimestamp) / (1000 * 60 * 60))
     });
 
     // Get only items visited since the last index
     const newHistoryItems = await getHistorySince(sinceTimestamp);
-    logger.info("performIncrementalHistoryIndex", `[Indexing] Found ${newHistoryItems.length} potentially new history items`);
+    const retrievalDuration = Date.now() - startTime;
+    logger.info("performIncrementalHistoryIndex", `[Indexing] Found ${newHistoryItems.length} potentially new history items`, {
+        retrievalTimeMs: retrievalDuration,
+        timeRange: `${sinceDate.toISOString()} to ${new Date().toISOString()}`
+    });
 
     let updated = 0;
     let added = 0;
+    let failed = 0;
 
-    for (const item of newHistoryItems) {
-        try {
-            // Check if we already have this URL
-            const existing = await getIndexedItem(item.url);
+    // Process in batches to avoid blocking for large incremental updates
+    const batchSize = 1000;
+    let processedItems = 0;
+    const processingStartTime = Date.now();
 
-            if (existing) {
-                // Only update if this visit is more recent
-                if (item.lastVisitTime > existing.lastVisit) {
-                    const updatedItem: IndexedItem = {
-                        ...existing,
-                        visitCount: Math.max(existing.visitCount, item.visitCount || 1),
+    for (let i = 0; i < newHistoryItems.length; i += batchSize) {
+        const batch = newHistoryItems.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(newHistoryItems.length / batchSize);
+
+        logger.debug("performIncrementalHistoryIndex", "[Indexing] Processing incremental batch", {
+            batch: `${batchNumber}/${totalBatches}`,
+            items: `${i + 1}-${Math.min(i + batchSize, newHistoryItems.length)}`,
+            total: newHistoryItems.length,
+            progressPercent: Math.round(((i + batch.length) / newHistoryItems.length) * 100)
+        });
+
+        for (const item of batch) {
+            try {
+                // Check if we already have this URL
+                const existing = await getIndexedItem(item.url);
+
+                if (existing) {
+                    // Only update if this visit is more recent
+                    if (item.lastVisitTime > existing.lastVisit) {
+                        const updatedItem: IndexedItem = {
+                            ...existing,
+                            visitCount: Math.max(existing.visitCount, item.visitCount || 1),
+                            lastVisit: item.lastVisitTime,
+                            title: item.title || existing.title, // Prefer newer title if available
+                        };
+                        await saveIndexedItem(updatedItem);
+                        updated++;
+                    }
+                } else {
+                    // Create new indexed item
+                    const indexed: IndexedItem = {
+                        url: item.url,
+                        title: item.title || "",
+                        hostname: new URL(item.url).hostname,
+                        metaDescription: "",
+                        metaKeywords: [],
+                        visitCount: item.visitCount || 1,
                         lastVisit: item.lastVisitTime,
-                        title: item.title || existing.title, // Prefer newer title if available
+                        tokens: tokenize(item.title + " " + item.url),
                     };
-                    await saveIndexedItem(updatedItem);
-                    updated++;
+                    await saveIndexedItem(indexed);
+                    added++;
                 }
-            } else {
-                // Create new indexed item
-                const indexed: IndexedItem = {
-                    url: item.url,
-                    title: item.title || "",
-                    hostname: new URL(item.url).hostname,
-                    metaDescription: "",
-                    metaKeywords: [],
-                    visitCount: item.visitCount || 1,
-                    lastVisit: item.lastVisitTime,
-                    tokens: tokenize(item.title + " " + item.url),
-                };
-                await saveIndexedItem(indexed);
-                added++;
+                processedItems++;
+            } catch (error) {
+                logger.warn("performIncrementalHistoryIndex", "[Indexing] Failed to index item", { url: item.url, error: error.message });
+                failed++;
             }
-        } catch (error) {
-            logger.warn("performIncrementalHistoryIndex", "[Indexing] Failed to index item", { url: item.url, error: error.message });
+        }
+
+        // Small delay between batches to prevent blocking
+        if (i + batchSize < newHistoryItems.length) {
+            await new Promise(resolve => setTimeout(resolve, 5));
         }
     }
 
+    const totalDuration = Date.now() - startTime;
+    const processingDuration = Date.now() - processingStartTime;
     logger.info("performIncrementalHistoryIndex", "[Indexing] Incremental history indexing completed", {
+        totalItems: newHistoryItems.length,
+        processedItems,
         added,
         updated,
-        totalProcessed: newHistoryItems.length
+        failed,
+        totalDurationMs: totalDuration,
+        processingDurationMs: processingDuration,
+        itemsPerSecond: processedItems > 0 ? Math.round((processedItems / processingDuration) * 1000) : 0,
+        timeRangeIndexed: `${Math.round((Date.now() - sinceTimestamp) / (1000 * 60 * 60))} hours`
     });
 }
 
@@ -166,36 +248,55 @@ async function getFullHistory(): Promise<any[]> {
     const now = Date.now();
     const oneMonthMs = 30 * 24 * 60 * 60 * 1000; // 30 days
     const twoYearsAgo = now - (2 * 365 * 24 * 60 * 60 * 1000); // Go back 2 years
+    const startTime = Date.now();
 
-    logger.debug("getFullHistory", `[Indexing] Querying full history from ${new Date(twoYearsAgo).toISOString()} to now`);
+    logger.info("getFullHistory", "[Indexing] Starting comprehensive history retrieval", {
+        timeRange: `${new Date(twoYearsAgo).toISOString()} to ${new Date(now).toISOString()}`,
+        coverage: `${Math.round((now - twoYearsAgo) / (1000 * 60 * 60 * 24))} days`,
+        estimatedChunks: Math.ceil((now - twoYearsAgo) / oneMonthMs)
+    });
 
     // Query history in monthly chunks going backwards to get maximum coverage
-    for (let startTime = now; startTime > twoYearsAgo; startTime -= oneMonthMs) {
-        const endTime = startTime;
-        const startTimeQuery = Math.max(startTime - oneMonthMs, twoYearsAgo);
+    let chunkCount = 0;
+    for (let startTimeQuery = now; startTimeQuery > twoYearsAgo; startTimeQuery -= oneMonthMs) {
+        const endTime = startTimeQuery;
+        const chunkStartTime = Math.max(startTimeQuery - oneMonthMs, twoYearsAgo);
+        chunkCount++;
 
-        logger.trace("getFullHistory", "[Indexing] Querying chunk", {
-            from: new Date(startTimeQuery).toISOString(),
-            to: new Date(endTime).toISOString()
+        logger.debug("getFullHistory", "[Indexing] Querying history chunk", {
+            chunk: chunkCount,
+            from: new Date(chunkStartTime).toISOString(),
+            to: new Date(endTime).toISOString(),
+            monthsBack: Math.round((now - chunkStartTime) / (1000 * 60 * 60 * 24 * 30))
         });
 
         const chunk = await new Promise<any[]>((resolve) => {
             browserAPI.history.search({
                 text: "",
-                startTime: startTimeQuery,
+                startTime: chunkStartTime,
                 endTime: endTime,
                 maxResults: 10000 // Maximum allowed by Chrome per query
             }, resolve);
         });
 
         allItems.push(...chunk);
+        logger.trace("getFullHistory", "[Indexing] Chunk retrieved", {
+            chunk: chunkCount,
+            itemsInChunk: chunk.length,
+            totalSoFar: allItems.length
+        });
 
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // If we got fewer than 10000 results, we've likely reached the end of available history
         if (chunk.length < 10000) {
-            logger.debug("getFullHistory", `[Indexing] Reached end of available history at ${new Date(startTimeQuery).toISOString()}`);
+            logger.info("getFullHistory", "[Indexing] Reached end of available history", {
+                atDate: new Date(chunkStartTime).toISOString(),
+                totalChunks: chunkCount,
+                totalItems: allItems.length,
+                monthsBack: Math.round((now - chunkStartTime) / (1000 * 60 * 60 * 24 * 30))
+            });
             break;
         }
     }
@@ -215,10 +316,15 @@ async function getFullHistory(): Promise<any[]> {
         return acc;
     }, []);
 
-    logger.debug("getFullHistory", "[Indexing] Retrieved unique history items", {
-        total: allItems.length,
-        unique: uniqueItems.length,
-        coverage: `${Math.round((now - twoYearsAgo) / (1000 * 60 * 60 * 24))} days`
+    const retrievalDuration = Date.now() - startTime;
+    logger.info("getFullHistory", "[Indexing] History retrieval completed", {
+        totalRawItems: allItems.length,
+        uniqueItems: uniqueItems.length,
+        duplicatesRemoved: allItems.length - uniqueItems.length,
+        retrievalTimeMs: retrievalDuration,
+        itemsPerSecond: Math.round((allItems.length / retrievalDuration) * 1000),
+        timeRangeCovered: `${Math.round((now - twoYearsAgo) / (1000 * 60 * 60 * 24))} days`,
+        chunksProcessed: chunkCount
     });
 
     return uniqueItems;

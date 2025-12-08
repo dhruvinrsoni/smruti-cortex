@@ -203,10 +203,22 @@ async function init() {
                     if (command === "open-popup") {
                         try {
                             // Check if there's an active window before trying to open popup
-                            const windows = await new Promise<any[]>((resolve) => {
-                                browserAPI.windows.getAll({}, (windows) => resolve(windows));
-                            });
-                            const hasActiveWindow = windows.some((w: any) => w.focused);
+                            let hasActiveWindow = true; // Default to true to allow popup opening
+                            try {
+                                const windows = await new Promise<any[]>((resolve, reject) => {
+                                    browserAPI.windows.getAll({}, (windows) => {
+                                        if (chrome.runtime.lastError) {
+                                            reject(new Error(chrome.runtime.lastError.message));
+                                        } else {
+                                            resolve(windows);
+                                        }
+                                    });
+                                });
+                                hasActiveWindow = windows.some((w: any) => w.focused);
+                            } catch (windowError) {
+                                logger.warn("onCommand", "Could not check for active windows, proceeding anyway", { error: windowError.message });
+                                // Continue with popup opening even if window check fails
+                            }
 
                             if (!hasActiveWindow) {
                                 logger.warn("onCommand", "No active browser window found, skipping popup open");
@@ -242,10 +254,22 @@ async function init() {
                                 if (command === "open-popup") {
                                     try {
                                         // Check if there's an active window before trying to open popup
-                                        const windows = await new Promise<any[]>((resolve) => {
-                                            browserAPI.windows.getAll({}, (windows) => resolve(windows));
-                                        });
-                                        const hasActiveWindow = windows.some((w: any) => w.focused);
+                                        let hasActiveWindow = true; // Default to true to allow popup opening
+                                        try {
+                                            const windows = await new Promise<any[]>((resolve, reject) => {
+                                                browserAPI.windows.getAll({}, (windows) => {
+                                                    if (chrome.runtime.lastError) {
+                                                        reject(new Error(chrome.runtime.lastError.message));
+                                                    } else {
+                                                        resolve(windows);
+                                                    }
+                                                });
+                                            });
+                                            hasActiveWindow = windows.some((w: any) => w.focused);
+                                        } catch (windowError) {
+                                            logger.warn("onCommand", "Could not check for active windows, proceeding anyway", { error: windowError.message });
+                                            // Continue with popup opening even if window check fails
+                                        }
 
                                         if (!hasActiveWindow) {
                                             logger.warn("onCommand", "No active browser window found, skipping popup open");
