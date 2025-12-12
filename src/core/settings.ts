@@ -12,6 +12,10 @@ export interface AppSettings {
     displayMode: DisplayMode;
     logLevel: number;
     highlightMatches: boolean;
+    /**
+     * Delay in ms before focus shifts to results after typing (0 disables auto-focus)
+     */
+    focusDelayMs?: number;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -23,6 +27,7 @@ export class SettingsManager {
         displayMode: DisplayMode.LIST, // Default to list
         logLevel: 2, // INFO level
         highlightMatches: true, // Enable match highlighting by default
+        focusDelayMs: 300, // Default to 300ms
     };
 
     private static initialized = false;
@@ -108,6 +113,7 @@ export class SettingsManager {
             displayMode: DisplayMode.LIST,
             logLevel: 2, // INFO level
             highlightMatches: true,
+            focusDelayMs: 300,
         };
         await this.saveToStorage();
         await this.applySettings();
@@ -226,6 +232,7 @@ export class SettingsManager {
                 displayMode: DisplayMode.LIST,
                 logLevel: 2, // INFO level
                 highlightMatches: true,
+                focusDelayMs: 300,
             };
 
             this.logger.debug("validateSettings", "Validating settings object:", settings);
@@ -254,6 +261,14 @@ export class SettingsManager {
                 this.logger.debug("validateSettings", "HighlightMatches validated successfully:", validated.highlightMatches);
             } else {
                 this.logger.debug("validateSettings", "HighlightMatches validation failed, using default:", validated.highlightMatches);
+            }
+
+            // Validate focusDelayMs
+            if (typeof settings.focusDelayMs === 'number' && settings.focusDelayMs >= 0 && settings.focusDelayMs <= 2000) {
+                validated.focusDelayMs = settings.focusDelayMs;
+                this.logger.debug("validateSettings", "focusDelayMs validated successfully:", validated.focusDelayMs);
+            } else {
+                this.logger.debug("validateSettings", "focusDelayMs validation failed, using default:", validated.focusDelayMs);
             }
 
             // Future: validate other settings
