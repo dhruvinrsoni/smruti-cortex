@@ -78,7 +78,7 @@ function setupEventListeners() {
   }
 
   if (resultsNode) {
-    resultsNode.addEventListener("keydown", handleKeydown);
+    // Removed - individual result items handle keyboard navigation
   }
 
   if (settingsButton) {
@@ -184,7 +184,10 @@ function initializePopup() {
   // Smart debounce - wait for user to stop typing before searching
   function debounceSearchLocal(q: string) {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(() => doSearch(q), 300); // Wait 300ms after user stops typing
+    const delay = SettingsManager.getSetting('focusDelayMs');
+    // Clamp to [0, 2000] ms
+    const safeDelay = typeof delay === 'number' ? Math.max(0, Math.min(delay, 2000)) : 300;
+    debounceTimer = window.setTimeout(() => doSearch(q), safeDelay);
   }
 
   // Assign global
@@ -215,12 +218,17 @@ function initializePopup() {
       resultsLocal = (resp && resp.results) ? resp.results : [];
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
-      // Focus the results container if results exist
-      if (resultsLocal.length > 0) {
-        setTimeout(() => {
-          const resultsNode = $local("results") as HTMLUListElement;
-          resultsNode.focus();
-        }, 0); // Use timeout to ensure DOM is updated
+      // Focus the first result item if focusDelayMs > 0
+      const focusDelay = SettingsManager.getSetting('focusDelayMs');
+      if (typeof focusDelay === 'number' && focusDelay > 0 && resultsLocal.length > 0) {
+        const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const firstResult = resultsNode.querySelector(selector) as HTMLElement;
+        if (firstResult) {
+          activeIndex = 0;
+          highlightActive();
+          setTimeout(() => firstResult.focus(), 0);
+        }
       }
     } catch (error) {
       resultsLocal = [];
@@ -347,6 +355,16 @@ function initializePopup() {
     const resultsNode = $local("results") as HTMLUListElement;
     const settingsButton = $local("settings-button") as HTMLButtonElement;
 
+    let currentIndex = -1;
+    if (resultsNode.contains(currentElement)) {
+      const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+      const itemSelector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
+      const currentItem = (currentElement as HTMLElement).closest(itemSelector) as HTMLElement;
+      if (currentItem) {
+        currentIndex = parseInt(currentItem.dataset.index || "0");
+      }
+    }
+
     // Handle Tab navigation between main components
     if (e.key === "Tab" && !e.shiftKey) {
       e.preventDefault();
@@ -413,14 +431,24 @@ function initializePopup() {
     if (currentElement === input) {
       if (e.key === "ArrowDown" && resultsLocal.length > 0) {
         e.preventDefault();
-        // Move focus to first result item
+        // Move focus to first result item if not already focused
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
         const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
         const firstResult = resultsNode.querySelector(selector) as HTMLElement;
         if (firstResult) {
-          activeIndex = 0;
-          highlightActive();
-          firstResult.focus();
+          if (activeIndex !== 0) {
+            activeIndex = 0;
+            highlightActive();
+            firstResult.focus();
+          } else {
+            // If already at first, move to second
+            const results = resultsNode.querySelectorAll(selector);
+            if (results.length > 1) {
+              activeIndex = 1;
+              highlightActive();
+              (results[1] as HTMLElement).focus();
+            }
+          }
         }
         return;
       }
@@ -452,13 +480,14 @@ function initializePopup() {
       if (e.key === "ArrowDown") {
         e.preventDefault();
         if (resultsLocal.length === 0) return;
-        activeIndex = Math.min(resultsLocal.length - 1, activeIndex + 1);
+        const newIndex = Math.min(resultsLocal.length - 1, currentIndex + 1);
+        activeIndex = newIndex;
         highlightActive();
         // Focus the new active result item
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
         const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
         const results = resultsNode.querySelectorAll(selector);
-        const activeResult = results[activeIndex] as HTMLElement;
+        const activeResult = results[newIndex] as HTMLElement;
         if (activeResult) {
           activeResult.focus();
         }
@@ -468,13 +497,14 @@ function initializePopup() {
       if (e.key === "ArrowUp") {
         e.preventDefault();
         if (resultsLocal.length === 0) return;
-        activeIndex = Math.max(0, activeIndex - 1);
+        const newIndex = Math.max(0, currentIndex - 1);
+        activeIndex = newIndex;
         highlightActive();
         // Focus the new active result item
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
         const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
         const results = resultsNode.querySelectorAll(selector);
-        const activeResult = results[activeIndex] as HTMLElement;
+        const activeResult = results[newIndex] as HTMLElement;
         if (activeResult) {
           activeResult.focus();
         }
@@ -484,7 +514,7 @@ function initializePopup() {
       if (e.key === "ArrowRight" || e.key === "Enter") {
         e.preventDefault();
         if (resultsLocal.length === 0) return;
-        openResult(activeIndex, e);
+        openResult(currentIndex, e);
         return;
       }
 
@@ -502,8 +532,8 @@ function initializePopup() {
 
     if (e.key.toLowerCase() === "m" && e.ctrlKey) {
       e.preventDefault();
-      if (resultsLocal.length === 0) return;
-      const item = resultsLocal[activeIndex];
+      if (resultsLocal.length === 0 || currentIndex === -1) return;
+      const item = resultsLocal[currentIndex];
       if (item) {
         navigator.clipboard.writeText(`[${item.title || item.url}](${item.url})`).then(() => {
           const prev = resultCountNode.textContent;
@@ -611,6 +641,21 @@ function initializePopup() {
             </div>
           </div>
           <div class="settings-section">
+            <h3>Result Focus Delay</h3>
+            <p>Control how quickly focus shifts to results after typing. <br>
+            <b>0 ms</b> disables auto-focus. <b>100-2000 ms</b> is recommended for natural UX.</p>
+            <div class="setting-options">
+              <label class="setting-option">
+                <input type="number" id="modal-focusDelayMs" min="0" max="2000" step="50" style="width:80px;">
+                <span class="option-indicator"></span>
+                <div class="option-content">
+                  <strong>Focus Delay (ms)</strong>
+                  <small>Time to wait after typing before focusing results (0 disables)</small>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="settings-section">
             <h3>Actions</h3>
             <div class="setting-actions">
               <button class="action-btn secondary" id="modal-reset">Reset to Defaults</button>
@@ -625,6 +670,7 @@ function initializePopup() {
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const currentLogLevel = SettingsManager.getSetting('logLevel') || 2;
     const currentHighlight = SettingsManager.getSetting('highlightMatches') ?? true;
+    const currentFocusDelay = SettingsManager.getSetting('focusDelayMs') ?? 300;
 
     const displayInputs = app.querySelectorAll('input[name="modal-displayMode"]');
     const logInputs = app.querySelectorAll('input[name="modal-logLevel"]');
@@ -646,12 +692,36 @@ function initializePopup() {
       highlightInput.checked = currentHighlight;
     }
 
+    const focusDelayInput = app.querySelector('#modal-focusDelayMs') as HTMLInputElement;
+    if (focusDelayInput) {
+      focusDelayInput.value = String(currentFocusDelay);
+      focusDelayInput.addEventListener('change', async (e) => {
+        let val = parseInt(focusDelayInput.value);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > 2000) val = 2000;
+        await SettingsManager.setSetting('focusDelayMs', val);
+        focusDelayInput.value = String(val);
+        showToast(val === 0 ? "Auto-focus disabled" : `Focus delay set to ${val} ms`);
+      });
+    }
+
     // Event handlers
     const closeBtn = app.querySelector('.settings-close');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
+        // Preserve input value and results after closing settings
+        const inputValue = ($('search-input') as HTMLInputElement)?.value || input.value;
         app.innerHTML = originalHTML;
         setupEventListeners();
+        // Restore input value
+        const restoredInput = $('search-input') as HTMLInputElement;
+        if (restoredInput) {
+          restoredInput.value = inputValue;
+          restoredInput.focus();
+          restoredInput.select();
+        }
+        // Trigger search to restore results
+        debounceSearch(inputValue);
       });
     }
 
