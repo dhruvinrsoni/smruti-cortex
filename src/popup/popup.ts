@@ -410,16 +410,16 @@ function initializePopup() {
         } else {
           // No results, cycle back to search input
           input.focus();
-          input.select();
+          // Do not select text when focusing from Tab navigation
         }
       } else if (currentElement === settingsButton) {
         // From settings button -> search input
         input.focus();
-        input.select();
+        // Do not select text when focusing from Tab navigation
       } else if (resultsNode.contains(currentElement)) {
         // From any result item -> search input (cycle back)
         input.focus();
-        input.select();
+        // Do not select text when focusing from Tab navigation
       }
       return;
     }
@@ -445,12 +445,12 @@ function initializePopup() {
         } else {
           // No results, go to search input
           input.focus();
-          input.select();
+          // Do not select text when focusing from Tab navigation
         }
       } else if (resultsNode.contains(currentElement)) {
         // From any result item -> search input
         input.focus();
-        input.select();
+        // Do not select text when focusing from Tab navigation
       }
       return;
     }
