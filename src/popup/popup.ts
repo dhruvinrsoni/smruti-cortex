@@ -39,6 +39,20 @@ function showToast(message: string, isError = false) {
 let logger: ComponentLogger;
 let settingsManager: typeof SettingsManager;
 
+// === PERFORMANCE LOGGING: ENTRY POINT ===
+// Log the moment popup script is loaded (first code run) and record timestamp
+let __popupEntryTimestamp = Date.now();
+try {
+  // Also send to service worker for guaranteed logging
+  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({
+      type: "POPUP_PERF_LOG",
+      stage: "entry",
+      timestamp: __popupEntryTimestamp
+    });
+  }
+} catch (e) {}
+
 // Global variables for event setup
 let debounceSearch: (q: string) => void;
 let handleKeydown: (e: KeyboardEvent) => void;
@@ -138,10 +152,24 @@ function initializePopup() {
     return highlighted;
   }
 
+
   // Immediate focus for keyboard shortcut
   if (input) {
     input.focus();
     input.select();
+    // === PERFORMANCE LOGGING: INPUT FOCUSED ===
+    try {
+      const focusTimestamp = Date.now();
+      const elapsedMs = focusTimestamp - (typeof __popupEntryTimestamp === 'number' ? __popupEntryTimestamp : focusTimestamp);
+      if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: "POPUP_PERF_LOG",
+          stage: "input-focus",
+          timestamp: focusTimestamp,
+          elapsedMs
+        });
+      }
+    } catch (e) {}
   }
 
   // Pre-render empty state immediately

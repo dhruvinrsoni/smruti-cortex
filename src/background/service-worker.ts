@@ -92,6 +92,11 @@ function keepServiceWorkerAlive() {
             }
             sendResponse({ status: "ok" });
             break;
+          case "POPUP_PERF_LOG":
+            // Log popup performance timing info
+            logger.info("onMessage", `[PopupPerf] ${msg.stage} | ts=${msg.timestamp} | elapsedMs=${msg.elapsedMs}`);
+            sendResponse({ status: "ok" });
+            break;
           default:
             // For other messages, check if initialized
             if (!initialized) {
