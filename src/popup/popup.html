@@ -32,6 +32,7 @@
     .hints{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
     mark{background-color:#fef3c7;color:#92400e;padding:0 1px;border-radius:2px;font-weight:500}
   </style>
+  <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
   <div id="app" class="app">
@@ -60,6 +61,106 @@
         <span>↓: navigate results · ↑↓←→: move · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
       </div>
     </footer>
+  </div>
+
+  <!-- Settings Modal Overlay -->
+  <div id="settings-modal" class="settings-modal hidden">
+    <div class="settings-modal-content">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button id="settings-close" class="settings-close" title="Close">×</button>
+      </div>
+      <div class="settings-content">
+        <div class="settings-section">
+          <h3>Display Mode</h3>
+          <p>Choose how search results are displayed.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="radio" name="modal-displayMode" value="list">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>List View</strong>
+                <small>Vertical list layout - compact</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-displayMode" value="cards">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Card View</strong>
+                <small>Horizontal cards - shows full URLs</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Log Level</h3>
+          <p>Control extension logging verbosity.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="radio" name="modal-logLevel" value="0">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Error</strong>
+                <small>Show only errors</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-logLevel" value="2">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Info</strong>
+                <small>Show general information</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-logLevel" value="3">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Debug</strong>
+                <small>Show detailed debugging info</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Match Highlighting</h3>
+          <p>Highlight matching parts in search results.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-highlightMatches">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Enable highlighting</strong>
+                <small>Show what parts of titles and URLs match your search</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Result Focus Delay</h3>
+          <p>Control how quickly focus shifts to results after typing.<br>
+          <b>0 ms</b> disables auto-focus. <b>100-2000 ms</b> is recommended for natural UX.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="number" id="modal-focusDelayMs" min="0" max="2000" step="50" style="width:80px;">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Focus Delay (ms)</strong>
+                <small>Time to wait after typing before focusing results (0 disables)</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Actions</h3>
+          <div class="setting-actions">
+            <button class="action-btn secondary" id="modal-reset">Reset to Defaults</button>
+            <button class="action-btn danger" id="modal-clear">Clear All Data</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="popup.js"></script>

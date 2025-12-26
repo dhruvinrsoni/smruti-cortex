@@ -591,179 +591,97 @@ function initializePopup() {
     }
   }
 
-  // Simplified settings page - replace app content
+  // Show settings modal overlay (doesn't replace app content)
   function openSettingsPageLocal() {
-    const app = $('app');
-    const originalHTML = app.innerHTML;
-    app.innerHTML = `
-      <div class="settings-page">
-        <div class="settings-header">
-          <h2>Settings</h2>
-          <button class="settings-close" title="Close">×</button>
-        </div>
-        <div class="settings-content">
-          <div class="settings-section">
-            <h3>Display Mode</h3>
-            <p>Choose how search results are displayed.</p>
-            <div class="setting-options">
-              <label class="setting-option">
-                <input type="radio" name="modal-displayMode" value="list">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>List View</strong>
-                  <small>Vertical list layout - compact</small>
-                </div>
-              </label>
-              <label class="setting-option">
-                <input type="radio" name="modal-displayMode" value="cards">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>Card View</strong>
-                  <small>Horizontal cards - shows full URLs</small>
-                </div>
-              </label>
-            </div>
-          </div>
-          <div class="settings-section">
-            <h3>Log Level</h3>
-            <p>Control extension logging verbosity.</p>
-            <div class="setting-options">
-              <label class="setting-option">
-                <input type="radio" name="modal-logLevel" value="0">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>Error</strong>
-                  <small>Show only errors</small>
-                </div>
-              </label>
-              <label class="setting-option">
-                <input type="radio" name="modal-logLevel" value="2">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>Info</strong>
-                  <small>Show general information</small>
-                </div>
-              </label>
-              <label class="setting-option">
-                <input type="radio" name="modal-logLevel" value="3">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>Debug</strong>
-                  <small>Show detailed debugging info</small>
-                </div>
-              </label>
-            </div>
-          </div>
-          <div class="settings-section">
-            <h3>Match Highlighting</h3>
-            <p>Highlight matching parts in search results.</p>
-            <div class="setting-options">
-              <label class="setting-option">
-                <input type="checkbox" id="modal-highlightMatches">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>Enable highlighting</strong>
-                  <small>Show what parts of titles and URLs match your search</small>
-                </div>
-              </label>
-            </div>
-          </div>
-          <div class="settings-section">
-            <h3>Result Focus Delay</h3>
-            <p>Control how quickly focus shifts to results after typing. <br>
-            <b>0 ms</b> disables auto-focus. <b>100-2000 ms</b> is recommended for natural UX.</p>
-            <div class="setting-options">
-              <label class="setting-option">
-                <input type="number" id="modal-focusDelayMs" min="0" max="2000" step="50" style="width:80px;">
-                <span class="option-indicator"></span>
-                <div class="option-content">
-                  <strong>Focus Delay (ms)</strong>
-                  <small>Time to wait after typing before focusing results (0 disables)</small>
-                </div>
-              </label>
-            </div>
-          </div>
-          <div class="settings-section">
-            <h3>Actions</h3>
-            <div class="setting-actions">
-              <button class="action-btn secondary" id="modal-reset">Reset to Defaults</button>
-              <button class="action-btn danger" id="modal-clear">Clear All Data</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
 
-    // Load current settings
+    // Show the modal
+    modal.classList.remove('hidden');
+
+    // Load current settings into form
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const currentLogLevel = SettingsManager.getSetting('logLevel') || 2;
     const currentHighlight = SettingsManager.getSetting('highlightMatches') ?? true;
     const currentFocusDelay = SettingsManager.getSetting('focusDelayMs') ?? 300;
 
-    const displayInputs = app.querySelectorAll('input[name="modal-displayMode"]');
-    const logInputs = app.querySelectorAll('input[name="modal-logLevel"]');
+    const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
+    const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
 
     displayInputs.forEach(input => {
-      if ((input as HTMLInputElement).value === currentDisplayMode) {
-        (input as HTMLInputElement).checked = true;
-      }
+      (input as HTMLInputElement).checked = (input as HTMLInputElement).value === currentDisplayMode;
     });
 
     logInputs.forEach(input => {
-      if (parseInt((input as HTMLInputElement).value) === currentLogLevel) {
-        (input as HTMLInputElement).checked = true;
-      }
+      (input as HTMLInputElement).checked = parseInt((input as HTMLInputElement).value) === currentLogLevel;
     });
 
-    const highlightInput = app.querySelector('#modal-highlightMatches') as HTMLInputElement;
+    const highlightInput = modal.querySelector('#modal-highlightMatches') as HTMLInputElement;
     if (highlightInput) {
       highlightInput.checked = currentHighlight;
     }
 
-    const focusDelayInput = app.querySelector('#modal-focusDelayMs') as HTMLInputElement;
+    const focusDelayInput = modal.querySelector('#modal-focusDelayMs') as HTMLInputElement;
     if (focusDelayInput) {
       focusDelayInput.value = String(currentFocusDelay);
-      focusDelayInput.addEventListener('change', async (e) => {
-        let val = parseInt(focusDelayInput.value);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 2000) val = 2000;
-        await SettingsManager.setSetting('focusDelayMs', val);
-        focusDelayInput.value = String(val);
-        showToast(val === 0 ? "Auto-focus disabled" : `Focus delay set to ${val} ms`);
-      });
     }
+  }
 
-    // Event handlers
-    const closeBtn = app.querySelector('.settings-close');
+  // Close settings modal
+  function closeSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      // Re-focus search input
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        input.focus();
+      }
+    }
+  }
+
+  // Set up settings modal event listeners (called once)
+  function setupSettingsModalListeners() {
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
+
+    // Close button
+    const closeBtn = modal.querySelector('#settings-close');
     if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        // Preserve input value and results after closing settings
-        const inputValue = ($('search-input') as HTMLInputElement)?.value || input.value;
-        app.innerHTML = originalHTML;
-        setupEventListeners();
-        // Restore input value
-        const restoredInput = $('search-input') as HTMLInputElement;
-        if (restoredInput) {
-          restoredInput.value = inputValue;
-          restoredInput.focus();
-          restoredInput.select();
-        }
-        // Trigger search to restore results
-        debounceSearch(inputValue);
-      });
+      closeBtn.addEventListener('click', closeSettingsModal);
     }
 
-    // Settings changes
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeSettingsModal();
+      }
+    });
+
+    // Escape key to close
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSettingsModal();
+      }
+    });
+
+    // Display mode changes
+    const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     displayInputs.forEach(input => {
       input.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
+          renderResults(); // Re-render results with new display mode
           showToast("Display mode updated");
         }
       });
     });
 
+    // Log level changes
+    const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
     logInputs.forEach(input => {
       input.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
@@ -776,39 +694,57 @@ function initializePopup() {
       });
     });
 
+    // Highlight matches toggle
+    const highlightInput = modal.querySelector('#modal-highlightMatches') as HTMLInputElement;
     if (highlightInput) {
       highlightInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('highlightMatches', target.checked);
+        renderResults(); // Re-render results with/without highlighting
         showToast("Match highlighting " + (target.checked ? "enabled" : "disabled"));
       });
     }
 
-    // Action buttons
-    const resetBtn = app.querySelector('#modal-reset') as HTMLButtonElement;
-    const clearBtn = app.querySelector('#modal-clear') as HTMLButtonElement;
+    // Focus delay changes
+    const focusDelayInput = modal.querySelector('#modal-focusDelayMs') as HTMLInputElement;
+    if (focusDelayInput) {
+      focusDelayInput.addEventListener('change', async () => {
+        let val = parseInt(focusDelayInput.value);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > 2000) val = 2000;
+        await SettingsManager.setSetting('focusDelayMs', val);
+        focusDelayInput.value = String(val);
+        showToast(val === 0 ? "Auto-focus disabled" : `Focus delay set to ${val} ms`);
+      });
+    }
 
+    // Reset button
+    const resetBtn = modal.querySelector('#modal-reset') as HTMLButtonElement;
     if (resetBtn) {
       resetBtn.addEventListener('click', async () => {
         if (confirm('Reset all settings to defaults?')) {
           await SettingsManager.resetToDefaults();
           await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
-          app.innerHTML = originalHTML;
-          setupEventListeners();
+          closeSettingsModal();
+          renderResults();
           showToast("Settings reset to defaults");
         }
       });
     }
 
+    // Clear data button
+    const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (confirm('Clear all extension data? This will delete your browsing history.')) {
+        if (confirm('Clear all extension data? This will delete your browsing history index.')) {
           try {
             await clearIndexedDB();
             await SettingsManager.resetToDefaults();
             await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
-            app.innerHTML = originalHTML;
-            setupEventListeners();
+            closeSettingsModal();
+            resultsLocal = [];
+            activeIndex = -1;
+            renderResults();
             showToast("All data cleared");
           } catch (error) {
             showToast("Failed to clear data", true);
@@ -823,6 +759,9 @@ function initializePopup() {
 
   // Fast event setup
   setupEventListeners();
+
+  // Set up settings modal listeners once
+  setupSettingsModalListeners();
 
   // Fast window load - check service worker status and lazy load hints
   window.addEventListener("load", () => {
