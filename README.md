@@ -4,6 +4,28 @@ Ultra-fast, intelligent, Everything-like browser history search engine. SmrutiCo
 
 ## ✨ Features
 
+### 🎨 **Two UI Implementations**
+
+SmrutiCortex provides **two distinct user interfaces** that share the same powerful search engine:
+
+#### 1. **Inline Overlay** (Ultra-Fast, Content Script)
+- **Speed**: < 50ms response time
+- **Trigger**: Press `Ctrl+Shift+S` on any regular web page
+- **Technology**: Content script with closed Shadow DOM
+- **Appearance**: Sleek centered modal floating over the current page
+- **Use case**: Primary interface for instant search while browsing
+
+#### 2. **Extension Popup** (Traditional, Feature-Rich)  
+- **Speed**: 200-800ms (Chrome popup attachment overhead)
+- **Trigger**: Click toolbar icon OR `Ctrl+Shift+S` on special pages (chrome://, newtab, about:)
+- **Technology**: Standard Chrome extension popup
+- **Appearance**: 
+  - Popup mode: 600x600px dropdown from toolbar icon
+  - Tab mode: Centered card with backdrop when opened in a browser tab
+- **Use case**: Settings, bookmarking, and fallback for pages where content scripts cannot run
+
+**Shared Architecture**: Both UIs use the same `/src/shared/search-ui-base.ts` abstraction layer following SOLID/DRY principles. Updates to search behavior, highlighting, or keyboard navigation automatically apply to both implementations.
+
 ### 🚀 **Lightning-Fast Search**
 - **Instant results** as you type
 - **Intelligent ranking** using multiple scoring algorithms
@@ -14,7 +36,7 @@ Ultra-fast, intelligent, Everything-like browser history search engine. SmrutiCo
 - **First result auto-focus** - Type and hit Enter immediately
 - **Keyboard-first design** with full arrow key navigation
 - **Modifier key support** - Ctrl+Enter (new tab), Shift+Enter (background)
-- **Global keyboard shortcut** - Ctrl+Shift+S to open popup instantly
+- **Global keyboard shortcut** - Ctrl+Shift+S for ultra-fast inline overlay
 - **Omnibox integration** - Type `sc ` in address bar for quick access
 
 ### 🔧 **Developer-Friendly Debug**

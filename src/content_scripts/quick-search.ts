@@ -2,6 +2,7 @@
  * quick-search.ts
  * Ultra-fast inline search overlay that bypasses service worker wake-up delays.
  * 
+ * Architecture: Uses shared search-ui-base.ts for DRY compliance.
  * Performance Optimizations:
  * - Shadow DOM for complete style isolation (no CSS conflicts)
  * - CSS containment for faster rendering
@@ -10,6 +11,19 @@
  * - Early overlay pre-creation
  * - Performance timing logs at debug level
  */
+
+import {
+  type SearchResult,
+  type RenderOptions,
+  KeyboardAction,
+  truncateUrl,
+  escapeRegex,
+  appendHighlightedTextToDOM,
+  createMarkdownLink,
+  openUrl,
+  parseKeyboardAction,
+  renderResults as renderResultsShared
+} from '../shared/search-ui-base';
 
 // Prevent double-injection
 if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
@@ -566,8 +580,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // ===== RENDER RESULTS (CSP-safe) =====
-  function renderResults(results: any[]): void {
+  // ===== RENDER RESULTS (using shared render function) =====
+  function renderResults(results: SearchResult[]): void {
     if (!resultsEl) return;
     const t0 = performance.now();
 
@@ -576,121 +590,35 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       resultsEl.removeChild(resultsEl.firstChild);
     }
 
-    if (results.length === 0) {
-      const query = inputEl?.value?.trim() || '';
-      const emptyDiv = document.createElement('div');
-      emptyDiv.className = 'empty';
-      emptyDiv.textContent = query ? 'No results found' : 'Type to search your history...';
-      resultsEl.appendChild(emptyDiv);
-      return;
-    }
-
     const query = inputEl?.value?.trim().toLowerCase() || '';
     const tokens = query.split(/\s+/).filter(Boolean);
+    const emptyMessage = query ? 'No results found' : 'Type to search your history...';
 
-    // Use DocumentFragment for faster DOM manipulation
-    const fragment = document.createDocumentFragment();
-    
-    results.forEach((r, i) => {
-      const div = document.createElement('div');
-      div.className = `result${i === selectedIndex ? ' selected' : ''}`;
-      div.dataset.index = String(i);
-      div.dataset.url = r.url;
-      
-      const titleDiv = document.createElement('div');
-      titleDiv.className = 'result-title';
-      appendHighlightedText(titleDiv, r.title || r.url, tokens);
-      
-      const urlDiv = document.createElement('div');
-      urlDiv.className = 'result-url';
-      appendHighlightedText(urlDiv, truncateUrl(r.url), tokens);
-      
-      div.appendChild(titleDiv);
-      div.appendChild(urlDiv);
-      
-      // Click handler
-      div.addEventListener('click', (e: MouseEvent) => {
-        openResult(i, e.ctrlKey || e.metaKey);
-      });
-      
-      fragment.appendChild(div);
+    // Use shared rendering function (DRY principle)
+    const fragment = renderResultsShared(results, tokens, {
+      selectedIndex,
+      emptyMessage,
+      resultClassName: 'result',
+      selectedClassName: 'selected',
+      titleClassName: 'result-title',
+      urlClassName: 'result-url',
+      highlightClassName: 'highlight',
+      emptyClassName: 'empty',
+      onResultClick: (index, _result, ctrlOrMeta) => {
+        openResult(index, ctrlOrMeta);
+      }
     });
 
-    // Clear and append new results
-    while (resultsEl.firstChild) {
-      resultsEl.removeChild(resultsEl.firstChild);
-    }
     resultsEl.appendChild(fragment);
-
     perfLog(`renderResults (${results.length} items)`, t0);
   }
 
-  // CSP-safe text highlighting using DOM APIs
-  function appendHighlightedText(parent: HTMLElement, text: string, tokens: string[]): void {
-    if (!text) return;
-    
-    if (tokens.length === 0) {
-      parent.textContent = text;
-      return;
-    }
-    
-    // Build regex pattern for all tokens
-    const validTokens = tokens.filter(t => t.length >= 2);
-    if (validTokens.length === 0) {
-      parent.textContent = text;
-      return;
-    }
-    
-    const pattern = validTokens.map(escapeRegex).join('|');
-    const regex = new RegExp(`(${pattern})`, 'gi');
-    
-    let lastIndex = 0;
-    let match;
-    
-    while ((match = regex.exec(text)) !== null) {
-      // Add text before match
-      if (match.index > lastIndex) {
-        parent.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
-      }
-      // Add highlighted match
-      const span = document.createElement('span');
-      span.className = 'highlight';
-      span.textContent = match[1];
-      parent.appendChild(span);
-      lastIndex = regex.lastIndex;
-    }
-    
-    // Add remaining text
-    if (lastIndex < text.length) {
-      parent.appendChild(document.createTextNode(text.slice(lastIndex)));
-    }
-  }
-
-  function truncateUrl(url: string): string {
-    try {
-      const u = new URL(url);
-      const path = u.pathname + u.search;
-      const maxLen = 60;
-      if (path.length > maxLen) {
-        return u.host + path.slice(0, maxLen - 3) + '...';
-      }
-      return u.host + path;
-    } catch {
-      return url.slice(0, 80);
-    }
-  }
-
-  function escapeRegex(s: string): string {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  // ===== COPY TO CLIPBOARD =====
+  // ===== COPY TO CLIPBOARD (using shared utility) =====
   function copyMarkdownLink(index: number): void {
     const result = currentResults[index];
     if (!result?.url) return;
     
-    const title = result.title || result.url;
-    const markdown = `[${title}](${result.url})`;
+    const markdown = createMarkdownLink(result);
     
     navigator.clipboard.writeText(markdown).then(() => {
       showToast('Copied markdown link!');
@@ -699,52 +627,63 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     });
   }
 
-  // ===== KEYBOARD NAVIGATION =====
+  // ===== KEYBOARD NAVIGATION (using shared parseKeyboardAction) =====
   function handleKeydown(e: KeyboardEvent): void {
-    // Ctrl+M or Cmd+M: Copy markdown link
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
-      e.preventDefault();
-      if (currentResults.length > 0 && selectedIndex >= 0) {
-        copyMarkdownLink(selectedIndex);
-      }
-      return;
-    }
+    const action = parseKeyboardAction(e);
     
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
+    if (!action) return;
+    
+    e.preventDefault();
+    
+    switch (action) {
+      case KeyboardAction.CLOSE:
         hideOverlay();
         break;
-
-      case 'ArrowDown':
-        e.preventDefault();
+      
+      case KeyboardAction.CLEAR:
+        if (inputEl) {
+          inputEl.value = '';
+          inputEl.focus();
+          currentResults = [];
+          renderResults([]);
+        }
+        break;
+      
+      case KeyboardAction.NAVIGATE_DOWN:
         if (currentResults.length > 0) {
           selectedIndex = (selectedIndex + 1) % currentResults.length;
           updateSelection();
         }
         break;
-
-      case 'ArrowUp':
-        e.preventDefault();
+      
+      case KeyboardAction.NAVIGATE_UP:
         if (currentResults.length > 0) {
           selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
           updateSelection();
         }
         break;
-
-      case 'ArrowRight':
-        // ArrowRight: Open in new tab (like popup)
-        e.preventDefault();
+      
+      case KeyboardAction.OPEN_NEW_TAB:
         if (currentResults.length > 0 && selectedIndex >= 0) {
-          openResult(selectedIndex, true);
+          openResult(selectedIndex, true, false);
         }
         break;
-
-      case 'Enter':
-        e.preventDefault();
-        if (currentResults.length > 0) {
-          // Ctrl+Enter or Cmd+Enter: new tab, else same tab
-          openResult(selectedIndex, e.ctrlKey || e.metaKey);
+      
+      case KeyboardAction.OPEN_BACKGROUND_TAB:
+        if (currentResults.length > 0 && selectedIndex >= 0) {
+          openResult(selectedIndex, true, true);
+        }
+        break;
+      
+      case KeyboardAction.OPEN:
+        if (currentResults.length > 0 && selectedIndex >= 0) {
+          openResult(selectedIndex, false, false);
+        }
+        break;
+      
+      case KeyboardAction.COPY_MARKDOWN:
+        if (currentResults.length > 0 && selectedIndex >= 0) {
+          copyMarkdownLink(selectedIndex);
         }
         break;
     }
@@ -760,12 +699,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selected?.scrollIntoView({ block: 'nearest' });
   }
 
-  function openResult(index: number, newTab: boolean): void {
+  function openResult(index: number, newTab: boolean, background: boolean = false): void {
     const result = currentResults[index];
     if (!result?.url) return;
 
     hideOverlay();
 
+    // Use shared openUrl utility - but inline overlay runs in page context, so use window APIs
     if (newTab) {
       window.open(result.url, '_blank');
     } else {
