@@ -16,6 +16,30 @@ SmrutiCortex is a Chrome Manifest V3 extension for ultra-fast, intelligent brows
 - **src/popup/**: UI for search popup (HTML, CSS, TS)
 - **manifest.json**: Chrome extension manifest (MV3)
 
+## Two UI Implementations
+SmrutiCortex has **two distinct user interfaces**:
+
+### 1. **Inline Overlay** (Content Script-Based)
+- **Trigger**: `Ctrl+Shift+S` keyboard shortcut on regular web pages
+- **Implementation**: Content script (`quick-search.ts`) with closed Shadow DOM
+- **Appearance**: Centered modal overlay floating on top of the current page
+- **Performance**: Ultra-fast (< 50ms) - no service worker wake-up needed
+- **Context**: Runs directly in page context, always active
+- **Use case**: Primary interface for instant search on any webpage
+
+### 2. **Extension Popup** (Traditional Popup)
+- **Trigger**: Clicking toolbar icon OR `Ctrl+Shift+S` on special pages (chrome://, edge://, about:, extension pages)
+- **Implementation**: Standard Chrome extension popup (`popup.html`)
+- **Appearance**: Dropdown attached to toolbar icon (constrained 600x600px when popup, centered card when opened as tab)
+- **Performance**: Slower (200-800ms) due to popup attachment overhead
+- **Context**: Chrome extension context
+- **Use case**: Fallback for pages where content scripts cannot run, settings access, bookmarking
+
+**Note**: The same `popup.html` can be opened in three contexts:
+1. As a popup (attached to toolbar) - 600x600px constrained
+2. As a tab (via settings button) - centered card with backdrop
+3. Via omnibox (`sc ` in address bar) - popup mode
+
 ## Performance Philosophy
 - **Content script-first for shortcuts**: The `quick-search.ts` runs directly in page context, providing instant keyboard shortcut response (no service worker wake-up)
 - **Shadow DOM isolation**: Search overlay uses closed Shadow DOM for complete style isolation from page CSS
