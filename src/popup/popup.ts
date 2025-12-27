@@ -1,10 +1,18 @@
 // popup.ts — ultra-fast UI logic for SmrutiCortex popup
 // Compiled to dist/popup/popup.js
 // PERFORMANCE: This file is optimized for instant popup display
+// ARCHITECTURE: Uses shared search-ui-base.ts for DRY compliance
 
 import { BRAND_NAME } from "../core/constants";
 import { Logger, LogLevel, ComponentLogger } from "../core/logger";
 import { SettingsManager, DisplayMode } from "../core/settings";
+import {
+  type SearchResult,
+  createMarkdownLink,
+  openUrl,
+  parseKeyboardAction,
+  KeyboardAction
+} from "../shared/search-ui-base";
 
 // Lazy-loaded imports for non-critical features
 let tokenize: ((query: string) => string[]) | null = null;
@@ -427,7 +435,7 @@ function initializePopup() {
     }
   }
 
-  // Fast result opening
+  // Fast result opening (using shared openUrl utility)
   function openResult(index: number, event?: MouseEvent | KeyboardEvent) {
     const item = resultsLocal[index];
     if (!item) return;
@@ -435,13 +443,8 @@ function initializePopup() {
     const isCtrl = (event && (event as MouseEvent).ctrlKey) || (event instanceof KeyboardEvent && event.ctrlKey);
     const isShift = (event && (event as MouseEvent).shiftKey) || (event instanceof KeyboardEvent && event.shiftKey);
 
-    if (typeof chrome !== "undefined" && chrome.tabs) {
-      chrome.tabs.create({ url: item.url, active: !isShift }, () => {});
-    } else if (typeof browser !== "undefined" && browser.tabs) {
-      browser.tabs.create({ url: item.url, active: !isShift });
-    } else {
-      window.open(item.url, isCtrl ? "_blank" : "_self");
-    }
+    // Use shared openUrl - opens new tab if Ctrl or Shift, background if Shift
+    openUrl(item.url, isCtrl || isShift, isShift);
   }
 
   // Fast keyboard handling
@@ -631,7 +634,9 @@ function initializePopup() {
       if (resultsLocal.length === 0 || currentIndex === -1) return;
       const item = resultsLocal[currentIndex];
       if (item) {
-        navigator.clipboard.writeText(`[${item.title || item.url}](${item.url})`).then(() => {
+        // Use shared createMarkdownLink utility
+        const markdown = createMarkdownLink(item as SearchResult);
+        navigator.clipboard.writeText(markdown).then(() => {
           const prev = resultCountNode.textContent;
           resultCountNode.textContent = "Copied!";
           setTimeout(() => resultCountNode.textContent = prev, 900);

@@ -352,13 +352,53 @@ Move CPU-intensive scoring algorithms to a Web Worker within the service worker 
 
 ---
 
+## 🧩 Code Architecture: SOLID/DRY Principles
+
+### Shared Code Abstraction Layer
+
+To prevent code duplication and ensure consistency between the two UI implementations, we extracted common functionality into `/src/shared/search-ui-base.ts`:
+
+**Shared Utilities:**
+- `SearchResult` interface - Common result data model
+- `highlightText()` - Text highlighting with token matching
+- `appendHighlightedTextToDOM()` - CSP-safe DOM highlighting
+- `truncateUrl()` - URL display truncation
+- `createMarkdownLink()` - Markdown link generation
+- `openUrl()` - URL opening with tab/background support
+- `parseKeyboardAction()` - Keyboard event parsing
+- `renderResults()` - Generic result rendering with DocumentFragment
+- `debounce()` - Debouncing utility
+
+**Benefits:**
+1. **Single Source of Truth** - Update behavior in one place, affects both UIs
+2. **Type Safety** - Shared interfaces ensure data consistency
+3. **Easier Testing** - Test shared logic once, both UIs benefit
+4. **Maintainability** - No need to sync changes across duplicate code
+5. **Future-Proof** - Adding new UI features is easier and less error-prone
+
+**Implementation Pattern:**
+```typescript
+// Inline Overlay (quick-search.ts)
+import { parseKeyboardAction, KeyboardAction, renderResults } from '../shared/search-ui-base';
+
+// Extension Popup (popup.ts)
+import { createMarkdownLink, openUrl } from '../shared/search-ui-base';
+```
+
+Both implementations use the same core logic but adapt it to their specific contexts (Shadow DOM vs extension popup).
+
+---
+
 ## 📁 Files Changed
 
 | File | Changes |
 |------|---------|
-| `src/content_scripts/quick-search.ts` | Complete rewrite: Shadow DOM, port messaging, pre-warming, dynamic log level from settings |
+| `src/shared/search-ui-base.ts` | **NEW**: Shared abstraction layer with common utilities, interfaces, and rendering logic |
+| `src/content_scripts/quick-search.ts` | Refactored to use shared utilities; removed duplicate functions |
+| `src/popup/popup.ts` | Refactored to use shared utilities for markdown, URL opening, keyboard parsing |
 | `src/background/service-worker.ts` | **Critical fix**: Changed command handler to open inline overlay instead of popup; added port-based messaging; added `GET_LOG_LEVEL` handler |
-| `.github/copilot-instructions.md` | Updated performance philosophy section |
+| `.github/copilot-instructions.md` | Updated performance philosophy section and added "Two UI Implementations" documentation |
+| `README.md` | Added detailed section explaining Inline Overlay vs Extension Popup |
 | `docs/FUTURE_OPTIMIZATIONS.md` | New documentation for Offscreen Documents |
 | `docs/2025-12-27_ultra-fast-overlay-architecture.md` | This document |
 
@@ -372,6 +412,8 @@ Move CPU-intensive scoring algorithms to a Web Worker within the service worker 
 4. **Pre-warm everything** — Don't wait for user action to start initialization
 5. **Idle-time pre-creation** — Use `requestIdleCallback` for non-critical setup
 6. **CSS containment matters** — Tell the browser what it can skip
+7. **DRY principle is critical** — Shared code prevents divergence and bugs
+8. **SOLID architecture** — Interface-based design makes adding features easier
 
 ---
 
