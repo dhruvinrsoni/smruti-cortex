@@ -23,14 +23,57 @@ function registerCommandsListenerEarly() {
   if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
     browserAPI.commands.onCommand.addListener(async (command) => {
       if (command === "open-popup") {
-        // Open popup immediately - don't wait for initialization
-        if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
+        const t0 = performance.now();
+        logger.debug("onCommand", "🚀 Keyboard shortcut triggered");
+        
+        // Send message to content script to open inline overlay (FASTER than popup)
+        try {
+          const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
+          if (tab?.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://') && !tab.url.startsWith('about:') && !tab.url.startsWith('chrome-extension://')) {
+            try {
+              // Try to send message to existing content script
+              const response = await browserAPI.tabs.sendMessage(tab.id, { type: 'OPEN_INLINE_SEARCH' });
+              if (response?.success) {
+                logger.info("onCommand", `✅ Inline overlay opened in ${(performance.now() - t0).toFixed(1)}ms`);
+                return; // Success - don't continue
+              }
+            } catch (msgError) {
+              // Content script not loaded - inject it dynamically
+              logger.debug("onCommand", "Content script not loaded, injecting dynamically...");
+              try {
+                await browserAPI.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  files: ['content_scripts/quick-search.js']
+                });
+                // Wait a tiny bit for script to initialize
+                await new Promise(resolve => setTimeout(resolve, 50));
+                // Try again
+                const response = await browserAPI.tabs.sendMessage(tab.id, { type: 'OPEN_INLINE_SEARCH' });
+                if (response?.success) {
+                  logger.info("onCommand", `✅ Inline overlay opened (after inject) in ${(performance.now() - t0).toFixed(1)}ms`);
+                  return; // Success
+                }
+              } catch (injectError) {
+                logger.debug("onCommand", "Failed to inject content script", { error: (injectError as Error).message });
+              }
+            }
+            // If we get here, inline failed - fall through to popup
+            throw new Error('Inline overlay failed');
+          } else {
+            // Special page (chrome://, edge://, about:, extension page) - use popup
+            logger.info("onCommand", `Special page detected (${tab?.url?.slice(0, 30)}...), using popup`);
+            await browserAPI.action.openPopup();
+            logger.info("onCommand", `✅ Popup opened in ${(performance.now() - t0).toFixed(1)}ms`);
+          }
+        } catch (e) {
+          // Content script not loaded or page doesn't support it - fallback to popup
+          const errorMsg = (e as Error).message || 'Unknown error';
+          logger.info("onCommand", `Inline failed (${errorMsg}), falling back to popup`);
           try {
             await browserAPI.action.openPopup();
-            logger.info("onCommand", "✅ Popup opened successfully via action API");
-          } catch (e) {
-            // Popup might already be open - this is fine
-            logger.debug("onCommand", "Popup open attempt completed", { error: (e as Error).message });
+            logger.info("onCommand", `✅ Popup opened (fallback) in ${(performance.now() - t0).toFixed(1)}ms`);
+          } catch {
+            // Ignore - best effort
           }
         }
       }
@@ -76,6 +119,43 @@ function keepServiceWorkerAlive() {
   });
 }
 
+// === PORT-BASED MESSAGING FOR QUICK-SEARCH ===
+// Faster than one-shot messages for search-as-you-type scenarios
+function setupPortBasedMessaging() {
+  browserAPI.runtime.onConnect.addListener((port) => {
+    if (port.name === 'quick-search') {
+      logger.debug("onConnect", "Quick-search port connected");
+      
+      port.onMessage.addListener(async (msg) => {
+        if (msg.type === 'SEARCH_QUERY') {
+          const t0 = performance.now();
+          logger.debug("portMessage", `Quick-search query: "${msg.query}"`);
+          
+          if (!initialized) {
+            port.postMessage({ error: "Service worker not ready" });
+            return;
+          }
+          
+          try {
+            const results = await runSearch(msg.query);
+            logger.debug("portMessage", `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
+            port.postMessage({ results });
+          } catch (error) {
+            logger.error("portMessage", "Search error:", error);
+            port.postMessage({ error: (error as Error).message });
+          }
+        }
+      });
+      
+      port.onDisconnect.addListener(() => {
+        logger.debug("onDisconnect", "Quick-search port disconnected");
+      });
+    }
+  });
+}
+// Register port listener immediately
+setupPortBasedMessaging();
+
 (async function initLogger() {
   // Initialize logger first, then start logging
   await Logger.init();
@@ -96,6 +176,17 @@ function keepServiceWorkerAlive() {
           case "PING":
             logger.debug("onMessage", "Handling PING");
             sendResponse({ status: "ok" });
+            break;
+          case "OPEN_SETTINGS":
+            // Open the popup page in a new tab (since we can't open popup programmatically from content script)
+            logger.debug("onMessage", "Handling OPEN_SETTINGS");
+            browserAPI.tabs.create({ url: browserAPI.runtime.getURL('popup/popup.html') });
+            sendResponse({ status: "ok" });
+            break;
+          case "GET_LOG_LEVEL":
+            // Return current log level to content scripts
+            logger.trace("onMessage", "Handling GET_LOG_LEVEL");
+            sendResponse({ logLevel: Logger.getLevel() });
             break;
           case "SET_LOG_LEVEL":
             logger.info("onMessage", "[SmrutiCortex] Handling SET_LOG_LEVEL:", msg.level);
