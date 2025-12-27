@@ -1,12 +1,12 @@
 // database.ts — Hybrid storage layer with auto-detection for IndexedDB
 
-import { browserAPI } from "../core/helpers";
-import { IndexedItem } from "./schema";
-import { DB_NAME } from "../core/constants";
-import { Logger } from "../core/logger";
+import { browserAPI } from '../core/helpers';
+import { IndexedItem } from './schema';
+import { DB_NAME } from '../core/constants';
+import { Logger } from '../core/logger';
 
 const DB_VERSION = 1;
-const STORE_NAME = "pages";
+const STORE_NAME = 'pages';
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -15,29 +15,29 @@ let dbInstance: IDBDatabase | null = null;
 // ------------------------------
 export function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-        Logger.debug("Opening database...");
+        Logger.debug('Opening database...');
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = () => {
-            Logger.error("Open error:", request.error);
+            Logger.error('Open error:', request.error);
             reject(request.error);
         };
         request.onsuccess = () => {
             dbInstance = request.result;
-            Logger.debug("Database opened successfully");
+            Logger.debug('Database opened successfully');
             resolve(dbInstance);
         };
 
         request.onupgradeneeded = () => {
-            Logger.trace("Database upgrade needed, creating object store");
+            Logger.trace('Database upgrade needed, creating object store');
             const db = request.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
-                const store = db.createObjectStore(STORE_NAME, { keyPath: "url" });
-                store.createIndex("title", "title", { unique: false });
-                store.createIndex("hostname", "hostname", { unique: false });
-                store.createIndex("lastVisit", "lastVisit", { unique: false });
-                store.createIndex("visitCount", "visitCount", { unique: false });
-                Logger.trace("Object store and indexes created");
+                const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+                store.createIndex('title', 'title', { unique: false });
+                store.createIndex('hostname', 'hostname', { unique: false });
+                store.createIndex('lastVisit', 'lastVisit', { unique: false });
+                store.createIndex('visitCount', 'visitCount', { unique: false });
+                Logger.trace('Object store and indexes created');
             }
         };
     });
@@ -49,7 +49,7 @@ export function openDatabase(): Promise<IDBDatabase> {
 export async function saveIndexedItem(item: IndexedItem): Promise<void> {
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, "readwrite");
+        const txn = db.transaction(STORE_NAME, 'readwrite');
         const store = txn.objectStore(STORE_NAME);
         const req = store.put(item);
         req.onsuccess = () => resolve();
@@ -63,7 +63,7 @@ export async function saveIndexedItem(item: IndexedItem): Promise<void> {
 export async function getAllIndexedItems(): Promise<IndexedItem[]> {
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, "readonly");
+        const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
         const req = store.getAll();
 
@@ -81,7 +81,7 @@ export async function getAllIndexedItems(): Promise<IndexedItem[]> {
 export async function getIndexedItem(url: string): Promise<IndexedItem | null> {
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, "readonly");
+        const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
         const req = store.get(url);
         req.onsuccess = () => resolve(req.result ?? null);
@@ -93,7 +93,7 @@ export async function getIndexedItem(url: string): Promise<IndexedItem | null> {
 export async function deleteIndexedItem(url: string): Promise<void> {
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, "readwrite");
+        const txn = db.transaction(STORE_NAME, 'readwrite');
         const store = txn.objectStore(STORE_NAME);
         const req = store.delete(url);
         req.onsuccess = () => resolve();
@@ -105,7 +105,7 @@ export async function deleteIndexedItem(url: string): Promise<void> {
 export async function clearIndexedDB(): Promise<void> {
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, "readwrite");
+        const txn = db.transaction(STORE_NAME, 'readwrite');
         const store = txn.objectStore(STORE_NAME);
         const req = store.clear();
         req.onsuccess = () => resolve();

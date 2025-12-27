@@ -1,17 +1,17 @@
-import { Scorer } from "../../../core/scorer-types";
-import { tokenize } from "../tokenizer";
+import { Scorer } from '../../../core/scorer-types';
+import { tokenize } from '../tokenizer';
 
 const titleScorer: Scorer = {
-    name: "title",
+    name: 'title',
     weight: 0.40,
-    score: (item, query, allItems) => {
+    score: (item, query, _allItems) => {
         const title = item.title.toLowerCase();
         const queryTokens = tokenize(query);
 
-        if (queryTokens.length === 0) return 0;
+        if (queryTokens.length === 0) {return 0;}
 
         // Exact title match (highest relevance)
-        if (title === query) return 1;
+        if (title === query) {return 1;}
 
         // Count token matches in title
         const matches = queryTokens.filter(token => title.includes(token)).length;

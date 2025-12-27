@@ -1,22 +1,22 @@
 // scorer-manager.ts — Collects all scorers into a single weighted scoring pipeline
 
-import { Scorer } from "../../core/scorer-types";
-import titleScorer from "./scorers/title-scorer";
-import urlScorer from "./scorers/url-scorer";
-import recencyScorer from "./scorers/recency-scorer";
-import visitCountScorer from "./scorers/visitcount-scorer";
-import metaScorer from "./scorers/meta-scorer";
-import aiScorer from "./scorers/ai-scorer-placeholder";
+import { Scorer } from '../../core/scorer-types';
+import titleScorer from './scorers/title-scorer';
+import urlScorer from './scorers/url-scorer';
+import recencyScorer from './scorers/recency-scorer';
+import visitCountScorer from './scorers/visitcount-scorer';
+import metaScorer from './scorers/meta-scorer';
+import aiScorer from './scorers/ai-scorer-placeholder';
 
 // Domain familiarity scorer - learns from user behavior patterns
 const domainFamiliarityScorer: Scorer = {
-    name: "domainFamiliarity",
+    name: 'domainFamiliarity',
     weight: 0.05, // Small weight for subtle organic biasing
     score: (item, query, allItems) => {
-        if (!allItems || allItems.length === 0) return 0;
+        if (!allItems || allItems.length === 0) {return 0;}
 
         const hostname = item.hostname;
-        if (!hostname) return 0;
+        if (!hostname) {return 0;}
 
         // Count how many items from this domain are in the user's history
         const domainItems = allItems.filter(otherItem => otherItem.hostname === hostname);

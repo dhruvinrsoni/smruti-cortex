@@ -1,15 +1,15 @@
-import { Scorer } from "../../../core/scorer-types";
-import { tokenize } from "../tokenizer";
+import { Scorer } from '../../../core/scorer-types';
+import { tokenize } from '../tokenizer';
 
 const urlScorer: Scorer = {
-    name: "url",
+    name: 'url',
     weight: 0.15,
     score: (item, query) => {
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
         const queryTokens = tokenize(query);
 
-        if (queryTokens.length === 0) return 0;
+        if (queryTokens.length === 0) {return 0;}
 
         // Direct URL matches (highest relevance)
         const urlMatches = queryTokens.filter(token => url.includes(token)).length;

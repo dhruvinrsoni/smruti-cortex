@@ -3,7 +3,7 @@
   "name": "SmrutiCortex",
   "short_name": "SmrutiCortex",
   "description": "Everything-like instant search for your browser history — SmrutiCortex indexes your browsing memory and retrieves any URL instantly.",
-  "version": "0.1.0",
+  "version": "3.0.0",
   "permissions": [
     "history",
     "storage",
@@ -28,19 +28,29 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content_scripts/extractor.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content_scripts/extractor.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["content_scripts/quick-search.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content_scripts/quick-search.js"
+      ],
       "run_at": "document_start",
       "all_frames": false
     }
   ],
-  "omnibox": { "keyword": "sc" },
+  "omnibox": {
+    "keyword": "sc"
+  },
   "commands": {
     "open-popup": {
       "suggested_key": {
@@ -56,8 +66,14 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["content_scripts/*.js", "assets/*", "popup/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "content_scripts/*.js",
+        "assets/*",
+        "popup/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

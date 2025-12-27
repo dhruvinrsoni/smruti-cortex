@@ -161,13 +161,88 @@ src/
 
 ### Available Scripts
 ```bash
+# Building
 npm run build        # Development build (readable, with source maps)
-npm run build:prod   # Production build (minified)
-npm run lint         # Run ESLint
-npm run test         # Run unit tests
-npm run package      # Create store-ready zip
+npm run build:prod   # Production build (minified, optimized)
 npm run clean        # Remove build artifacts
+
+# Code Quality
+npm run lint         # Check code for issues
+npm run lint:fix     # Auto-fix lint issues
+
+# Testing
+npm run test              # Run tests once
+npm run test:watch        # Run tests in watch mode
+npm run test:coverage     # Run tests with coverage report
+
+# Packaging
+npm run package      # Build prod + create store-ready zip
 ```
+
+### 📦 Build vs Package Explained
+
+**`npm run build:prod`** (Compiling for production):
+- **What it does:** Compiles TypeScript → JavaScript, minifies code, removes source maps
+- **Input:** `src/` folder (TypeScript source)
+- **Output:** `dist/` folder (production-ready JavaScript)
+- **When to use:** Before testing the extension or preparing for release
+
+**`npm run package`** (Creating store submission):
+- **What it does:** Runs `build:prod` + creates a zip file for Chrome Web Store
+- **Input:** `dist/` folder (built code)
+- **Output:** `release/smruti-cortex-v3.0.0.zip` (ready to upload)
+- **When to use:** When you're ready to publish a new version to the store
+
+**Dev vs Prod Workflows:**
+- **Dev:** `npm run build` → load `dist/` in Chrome → iterate (has source maps for debugging)
+- **Prod:** `npm run build:prod` → `npm run package` → upload zip to store (optimized & minified)
+
+### 🧪 Running Tests
+
+SmrutiCortex uses **Vitest** for fast, modern testing:
+
+```bash
+# Run all tests once
+npm run test
+
+# Watch mode (re-runs on file changes)
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+```
+
+**Test coverage report** is generated in `coverage/` folder after running `npm run test:coverage`. Open `coverage/index.html` in a browser to see detailed coverage.
+
+### 🔍 Linting & Code Quality
+
+**ESLint** catches bugs and enforces consistent code style:
+
+```bash
+# Check for issues
+npm run lint
+
+# Auto-fix what's fixable
+npm run lint:fix
+```
+
+**Linting rules:**
+- TypeScript best practices
+- No unused variables
+- Consistent formatting
+- Chrome extension API usage patterns
+
+### 🤖 Local Workflow (Before Committing)
+
+Run these commands before pushing code to ensure quality:
+
+```bash
+npm run lint        # Check code quality
+npm run test        # Run tests
+npm run build       # Verify it builds
+```
+
+If everything passes, you're good to commit!
 
 ### Debug Checklist
 1. **Extension loads** without errors in `chrome://extensions`

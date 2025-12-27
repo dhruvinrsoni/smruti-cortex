@@ -1,34 +1,33 @@
 // search-engine.ts — SmrutiCortex Search Brain
 
-import { BRAND_NAME } from "../../core/constants";
-import { getAllIndexedItems } from "../database";
-import { getAllScorers } from "./scorer-manager";
-import { IndexedItem } from "../schema";
-import { tokenize } from "./tokenizer";
-import { browserAPI } from "../../core/helpers";
-import { Logger } from "../../core/logger";
+import { getAllIndexedItems } from '../database';
+import { getAllScorers } from './scorer-manager';
+import { IndexedItem } from '../schema';
+import { tokenize } from './tokenizer';
+import { browserAPI } from '../../core/helpers';
+import { Logger } from '../../core/logger';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
-    const logger = Logger.forComponent("SearchEngine");
-    logger.debug("runSearch", "Search called with query:", query);
+    const logger = Logger.forComponent('SearchEngine');
+    logger.debug('runSearch', 'Search called with query:', query);
 
     const q = query.trim().toLowerCase();
     if (!q) {
-        logger.trace("runSearch", "Query is empty, returning empty array");
+        logger.trace('runSearch', 'Query is empty, returning empty array');
         return [];
     }
 
     const tokens = tokenize(q);
-    logger.debug("runSearch", "Query tokens:", tokens);
+    logger.debug('runSearch', 'Query tokens:', tokens);
 
     const scorers = getAllScorers();
-    logger.trace("runSearch", "Loaded scorers:", scorers.length);
+    logger.trace('runSearch', 'Loaded scorers:', scorers.length);
 
     // Get all indexed items
     const items = await getAllIndexedItems();
 
     if (items.length === 0) {
-        logger.warn("runSearch", `🔍 "${q}" - No index available, using browser history`);
+        logger.warn('runSearch', `🔍 "${q}" - No index available, using browser history`);
         // Fallback to browser history search with higher limit
         const historyItems = await new Promise<any[]>((resolve) => {
             browserAPI.history.search({
@@ -37,28 +36,28 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 startTime: 0 // Search all history
             }, resolve);
         });
-        logger.info("runSearch", `📚 History fallback: ${historyItems.length} results for "${q}"`);
+        logger.info('runSearch', `📚 History fallback: ${historyItems.length} results for "${q}"`);
 
         // Convert to IndexedItem format
         const fallbackItems: IndexedItem[] = historyItems.map(item => ({
             url: item.url,
-            title: item.title || "",
-            hostname: (() => { try { return new URL(item.url).hostname; } catch { return ""; } })(),
-            metaDescription: "",
+            title: item.title || '',
+            hostname: (() => { try { return new URL(item.url).hostname; } catch { return ''; } })(),
+            metaDescription: '',
             metaKeywords: [],
             visitCount: item.visitCount || 1,
             lastVisit: item.lastVisitTime || Date.now(),
-            tokens: tokenize((item.title || "") + " " + item.url)
+            tokens: tokenize((item.title || '') + ' ' + item.url)
         }));
         return fallbackItems;
     }
 
-    logger.debug("runSearch", "Processing items for scoring");
+    logger.debug('runSearch', 'Processing items for scoring');
     const results: Array<{ item: IndexedItem; finalScore: number }> = [];
 
     for (const item of items) {
         // More flexible matching: ANY token match (not ALL tokens required)
-        const haystack = (item.title + " " + item.url + " " + item.hostname).toLowerCase();
+        const haystack = (item.title + ' ' + item.url + ' ' + item.hostname).toLowerCase();
         const hasAnyMatch = tokens.some(token => haystack.includes(token));
 
         if (!hasAnyMatch) {
@@ -74,7 +73,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
         }
 
-        logger.debug("runSearch", `Item scored: ${item.title.substring(0, 50)}...`, {
+        logger.debug('runSearch', `Item scored: ${item.title.substring(0, 50)}...`, {
             url: item.url,
             totalScore: score,
             scorerBreakdown: scorerDetails
@@ -86,7 +85,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         }
     }
 
-    logger.debug("runSearch", `Found ${results.length} matching items before sorting`);
+    logger.debug('runSearch', `Found ${results.length} matching items before sorting`);
 
     // Sort by score (highest first)
     results.sort((a, b) => b.finalScore - a.finalScore);
@@ -97,7 +96,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const maxPerDomain = 10; // Increased from 3 to 10 for power users
 
     for (const res of results) {
-        const domain = res.item.hostname || "unknown";
+        const domain = res.item.hostname || 'unknown';
         const count = domainCount.get(domain) || 0;
         if (count < maxPerDomain) {
             diversified.push(res);
@@ -105,14 +104,14 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         }
     }
 
-    logger.debug("runSearch", "Diversification completed", {
+    logger.debug('runSearch', 'Diversification completed', {
         originalResults: results.length,
         diversifiedResults: diversified.length,
         domainDistribution: Object.fromEntries(domainCount.entries())
     });
 
     const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
-    logger.info("runSearch", `🔍 "${q}" → ${finalResults.length} results (${results.length} matches, ${items.length} indexed)`);
+    logger.info('runSearch', `🔍 "${q}" → ${finalResults.length} results (${results.length} matches, ${items.length} indexed)`);
 
     return finalResults;
 }

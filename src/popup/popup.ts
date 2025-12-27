@@ -3,16 +3,16 @@
 // PERFORMANCE: This file is optimized for instant popup display
 // ARCHITECTURE: Uses shared search-ui-base.ts for DRY compliance
 
-import { BRAND_NAME } from "../core/constants";
-import { Logger, LogLevel, ComponentLogger } from "../core/logger";
-import { SettingsManager, DisplayMode } from "../core/settings";
+import { BRAND_NAME } from '../core/constants';
+import { Logger, LogLevel, ComponentLogger } from '../core/logger';
+import { SettingsManager, DisplayMode } from '../core/settings';
 import {
   type SearchResult,
   createMarkdownLink,
   openUrl,
   parseKeyboardAction,
   KeyboardAction
-} from "../shared/search-ui-base";
+} from '../shared/search-ui-base';
 
 // Lazy-loaded imports for non-critical features
 let tokenize: ((query: string) => string[]) | null = null;
@@ -21,7 +21,7 @@ let clearIndexedDB: (() => Promise<void>) | null = null;
 // Load tokenize lazily when needed
 async function getTokenize(): Promise<(query: string) => string[]> {
   if (!tokenize) {
-    const mod = await import("../background/search/tokenizer");
+    const mod = await import('../background/search/tokenizer');
     tokenize = mod.tokenize;
   }
   return tokenize;
@@ -30,7 +30,7 @@ async function getTokenize(): Promise<(query: string) => string[]> {
 // Load clearIndexedDB lazily when needed (only for settings clear button)
 async function getClearIndexedDB(): Promise<() => Promise<void>> {
   if (!clearIndexedDB) {
-    const mod = await import("../background/database");
+    const mod = await import('../background/database');
     clearIndexedDB = mod.clearIndexedDB;
   }
   return clearIndexedDB;
@@ -70,17 +70,19 @@ let settingsManager: typeof SettingsManager;
 
 // === PERFORMANCE LOGGING: ENTRY POINT ===
 // Log the moment popup script is loaded (first code run) and record timestamp
-let __popupEntryTimestamp = Date.now();
+const __popupEntryTimestamp = Date.now();
 try {
   // Also send to service worker for guaranteed logging
-  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
     chrome.runtime.sendMessage({
-      type: "POPUP_PERF_LOG",
-      stage: "entry",
+      type: 'POPUP_PERF_LOG',
+      stage: 'entry',
       timestamp: __popupEntryTimestamp
     });
   }
-} catch (e) {}
+} catch (e) {
+  // Ignore timing errors - not critical
+}
 
 // Global variables for event setup
 let debounceSearch: (q: string) => void;
@@ -92,7 +94,7 @@ let $: (id: string) => any;
 // Initialize essentials synchronously first - NO async operations blocking UI
 function fastInit() {
   // Create logger synchronously (no async)
-  logger = Logger.forComponent("PopupScript");
+  logger = Logger.forComponent('PopupScript');
 
   // Start popup IMMEDIATELY - don't wait for anything
   initializePopup();
@@ -100,7 +102,7 @@ function fastInit() {
   // Initialize settings in background (non-blocking)
   // Settings will use defaults until loaded
   SettingsManager.init().catch(err => {
-    console.warn("Settings init failed:", err);
+    console.warn('Settings init failed:', err);
   });
 }
 
@@ -108,17 +110,17 @@ function fastInit() {
 fastInit();
 
 function setupEventListeners() {
-  const input = $("search-input") as HTMLInputElement;
-  const resultsNode = $("results") as HTMLUListElement;
-  const resultCountNode = $("result-count") as HTMLDivElement;
-  const settingsButton = $("settings-button") as HTMLButtonElement;
+  const input = $('search-input') as HTMLInputElement;
+  const resultsNode = $('results') as HTMLUListElement;
+  const resultCountNode = $('result-count') as HTMLDivElement;
+  const settingsButton = $('settings-button') as HTMLButtonElement;
 
   // Make results container focusable for keyboard navigation
   // Removed - individual result items should be focusable instead
 
   if (input) {
-    input.addEventListener("input", (ev) => debounceSearch((ev.target as HTMLInputElement).value));
-    input.addEventListener("keydown", handleKeydown);
+    input.addEventListener('input', (ev) => debounceSearch((ev.target as HTMLInputElement).value));
+    input.addEventListener('keydown', handleKeydown);
   }
 
   if (resultsNode) {
@@ -126,8 +128,8 @@ function setupEventListeners() {
   }
 
   if (settingsButton) {
-    settingsButton.addEventListener("keydown", handleKeydown);
-    settingsButton.addEventListener("click", openSettingsPage);
+    settingsButton.addEventListener('keydown', handleKeydown);
+    settingsButton.addEventListener('click', openSettingsPage);
   }
   
   // Bookmark button: copy URL and make draggable
@@ -193,16 +195,16 @@ function initializePopup() {
   $ = $local;
 
   // Get elements immediately
-  const input = $local("search-input") as HTMLInputElement;
-  const resultsNode = $local("results") as HTMLUListElement;
-  const resultCountNode = $local("result-count") as HTMLDivElement;
-  const settingsButton = $local("settings-button") as HTMLButtonElement;
+  const input = $local('search-input') as HTMLInputElement;
+  const resultsNode = $local('results') as HTMLUListElement;
+  const resultCountNode = $local('result-count') as HTMLDivElement;
+  const settingsButton = $local('settings-button') as HTMLButtonElement;
 
   let resultsLocal: IndexedItem[] = [];
   let activeIndex = -1;
   let debounceTimer: number | undefined;
   let serviceWorkerReady = false;
-  let currentQuery = "";
+  let currentQuery = '';
 
   // Assign global results
   results = resultsLocal;
@@ -220,7 +222,7 @@ function initializePopup() {
     const tokens = simpleTokenize(query);
     let highlighted = text;
     for (const token of tokens) {
-      if (token.length < 2) continue; // Skip very short tokens
+      if (token.length < 2) {continue;} // Skip very short tokens
       const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`(${escapedToken})`, 'gi');
       highlighted = highlighted.replace(regex, '<mark>$1</mark>');
@@ -237,15 +239,17 @@ function initializePopup() {
     try {
       const focusTimestamp = Date.now();
       const elapsedMs = focusTimestamp - (typeof __popupEntryTimestamp === 'number' ? __popupEntryTimestamp : focusTimestamp);
-      if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
-          type: "POPUP_PERF_LOG",
-          stage: "input-focus",
+          type: 'POPUP_PERF_LOG',
+          stage: 'input-focus',
           timestamp: focusTimestamp,
           elapsedMs
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      // Ignore timing errors - not critical
+    }
   }
 
   // Pre-render empty state immediately
@@ -255,7 +259,7 @@ function initializePopup() {
   function sendMessage(msg: any): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
-        const runtime = (typeof chrome !== "undefined" && chrome.runtime) ? chrome.runtime : (typeof browser !== "undefined" ? browser.runtime : null);
+        const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : (typeof browser !== 'undefined' ? browser.runtime : null);
         if (!runtime || !runtime.sendMessage) {
           resolve({ results: [] });
           return;
@@ -275,10 +279,10 @@ function initializePopup() {
 
   // Fast service worker check
   async function checkServiceWorkerStatus(): Promise<boolean> {
-    if (serviceWorkerReady) return true;
+    if (serviceWorkerReady) {return true;}
     try {
-      const resp = await sendMessage({ type: "PING" });
-      serviceWorkerReady = resp && resp.status === "ok";
+      const resp = await sendMessage({ type: 'PING' });
+      serviceWorkerReady = resp && resp.status === 'ok';
       return serviceWorkerReady;
     } catch (error) {
       return false;
@@ -287,7 +291,7 @@ function initializePopup() {
 
   // Smart debounce - wait for user to stop typing before searching
   function debounceSearchLocal(q: string) {
-    if (debounceTimer) clearTimeout(debounceTimer);
+    if (debounceTimer) {clearTimeout(debounceTimer);}
     const delay = SettingsManager.getSetting('focusDelayMs');
     // Clamp to [0, 2000] ms
     const safeDelay = typeof delay === 'number' ? Math.max(0, Math.min(delay, 2000)) : 300;
@@ -300,7 +304,7 @@ function initializePopup() {
   // Fast search
   async function doSearch(q: string) {
     currentQuery = q;
-    if (!q || q.trim() === "") {
+    if (!q || q.trim() === '') {
       resultsLocal = [];
       activeIndex = -1;
       renderResults();
@@ -312,13 +316,13 @@ function initializePopup() {
       resultsLocal = [];
       activeIndex = -1;
       renderResults();
-      resultCountNode.textContent = "Initializing...";
+      resultCountNode.textContent = 'Initializing...';
       resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
       return;
     }
 
     try {
-      const resp = await sendMessage({ type: "SEARCH_QUERY", query: q });
+      const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q });
       resultsLocal = (resp && resp.results) ? resp.results : [];
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
@@ -326,7 +330,7 @@ function initializePopup() {
       const focusDelay = SettingsManager.getSetting('focusDelayMs');
       if (typeof focusDelay === 'number' && focusDelay > 0 && resultsLocal.length > 0) {
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
         const firstResult = resultsNode.querySelector(selector) as HTMLElement;
         if (firstResult) {
           activeIndex = 0;
@@ -344,16 +348,16 @@ function initializePopup() {
   // Fast rendering
   function renderResults() {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-    resultsNode.className = displayMode === DisplayMode.CARDS ? "results cards" : "results list";
+    resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
 
-    resultsNode.innerHTML = "";
-    resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? "" : "s"}`;
+    resultsNode.innerHTML = '';
+    resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
 
     if (resultsLocal.length === 0) {
-      const empty = document.createElement("div");
-      empty.textContent = "No matches — try different keywords";
-      empty.style.padding = "8px";
-      empty.style.color = "var(--muted)";
+      const empty = document.createElement('div');
+      empty.textContent = 'No matches — try different keywords';
+      empty.style.padding = '8px';
+      empty.style.color = 'var(--muted)';
       resultsNode.appendChild(empty);
       return;
     }
@@ -361,29 +365,29 @@ function initializePopup() {
     // Fast rendering without logging
     if (displayMode === DisplayMode.CARDS) {
       resultsLocal.forEach((item, idx) => {
-        const card = document.createElement("div");
-        card.className = "result-card";
+        const card = document.createElement('div');
+        card.className = 'result-card';
         card.tabIndex = 0;
         card.dataset.index = String(idx);
-        if (idx === activeIndex) card.classList.add("active");
+        if (idx === activeIndex) {card.classList.add('active');}
 
-        const fav = document.createElement("img");
-        fav.className = "card-favicon";
+        const fav = document.createElement('img');
+        fav.className = 'card-favicon';
         try {
           fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
         } catch {
           fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
         }
 
-        const details = document.createElement("div");
-        details.className = "card-details";
+        const details = document.createElement('div');
+        details.className = 'card-details';
 
-        const title = document.createElement("div");
-        title.className = "card-title";
+        const title = document.createElement('div');
+        title.className = 'card-title';
         title.innerHTML = highlightMatches(item.title || item.url, currentQuery);
 
-        const url = document.createElement("div");
-        url.className = "card-url";
+        const url = document.createElement('div');
+        url.className = 'card-url';
         url.innerHTML = highlightMatches(item.url, currentQuery);
 
         details.appendChild(title);
@@ -391,35 +395,35 @@ function initializePopup() {
         card.appendChild(fav);
         card.appendChild(details);
 
-        card.addEventListener("click", (e) => openResult(idx, e as MouseEvent));
-        card.addEventListener("keydown", handleKeydownLocal);
+        card.addEventListener('click', (e) => openResult(idx, e as MouseEvent));
+        card.addEventListener('keydown', handleKeydownLocal);
 
         resultsNode.appendChild(card);
       });
     } else {
       resultsLocal.forEach((item, idx) => {
-        const li = document.createElement("li");
+        const li = document.createElement('li');
         li.tabIndex = 0;
         li.dataset.index = String(idx);
-        if (idx === activeIndex) li.classList.add("active");
+        if (idx === activeIndex) {li.classList.add('active');}
 
-        const fav = document.createElement("img");
-        fav.className = "favicon";
+        const fav = document.createElement('img');
+        fav.className = 'favicon';
         try {
           fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
         } catch {
           fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
         }
 
-        const details = document.createElement("div");
-        details.className = "result-details";
+        const details = document.createElement('div');
+        details.className = 'result-details';
 
-        const title = document.createElement("div");
-        title.className = "result-title";
+        const title = document.createElement('div');
+        title.className = 'result-title';
         title.innerHTML = highlightMatches(item.title || item.url, currentQuery);
 
-        const url = document.createElement("div");
-        url.className = "result-url";
+        const url = document.createElement('div');
+        url.className = 'result-url';
         url.innerHTML = highlightMatches(item.url, currentQuery);
 
         details.appendChild(title);
@@ -427,8 +431,8 @@ function initializePopup() {
         li.appendChild(fav);
         li.appendChild(details);
 
-        li.addEventListener("click", (e) => openResult(idx, e as MouseEvent));
-        li.addEventListener("keydown", handleKeydownLocal);
+        li.addEventListener('click', (e) => openResult(idx, e as MouseEvent));
+        li.addEventListener('keydown', handleKeydownLocal);
 
         resultsNode.appendChild(li);
       });
@@ -438,7 +442,7 @@ function initializePopup() {
   // Fast result opening (using shared openUrl utility)
   function openResult(index: number, event?: MouseEvent | KeyboardEvent) {
     const item = resultsLocal[index];
-    if (!item) return;
+    if (!item) {return;}
 
     const isCtrl = (event && (event as MouseEvent).ctrlKey) || (event instanceof KeyboardEvent && event.ctrlKey);
     const isShift = (event && (event as MouseEvent).shiftKey) || (event instanceof KeyboardEvent && event.shiftKey);
@@ -450,9 +454,9 @@ function initializePopup() {
   // Fast keyboard handling
   function handleKeydownLocal(e: KeyboardEvent) {
     const currentElement = document.activeElement;
-    const input = $local("search-input") as HTMLInputElement;
-    const resultsNode = $local("results") as HTMLUListElement;
-    const settingsButton = $local("settings-button") as HTMLButtonElement;
+    const input = $local('search-input') as HTMLInputElement;
+    const resultsNode = $local('results') as HTMLUListElement;
+    const settingsButton = $local('settings-button') as HTMLButtonElement;
 
     let currentIndex = -1;
     if (resultsNode.contains(currentElement)) {
@@ -460,18 +464,18 @@ function initializePopup() {
       const itemSelector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
       const currentItem = (currentElement as HTMLElement).closest(itemSelector) as HTMLElement;
       if (currentItem) {
-        currentIndex = parseInt(currentItem.dataset.index || "0");
+        currentIndex = parseInt(currentItem.dataset.index || '0');
       }
     }
 
     // Handle Tab navigation between main components
-    if (e.key === "Tab" && !e.shiftKey) {
+    if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
       if (currentElement === input) {
         // From search input -> first result item (if results exist)
         if (resultsLocal.length > 0) {
           const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-          const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+          const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
           const firstResult = resultsNode.querySelector(selector) as HTMLElement;
           if (firstResult) {
             activeIndex = 0;
@@ -496,7 +500,7 @@ function initializePopup() {
     }
 
     // Handle Shift+Tab navigation (reverse)
-    if (e.key === "Tab" && e.shiftKey) {
+    if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
       if (currentElement === input) {
         // From search input -> settings button
@@ -505,7 +509,7 @@ function initializePopup() {
         // From settings button -> last result item (if results exist), or search input
         if (resultsLocal.length > 0) {
           const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-          const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+          const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
           const results = resultsNode.querySelectorAll(selector);
           const lastResult = results[results.length - 1] as HTMLElement;
           if (lastResult) {
@@ -528,11 +532,11 @@ function initializePopup() {
 
     // Handle search input specific keys
     if (currentElement === input) {
-      if (e.key === "ArrowDown" && resultsLocal.length > 0) {
+      if (e.key === 'ArrowDown' && resultsLocal.length > 0) {
         e.preventDefault();
         // Move focus to first result item if not already focused
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
         const firstResult = resultsNode.querySelector(selector) as HTMLElement;
         if (firstResult) {
           if (activeIndex !== 0) {
@@ -551,10 +555,10 @@ function initializePopup() {
         }
         return;
       }
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         // Don't prevent default - let Escape bubble up to close the popup
-        input.value = "";
-        currentQuery = "";
+        input.value = '';
+        currentQuery = '';
         resultsLocal = [];
         activeIndex = -1;
         renderResults();
@@ -566,7 +570,7 @@ function initializePopup() {
 
     // Handle settings button keys
     if (currentElement === settingsButton) {
-      if (e.key === "Enter" || e.key === " ") {
+      if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         openSettingsPage();
         return;
@@ -576,15 +580,15 @@ function initializePopup() {
 
     // Handle result item navigation
     if (resultsNode.contains(currentElement)) {
-      if (e.key === "ArrowDown") {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (resultsLocal.length === 0) return;
+        if (resultsLocal.length === 0) {return;}
         const newIndex = Math.min(resultsLocal.length - 1, currentIndex + 1);
         activeIndex = newIndex;
         highlightActive();
         // Focus the new active result item
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
         const results = resultsNode.querySelectorAll(selector);
         const activeResult = results[newIndex] as HTMLElement;
         if (activeResult) {
@@ -593,15 +597,15 @@ function initializePopup() {
         return;
       }
 
-      if (e.key === "ArrowUp") {
+      if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (resultsLocal.length === 0) return;
+        if (resultsLocal.length === 0) {return;}
         const newIndex = Math.max(0, currentIndex - 1);
         activeIndex = newIndex;
         highlightActive();
         // Focus the new active result item
         const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-        const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+        const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
         const results = resultsNode.querySelectorAll(selector);
         const activeResult = results[newIndex] as HTMLElement;
         if (activeResult) {
@@ -610,17 +614,17 @@ function initializePopup() {
         return;
       }
 
-      if (e.key === "ArrowRight" || e.key === "Enter") {
+      if (e.key === 'ArrowRight' || e.key === 'Enter') {
         e.preventDefault();
-        if (resultsLocal.length === 0) return;
+        if (resultsLocal.length === 0) {return;}
         openResult(currentIndex, e);
         return;
       }
 
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         // Don't prevent default - let Escape bubble up to close the popup
-        input.value = "";
-        currentQuery = "";
+        input.value = '';
+        currentQuery = '';
         resultsLocal = [];
         activeIndex = -1;
         renderResults();
@@ -629,16 +633,16 @@ function initializePopup() {
       }
     }
 
-    if (e.key.toLowerCase() === "m" && e.ctrlKey) {
+    if (e.key.toLowerCase() === 'm' && e.ctrlKey) {
       e.preventDefault();
-      if (resultsLocal.length === 0 || currentIndex === -1) return;
+      if (resultsLocal.length === 0 || currentIndex === -1) {return;}
       const item = resultsLocal[currentIndex];
       if (item) {
         // Use shared createMarkdownLink utility
         const markdown = createMarkdownLink(item as SearchResult);
         navigator.clipboard.writeText(markdown).then(() => {
           const prev = resultCountNode.textContent;
-          resultCountNode.textContent = "Copied!";
+          resultCountNode.textContent = 'Copied!';
           setTimeout(() => resultCountNode.textContent = prev, 900);
         });
       }
@@ -652,22 +656,22 @@ function initializePopup() {
   // Fast highlighting and focusing
   function highlightActive() {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-    const selector = displayMode === DisplayMode.CARDS ? ".result-card" : "li";
+    const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
     const items = Array.from(resultsNode.querySelectorAll(selector));
-    items.forEach((item) => item.classList.remove("active"));
+    items.forEach((item) => item.classList.remove('active'));
     const active = items[activeIndex];
     if (active) {
-      active.classList.add("active");
+      active.classList.add('active');
       // Don't focus individual items - keep focus on results container
       // Just scroll the active item into view if needed
-      active.scrollIntoView({ block: "nearest", inline: "nearest" });
+      active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
   }
 
   // Show settings modal overlay (doesn't replace app content)
   function openSettingsPageLocal() {
     const modal = document.getElementById('settings-modal');
-    if (!modal) return;
+    if (!modal) {return;}
 
     // Show the modal
     modal.classList.remove('hidden');
@@ -721,7 +725,7 @@ function initializePopup() {
   // Set up settings modal event listeners (called once)
   function setupSettingsModalListeners() {
     const modal = document.getElementById('settings-modal');
-    if (!modal) return;
+    if (!modal) {return;}
 
     // Close button
     const closeBtn = modal.querySelector('#settings-close');
@@ -753,7 +757,7 @@ function initializePopup() {
         if (target.checked) {
           await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
           renderResults(); // Re-render results with new display mode
-          showToast("Display mode updated");
+          showToast('Display mode updated');
         }
       });
     });
@@ -767,7 +771,7 @@ function initializePopup() {
           const level = parseInt(target.value);
           await SettingsManager.setSetting('logLevel', level);
           await Logger.setLevel(level);
-          showToast("Log level updated");
+          showToast('Log level updated');
         }
       });
     });
@@ -779,7 +783,7 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('highlightMatches', target.checked);
         renderResults(); // Re-render results with/without highlighting
-        showToast("Match highlighting " + (target.checked ? "enabled" : "disabled"));
+        showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'));
       });
     }
 
@@ -788,11 +792,11 @@ function initializePopup() {
     if (focusDelayInput) {
       focusDelayInput.addEventListener('change', async () => {
         let val = parseInt(focusDelayInput.value);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 2000) val = 2000;
+        if (isNaN(val) || val < 0) {val = 0;}
+        if (val > 2000) {val = 2000;}
         await SettingsManager.setSetting('focusDelayMs', val);
         focusDelayInput.value = String(val);
-        showToast(val === 0 ? "Auto-focus disabled" : `Focus delay set to ${val} ms`);
+        showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`);
       });
     }
 
@@ -805,7 +809,7 @@ function initializePopup() {
           await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
           closeSettingsModal();
           renderResults();
-          showToast("Settings reset to defaults");
+          showToast('Settings reset to defaults');
         }
       });
     }
@@ -825,9 +829,9 @@ function initializePopup() {
             resultsLocal = [];
             activeIndex = -1;
             renderResults();
-            showToast("All data cleared");
+            showToast('All data cleared');
           } catch (error) {
-            showToast("Failed to clear data", true);
+            showToast('Failed to clear data', true);
           }
         }
       });
@@ -844,12 +848,12 @@ function initializePopup() {
   setupSettingsModalListeners();
 
   // Fast window load - check service worker status and lazy load hints
-  window.addEventListener("load", () => {
+  window.addEventListener('load', () => {
     // Check service worker status asynchronously (don't block)
     checkServiceWorkerStatus().then(ready => {
       serviceWorkerReady = ready;
       if (!ready) {
-        resultCountNode.textContent = "Initializing...";
+        resultCountNode.textContent = 'Initializing...';
         resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
       }
     });
@@ -876,28 +880,28 @@ function initializePopup() {
   }
 
   // Message listeners
-  if (typeof chrome !== "undefined" && chrome.runtime) {
+  if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === "KEYBOARD_SHORTCUT_OPEN") {
+      if (message.type === 'KEYBOARD_SHORTCUT_OPEN') {
         handleKeyboardShortcut();
-        sendResponse({ status: "ok" });
-      } else if (message.type === "PING") {
-        sendResponse({ status: "ok" });
-      } else if (message.type === "SETTINGS_CHANGED") {
+        sendResponse({ status: 'ok' });
+      } else if (message.type === 'PING') {
+        sendResponse({ status: 'ok' });
+      } else if (message.type === 'SETTINGS_CHANGED') {
         renderResults();
-        sendResponse({ status: "ok" });
+        sendResponse({ status: 'ok' });
       }
     });
-  } else if (typeof browser !== "undefined" && browser.runtime) {
+  } else if (typeof browser !== 'undefined' && browser.runtime) {
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === "KEYBOARD_SHORTCUT_OPEN") {
+      if (message.type === 'KEYBOARD_SHORTCUT_OPEN') {
         handleKeyboardShortcut();
-        sendResponse({ status: "ok" });
-      } else if (message.type === "PING") {
-        sendResponse({ status: "ok" });
-      } else if (message.type === "SETTINGS_CHANGED") {
+        sendResponse({ status: 'ok' });
+      } else if (message.type === 'PING') {
+        sendResponse({ status: 'ok' });
+      } else if (message.type === 'SETTINGS_CHANGED') {
         renderResults();
-        sendResponse({ status: "ok" });
+        sendResponse({ status: 'ok' });
       }
     });
   }
