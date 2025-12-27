@@ -44,11 +44,26 @@ export class SettingsManager {
     }
 
     /**
+     * Check if already initialized
+     */
+    static isInitialized(): boolean {
+        return this.initialized;
+    }
+
+    /**
      * Initialize settings from storage
+     * PERFORMANCE: This is designed to be non-blocking - uses defaults immediately
      */
     static async init(): Promise<void> {
-        this.logger.debug("init", "⚙️ Initializing settings...");
+        // Already initialized - skip
+        if (this.initialized) return;
+
+        // Mark as initialized immediately with defaults
+        // Settings can be used right away with defaults
+        this.initialized = true;
+
         try {
+            // Load stored settings in background (non-blocking for UI)
             const stored = await this.loadFromStorage();
             if (stored) {
                 this.settings = { ...this.settings, ...stored };
@@ -57,13 +72,12 @@ export class SettingsManager {
             // Ensure displayMode always defaults to list
             this.settings.displayMode = DisplayMode.LIST;
 
-            // Apply current settings
+            // Apply current settings (non-critical)
             await this.applySettings();
-            this.initialized = true;
-            this.logger.debug("init", "✅ Settings ready");
+            this.logger.debug("init", "✅ Settings loaded from storage");
         } catch (error) {
-            this.logger.error("init", "Failed to initialize settings:", error);
-            // Continue with defaults
+            // Already using defaults, just log the error
+            this.logger.warn("init", "Using defaults, storage load failed:", error);
         }
     }
 

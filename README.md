@@ -71,12 +71,19 @@ npm run build
 - **Arrow Up/Down**: Navigate results
 - **Escape**: Clear search and refocus input
 - **M**: Copy markdown link to clipboard
-- **Ctrl+Shift+S**: Quick open popup (focuses first result if available)
+- **Ctrl+Shift+S**: Ultra-fast inline search overlay ⚡
 
 ### Quick Access
+- **Inline Overlay** (Fastest): Press `Ctrl+Shift+S` on any page for instant search
 - **Omnibox**: Type `sc ` in address bar, then your search query
 - **Toolbar**: Click the brain icon 🧠
-- **Keyboard**: Press `Ctrl+Shift+S` to open popup instantly
+
+### 🚀 Ultra-Fast Inline Search
+The **Ctrl+Shift+S** shortcut opens an **instant inline overlay** directly on the current page. This bypasses Chrome's service worker wake-up delays, providing truly instant response:
+- **Zero delay** - Content script runs in page context, no service worker needed
+- **Sleek dark UI** - Minimal, distraction-free overlay
+- **Full keyboard navigation** - Arrow keys, Enter, Escape
+- **Same powerful search** - Uses the same scoring engine
 
 ### Debug Features
 - **Debug Toggle**: Check/uncheck the "Debug" box in popup header

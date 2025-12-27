@@ -32,6 +32,12 @@
       "js": ["content_scripts/extractor.js"],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_scripts/quick-search.js"],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "omnibox": { "keyword": "sc" },

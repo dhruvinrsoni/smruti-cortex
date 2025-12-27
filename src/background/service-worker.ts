@@ -14,6 +14,33 @@ import { SettingsManager } from "../core/settings";
 let initialized = false;
 const logger = Logger.forComponent("ServiceWorker");
 
+// === ULTRA-FAST KEYBOARD SHORTCUT HANDLER ===
+// Register command listener IMMEDIATELY at module load (before any async init)
+// This ensures keyboard shortcuts work even during cold start
+let commandsListenerRegistered = false;
+function registerCommandsListenerEarly() {
+  if (commandsListenerRegistered) return;
+  if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
+    browserAPI.commands.onCommand.addListener(async (command) => {
+      if (command === "open-popup") {
+        // Open popup immediately - don't wait for initialization
+        if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
+          try {
+            await browserAPI.action.openPopup();
+            logger.info("onCommand", "✅ Popup opened successfully via action API");
+          } catch (e) {
+            // Popup might already be open - this is fine
+            logger.debug("onCommand", "Popup open attempt completed", { error: (e as Error).message });
+          }
+        }
+      }
+    });
+    commandsListenerRegistered = true;
+  }
+}
+// Register immediately at module load
+registerCommandsListenerEarly();
+
 // Keep service worker alive to reduce cold start delays
 function keepServiceWorkerAlive() {
   // Use multiple overlapping alarms to keep service worker active
@@ -195,99 +222,9 @@ async function init() {
         // Keep service worker alive to reduce cold start delays for keyboard shortcuts
         keepServiceWorkerAlive();
 
-        // Listen for keyboard commands
-        logger.debug("init", "Setting up command listener");
-        let popupOpeningInProgress = false; // Prevent multiple simultaneous popup opens
-        try {
-            if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                logger.debug("init", "Commands API is available, setting up listener");
-                browserAPI.commands.onCommand.addListener(async (command) => {
-                    logger.debug("onCommand", "Command received", { command });
-                    if (command === "open-popup") {
-                        if (popupOpeningInProgress) {
-                            logger.debug("onCommand", "Popup open already in progress, ignoring");
-                            return;
-                        }
-                        popupOpeningInProgress = true;
-                        try {
-                            // For popup extensions, skip window checks - popups can open regardless of window focus
-                            if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                try {
-                                    logger.debug("onCommand", "Attempting to open popup via action API");
-                                    await browserAPI.action.openPopup();
-                                    logger.info("onCommand", "✅ Popup opened successfully via action API");
-                                    return; // Success
-                                } catch (popupError) {
-                                    // For popup extensions, this is often normal - popup might already be open
-                                    // The browser should bring existing popup to focus automatically
-                                    logger.debug("onCommand", "Popup open attempt completed (might already be open)", { error: popupError.message });
-                                    // Don't treat this as an error - it's expected behavior
-                                    return;
-                                }
-                            } else {
-                                logger.error("onCommand", "Action API not available - this is required for popup extensions");
-                                throw new Error("Action API not available for popup extension");
-                            }
-                        } catch (error) {
-                            logger.error("onCommand", "Failed to open popup", error);
-                            // Don't try to create tabs - popup extensions should only open popups
-                        } finally {
-                            popupOpeningInProgress = false;
-                        }
-                    }
-                });
-                logger.debug("init", "Commands listener set up successfully");
-            } else {
-                logger.warn("init", "Commands API not available during init - this may be normal");
-                logger.debug("init", "browserAPI.commands exists:", !!browserAPI.commands);
-                if (browserAPI.commands) {
-                    logger.debug("init", "browserAPI.commands properties:", Object.keys(browserAPI.commands));
-                    logger.debug("init", "browserAPI.commands.onCommand:", browserAPI.commands.onCommand);
-                }
-                logger.debug("init", "Will retry commands setup later");
-
-                // Try to set up commands listener after a delay
-                setTimeout(() => {
-                    try {
-                        if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
-                            browserAPI.commands.onCommand.addListener(async (command) => {
-                                logger.debug("onCommand", "Command received", { command });
-                                if (command === "open-popup") {
-                                    try {
-                                        // For popup extensions, skip window checks - popups can open regardless of window focus
-                                        if (browserAPI.action && typeof browserAPI.action.openPopup === 'function') {
-                                            try {
-                                                logger.debug("onCommand", "Attempting to open popup via action API");
-                                                await browserAPI.action.openPopup();
-                                                logger.info("onCommand", "✅ Popup opened successfully via action API");
-                                                return; // Success - don't fall back to tab
-                                            } catch (popupError) {
-                                                // For popup extensions, this is often normal - popup might already be open
-                                                // The browser should bring existing popup to focus automatically
-                                                logger.debug("onCommand", "Popup open attempt completed (might already be open)", { error: popupError.message });
-                                                // Don't treat this as an error - it's expected behavior
-                                                return;
-                                            }
-                                        } else {
-                                            logger.error("onCommand", "Action API not available - this is required for popup extensions");
-                                            throw new Error("Action API not available for popup extension");
-                                        }
-                                    } catch (error) {
-                                        logger.error("onCommand", "Failed to open popup - this is a critical error for popup extensions", error);
-                                        // Don't create tabs for popup extensions - that's not the intended behavior
-                                        // Instead, show an error to the user somehow, or just log the error
-                                    }
-                                }
-                            });
-                        }
-                    } catch (retryError) {
-                        logger.error("init", "Error setting up commands listener (delayed):", retryError);
-                    }
-                }, 1000);
-            }
-        } catch (error) {
-            logger.error("init", "Error setting up commands listener:", error);
-        }
+        // Command listener is already registered at module load level for ultra-fast response
+        // Just ensure it's registered if not already
+        registerCommandsListenerEarly();
 
         logger.info("init", "Service worker ready.");
         logger.info("init", "[SmrutiCortex] Service worker ready");

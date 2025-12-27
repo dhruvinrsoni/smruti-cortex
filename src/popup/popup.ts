@@ -1,11 +1,32 @@
-// popup.ts — lightweight UI logic for SmrutiCortex popup
-// Compiled by webpack to dist/popup/popup.js
+// popup.ts — ultra-fast UI logic for SmrutiCortex popup
+// Compiled to dist/popup/popup.js
+// PERFORMANCE: This file is optimized for instant popup display
 
 import { BRAND_NAME } from "../core/constants";
 import { Logger, LogLevel, ComponentLogger } from "../core/logger";
 import { SettingsManager, DisplayMode } from "../core/settings";
-import { tokenize } from "../background/search/tokenizer";
-import { clearIndexedDB } from "../background/database";
+
+// Lazy-loaded imports for non-critical features
+let tokenize: ((query: string) => string[]) | null = null;
+let clearIndexedDB: (() => Promise<void>) | null = null;
+
+// Load tokenize lazily when needed
+async function getTokenize(): Promise<(query: string) => string[]> {
+  if (!tokenize) {
+    const mod = await import("../background/search/tokenizer");
+    tokenize = mod.tokenize;
+  }
+  return tokenize;
+}
+
+// Load clearIndexedDB lazily when needed (only for settings clear button)
+async function getClearIndexedDB(): Promise<() => Promise<void>> {
+  if (!clearIndexedDB) {
+    const mod = await import("../background/database");
+    clearIndexedDB = mod.clearIndexedDB;
+  }
+  return clearIndexedDB;
+}
 
 declare const browser: any;
 
@@ -60,21 +81,22 @@ let results: any[];
 let openSettingsPage: () => void;
 let $: (id: string) => any;
 
-// Initialize essentials synchronously first
+// Initialize essentials synchronously first - NO async operations blocking UI
 function fastInit() {
-  // Create logger synchronously
+  // Create logger synchronously (no async)
   logger = Logger.forComponent("PopupScript");
 
-  // Initialize settings synchronously if possible
+  // Start popup IMMEDIATELY - don't wait for anything
+  initializePopup();
+
+  // Initialize settings in background (non-blocking)
+  // Settings will use defaults until loaded
   SettingsManager.init().catch(err => {
     console.warn("Settings init failed:", err);
   });
-
-  // Start popup immediately
-  initializePopup();
 }
 
-// Start immediately
+// Start immediately - this runs synchronously
 fastInit();
 
 function setupEventListeners() {
@@ -136,12 +158,17 @@ function initializePopup() {
   // Assign global results
   results = resultsLocal;
 
+  // Simple inline tokenizer for highlighting (avoids heavy import)
+  function simpleTokenize(query: string): string[] {
+    return query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  }
+
   // Highlight matching parts in text
   function highlightMatches(text: string, query: string): string {
     if (!query.trim() || !SettingsManager.getSetting('highlightMatches')) {
       return text;
     }
-    const tokens = tokenize(query);
+    const tokens = simpleTokenize(query);
     let highlighted = text;
     for (const token of tokens) {
       if (token.length < 2) continue; // Skip very short tokens
@@ -738,7 +765,9 @@ function initializePopup() {
       clearBtn.addEventListener('click', async () => {
         if (confirm('Clear all extension data? This will delete your browsing history index.')) {
           try {
-            await clearIndexedDB();
+            // Lazy load clearIndexedDB only when needed
+            const clearDB = await getClearIndexedDB();
+            await clearDB();
             await SettingsManager.resetToDefaults();
             await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
             closeSettingsModal();
