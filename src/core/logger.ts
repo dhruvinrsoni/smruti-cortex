@@ -29,43 +29,39 @@ export interface LogEntry {
 }
 
 export class Logger {
-    private static currentLevel: LogLevel = LogLevel.DEBUG; // Changed from INFO to DEBUG
+    private static currentLevel: LogLevel = LogLevel.INFO; // Default to INFO for production
     private static initialized = false;
     private static logBuffer: LogEntry[] = [];
     private static readonly MAX_BUFFER_SIZE = 1000;
 
     /**
-     * Initialize logger with Spring Boot-style configuration
+     * Initialize logger - FAST: marks as initialized immediately
+     * Async loading of saved level happens in background
      */
     static async init(): Promise<void> {
+        // Already initialized - skip
         if (this.initialized) return;
 
+        // Mark as initialized immediately with default INFO level
+        this.initialized = true;
+        this.currentLevel = LogLevel.INFO;
+
+        // Load saved log level in background (non-blocking)
         try {
-            // Set default level initially to INFO (changed from DEBUG)
-            this.currentLevel = LogLevel.INFO;
-
-            // Try to load saved log level from settings
-            try {
-                await SettingsManager.init();
-                const savedLogLevel = SettingsManager.getSetting('logLevel');
-                if (typeof savedLogLevel === 'number' && savedLogLevel >= 0 && savedLogLevel <= 4) {
-                    this.currentLevel = savedLogLevel;
-                }
-            } catch (error) {
-                // Settings not available yet, keep default INFO level
-                console.warn("[Logger] Could not load saved log level, using default INFO:", error);
+            await SettingsManager.init();
+            const savedLogLevel = SettingsManager.getSetting('logLevel');
+            if (typeof savedLogLevel === 'number' && savedLogLevel >= 0 && savedLogLevel <= 4) {
+                this.currentLevel = savedLogLevel;
             }
-
-            this.initialized = true;
-
-            this.info("Logger", "init", "Logger initialized with Spring Boot-style logging", {
-                currentLevel: LogLevel[this.currentLevel],
-                pattern: "timestamp [LEVEL] [className.methodName] - message"
-            });
         } catch (error) {
-            console.error("[FALLBACK] Logger initialization failed:", error);
-            this.currentLevel = LogLevel.INFO;
+            // Settings not available yet, keep default INFO level
+            // Don't log here to avoid recursion
         }
+
+        this.info("Logger", "init", "Logger initialized with Spring Boot-style logging", {
+            currentLevel: LogLevel[this.currentLevel],
+            pattern: "timestamp [LEVEL] [className.methodName] - message"
+        });
     }
 
     /**

@@ -23,11 +23,19 @@ const common = {
       format: "iife"
     });
 
-    // content script
+    // content script - extractor
     await build({
       ...common,
       entryPoints: [resolve(cwd, "src/content_scripts/extractor.ts")],
       outfile: resolve(outdir, "content_scripts/extractor.js"),
+      format: "iife"
+    });
+
+    // content script - quick-search (ultra-fast inline overlay)
+    await build({
+      ...common,
+      entryPoints: [resolve(cwd, "src/content_scripts/quick-search.ts")],
+      outfile: resolve(outdir, "content_scripts/quick-search.js"),
       format: "iife"
     });
 
