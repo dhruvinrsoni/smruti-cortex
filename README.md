@@ -1,6 +1,29 @@
 # SmrutiCortex 🧠
 
-Ultra-fast, intelligent, Everything-like browser history search engine. SmrutiCortex indexes your browsing memory and retrieves any URL instantly.
+[![Build](https://github.com/dhruvinrsoni/SmrutiCortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/SmrutiCortex/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+
+**Ultra-fast, intelligent, Everything-like browser history search engine.**
+
+SmrutiCortex indexes your browsing memory and retrieves any URL instantly. 100% local, privacy-first.
+
+> **Smruti (स्मृति)** — Sanskrit for "memory" | **Cortex** — The brain's intelligence center
+
+---
+
+## 📖 Table of Contents
+
+- [Features](#-features)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Documentation](#-documentation)
+- [Development](#-development)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
 
 ## ✨ Features
 
@@ -138,9 +161,12 @@ src/
 
 ### Available Scripts
 ```bash
-npm run build        # Build extension (readable, with source maps)
-npm run clean        # Remove build artifacts
+npm run build        # Development build (readable, with source maps)
+npm run build:prod   # Production build (minified)
 npm run lint         # Run ESLint
+npm run test         # Run unit tests
+npm run package      # Create store-ready zip
+npm run clean        # Remove build artifacts
 ```
 
 ### Debug Checklist
@@ -157,24 +183,55 @@ npm run lint         # Run ESLint
 - **Debug logs missing**: Ensure debug toggle is checked
 - **Build fails**: Run `npm install` and check Node.js version
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly with debug logging enabled
-5. Submit a pull request
-
-## 📄 License
-
-See LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **Smruti (स्मृति)**: Sanskrit for "memory"
-- **Cortex**: Human brain's intelligence center
-- Inspired by Everything search engine for Windows
+See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 ---
 
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [HOW_TO.md](docs/HOW_TO.md) | Complete user guide |
+| [FAQ.md](docs/FAQ.md) | Frequently asked questions |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Debug guide and solutions |
+| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | How to contribute |
+| [DEVELOPER_ONBOARDING.md](docs/DEVELOPER_ONBOARDING.md) | Architecture overview |
+| [STORE_DEPLOYMENT.md](docs/STORE_DEPLOYMENT.md) | Chrome/Edge store submission |
+| [BRANDING.md](docs/BRANDING.md) | Visual identity guidelines |
+| [TESTING_and_DEBUG_GUIDE.md](TESTING_and_DEBUG_GUIDE.md) | Testing procedures |
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details.
+
+Quick start:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`npm test`) and lint (`npm run lint`)
+5. Submit a pull request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- Inspired by [Everything](https://www.voidtools.com/) search engine for Windows
+- Built with TypeScript, IndexedDB, and Chrome Extension APIs
+
+---
+
+<div align="center">
+
 **Made with ❤️ for power users who remember everything... except where they put it.**
+
+[Report Bug](https://github.com/dhruvinrsoni/SmrutiCortex/issues) · [Request Feature](https://github.com/dhruvinrsoni/SmrutiCortex/issues) · [Discussions](https://github.com/dhruvinrsoni/SmrutiCortex/discussions)
+
+</div>

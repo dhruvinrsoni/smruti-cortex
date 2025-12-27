@@ -1,21 +1,33 @@
 {
   "name": "smruti-cortex",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "description": "SmrutiCortex — Everything-like instant browser history search (MV3).",
   "scripts": {
     "clean": "rimraf dist",
     "build": "npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",
+    "build:prod": "npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-prod.mjs",
+    "package": "npm run build:prod && node ./scripts/package.mjs",
     "tsc": "tsc --project tsconfig.json",
-    "lint": "echo \"No linter configured\"",
+    "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "start:watch": "node ./scripts/esbuild-dev.mjs --watch"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.188",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vitest/coverage-v8": "^2.1.0",
     "esbuild": "^0.27.0",
+    "eslint": "^8.57.0",
+    "jsdom": "^24.1.0",
     "rimraf": "^5.0.0",
     "ts-node": "^10.9.1",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   },
   "dependencies": {
     "webextension-polyfill": "^0.10.0"
