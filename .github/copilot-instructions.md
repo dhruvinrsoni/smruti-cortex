@@ -18,6 +18,11 @@ SmrutiCortex is a Chrome Manifest V3 extension for ultra-fast, intelligent brows
 
 ## Performance Philosophy
 - **Content script-first for shortcuts**: The `quick-search.ts` runs directly in page context, providing instant keyboard shortcut response (no service worker wake-up)
+- **Shadow DOM isolation**: Search overlay uses closed Shadow DOM for complete style isolation from page CSS
+- **Port-based messaging**: Uses `chrome.runtime.connect()` for faster search-as-you-type (2-5ms vs 5-15ms one-shot)
+- **Service worker pre-warming**: Ping on visibility change and first keypress to eliminate cold starts
+- **requestIdleCallback pre-creation**: Overlay pre-created during browser idle time for instant appearance
+- **CSS containment**: Uses `contain: layout style` and `content-visibility: auto` for faster rendering
 - **Non-blocking initialization**: Logger and Settings use async init to avoid blocking popup load
 - **Lazy loading**: Heavy imports are loaded on-demand, not at startup
 - **Module-level listeners**: Command listeners registered at module load time, before async init
