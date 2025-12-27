@@ -178,9 +178,9 @@ setupPortBasedMessaging();
             sendResponse({ status: "ok" });
             break;
           case "OPEN_SETTINGS":
-            // Open the popup page in a new tab (since we can't open popup programmatically from content script)
+            // Open the popup page in a new tab with #settings hash to auto-open modal
             logger.debug("onMessage", "Handling OPEN_SETTINGS");
-            browserAPI.tabs.create({ url: browserAPI.runtime.getURL('popup/popup.html') });
+            browserAPI.tabs.create({ url: browserAPI.runtime.getURL('popup/popup.html#settings') });
             sendResponse({ status: "ok" });
             break;
           case "GET_LOG_LEVEL":
