@@ -5,7 +5,26 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## ✅ COMPLETED — RECENT IMPLEMENTATIONS
+## 📦 VERSION HISTORY
+
+| Version | Status | Description |
+|---------|--------|-------------|
+| v1.0 | ✅ Released | Initial working extension |
+| v2.0 | ✅ Released | Ultra-fast overlay, SOLID/DRY refactor, two UI architecture |
+| v3.0 | 🚧 Planned | Documentation, CI/CD, store-ready |
+
+---
+
+## ✅ COMPLETED — v2.0 (Current Release)
+- [x] **Ultra-fast inline overlay** - < 50ms response, Shadow DOM isolation
+- [x] **Two UI architecture** - Inline Overlay + Extension Popup
+- [x] **SOLID/DRY refactor** - Shared abstraction layer (search-ui-base.ts)
+- [x] **Tab mode UX** - Centered card layout when opened as tab
+- [x] **Bookmark button** - Drag-and-drop bookmarklet creation
+- [x] **Port-based messaging** - Faster search-as-you-type
+- [x] **Comprehensive architecture docs** - UI-ARCHITECTURE.md, diagrams
+
+## ✅ COMPLETED — v1.0
 - [x] **Debug toggle in popup** - Checkbox controls all console logging
 - [x] **Persistent debug settings** - Debug preference saves to chrome.storage
 - [x] **First result auto-focus** - Search results automatically focus first item
@@ -13,6 +32,48 @@ Each item can be converted into GitHub Issues.
 - [x] **Enhanced keyboard navigation** - Full arrow key support, modifier keys
 - [x] **Global keyboard shortcut** - Ctrl+Shift+S to open popup instantly
 - [x] **Comprehensive documentation** - Updated README, testing guide, user instructions
+
+---
+
+## 🚧 v3.0 ROADMAP — Documentation & Release Readiness
+
+### Phase 1: Code Quality (Priority: 🔴 Critical)
+- [ ] **CI/CD Pipeline** - GitHub Actions for lint, build, release automation
+- [ ] **Unit Test Setup** - Vitest for shared utilities, 80% coverage target
+
+### Phase 2: User Documentation (Priority: 🟡 High)
+- [ ] **HOW_TO.md** - Installation, usage, keyboard shortcuts guide
+- [ ] **FAQ.md** - Common questions (privacy, features, troubleshooting)
+- [ ] **TROUBLESHOOTING.md** - Debug guide with solutions
+
+### Phase 3: Developer Documentation (Priority: 🟢 Medium)
+- [ ] **CONTRIBUTING.md** - Code style, PR guidelines, how to add scorers
+- [ ] **DEVELOPER_ONBOARDING.md** - Architecture, data flow, key files
+
+### Phase 4: Release Readiness (Priority: 🔵 Store Prep)
+- [ ] **Production Build Script** - Minified builds, zip packaging
+- [ ] **Store Deployment Guide** - Chrome/Edge submission process
+- [ ] **README Polish** - Badges, backstory, roadmap section
+- [ ] **Branding Guide** - Logo concepts, colors, icon specs
+
+---
+
+## 🔮 v4.0+ FUTURE ROADMAP
+
+### AI & Intelligence
+- [ ] AI embedding scorer (opt-in)
+- [ ] Semantic search with embeddings
+- [ ] Query expansion
+- [ ] API key management in settings
+
+### Premium Features (Potential Monetization)
+- [ ] Cross-device sync (Chrome Sync API)
+- [ ] End-to-end encrypted sync engine
+- [ ] Session snapshots + restore workspaces
+
+### Analytics (Privacy-Respecting)
+- [ ] Opt-in anonymized local analytics
+- [ ] Export diagnostics for bug reporting
 
 ---
 
