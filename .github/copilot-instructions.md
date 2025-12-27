@@ -4,15 +4,23 @@
 SmrutiCortex is a Chrome Manifest V3 extension for ultra-fast, intelligent browser history search. It uses IndexedDB for local storage, a modular scorer system for ranking, and a service worker for background processing. The codebase is TypeScript-first and organized for maintainability and speed.
 
 ## Architecture & Key Components
-- **src/assets/background/**: Core background logic, including:
+- **src/background/**: Core background logic, including:
   - `database.ts`: IndexedDB schema and access
   - `indexing.ts`: Real-time history indexing
   - `messaging.ts`: Message passing between extension parts
   - `search/`: Modular scoring system (see `scorer-manager.ts`, `search-engine.ts`, and `scorers/`)
-- **src/content_scripts/**: Content extraction and injection logic
+- **src/content_scripts/**: 
+  - `extractor.ts`: Page metadata extraction
+  - `quick-search.ts`: **Ultra-fast inline search overlay** (bypasses service worker wake-up delays)
 - **src/core/**: Shared utilities, constants, logger, and settings
 - **src/popup/**: UI for search popup (HTML, CSS, TS)
 - **manifest.json**: Chrome extension manifest (MV3)
+
+## Performance Philosophy
+- **Content script-first for shortcuts**: The `quick-search.ts` runs directly in page context, providing instant keyboard shortcut response (no service worker wake-up)
+- **Non-blocking initialization**: Logger and Settings use async init to avoid blocking popup load
+- **Lazy loading**: Heavy imports are loaded on-demand, not at startup
+- **Module-level listeners**: Command listeners registered at module load time, before async init
 
 ## Developer Workflow
 - **Install dependencies:** `npm install`
