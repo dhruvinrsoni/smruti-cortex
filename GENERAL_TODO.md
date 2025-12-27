@@ -11,11 +11,25 @@ Each item can be converted into GitHub Issues.
 |---------|--------|-------------|
 | v1.0 | ✅ Released | Initial working extension |
 | v2.0 | ✅ Released | Ultra-fast overlay, SOLID/DRY refactor, two UI architecture |
-| v3.0 | 🚧 Planned | Documentation, CI/CD, store-ready |
+| v3.0 | ✅ Released | Documentation, CI/CD, testing, store-ready |
 
 ---
 
-## ✅ COMPLETED — v2.0 (Current Release)
+## ✅ COMPLETED — v3.0 (Current Release)
+- [x] **CI/CD Pipeline** - GitHub Actions workflow (build, lint, test, release)
+- [x] **Unit Test Setup** - Vitest with 28 tests for shared utilities
+- [x] **ESLint Configuration** - TypeScript linting rules
+- [x] **HOW_TO.md** - Comprehensive user guide
+- [x] **FAQ.md** - Privacy, features, usage questions
+- [x] **TROUBLESHOOTING.md** - Debug guide with solutions
+- [x] **CONTRIBUTING.md** - Code style, PR guidelines
+- [x] **DEVELOPER_ONBOARDING.md** - Architecture, data flow, key files
+- [x] **STORE_DEPLOYMENT.md** - Chrome/Edge submission guide
+- [x] **BRANDING.md** - Colors, typography, visual identity
+- [x] **Production Build Script** - scripts/package.mjs for zip creation
+- [x] **README Polish** - Badges, documentation table, proper structure
+
+## ✅ COMPLETED — v2.0
 - [x] **Ultra-fast inline overlay** - < 50ms response, Shadow DOM isolation
 - [x] **Two UI architecture** - Inline Overlay + Extension Popup
 - [x] **SOLID/DRY refactor** - Shared abstraction layer (search-ui-base.ts)
@@ -35,30 +49,7 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## 🚧 v3.0 ROADMAP — Documentation & Release Readiness
-
-### Phase 1: Code Quality (Priority: 🔴 Critical)
-- [ ] **CI/CD Pipeline** - GitHub Actions for lint, build, release automation
-- [ ] **Unit Test Setup** - Vitest for shared utilities, 80% coverage target
-
-### Phase 2: User Documentation (Priority: 🟡 High)
-- [ ] **HOW_TO.md** - Installation, usage, keyboard shortcuts guide
-- [ ] **FAQ.md** - Common questions (privacy, features, troubleshooting)
-- [ ] **TROUBLESHOOTING.md** - Debug guide with solutions
-
-### Phase 3: Developer Documentation (Priority: 🟢 Medium)
-- [ ] **CONTRIBUTING.md** - Code style, PR guidelines, how to add scorers
-- [ ] **DEVELOPER_ONBOARDING.md** - Architecture, data flow, key files
-
-### Phase 4: Release Readiness (Priority: 🔵 Store Prep)
-- [ ] **Production Build Script** - Minified builds, zip packaging
-- [ ] **Store Deployment Guide** - Chrome/Edge submission process
-- [ ] **README Polish** - Badges, backstory, roadmap section
-- [ ] **Branding Guide** - Logo concepts, colors, icon specs
-
----
-
-## 🔮 v4.0+ FUTURE ROADMAP
+##  v4.0+ FUTURE ROADMAP
 
 ### AI & Intelligence
 - [ ] AI embedding scorer (opt-in)
