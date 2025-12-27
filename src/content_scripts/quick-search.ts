@@ -12,15 +12,13 @@
  * - Performance timing logs at debug level
  */
 
+/* eslint-disable no-inner-declarations */
+// ^ Functions intentionally nested inside conditional blocks to guard against double-injection
+
 import {
   type SearchResult,
-  type RenderOptions,
   KeyboardAction,
-  truncateUrl,
-  escapeRegex,
-  appendHighlightedTextToDOM,
   createMarkdownLink,
-  openUrl,
   parseKeyboardAction,
   renderResults as renderResultsShared
 } from '../shared/search-ui-base';
@@ -48,7 +46,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== PERFORMANCE TIMING =====
   const perfLog = (label: string, startTime?: number) => {
-    if (currentLogLevel < LOG_LEVEL.DEBUG) return;
+    if (currentLogLevel < LOG_LEVEL.DEBUG) {return;}
     if (startTime !== undefined) {
       console.debug(`[SmrutiCortex Perf] ${label}: ${(performance.now() - startTime).toFixed(2)}ms`);
     } else {
@@ -305,7 +303,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SERVICE WORKER PRE-WARMING =====
   function prewarmServiceWorker(): void {
-    if (prewarmed) return;
+    if (prewarmed) {return;}
     prewarmed = true;
     const t0 = performance.now();
     try {
@@ -322,7 +320,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== PORT-BASED MESSAGING =====
   function openSearchPort(): void {
-    if (searchPort) return;
+    if (searchPort) {return;}
     const t0 = performance.now();
     try {
       searchPort = chrome.runtime.connect({ name: 'quick-search' });
@@ -359,10 +357,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   let toastTimeout: number | null = null;
   
   function showToast(message: string): void {
-    if (!toastEl) return;
+    if (!toastEl) {return;}
     toastEl.textContent = message;
     toastEl.classList.add('show');
-    if (toastTimeout) clearTimeout(toastTimeout);
+    if (toastTimeout) {clearTimeout(toastTimeout);}
     toastTimeout = window.setTimeout(() => {
       toastEl?.classList.remove('show');
     }, 1500);
@@ -370,7 +368,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== CREATE OVERLAY WITH SHADOW DOM (CSP-safe, no innerHTML) =====
   function createOverlay(): void {
-    if (shadowHost) return;
+    if (shadowHost) {return;}
     
     const t0 = performance.now();
 
@@ -474,7 +472,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Event listeners
     overlayEl.addEventListener('click', (e) => {
-      if (e.target === overlayEl) hideOverlay();
+      if (e.target === overlayEl) {hideOverlay();}
     });
 
     inputEl.addEventListener('input', handleInput);
@@ -497,7 +495,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('createOverlay (on-demand)', t1);
     }
     
-    if (!shadowHost || !overlayEl || !inputEl) return;
+    if (!shadowHost || !overlayEl || !inputEl) {return;}
 
     // Open port for faster messaging
     openSearchPort();
@@ -520,12 +518,12 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function hideOverlay(): void {
-    if (!shadowHost || !overlayEl) return;
+    if (!shadowHost || !overlayEl) {return;}
     
     shadowHost.classList.remove('visible');
     overlayEl.classList.remove('visible');
     
-    if (inputEl) inputEl.blur();
+    if (inputEl) {inputEl.blur();}
     
     // Close port after a delay (in case user reopens quickly)
     setTimeout(closeSearchPort, 1000);
@@ -537,7 +535,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SEARCH =====
   function handleInput(): void {
-    if (debounceTimer) clearTimeout(debounceTimer);
+    if (debounceTimer) {clearTimeout(debounceTimer);}
     debounceTimer = window.setTimeout(() => {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
@@ -582,7 +580,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== RENDER RESULTS (using shared render function) =====
   function renderResults(results: SearchResult[]): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
     const t0 = performance.now();
 
     // Clear existing results
@@ -616,7 +614,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COPY TO CLIPBOARD (using shared utility) =====
   function copyMarkdownLink(index: number): void {
     const result = currentResults[index];
-    if (!result?.url) return;
+    if (!result?.url) {return;}
     
     const markdown = createMarkdownLink(result);
     
@@ -631,7 +629,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   function handleKeydown(e: KeyboardEvent): void {
     const action = parseKeyboardAction(e);
     
-    if (!action) return;
+    if (!action) {return;}
     
     e.preventDefault();
     
@@ -690,7 +688,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function updateSelection(): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
     resultsEl.querySelectorAll('.result').forEach((el, i) => {
       el.classList.toggle('selected', i === selectedIndex);
     });
@@ -699,9 +697,9 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selected?.scrollIntoView({ block: 'nearest' });
   }
 
-  function openResult(index: number, newTab: boolean, background: boolean = false): void {
+  function openResult(index: number, newTab: boolean, _background: boolean = false): void {
     const result = currentResults[index];
-    if (!result?.url) return;
+    if (!result?.url) {return;}
 
     hideOverlay();
 

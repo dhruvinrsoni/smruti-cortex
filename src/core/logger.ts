@@ -1,6 +1,6 @@
 // logging.ts — Spring Boot-style centralized logging with enforced patterns
 
-import { SettingsManager } from "./settings";
+import { SettingsManager } from './settings';
 
 export enum LogLevel {
     ERROR = 0,
@@ -40,7 +40,7 @@ export class Logger {
      */
     static async init(): Promise<void> {
         // Already initialized - skip
-        if (this.initialized) return;
+        if (this.initialized) {return;}
 
         // Mark as initialized immediately with default INFO level
         this.initialized = true;
@@ -58,9 +58,9 @@ export class Logger {
             // Don't log here to avoid recursion
         }
 
-        this.info("Logger", "init", "Logger initialized with Spring Boot-style logging", {
+        this.info('Logger', 'init', 'Logger initialized with Spring Boot-style logging', {
             currentLevel: LogLevel[this.currentLevel],
-            pattern: "timestamp [LEVEL] [className.methodName] - message"
+            pattern: 'timestamp [LEVEL] [className.methodName] - message'
         });
     }
 
@@ -73,12 +73,12 @@ export class Logger {
 
         try {
             await SettingsManager.setSetting('logLevel', level);
-            this.info("Logger", "setLevel", "Log level changed", {
+            this.info('Logger', 'setLevel', 'Log level changed', {
                 from: LogLevel[oldLevel],
                 to: LogLevel[level]
             });
         } catch (error) {
-            this.error("Logger", "setLevel", "Failed to persist log level", { error: error.message });
+            this.error('Logger', 'setLevel', 'Failed to persist log level', { error: error.message });
         }
     }
 
@@ -87,7 +87,7 @@ export class Logger {
      */
     static setLevelInternal(level: LogLevel): void {
         this.currentLevel = level;
-        this.debug("Logger", "setLevelInternal", "Log level set internally", {
+        this.debug('Logger', 'setLevelInternal', 'Log level set internally', {
             level: LogLevel[level]
         });
     }
@@ -151,7 +151,7 @@ export class Logger {
      * Create and log an entry
      */
     private static log(level: LogLevel, context: LogContext, message: string, data?: any, error?: Error): void {
-        if (!this.shouldLog(level)) return;
+        if (!this.shouldLog(level)) {return;}
 
         const entry: LogEntry = {
             timestamp: this.formatLocalTimestamp(),
@@ -201,7 +201,7 @@ export class Logger {
             this.log(LogLevel.ERROR, { className: args[0], methodName: args[1] }, args[2], args[3], args[4]);
         } else {
             // Old pattern: error(message, data?, error?) - use "Unknown" as className
-            this.log(LogLevel.ERROR, { className: "Unknown", methodName: "unknown" }, args[0], args[1], args[2]);
+            this.log(LogLevel.ERROR, { className: 'Unknown', methodName: 'unknown' }, args[0], args[1], args[2]);
         }
     }
 
@@ -215,7 +215,7 @@ export class Logger {
             this.log(LogLevel.WARN, { className: args[0], methodName: args[1] }, args[2], args[3]);
         } else {
             // Old pattern: warn(message, data?) - use "Unknown" as className
-            this.log(LogLevel.WARN, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
+            this.log(LogLevel.WARN, { className: 'Unknown', methodName: 'unknown' }, args[0], args[1]);
         }
     }
 
@@ -229,7 +229,7 @@ export class Logger {
             this.log(LogLevel.INFO, { className: args[0], methodName: args[1] }, args[2], args[3]);
         } else {
             // Old pattern: info(message, data?) - use "Unknown" as className
-            this.log(LogLevel.INFO, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
+            this.log(LogLevel.INFO, { className: 'Unknown', methodName: 'unknown' }, args[0], args[1]);
         }
     }
 
@@ -243,7 +243,7 @@ export class Logger {
             this.log(LogLevel.DEBUG, { className: args[0], methodName: args[1] }, args[2], args[3]);
         } else {
             // Old pattern: debug(message, data?) - use "Unknown" as className
-            this.log(LogLevel.DEBUG, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
+            this.log(LogLevel.DEBUG, { className: 'Unknown', methodName: 'unknown' }, args[0], args[1]);
         }
     }
 
@@ -257,7 +257,7 @@ export class Logger {
             this.log(LogLevel.TRACE, { className: args[0], methodName: args[1] }, args[2], args[3]);
         } else {
             // Old pattern: trace(message, data?) - use "Unknown" as className
-            this.log(LogLevel.TRACE, { className: "Unknown", methodName: "unknown" }, args[0], args[1]);
+            this.log(LogLevel.TRACE, { className: 'Unknown', methodName: 'unknown' }, args[0], args[1]);
         }
     }
 

@@ -1,20 +1,22 @@
-// extractor.ts
-// Runs in page context as a content script. Extracts metadata and posts it to background.
+/**
+ * extractor.ts
+ * Runs in page context as a content script. Extracts metadata and posts it to background.
+ */
+
+/* eslint-disable no-inner-declarations */
+// ^ Functions intentionally nested inside conditional blocks to guard against double-injection
 
 declare const browser: any;
-
-import { browserAPI } from "../core/helpers"; // if you compile this into bundle; otherwise use chrome/browser direct
 
 // Only run in top-level frames
 if ((window as any).top !== window) {
   // skip if inside iframe
-  // eslint-disable-next-line no-undef
   // console.log('[SmrutiCortex] extractor: iframe - skipping');
 } else {
   (function runExtractor() {
     try {
       const url = location.href;
-      const title = document.title || "";
+      const title = document.title || '';
       const canonicalEl = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
       const canonical = canonicalEl?.href || null;
 
@@ -28,12 +30,12 @@ if ((window as any).top !== window) {
         return el?.content ?? null;
       }
 
-      const metaDescription = getMeta("description") || getMetaProperty("og:description") || "";
-      const metaKeywordsRaw = getMeta("keywords") || "";
-      const metaKeywords = metaKeywordsRaw ? metaKeywordsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+      const metaDescription = getMeta('description') || getMetaProperty('og:description') || '';
+      const metaKeywordsRaw = getMeta('keywords') || '';
+      const metaKeywords = metaKeywordsRaw ? metaKeywordsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-      const ogTitle = getMetaProperty("og:title") || "";
-      const ogImage = getMetaProperty("og:image") || "";
+      const ogTitle = getMetaProperty('og:title') || '';
+      const ogImage = getMetaProperty('og:image') || '';
 
       // Build meta payload
       const payload = {
@@ -47,10 +49,10 @@ if ((window as any).top !== window) {
 
       // send to background
       // Use browser runtime if available; otherwise chrome
-      const runtime = (typeof browser !== "undefined") ? browser.runtime : (typeof chrome !== "undefined" ? chrome.runtime : null);
+      const runtime = (typeof browser !== 'undefined') ? browser.runtime : (typeof chrome !== 'undefined' ? chrome.runtime : null);
 
       if (runtime && runtime.sendMessage) {
-        runtime.sendMessage({ type: "METADATA_CAPTURE", payload }, (resp) => {
+        runtime.sendMessage({ type: 'METADATA_CAPTURE', payload }, () => {
           // optional callback; ignore errors
         });
       }

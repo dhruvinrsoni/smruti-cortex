@@ -1,6 +1,6 @@
 // scorer-types.ts — Shared interfaces for modular scoring
 
-import { IndexedItem } from "../background/schema";
+import { IndexedItem } from '../background/schema';
 
 export interface Scorer {
     name: string;                   // unique name
