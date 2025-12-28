@@ -103,9 +103,19 @@ function keepServiceWorkerAlive() {
     browserAPI.alarms.create('keep-alive-restart', { delayInMinutes: 0.1, periodInMinutes: 0.5 });
   });
 
-  browserAPI.runtime.onInstalled.addListener(() => {
+  browserAPI.runtime.onInstalled.addListener(async (details) => {
     // Ensure alarms are set after install/update
     browserAPI.alarms.create('keep-alive-install', { delayInMinutes: 0.1, periodInMinutes: 0.5 });
+    
+    // Show onboarding on first install
+    if (details.reason === 'install') {
+      logger.info('onInstalled', 'First install detected - opening onboarding');
+      try {
+        await browserAPI.tabs.create({ url: browserAPI.runtime.getURL('popup/onboarding.html') });
+      } catch (error) {
+        logger.error('onInstalled', 'Failed to open onboarding:', error);
+      }
+    }
   });
 
   // Listen to tab events to stay active
