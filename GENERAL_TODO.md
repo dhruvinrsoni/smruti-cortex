@@ -130,4 +130,22 @@ Each item can be converted into GitHub Issues.
 ## HOW TO USE THIS FILE
 - Convert each into GitHub Issues
 - Track progress milestone by milestone
-- Maintain privacy/security parity with browser store requirements
+- Maintain privacy/security parity with browser store requirements- [ ] [Default to Local-only processing](https://github.com/dhruvinrsoni/smruti-cortex/issues/4)  Labels: priority/high, area/privacy
+- [ ] [Explain extension permissions in Options page](https://github.com/dhruvinrsoni/smruti-cortex/issues/5)  Labels: priority/high, area/privacy
+- [ ] [Sensitive-site blacklist for extractor](https://github.com/dhruvinrsoni/smruti-cortex/issues/6)  Labels: priority/high, area/privacy
+- [ ] [Disable metadata extraction toggle](https://github.com/dhruvinrsoni/smruti-cortex/issues/7)  Labels: priority/high, area/privacy
+- [ ] [Unit tests for mergeMetadata logic](https://github.com/dhruvinrsoni/smruti-cortex/issues/8)  Labels: priority/high, area/tests
+- [ ] [Build index rebuild flow (full history import)](https://github.com/dhruvinrsoni/smruti-cortex/issues/9)  Labels: priority/high, area/indexing
+- [ ] [Background resilience: service worker restart recovery](https://github.com/dhruvinrsoni/smruti-cortex/issues/10)  Labels: priority/high, area/background
+- [ ] [Add onboarding 3-step flow for new users](https://github.com/dhruvinrsoni/smruti-cortex/issues/11)  Labels: priority/medium, area/ux
+- [ ] [Pinned results / favorites](https://github.com/dhruvinrsoni/smruti-cortex/issues/12)  Labels: priority/medium, area/ux
+- [ ] [Favicon caching for faster rendering](https://github.com/dhruvinrsoni/smruti-cortex/issues/13)  Labels: priority/medium, area/ux
+- [ ] [Add preview snippet or metadata snippet](https://github.com/dhruvinrsoni/smruti-cortex/issues/14)  Labels: priority/medium, area/ux
+- [ ] [Document scorer plugin interface](https://github.com/dhruvinrsoni/smruti-cortex/issues/15)  Labels: priority/medium, area/docs
+- [ ] [Add AI embedding scorer (opt-in)](https://github.com/dhruvinrsoni/smruti-cortex/issues/16)  Labels: priority/medium, area/ai
+- [ ] [Store embeddings only with user consent](https://github.com/dhruvinrsoni/smruti-cortex/issues/17)  Labels: priority/medium, area/privacy
+- [ ] [Add API key management in settings](https://github.com/dhruvinrsoni/smruti-cortex/issues/18)  Labels: priority/medium, area/settings
+- [ ] [Create promo screenshots for Chrome/Edge store](https://github.com/dhruvinrsoni/smruti-cortex/issues/19)  Labels: priority/low, area/marketing
+- [ ] [Write Store Description + Release Notes](https://github.com/dhruvinrsoni/smruti-cortex/issues/20)  Labels: priority/low, area/marketing
+- [ ] [Add GitHub Action to auto-zip builds](https://github.com/dhruvinrsoni/smruti-cortex/issues/21)  Labels: priority/low, area/ci
+- [ ] [Prepare automated release upload](https://github.com/dhruvinrsoni/smruti-cortex/issues/22)  Labels: priority/low, area/ci
