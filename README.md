@@ -1,215 +1,110 @@
 # SmrutiCortex 🧠
 
+**Ultra-fast browser history search. Find any page instantly.**
+
 [![Build](https://github.com/dhruvinrsoni/SmrutiCortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/SmrutiCortex/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
-
-**Ultra-fast, intelligent, Everything-like browser history search engine.**
-
-SmrutiCortex indexes your browsing memory and retrieves any URL instantly. 100% local, privacy-first.
 
 > **Smruti (स्मृति)** — Sanskrit for "memory" | **Cortex** — The brain's intelligence center
 
 ---
 
-## 📖 Table of Contents
+## ✨ Why SmrutiCortex?
 
-- [Features](#-features)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Documentation](#-documentation)
-- [Development](#-development)
-- [Contributing](#-contributing)
-- [License](#-license)
+Browser history search is slow. SmrutiCortex indexes everything locally and retrieves any URL in milliseconds. Like "Everything" for Windows, but for your browser.
+
+**3 seconds:** Type, Enter, Done. ⚡
 
 ---
 
-## ✨ Features
+## 🔐 Privacy First
 
-### 🎨 **Two UI Implementations**
+**100% local. Zero telemetry. No cloud sync.**
 
-SmrutiCortex provides **two distinct user interfaces** that share the same powerful search engine:
+- All data stored in IndexedDB on your device
+- No external servers, no tracking, no analytics
+- Open source — inspect the code anytime
+- Delete all data anytime
 
-#### 1. **Inline Overlay** (Ultra-Fast, Content Script)
-- **Speed**: < 50ms response time
-- **Trigger**: Press `Ctrl+Shift+S` on any regular web page
-- **Technology**: Content script with closed Shadow DOM
-- **Appearance**: Sleek centered modal floating over the current page
-- **Use case**: Primary interface for instant search while browsing
+**You own your data.**
 
-#### 2. **Extension Popup** (Traditional, Feature-Rich)  
-- **Speed**: 200-800ms (Chrome popup attachment overhead)
-- **Trigger**: Click toolbar icon OR `Ctrl+Shift+S` on special pages (chrome://, newtab, about:)
-- **Technology**: Standard Chrome extension popup
-- **Appearance**: 
-  - Popup mode: 600x600px dropdown from toolbar icon
-  - Tab mode: Centered card with backdrop when opened in a browser tab
-- **Use case**: Settings, bookmarking, and fallback for pages where content scripts cannot run
+---
 
-**Shared Architecture**: Both UIs use the same `/src/shared/search-ui-base.ts` abstraction layer following SOLID/DRY principles. Updates to search behavior, highlighting, or keyboard navigation automatically apply to both implementations.
+## 🚀 Features
 
-### 🚀 **Lightning-Fast Search**
-- **Instant results** as you type
-- **Intelligent ranking** using multiple scoring algorithms
-- **Browser history fallback** when local index is unavailable
-- **Real-time indexing** of new visits
+| Feature | Description |
+|---------|-------------|
+| ⚡ **Instant Search** | Results < 50ms as you type |
+| ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
+| 🎯 **Smart Ranking** | Recency + frequency scoring |
+| 🔍 **Omnibox** | Type `sc ` in address bar |
+| 📋 **Copy Links** | `Ctrl+M` for markdown |
+| 🎨 **Clean UI** | Minimal, distraction-free |
 
-### 🎯 **Smart Navigation**
-- **First result auto-focus** - Type and hit Enter immediately
-- **Keyboard-first design** with full arrow key navigation
-- **Modifier key support** - Ctrl+Enter (new tab), Shift+Enter (background)
-- **Global keyboard shortcut** - Ctrl+Shift+S for ultra-fast inline overlay
-- **Omnibox integration** - Type `sc ` in address bar for quick access
-
-### 🔧 **Developer-Friendly Debug**
-- **Toggle debug logging** with persistent checkbox
-- **Comprehensive logging** across all components
-- **Development build** with readable source maps
-- **Console-based debugging** for all extension parts
-
-### 🏗️ **Architecture**
-- **Manifest V3** Chrome extension
-- **IndexedDB** for local data storage
-- **Modular scorer system** for ranking algorithms
-- **Service worker** background processing
-- **TypeScript** for type safety
+---
 
 ## 📦 Installation
 
-### Prerequisites
-- Node.js 18+ and npm
-- Chrome or Edge browser (Chromium-based)
-
-### Build & Install
 ```bash
-# Clone the repository
+# Clone and build
 git clone https://github.com/dhruvinrsoni/smruti-cortex.git
 cd smruti-cortex
-
-# Install dependencies
 npm install
-
-# Build the extension
 npm run build
+
+# Load in Chrome
+# 1. Open chrome://extensions
+# 2. Enable "Developer mode"
+# 3. Click "Load unpacked"
+# 4. Select dist/ folder
 ```
 
-### Load in Browser
-1. Open Chrome and go to `chrome://extensions`
-2. Enable "Developer mode" (top right)
-3. Click "Load unpacked"
-4. Select the `dist/` folder from the project
-5. The SmrutiCortex icon should appear in your toolbar
+---
 
 ## 🎮 Usage
 
-### Basic Search
-1. Click the SmrutiCortex icon in your toolbar
-2. Start typing - results appear instantly
-3. First result is automatically focused
-4. Press Enter to open, or use arrow keys to navigate
+**Search:**
+- Click icon or press `Ctrl+Shift+S`
+- Type anything
+- Hit `Enter` to open
 
-### Keyboard Shortcuts
-- **Enter**: Open selected result
-- **Ctrl+Enter**: Open in new tab
-- **Shift+Enter**: Open in background tab
-- **Arrow Up/Down**: Navigate results
-- **Escape**: Clear search and refocus input
-- **M**: Copy markdown link to clipboard
-- **Ctrl+Shift+S**: Ultra-fast inline search overlay ⚡
+**Keyboard Shortcuts:**
+- `Enter` — Open result
+- `Ctrl+Enter` — New tab
+- `Shift+Enter` — Background tab
+- `Arrow Keys` — Navigate
+- `Esc` — Clear
+- `Ctrl+M` — Copy markdown link
 
-### Quick Access
-- **Inline Overlay** (Fastest): Press `Ctrl+Shift+S` on any page for instant search
-- **Omnibox**: Type `sc ` in address bar, then your search query
-- **Toolbar**: Click the brain icon 🧠
+**Quick Access:**
+- Type `sc ` in address bar + query
 
-### 🚀 Ultra-Fast Inline Search
-The **Ctrl+Shift+S** shortcut opens an **instant inline overlay** directly on the current page. This bypasses Chrome's service worker wake-up delays, providing truly instant response:
-- **Zero delay** - Content script runs in page context, no service worker needed
-- **Sleek dark UI** - Minimal, distraction-free overlay
-- **Full keyboard navigation** - Arrow keys, Enter, Escape
-- **Same powerful search** - Uses the same scoring engine
+---
 
-### Debug Features
-- **Debug Toggle**: Check/uncheck the "Debug" box in popup header
-- **Console Logs**: All debug info appears in DevTools console
-- **Persistent Setting**: Debug preference saves across sessions
+## 🛠️ Development
 
-## 🏛️ Project Structure
+```bash
+# Build
+npm run build        # Development (with source maps)
+npm run build:prod   # Production (minified)
 
+# Quality
+npm run lint         # Check code
+npm run test         # Run tests
+
+# Package
+npm run package      # Create store-ready zip
+```
+
+**Project Structure:**
 ```
 src/
-├── background/           # Service worker & background scripts
-│   ├── database.ts       # IndexedDB operations
-│   ├── indexing.ts       # History ingestion logic
-│   ├── messaging.ts      # Inter-script communication
-│   ├── schema.ts         # Data type definitions
-│   ├── search/           # Search engine components
-│   │   ├── scorer-manager.ts
-│   │   ├── search-engine.ts
-│   │   └── scorers/      # Ranking algorithms
-│   └── service-worker.ts # Main background script
-├── content_scripts/      # Page content extraction
-├── core/                 # Shared utilities
-└── popup/                # Extension popup UI
-    ├── popup.html        # Popup structure
-    ├── popup.ts          # Popup logic
-    └── popup.css         # Popup styling
-```
-
-## 🔧 Development
-
-### Available Scripts
-```bash
-# Building
-npm run build        # Development build (readable, with source maps)
-npm run build:prod   # Production build (minified, optimized)
-npm run clean        # Remove build artifacts
-
-# Code Quality
-npm run lint         # Check code for issues
-npm run lint:fix     # Auto-fix lint issues
-
-# Testing
-npm run test              # Run tests once
-npm run test:watch        # Run tests in watch mode
-npm run test:coverage     # Run tests with coverage report
-
-# Packaging
-npm run package      # Build prod + create store-ready zip
-```
-
-### 📦 Build vs Package Explained
-
-**`npm run build:prod`** (Compiling for production):
-- **What it does:** Compiles TypeScript → JavaScript, minifies code, removes source maps
-- **Input:** `src/` folder (TypeScript source)
-- **Output:** `dist/` folder (production-ready JavaScript)
-- **When to use:** Before testing the extension or preparing for release
-
-**`npm run package`** (Creating store submission):
-- **What it does:** Runs `build:prod` + creates a zip file for Chrome Web Store
-- **Input:** `dist/` folder (built code)
-- **Output:** `release/smruti-cortex-v3.0.0.zip` (ready to upload)
-- **When to use:** When you're ready to publish a new version to the store
-
-**Dev vs Prod Workflows:**
-- **Dev:** `npm run build` → load `dist/` in Chrome → iterate (has source maps for debugging)
-- **Prod:** `npm run build:prod` → `npm run package` → upload zip to store (optimized & minified)
-
-### 🧪 Running Tests
-
-SmrutiCortex uses **Vitest** for fast, modern testing:
-
-```bash
-# Run all tests once
-npm run test
-
-# Watch mode (re-runs on file changes)
-npm run test:watch
-
-# Generate coverage report
-npm run test:coverage
+├── background/      # Service worker, indexing, search engine
+├── content_scripts/ # Page metadata extraction
+├── popup/           # Search UI
+├── core/            # Shared utilities
+└── shared/          # UI abstractions
 ```
 
 **Test coverage report** is generated in `coverage/` folder after running `npm run test:coverage`. Open `coverage/index.html` in a browser to see detailed coverage.
@@ -252,61 +147,49 @@ If everything passes, you're good to commit!
 5. **Search works** and returns relevant results
 6. **Debug toggle** controls console output
 
-### Common Issues
-- **Popup not loading**: Check `dist/popup/popup.html` exists
-- **No search results**: Wait for initial indexing to complete
-- **Debug logs missing**: Ensure debug toggle is checked
-- **Build fails**: Run `npm install` and check Node.js version
-
-See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
-
 ---
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [HOW_TO.md](docs/HOW_TO.md) | Complete user guide |
-| [FAQ.md](docs/FAQ.md) | Frequently asked questions |
-| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Debug guide and solutions |
-| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | How to contribute |
-| [DEVELOPER_ONBOARDING.md](docs/DEVELOPER_ONBOARDING.md) | Architecture overview |
-| [STORE_DEPLOYMENT.md](docs/STORE_DEPLOYMENT.md) | Chrome/Edge store submission |
-| [BRANDING.md](docs/BRANDING.md) | Visual identity guidelines |
-| [TESTING_and_DEBUG_GUIDE.md](TESTING_and_DEBUG_GUIDE.md) | Testing procedures |
+| Doc | Purpose |
+|-----|---------|
+| [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) | Store submission guide |
+| [TESTING_and_DEBUG_GUIDE.md](TESTING_and_DEBUG_GUIDE.md) | Build, test, debug |
+| [GENERAL_TODO.md](GENERAL_TODO.md) | Roadmap |
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details.
+1. Fork repo
+2. Create feature branch
+3. Make changes
+4. Run `npm run lint && npm run test`
+5. Submit PR
 
-Quick start:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`npm test`) and lint (`npm run lint`)
-5. Submit a pull request
+**Keep it minimal.** No unnecessary code.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — See [LICENSE](LICENSE)
 
 ---
 
-## 🙏 Acknowledgments
+## 💡 Philosophy
 
-- Inspired by [Everything](https://www.voidtools.com/) search engine for Windows
-- Built with TypeScript, IndexedDB, and Chrome Extension APIs
+**Minimalism:** Every line of code must justify its existence.
+
+**Privacy:** Your data never leaves your device.
+
+**Speed:** < 50ms response time or bust.
+
+**Open:** Transparent, auditable, hackable.
 
 ---
 
-<div align="center">
+**Made for power users who remember everything... except where they put it.**
 
-**Made with ❤️ for power users who remember everything... except where they put it.**
+[Report Bug](https://github.com/dhruvinrsoni/SmrutiCortex/issues) · [Request Feature](https://github.com/dhruvinrsoni/SmrutiCortex/issues)
 
-[Report Bug](https://github.com/dhruvinrsoni/SmrutiCortex/issues) · [Request Feature](https://github.com/dhruvinrsoni/SmrutiCortex/issues) · [Discussions](https://github.com/dhruvinrsoni/SmrutiCortex/discussions)
-
-</div>
