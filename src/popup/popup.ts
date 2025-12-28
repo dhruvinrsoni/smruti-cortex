@@ -3,29 +3,17 @@
 // PERFORMANCE: This file is optimized for instant popup display
 // ARCHITECTURE: Uses shared search-ui-base.ts for DRY compliance
 
-import { BRAND_NAME } from '../core/constants';
-import { Logger, LogLevel, ComponentLogger } from '../core/logger';
+import { Logger } from '../core/logger';
 import { SettingsManager, DisplayMode } from '../core/settings';
+import { hasCompletedOnboarding } from './onboarding';
 import {
   type SearchResult,
   createMarkdownLink,
-  openUrl,
-  parseKeyboardAction,
-  KeyboardAction
+  openUrl
 } from '../shared/search-ui-base';
 
 // Lazy-loaded imports for non-critical features
-let tokenize: ((query: string) => string[]) | null = null;
 let clearIndexedDB: (() => Promise<void>) | null = null;
-
-// Load tokenize lazily when needed
-async function getTokenize(): Promise<(query: string) => string[]> {
-  if (!tokenize) {
-    const mod = await import('../background/search/tokenizer');
-    tokenize = mod.tokenize;
-  }
-  return tokenize;
-}
 
 // Load clearIndexedDB lazily when needed (only for settings clear button)
 async function getClearIndexedDB(): Promise<() => Promise<void>> {
@@ -65,8 +53,7 @@ function showToast(message: string, isError = false) {
 }
 
 // Fast initialization - prioritize speed over logging
-let logger: ComponentLogger;
-let settingsManager: typeof SettingsManager;
+let logger: ReturnType<typeof Logger.forComponent>;
 
 // === PERFORMANCE LOGGING: ENTRY POINT ===
 // Log the moment popup script is loaded (first code run) and record timestamp
@@ -87,9 +74,8 @@ try {
 // Global variables for event setup
 let debounceSearch: (q: string) => void;
 let handleKeydown: (e: KeyboardEvent) => void;
-let results: any[];
 let openSettingsPage: () => void;
-let $: (id: string) => any;
+let $: (id: string) => HTMLElement | null;
 
 // Initialize essentials synchronously first - NO async operations blocking UI
 function fastInit() {
@@ -205,9 +191,6 @@ function initializePopup() {
   let debounceTimer: number | undefined;
   let serviceWorkerReady = false;
   let currentQuery = '';
-
-  // Assign global results
-  results = resultsLocal;
 
   // Simple inline tokenizer for highlighting (avoids heavy import)
   function simpleTokenize(query: string): string[] {
@@ -905,4 +888,17 @@ function initializePopup() {
       }
     });
   }
+  
+  // Check if onboarding is needed (non-blocking)
+  hasCompletedOnboarding().then(completed => {
+    if (!completed) {
+      logger.info('initializePopup', 'Onboarding not completed - opening onboarding page');
+      chrome.tabs.create({ url: chrome.runtime.getURL('popup/onboarding.html') });
+      // Close this popup since we're redirecting to onboarding
+      setTimeout(() => window.close(), 100);
+    }
+  }).catch(err => {
+    logger.error('initializePopup', 'Failed to check onboarding:', err);
+    // Continue normally on error
+  });
 }

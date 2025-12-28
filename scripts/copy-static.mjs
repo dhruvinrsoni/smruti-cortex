@@ -18,6 +18,9 @@ copyFileSync(resolve(root, "manifest.json"), resolve(dist, "manifest.json"));
 // copy popup.html (if present)
 try { copyFileSync(resolve(root, "src/popup/popup.html"), resolve(dist, "popup/popup.html")); } catch(e) { /* ignore */ }
 
+// copy onboarding.html (if present)
+try { copyFileSync(resolve(root, "src/popup/onboarding.html"), resolve(dist, "popup/onboarding.html")); } catch(e) { /* ignore */ }
+
 // copy popup.css (if present)
 try { copyFileSync(resolve(root, "src/popup/popup.css"), resolve(dist, "popup/popup.css")); } catch(e) { /* ignore */ }
 
