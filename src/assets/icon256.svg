@@ -1,20 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <!-- SmrutiCortex 256px - High-DPI / Marketing -->
-  <circle cx="128" cy="128" r="116" fill="#3b82f6"/>
+  <!--
+    SmrutiCortex 256px Icon — High-DPI Version
+    Version 11 — Matches master icon design
+  -->
   
-  <!-- Lightning bolt - speed (<50ms) -->
-  <path d="M 100 48
-           L 140 48
-           L 108 114
-           L 150 114
-           L 84 206
-           L 104 134
-           L 70 134
-           Z"
-        fill="#ffffff"/>
+  <!-- Container -->
+  <circle cx="128" cy="128" r="115" fill="#1e3a8a"/>
   
-  <!-- Neural nodes - brain cortex -->
-  <circle cx="170" cy="80" r="14" fill="#ffffff"/>
-  <circle cx="180" cy="130" r="11" fill="#ffffff"/>
-  <circle cx="160" cy="176" r="12" fill="#ffffff"/>
+  <!-- S-curve (refined asymmetric flow) -->
+  <path d="M 55 65
+           C 55 35, 115 20, 155 30
+           C 200 42, 215 80, 200 110
+           C 185 140, 150 145, 128 145
+           C 106 145, 71 150, 56 180
+           C 41 210, 75 235, 125 230
+           C 170 225, 195 205, 195 185"
+        fill="none"
+        stroke="#ffffff"
+        stroke-width="22"
+        stroke-linecap="round"/>
+  
+  <!-- Node 1: Origin (top-left) -->
+  <circle cx="55" cy="65" r="15" fill="#ffffff"/>
+  <circle cx="55" cy="65" r="8.5" fill="#3b82f6"/>
+  <circle cx="53" cy="63" r="3" fill="#ffffff" opacity="0.7"/>
+  
+  <!-- Node 2: Eureka (center - largest) -->
+  <circle cx="128" cy="145" r="18" fill="#ffffff"/>
+  <circle cx="128" cy="145" r="11.5" fill="#1e3a8a"/>
+  <circle cx="128" cy="145" r="7" fill="#ffffff"/>
+  <circle cx="126" cy="143" r="2.5" fill="#60a5fa" opacity="0.8"/>
+  
+  <!-- Node 3: Destination (bottom-right) -->
+  <circle cx="195" cy="185" r="15" fill="#ffffff"/>
+  <circle cx="195" cy="185" r="8.5" fill="#3b82f6"/>
+  <circle cx="193" cy="183" r="3" fill="#ffffff" opacity="0.7"/>
 </svg>
