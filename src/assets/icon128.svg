@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- SmrutiCortex 128px - Full detail for Chrome Web Store -->
+  <circle cx="64" cy="64" r="58" fill="#3b82f6"/>
+  
+  <!-- Lightning bolt - speed indicator -->
+  <path d="M 50 24
+           L 70 24
+           L 54 57
+           L 75 57
+           L 42 103
+           L 52 67
+           L 35 67
+           Z"
+        fill="#ffffff"/>
+  
+  <!-- Neural nodes - cortex reference -->
+  <circle cx="85" cy="40" r="8" fill="#ffffff"/>
+  <circle cx="90" cy="65" r="6" fill="#ffffff"/>
+  <circle cx="80" cy="88" r="6" fill="#ffffff"/>
+</svg>

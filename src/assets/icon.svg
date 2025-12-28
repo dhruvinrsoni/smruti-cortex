@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- SmrutiCortex Master Icon -->
+  <!-- Concept: Neural node with lightning speed pulse -->
+  <!-- Philosophy: Memory (circle) + Speed (bolt) + Intelligence (branching) -->
+  
+  <!-- Background circle - represents contained memory, privacy -->
+  <circle cx="512" cy="512" r="464" fill="#3b82f6"/>
+  
+  <!-- Lightning bolt - represents speed (<50ms) -->
+  <!-- Integrated into a brain-like S-curve -->
+  <path d="M 400 200
+           L 560 200
+           L 440 460
+           L 600 460
+           L 340 824
+           L 420 540
+           L 280 540
+           Z"
+        fill="#ffffff"/>
+  
+  <!-- Neural dots - represent cortex nodes / connections -->
+  <circle cx="680" cy="320" r="56" fill="#ffffff"/>
+  <circle cx="720" cy="520" r="44" fill="#ffffff"/>
+  <circle cx="640" cy="700" r="48" fill="#ffffff"/>
+</svg>

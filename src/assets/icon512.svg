@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- SmrutiCortex 512px - Social media / Promotional -->
+  <circle cx="256" cy="256" r="232" fill="#3b82f6"/>
+  
+  <!-- Lightning bolt - represents instant speed -->
+  <path d="M 200 96
+           L 280 96
+           L 216 228
+           L 300 228
+           L 168 412
+           L 208 268
+           L 140 268
+           Z"
+        fill="#ffffff"/>
+  
+  <!-- Neural nodes - brain cortex connections -->
+  <circle cx="340" cy="160" r="28" fill="#ffffff"/>
+  <circle cx="360" cy="260" r="22" fill="#ffffff"/>
+  <circle cx="320" cy="352" r="24" fill="#ffffff"/>
+</svg>
