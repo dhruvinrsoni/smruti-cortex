@@ -1,25 +1,104 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- SmrutiCortex Master Icon -->
-  <!-- Concept: Neural node with lightning speed pulse -->
-  <!-- Philosophy: Memory (circle) + Speed (bolt) + Intelligence (branching) -->
+  <!--
+    SmrutiCortex Icon v2.0: "The Neural Nexus"
+    
+    Design Philosophy:
+    - Central node = the memory being accessed (moment of recall)
+    - 6 neural pathways = connections to your browsing history
+    - Curved bezier paths = organic, brain-like intelligence
+    - Outer ring = privacy boundary (data stays contained)
+    - Constellation pattern = your personal memory map
+    
+    Construction:
+    - Built on 1024x1024 canvas with 512,512 center
+    - Golden ratio proportions
+    - All curves are smooth beziers for scalability
+    
+    Color Strategy:
+    - Primary: #3b82f6 (trust, intelligence)
+    - Depth created through opacity and stroke weights
+  -->
   
-  <!-- Background circle - represents contained memory, privacy -->
-  <circle cx="512" cy="512" r="464" fill="#3b82f6"/>
+  <!-- Background: Outer containing ring - privacy boundary -->
+  <circle cx="512" cy="512" r="460" fill="none" stroke="#3b82f6" stroke-width="28" opacity="0.25"/>
   
-  <!-- Lightning bolt - represents speed (<50ms) -->
-  <!-- Integrated into a brain-like S-curve -->
-  <path d="M 400 200
-           L 560 200
-           L 440 460
-           L 600 460
-           L 340 824
-           L 420 540
-           L 280 540
-           Z"
-        fill="#ffffff"/>
+  <!-- Mid-layer ring for depth -->
+  <circle cx="512" cy="512" r="380" fill="none" stroke="#3b82f6" stroke-width="16" opacity="0.15"/>
   
-  <!-- Neural dots - represent cortex nodes / connections -->
-  <circle cx="680" cy="320" r="56" fill="#ffffff"/>
-  <circle cx="720" cy="520" r="44" fill="#ffffff"/>
-  <circle cx="640" cy="700" r="48" fill="#ffffff"/>
+  <!-- Neural Pathways Layer 1 (Background - lighter) -->
+  <!-- These create the web of connections, suggesting vast indexed memory -->
+  <g fill="none" stroke="#3b82f6" stroke-width="20" stroke-linecap="round" opacity="0.35">
+    <!-- Cross connections between peripheral nodes -->
+    <path d="M280,340 Q400,280 512,200"/>
+    <path d="M744,340 Q624,280 512,200"/>
+    <path d="M200,600 Q240,720 340,820"/>
+    <path d="M824,600 Q784,720 684,820"/>
+    <path d="M340,820 Q512,880 684,820"/>
+  </g>
+  
+  <!-- Neural Pathways Layer 2 (Primary connections to center) -->
+  <!-- 6 main pathways radiating from central node - the moment of recall -->
+  <g fill="none" stroke="#3b82f6" stroke-width="32" stroke-linecap="round">
+    <!-- Top pathway - 12 o'clock -->
+    <path d="M512,380 Q512,290 512,200" opacity="0.9"/>
+    
+    <!-- Top-right pathway - 2 o'clock -->
+    <path d="M580,420 Q680,360 744,340" opacity="0.85"/>
+    
+    <!-- Bottom-right pathway - 4 o'clock -->
+    <path d="M600,560 Q720,620 824,600" opacity="0.8"/>
+    
+    <!-- Bottom pathway - 6 o'clock (splits into two) -->
+    <path d="M540,600 Q580,720 684,820" opacity="0.85"/>
+    <path d="M484,600 Q444,720 340,820" opacity="0.85"/>
+    
+    <!-- Bottom-left pathway - 8 o'clock -->
+    <path d="M424,560 Q304,620 200,600" opacity="0.8"/>
+    
+    <!-- Top-left pathway - 10 o'clock -->
+    <path d="M444,420 Q344,360 280,340" opacity="0.85"/>
+  </g>
+  
+  <!-- Peripheral Nodes - the vast constellation of indexed memories -->
+  <g fill="#3b82f6">
+    <!-- Top node - 12 o'clock -->
+    <circle cx="512" cy="200" r="48"/>
+    
+    <!-- Top-right node - 2 o'clock -->
+    <circle cx="744" cy="340" r="42"/>
+    
+    <!-- Right node - 4 o'clock -->
+    <circle cx="824" cy="600" r="38"/>
+    
+    <!-- Bottom-right node - 5 o'clock -->
+    <circle cx="684" cy="820" r="42"/>
+    
+    <!-- Bottom-left node - 7 o'clock -->
+    <circle cx="340" cy="820" r="42"/>
+    
+    <!-- Left node - 8 o'clock -->
+    <circle cx="200" cy="600" r="38"/>
+    
+    <!-- Top-left node - 10 o'clock -->
+    <circle cx="280" cy="340" r="42"/>
+  </g>
+  
+  <!-- Central Node - THE FOCAL POINT -->
+  <!-- This is the memory being accessed - the moment of instant recall -->
+  <!-- Layered for emphasis and depth -->
+  
+  <!-- Outer glow ring -->
+  <circle cx="512" cy="512" r="140" fill="#3b82f6" opacity="0.2"/>
+  
+  <!-- Mid emphasis ring -->
+  <circle cx="512" cy="512" r="110" fill="#3b82f6" opacity="0.4"/>
+  
+  <!-- Core node - solid, prominent -->
+  <circle cx="512" cy="512" r="80" fill="#3b82f6"/>
+  
+  <!-- Inner highlight - creates dimension -->
+  <circle cx="496" cy="496" r="32" fill="#60a5fa" opacity="0.6"/>
+  
+  <!-- Center point - the exact moment of recall -->
+  <circle cx="512" cy="512" r="20" fill="#ffffff"/>
 </svg>
