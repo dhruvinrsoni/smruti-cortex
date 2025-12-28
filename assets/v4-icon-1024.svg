@@ -1,0 +1,35 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="scBrainGrad" x1="200" y1="200" x2="800" y2="800" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#3b82f6"/> <stop offset="100%" stop-color="#8b5cf6"/> </linearGradient>
+    <linearGradient id="scImpulseGrad" x1="500" y1="500" x2="1000" y2="1000" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#06b6d4"/> <stop offset="100%" stop-color="#3b82f6"/> </linearGradient>
+</defs>
+
+<g transform="translate(30,30) scale(0.94)">
+    
+    <g stroke="url(#scBrainGrad)" stroke-width="28" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M512 130 C 300 130, 130 300, 130 512 C 130 724, 300 894, 512 894 C 650 894, 770 820, 840 710"/>
+        
+        <path d="M512 512 C 512 350, 350 350, 350 250"/>
+        <path d="M512 512 C 650 512, 750 350, 800 250"/>
+        <path d="M512 512 C 350 650, 250 750, 350 800"/>
+        
+        <path d="M350 250 C 200 350, 200 650, 350 800"/>
+        <path d="M800 250 C 700 400, 850 600, 750 750"/>
+        <path d="M250 512 C 350 400, 650 400, 774 512"/>
+    </g>
+
+    <g fill="url(#scBrainGrad)">
+        <circle cx="512" cy="512" r="45"/> <circle cx="350" cy="250" r="35"/> <circle cx="800" cy="250" r="35"/>
+        <circle cx="350" cy="800" r="35"/> <circle cx="250" cy="512" r="35"/>
+    </g>
+
+    <g stroke="url(#scImpulseGrad)" stroke-width="40" fill="none" stroke-linecap="round" stroke-linejoin="miter">
+        <path d="M512 512 C 650 650, 680 720, 750 750" stroke-width="32"/>
+        <path d="M750 750 L 880 880 L 980 840 L 860 960 L 950 1010"/>
+    </g>
+    
+    <circle cx="750" cy="750" r="40" fill="#06b6d4"/>
+    <circle cx="750" cy="750" r="60" stroke="#06b6d4" stroke-width="10" opacity="0.5"/> </g>
+</svg>
