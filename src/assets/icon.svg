@@ -1,104 +1,156 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <!--
-    SmrutiCortex Icon v2.0: "The Neural Nexus"
+    SmrutiCortex Icon v3.0: "The Cortex Nexus"
     
-    Design Philosophy:
-    - Central node = the memory being accessed (moment of recall)
-    - 6 neural pathways = connections to your browsing history
-    - Curved bezier paths = organic, brain-like intelligence
-    - Outer ring = privacy boundary (data stays contained)
-    - Constellation pattern = your personal memory map
+    Design Concept:
+    This icon fuses multiple layers of meaning into a sophisticated visual:
     
-    Construction:
-    - Built on 1024x1024 canvas with 512,512 center
-    - Golden ratio proportions
-    - All curves are smooth beziers for scalability
+    1. OUTER RING: Stylized brain cortex folds - not a circle, but
+       a shape with subtle undulations suggesting the brain's gyri.
+       Represents the "Cortex" — where memory processing happens.
     
-    Color Strategy:
-    - Primary: #3b82f6 (trust, intelligence)
-    - Depth created through opacity and stroke weights
+    2. INNER S-CURVE: A flowing curve that subtly forms an "S" shape,
+       representing "Smruti" while also suggesting the flowing nature
+       of memory recall — thoughts connecting across time.
+    
+    3. CENTRAL BURST: An activation point with radiating energy,
+       representing the <50ms speed — the instant of recall.
+    
+    4. NEURAL NODES: Strategic points along the S-curve representing
+       indexed memories in your history.
+    
+    Geometry:
+    - Canvas: 1024x1024, center at 512,512
+    - Outer boundary: ~460px radius
+    - Golden ratio proportions throughout
+    - Bezier curves for organic, intelligent feel
+    
+    Color:
+    - Primary: #2563eb (deeper blue for sophistication)
+    - Secondary: #3b82f6 (classic blue)
+    - Accent: #60a5fa (highlight)
   -->
   
-  <!-- Background: Outer containing ring - privacy boundary -->
-  <circle cx="512" cy="512" r="460" fill="none" stroke="#3b82f6" stroke-width="28" opacity="0.25"/>
+  <defs>
+    <!-- Gradient for depth -->
+    <linearGradient id="depthGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1"/>
+    </linearGradient>
+    
+    <!-- Radial gradient for central glow -->
+    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.8"/>
+      <stop offset="70%" style="stop-color:#3b82f6;stop-opacity:0.4"/>
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
   
-  <!-- Mid-layer ring for depth -->
-  <circle cx="512" cy="512" r="380" fill="none" stroke="#3b82f6" stroke-width="16" opacity="0.15"/>
+  <!-- LAYER 1: Outer Cortex Ring -->
+  <!-- A stylized ring with undulating edges suggesting brain folds -->
+  <path d="M512,52 
+           C720,52 880,180 920,340
+           C960,500 920,660 880,760
+           C840,860 720,952 512,972
+           C304,952 184,860 144,760
+           C104,660 64,500 104,340
+           C144,180 304,52 512,52 Z"
+        fill="none" 
+        stroke="#2563eb" 
+        stroke-width="36"
+        opacity="0.3"/>
   
-  <!-- Neural Pathways Layer 1 (Background - lighter) -->
-  <!-- These create the web of connections, suggesting vast indexed memory -->
-  <g fill="none" stroke="#3b82f6" stroke-width="20" stroke-linecap="round" opacity="0.35">
-    <!-- Cross connections between peripheral nodes -->
-    <path d="M280,340 Q400,280 512,200"/>
-    <path d="M744,340 Q624,280 512,200"/>
-    <path d="M200,600 Q240,720 340,820"/>
-    <path d="M824,600 Q784,720 684,820"/>
-    <path d="M340,820 Q512,880 684,820"/>
+  <!-- LAYER 2: Inner organic ring with cortex-like asymmetry -->
+  <path d="M512,140
+           C680,140 800,240 840,380
+           C880,520 840,660 780,740
+           C720,820 620,884 512,884
+           C404,884 304,820 244,740
+           C184,660 144,520 184,380
+           C224,240 344,140 512,140 Z"
+        fill="none"
+        stroke="#3b82f6"
+        stroke-width="24"
+        opacity="0.4"/>
+  
+  <!-- LAYER 3: The S-Curve Flow -->
+  <!-- This flowing double curve creates the signature S shape -->
+  <!-- Represents the flow of memory, the Smruti, the continuous recall -->
+  <g fill="none" stroke="url(#depthGradient)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Primary S-curve -->
+    <path d="M280,260
+             C340,200 440,180 520,200
+             C620,224 680,300 680,400
+             C680,500 600,560 520,580
+             C440,600 380,640 380,720
+             C380,800 460,860 560,860
+             C680,860 760,780 800,700"
+          stroke-width="48"
+          opacity="0.9"/>
+    
+    <!-- Secondary flow line - creates depth -->
+    <path d="M220,320
+             C280,260 380,240 480,260
+             C580,280 640,340 640,420
+             C640,500 580,560 500,580"
+          stroke-width="32"
+          opacity="0.5"/>
   </g>
   
-  <!-- Neural Pathways Layer 2 (Primary connections to center) -->
-  <!-- 6 main pathways radiating from central node - the moment of recall -->
-  <g fill="none" stroke="#3b82f6" stroke-width="32" stroke-linecap="round">
-    <!-- Top pathway - 12 o'clock -->
-    <path d="M512,380 Q512,290 512,200" opacity="0.9"/>
-    
-    <!-- Top-right pathway - 2 o'clock -->
-    <path d="M580,420 Q680,360 744,340" opacity="0.85"/>
-    
-    <!-- Bottom-right pathway - 4 o'clock -->
-    <path d="M600,560 Q720,620 824,600" opacity="0.8"/>
-    
-    <!-- Bottom pathway - 6 o'clock (splits into two) -->
-    <path d="M540,600 Q580,720 684,820" opacity="0.85"/>
-    <path d="M484,600 Q444,720 340,820" opacity="0.85"/>
-    
-    <!-- Bottom-left pathway - 8 o'clock -->
-    <path d="M424,560 Q304,620 200,600" opacity="0.8"/>
-    
-    <!-- Top-left pathway - 10 o'clock -->
-    <path d="M444,420 Q344,360 280,340" opacity="0.85"/>
+  <!-- LAYER 4: Neural Pathway Connections -->
+  <!-- Subtle lines connecting key points along the S-curve -->
+  <g fill="none" stroke="#3b82f6" stroke-width="16" stroke-linecap="round" opacity="0.35">
+    <path d="M280,260 Q180,340 200,480"/>
+    <path d="M680,400 Q780,460 800,560"/>
+    <path d="M380,720 Q340,800 360,880"/>
+    <path d="M560,860 Q640,920 720,900"/>
   </g>
   
-  <!-- Peripheral Nodes - the vast constellation of indexed memories -->
+  <!-- LAYER 5: Neural Nodes along the S-curve -->
+  <!-- Each node represents a memory point in your indexed history -->
   <g fill="#3b82f6">
-    <!-- Top node - 12 o'clock -->
-    <circle cx="512" cy="200" r="48"/>
+    <!-- Starting node - top left -->
+    <circle cx="280" cy="260" r="44"/>
     
-    <!-- Top-right node - 2 o'clock -->
-    <circle cx="744" cy="340" r="42"/>
+    <!-- Peak node - where S curves -->
+    <circle cx="680" cy="400" r="40"/>
     
-    <!-- Right node - 4 o'clock -->
-    <circle cx="824" cy="600" r="38"/>
+    <!-- Mid-inflection node -->
+    <circle cx="520" cy="580" r="36"/>
     
-    <!-- Bottom-right node - 5 o'clock -->
-    <circle cx="684" cy="820" r="42"/>
+    <!-- Lower curve node -->
+    <circle cx="380" cy="720" r="40"/>
     
-    <!-- Bottom-left node - 7 o'clock -->
-    <circle cx="340" cy="820" r="42"/>
+    <!-- End node - bottom right -->
+    <circle cx="800" cy="700" r="44"/>
     
-    <!-- Left node - 8 o'clock -->
-    <circle cx="200" cy="600" r="38"/>
-    
-    <!-- Top-left node - 10 o'clock -->
-    <circle cx="280" cy="340" r="42"/>
+    <!-- Secondary nodes (smaller) -->
+    <circle cx="200" cy="480" r="28" opacity="0.7"/>
+    <circle cx="800" cy="560" r="28" opacity="0.7"/>
   </g>
   
-  <!-- Central Node - THE FOCAL POINT -->
-  <!-- This is the memory being accessed - the moment of instant recall -->
-  <!-- Layered for emphasis and depth -->
+  <!-- LAYER 6: Central Activation Zone -->
+  <!-- The moment of recall - where all paths converge conceptually -->
+  <!-- Positioned at the visual center of the S-curve inflection -->
+  <circle cx="520" cy="480" r="100" fill="url(#centerGlow)"/>
   
-  <!-- Outer glow ring -->
-  <circle cx="512" cy="512" r="140" fill="#3b82f6" opacity="0.2"/>
+  <!-- LAYER 7: Central Node Emphasis -->
+  <!-- Multiple layers for depth and importance -->
+  <circle cx="520" cy="480" r="64" fill="#2563eb"/>
+  <circle cx="520" cy="480" r="48" fill="#3b82f6"/>
+  <circle cx="508" cy="468" r="20" fill="#60a5fa" opacity="0.7"/>
+  <circle cx="520" cy="480" r="16" fill="#ffffff"/>
   
-  <!-- Mid emphasis ring -->
-  <circle cx="512" cy="512" r="110" fill="#3b82f6" opacity="0.4"/>
-  
-  <!-- Core node - solid, prominent -->
-  <circle cx="512" cy="512" r="80" fill="#3b82f6"/>
-  
-  <!-- Inner highlight - creates dimension -->
-  <circle cx="496" cy="496" r="32" fill="#60a5fa" opacity="0.6"/>
-  
-  <!-- Center point - the exact moment of recall -->
-  <circle cx="512" cy="512" r="20" fill="#ffffff"/>
+  <!-- LAYER 8: Speed Lines / Energy Burst -->
+  <!-- Radiating from center - suggests instant recall -->
+  <g stroke="#60a5fa" stroke-width="6" stroke-linecap="round" opacity="0.6">
+    <line x1="520" y1="400" x2="520" y2="360"/>
+    <line x1="580" y1="420" x2="620" y2="390"/>
+    <line x1="600" y1="480" x2="640" y2="480"/>
+    <line x1="580" y1="540" x2="620" y2="570"/>
+    <line x1="520" y1="560" x2="520" y2="600"/>
+    <line x1="460" y1="540" x2="420" y2="570"/>
+    <line x1="440" y1="480" x2="400" y2="480"/>
+    <line x1="460" y1="420" x2="420" y2="390"/>
+  </g>
 </svg>
