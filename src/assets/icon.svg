@@ -1,156 +1,131 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <!--
-    SmrutiCortex Icon v3.0: "The Cortex Nexus"
-    
-    Design Concept:
-    This icon fuses multiple layers of meaning into a sophisticated visual:
-    
-    1. OUTER RING: Stylized brain cortex folds - not a circle, but
-       a shape with subtle undulations suggesting the brain's gyri.
-       Represents the "Cortex" — where memory processing happens.
-    
-    2. INNER S-CURVE: A flowing curve that subtly forms an "S" shape,
-       representing "Smruti" while also suggesting the flowing nature
-       of memory recall — thoughts connecting across time.
-    
-    3. CENTRAL BURST: An activation point with radiating energy,
-       representing the <50ms speed — the instant of recall.
-    
-    4. NEURAL NODES: Strategic points along the S-curve representing
-       indexed memories in your history.
-    
-    Geometry:
-    - Canvas: 1024x1024, center at 512,512
-    - Outer boundary: ~460px radius
-    - Golden ratio proportions throughout
-    - Bezier curves for organic, intelligent feel
-    
-    Color:
-    - Primary: #2563eb (deeper blue for sophistication)
-    - Secondary: #3b82f6 (classic blue)
-    - Accent: #60a5fa (highlight)
+    ╔═══════════════════════════════════════════════════════════════════════╗
+    ║                                                                       ║
+    ║                    S M R U T I C O R T E X                            ║
+    ║                                                                       ║
+    ║                    ▀▀▀ THE MARK ▀▀▀                                   ║
+    ║                                                                       ║
+    ║                  Version 11.0 — THE EUREKA                            ║
+    ║                                                                       ║
+    ╠═══════════════════════════════════════════════════════════════════════╣
+    ║                                                                       ║
+    ║  "The Neural S — Final Edition"                                       ║
+    ║                                                                       ║
+    ║  DESIGN ESSENCE                                                       ║
+    ║  ══════════════                                                       ║
+    ║                                                                       ║
+    ║  Three elements. Nothing more.                                        ║
+    ║                                                                       ║
+    ║    ① CIRCLE — The privacy boundary, the complete index                ║
+    ║    ② S-CURVE — Brand initial + neural pathway + speed                 ║
+    ║    ③ THREE NODES — Question → Eureka → Answer                         ║
+    ║                                                                       ║
+    ║  THE HIDDEN GENIUS                                                    ║
+    ║  ════════════════                                                     ║
+    ║                                                                       ║
+    ║  The S is not just a letter. It IS:                                   ║
+    ║    • A neural synapse connecting two points                           ║
+    ║    • A lightning bolt frozen in time (speed)                          ║
+    ║    • The flow of memory through time                                  ║
+    ║    • Sanskrit-inspired curves (Smruti heritage)                       ║
+    ║                                                                       ║
+    ║  GEOMETRY                                                             ║
+    ║  ════════                                                             ║
+    ║                                                                       ║
+    ║  Canvas: 1024×1024, center at (512, 512)                              ║
+    ║  Circle: r=460 (leaves 52px padding)                                  ║
+    ║  S-curve: Stroke width 88px                                           ║
+    ║  Node sizes: 60r (terminal) / 72r (central)                           ║
+    ║                                                                       ║
+    ║  REFINED S-CURVE                                                      ║
+    ║  ══════════════                                                       ║
+    ║                                                                       ║
+    ║  The S now has:                                                       ║
+    ║    • More dramatic top loop (reaching higher)                         ║
+    ║    • Tighter center inflection (more dynamic)                         ║
+    ║    • Stronger bottom termination (confident end)                      ║
+    ║    • Better overall flow and balance                                  ║
+    ║                                                                       ║
+    ║  COLORS                                                               ║
+    ║  ══════                                                               ║
+    ║                                                                       ║
+    ║  #1e3a8a — Navy: Intelligence, trust, depth                           ║
+    ║  #ffffff — White: Clarity, speed, purity                              ║
+    ║  #3b82f6 — Blue: Sophistication (node centers)                        ║
+    ║                                                                       ║
+    ╚═══════════════════════════════════════════════════════════════════════╝
   -->
   
-  <defs>
-    <!-- Gradient for depth -->
-    <linearGradient id="depthGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1"/>
-      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1"/>
-    </linearGradient>
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!--                         THE CIRCLE                                  -->
+  <!--               Container · Privacy · Completeness                    -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  
+  <circle cx="512" cy="512" r="460" fill="#1e3a8a"/>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!--                         THE S-CURVE                                 -->
+  <!--          Brand Initial · Neural Path · Speed · Memory               -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!--
+    This is the refined S-curve with more elegant, flowing proportions.
     
-    <!-- Radial gradient for central glow -->
-    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.8"/>
-      <stop offset="70%" style="stop-color:#3b82f6;stop-opacity:0.4"/>
-      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:0"/>
-    </radialGradient>
-  </defs>
+    Key Control Points:
+    • Origin:      (220, 260) — slightly off-center for dynamism
+    • Upper peak:  (800, 340) — reaches far right at top
+    • Inflection:  (512, 512) — true center (the eureka moment)
+    • Lower dip:   (224, 684) — reaches far left at bottom
+    • Terminus:    (780, 740) — confident ending
+    
+    The S has asymmetric energy — it's not a perfect mirror.
+    This creates visual interest and suggests movement/speed.
+  -->
   
-  <!-- LAYER 1: Outer Cortex Ring -->
-  <!-- A stylized ring with undulating edges suggesting brain folds -->
-  <path d="M512,52 
-           C720,52 880,180 920,340
-           C960,500 920,660 880,760
-           C840,860 720,952 512,972
-           C304,952 184,860 144,760
-           C104,660 64,500 104,340
-           C144,180 304,52 512,52 Z"
-        fill="none" 
-        stroke="#2563eb" 
-        stroke-width="36"
-        opacity="0.3"/>
-  
-  <!-- LAYER 2: Inner organic ring with cortex-like asymmetry -->
-  <path d="M512,140
-           C680,140 800,240 840,380
-           C880,520 840,660 780,740
-           C720,820 620,884 512,884
-           C404,884 304,820 244,740
-           C184,660 144,520 184,380
-           C224,240 344,140 512,140 Z"
+  <path d="M 220 260
+           C 220 140, 460 80, 620 120
+           C 800 168, 860 320, 800 440
+           C 740 560, 600 580, 512 580
+           C 424 580, 284 600, 224 720
+           C 164 840, 300 940, 500 920
+           C 680 900, 780 820, 780 740"
         fill="none"
-        stroke="#3b82f6"
-        stroke-width="24"
-        opacity="0.4"/>
+        stroke="#ffffff"
+        stroke-width="88"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
   
-  <!-- LAYER 3: The S-Curve Flow -->
-  <!-- This flowing double curve creates the signature S shape -->
-  <!-- Represents the flow of memory, the Smruti, the continuous recall -->
-  <g fill="none" stroke="url(#depthGradient)" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Primary S-curve -->
-    <path d="M280,260
-             C340,200 440,180 520,200
-             C620,224 680,300 680,400
-             C680,500 600,560 520,580
-             C440,600 380,640 380,720
-             C380,800 460,860 560,860
-             C680,860 760,780 800,700"
-          stroke-width="48"
-          opacity="0.9"/>
-    
-    <!-- Secondary flow line - creates depth -->
-    <path d="M220,320
-             C280,260 380,240 480,260
-             C580,280 640,340 640,420
-             C640,500 580,560 500,580"
-          stroke-width="32"
-          opacity="0.5"/>
-  </g>
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!--                        THE THREE NODES                              -->
+  <!--                  Origin · Eureka · Destination                      -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
   
-  <!-- LAYER 4: Neural Pathway Connections -->
-  <!-- Subtle lines connecting key points along the S-curve -->
-  <g fill="none" stroke="#3b82f6" stroke-width="16" stroke-linecap="round" opacity="0.35">
-    <path d="M280,260 Q180,340 200,480"/>
-    <path d="M680,400 Q780,460 800,560"/>
-    <path d="M380,720 Q340,800 360,880"/>
-    <path d="M560,860 Q640,920 720,900"/>
-  </g>
+  <!-- ─────────────────────────────────────────────────────────────────── -->
+  <!-- NODE 1: ORIGIN (Top-Left)                                           -->
+  <!-- The question · The search begins · The memory sought                -->
+  <!-- ─────────────────────────────────────────────────────────────────── -->
   
-  <!-- LAYER 5: Neural Nodes along the S-curve -->
-  <!-- Each node represents a memory point in your indexed history -->
-  <g fill="#3b82f6">
-    <!-- Starting node - top left -->
-    <circle cx="280" cy="260" r="44"/>
-    
-    <!-- Peak node - where S curves -->
-    <circle cx="680" cy="400" r="40"/>
-    
-    <!-- Mid-inflection node -->
-    <circle cx="520" cy="580" r="36"/>
-    
-    <!-- Lower curve node -->
-    <circle cx="380" cy="720" r="40"/>
-    
-    <!-- End node - bottom right -->
-    <circle cx="800" cy="700" r="44"/>
-    
-    <!-- Secondary nodes (smaller) -->
-    <circle cx="200" cy="480" r="28" opacity="0.7"/>
-    <circle cx="800" cy="560" r="28" opacity="0.7"/>
-  </g>
+  <circle cx="220" cy="260" r="60" fill="#ffffff"/>
+  <circle cx="220" cy="260" r="34" fill="#3b82f6"/>
+  <circle cx="208" cy="248" r="13" fill="#ffffff" opacity="0.7"/>
   
-  <!-- LAYER 6: Central Activation Zone -->
-  <!-- The moment of recall - where all paths converge conceptually -->
-  <!-- Positioned at the visual center of the S-curve inflection -->
-  <circle cx="520" cy="480" r="100" fill="url(#centerGlow)"/>
+  <!-- ─────────────────────────────────────────────────────────────────── -->
+  <!-- NODE 2: EUREKA (Center)                                             -->
+  <!-- THE MOMENT OF RECALL · The synapse fires · Instant recognition      -->
+  <!-- This is THE focal point — largest, most layered, most prominent     -->
+  <!-- ─────────────────────────────────────────────────────────────────── -->
   
-  <!-- LAYER 7: Central Node Emphasis -->
-  <!-- Multiple layers for depth and importance -->
-  <circle cx="520" cy="480" r="64" fill="#2563eb"/>
-  <circle cx="520" cy="480" r="48" fill="#3b82f6"/>
-  <circle cx="508" cy="468" r="20" fill="#60a5fa" opacity="0.7"/>
-  <circle cx="520" cy="480" r="16" fill="#ffffff"/>
+  <circle cx="512" cy="580" r="72" fill="#ffffff"/>
+  <circle cx="512" cy="580" r="46" fill="#1e3a8a"/>
+  <circle cx="512" cy="580" r="28" fill="#ffffff"/>
+  <circle cx="500" cy="568" r="10" fill="#60a5fa" opacity="0.8"/>
   
-  <!-- LAYER 8: Speed Lines / Energy Burst -->
-  <!-- Radiating from center - suggests instant recall -->
-  <g stroke="#60a5fa" stroke-width="6" stroke-linecap="round" opacity="0.6">
-    <line x1="520" y1="400" x2="520" y2="360"/>
-    <line x1="580" y1="420" x2="620" y2="390"/>
-    <line x1="600" y1="480" x2="640" y2="480"/>
-    <line x1="580" y1="540" x2="620" y2="570"/>
-    <line x1="520" y1="560" x2="520" y2="600"/>
-    <line x1="460" y1="540" x2="420" y2="570"/>
-    <line x1="440" y1="480" x2="400" y2="480"/>
-    <line x1="460" y1="420" x2="420" y2="390"/>
-  </g>
+  <!-- ─────────────────────────────────────────────────────────────────── -->
+  <!-- NODE 3: DESTINATION (Bottom-Right)                                  -->
+  <!-- The answer · The memory found · The page opens                      -->
+  <!-- ─────────────────────────────────────────────────────────────────── -->
+  
+  <circle cx="780" cy="740" r="60" fill="#ffffff"/>
+  <circle cx="780" cy="740" r="34" fill="#3b82f6"/>
+  <circle cx="768" cy="728" r="13" fill="#ffffff" opacity="0.7"/>
 </svg>

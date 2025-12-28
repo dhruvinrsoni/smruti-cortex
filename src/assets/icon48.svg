@@ -1,8 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- SmrutiCortex 48px - Medium detail -->
-  <circle cx="24" cy="24" r="22" fill="#3b82f6"/>
-  <path d="M 18 9 L 27 9 L 20 22 L 28 22 L 15 39 L 19 25 L 12 25 Z" fill="#ffffff"/>
-  <circle cx="33" cy="15" r="3" fill="#ffffff"/>
-  <circle cx="35" cy="25" r="2.5" fill="#ffffff"/>
-  <circle cx="31" cy="34" r="2.5" fill="#ffffff"/>
+  <!--
+    SmrutiCortex 48px Icon — Extension Management
+    Version 11 — Matches master icon design
+    
+    Medium detail: S-curve + start/end nodes (no center at this size)
+  -->
+  
+  <!-- Container -->
+  <circle cx="24" cy="24" r="21.5" fill="#1e3a8a"/>
+  
+  <!-- S-curve (matching v11 asymmetric flow) -->
+  <path d="M 10.5 12.5
+           C 10.5 7, 22 4, 30 5.5
+           C 38 8, 41 15, 38 21
+           C 35 27, 28 27.5, 24 27.5
+           C 20 27.5, 13.5 28.5, 11 34
+           C 8.5 39.5, 14 45, 24 44
+           C 32 43, 37.5 39, 37.5 35"
+        fill="none"
+        stroke="#ffffff"
+        stroke-width="4.2"
+        stroke-linecap="round"/>
+  
+  <!-- Node 1: Origin (top-left) -->
+  <circle cx="10.5" cy="12.5" r="2.8" fill="#ffffff"/>
+  <circle cx="10.5" cy="12.5" r="1.6" fill="#3b82f6"/>
+  
+  <!-- Node 3: Destination (bottom-right) -->
+  <circle cx="37.5" cy="35" r="2.8" fill="#ffffff"/>
+  <circle cx="37.5" cy="35" r="1.6" fill="#3b82f6"/>
 </svg>
