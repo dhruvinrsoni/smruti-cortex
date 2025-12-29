@@ -62,19 +62,27 @@ npm run build
 
 ### Debug Features
 
-### Log Level Buttons
-- **Location**: Rounded button group in popup header next to title
-- **Function**: Controls logging verbosity with four colored buttons:
-  - **ERROR** (Red): Only critical errors
-  - **INFO** (Blue): Errors + important events (default)
-  - **DEBUG** (Green): Info + detailed debugging
-  - **TRACE** (Amber): Debug + very verbose tracing
-- **Visual Design**: Rounded rectangle container with light-colored buttons that turn dark when selected
+### Log Level Settings
+- **Location**: Settings modal (click gear icon → Log Level section)
+- **Function**: Controls logging verbosity with four levels:
+  - **ERROR**: Only critical errors - production use
+  - **INFO**: Errors + important events (default) - production/general use
+  - **DEBUG**: Info + detailed debugging - development use
+  - **TRACE**: Maximum verbosity - AI layer details, all message passing, request/response payloads
 - **Persistence**: Setting saves across browser sessions
-- **Scope**: Controls logs from popup, service worker, messaging, and search engine
+- **Scope**: Controls logs from popup, service worker, messaging, search engine, and AI layer (Ollama)
+
+### AI Layer Transparency (TRACE Level)
+When TRACE is enabled, the Ollama AI service logs:
+- Full configuration on initialization
+- Every API request with URL, method, body size
+- Response status and parsing details
+- Embedding dimensions and sample values
+- Performance metrics (throughput, timing)
+- **Privacy note**: All AI processing is LOCAL via Ollama - no cloud calls
 
 ### Debug Checklist
-1. **Open popup** and click desired log level button (INFO is default)
+1. **Open Settings** via gear icon and select desired log level
 2. **Open DevTools** (F12) → Console tab
 3. **Service Worker logs**:
    - `[INFO] Initializing service worker…`

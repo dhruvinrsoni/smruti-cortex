@@ -165,15 +165,15 @@ setupPortBasedMessaging();
   // Set up messaging immediately
   logger.debug('initLogger', '[SmrutiCortex] Setting up message listeners');
   browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    logger.debug('onMessage', 'Message listener triggered with message:', msg);
+    logger.trace('onMessage', 'Message listener triggered with message:', msg);
     logger.trace('onMessage', 'Sender:', sender);
     (async () => {
-      logger.debug('onMessage', 'Processing message asynchronously');
+      logger.trace('onMessage', 'Processing message asynchronously');
       try {
-        logger.debug('onMessage', 'Message type:', msg.type);
+        logger.trace('onMessage', 'Message type:', msg.type);
         switch (msg.type) {
           case 'PING':
-            logger.debug('onMessage', 'Handling PING');
+            logger.trace('onMessage', 'Handling PING');
             sendResponse({ status: 'ok' });
             break;
           case 'OPEN_SETTINGS':
@@ -254,13 +254,13 @@ setupPortBasedMessaging();
                 sendResponse({ error: 'Unknown message type' });
             }
         }
-        logger.debug('onMessage', 'Message processing completed');
+        logger.trace('onMessage', 'Message processing completed');
       } catch (error) {
         logger.error('onMessage', 'Error processing message:', error);
         sendResponse({ error: error.message });
       }
     })();
-    logger.debug('onMessage', 'Returning true for async response');
+    logger.trace('onMessage', 'Returning true for async response');
     return true; // async response
   });
 
