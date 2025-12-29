@@ -15,7 +15,8 @@
   ],
   "host_permissions": [
     "<all_urls>",
-    "https://api.your-ai-provider.example/*"
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"

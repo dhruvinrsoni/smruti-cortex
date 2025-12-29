@@ -140,14 +140,14 @@ export class SettingsManager {
             this.logger.info('init', '🔄 Loading settings from storage...');
             // Load stored settings in background (non-blocking for UI)
             const stored = await this.loadFromStorage();
-            this.logger.info('init', '📦 Loaded from storage:', JSON.stringify(stored));
+            this.logger.info('init', '📦 Loaded from storage:', stored || 'null');
             
             if (stored) {
                 this.logger.info('init', '🔀 Merging with defaults...');
                 this.settings = { ...this.settings, ...stored };
-                this.logger.info('init', '✅ Merged settings:', JSON.stringify(this.settings));
+                this.logger.info('init', '✅ Merged settings:', this.settings);
             } else {
-                this.logger.info('init', '⚠️ No stored settings, using defaults:', JSON.stringify(this.settings));
+                this.logger.info('init', '⚠️ No stored settings, using defaults:', this.settings);
             }
 
             // Ensure displayMode always defaults to list
@@ -159,7 +159,7 @@ export class SettingsManager {
         } catch (error) {
             // Already using defaults, just log the error
             this.logger.error('init', '❌ Settings initialization failed:', error);
-            this.logger.info('init', '📋 Using defaults:', JSON.stringify(this.settings));
+            this.logger.info('init', '📋 Using defaults:', this.settings);
         }
     }
 
@@ -175,10 +175,10 @@ export class SettingsManager {
      */
     static async updateSettings(updates: Partial<AppSettings>): Promise<void> {
         try {
-            this.logger.debug('updateSettings', '📝 Before update:', JSON.stringify(this.settings));
-            this.logger.info('updateSettings', '📝 Applying updates:', JSON.stringify(updates));
+            this.logger.debug('updateSettings', '📝 Before update:', this.settings);
+            this.logger.info('updateSettings', '📝 Applying updates:', updates);
             this.settings = { ...this.settings, ...updates };
-            this.logger.info('updateSettings', '📝 After merge:', JSON.stringify(this.settings));
+            this.logger.info('updateSettings', '📝 After merge:', this.settings);
             await this.saveToStorage();
             this.logger.info('updateSettings', '💾 Saved to storage');
             await this.applySettings();
