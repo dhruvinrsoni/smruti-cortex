@@ -12,10 +12,18 @@ Each item can be converted into GitHub Issues.
 | v1.0 | ✅ Released | Initial working extension |
 | v2.0 | ✅ Released | Ultra-fast overlay, SOLID/DRY refactor, two UI architecture |
 | v3.0 | ✅ Released | Documentation, CI/CD, testing, store-ready |
+| v4.0 | 🔄 In Progress | Professional branding, local Ollama AI, privacy hardening |
 
 ---
 
-## ✅ COMPLETED — v3.0 (Current Release)
+## ✅ COMPLETED — v4.0 (In Progress)
+- [x] **Professional Icon System** - v11 "Neural S" design across all sizes
+- [x] **Remove Hardcoded Content** - All assets loaded from files (no emojis, no inline SVG)
+- [ ] **Local Ollama Integration** - Privacy-first AI with developer insights panel
+- [ ] **Default Local-Only Processing** - No external calls without explicit consent
+- [ ] **Sensitive-Site Blacklist** - Disable extractor on banks/password portals
+
+## ✅ COMPLETED — v3.0
 - [x] **CI/CD Pipeline** - GitHub Actions workflow (build, lint, test, release)
 - [x] **Unit Test Setup** - Vitest with 28 tests for shared utilities
 - [x] **ESLint Configuration** - TypeScript linting rules
@@ -49,13 +57,37 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-##  v4.0+ FUTURE ROADMAP
+## 🎯 v4.0 ROADMAP (LOCAL AI + PRIVACY)
 
-### AI & Intelligence
-- [ ] AI embedding scorer (opt-in)
-- [ ] Semantic search with embeddings
+### Core Features
+- [ ] **Local Ollama Integration** - Issue #16
+  - Enable/disable toggle (default: disabled)
+  - Auto-detect Ollama at localhost:11434
+  - Model selection dropdown
+  - Graceful fallback to keyword search
+- [ ] **Developer Insights Panel** - Issue #16
+  - Real-time embedding generation metrics
+  - Model performance tracking
+  - Token usage visualization
+  - Success/failure rates
+- [ ] **Default Local-Only Processing** - Issue #4
+  - Audit all network calls
+  - Settings page with clear toggles
+  - Privacy-first architecture
+- [ ] **Sensitive-Site Blacklist** - Issue #6
+  - Disable extractor on banks, password portals
+  - User-configurable blacklist
+  - Smart defaults for common sensitive domains
+
+---
+
+## v5.0+ FUTURE ROADMAP
+
+### AI & Intelligence (Deferred)
+- [ ] External API embedding scorer (6+ months, privacy review needed)
+- [ ] Semantic search with cloud embeddings (privacy concerns)
 - [ ] Query expansion
-- [ ] API key management in settings
+- [ ] API key management (only if external APIs approved)
 
 ### Premium Features (Potential Monetization)
 - [ ] Cross-device sync (Chrome Sync API)
@@ -68,11 +100,11 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## HIGH PRIORITY — PRIVACY & SECURITY
+## HIGH PRIORITY — PRIVACY & SECURITY (v4.0)
+- [x] Default to "Local-only" processing (no external data usage) - Issue #4 (v4.0 milestone)
+- [x] Add sensitive-site blacklist (disable extractor on banks, password portals) - Issue #6 (v4.0 milestone)
 - [ ] Add onboarding privacy prompt (explain metadata extraction clearly to user)
-- [ ] Default to “Local-only” processing (no external data usage)
 - [ ] Explain permissions within extension Options page
-- [ ] Add sensitive-site blacklist (disable extractor on banks, password portals)
 - [ ] Add toggle: “Disable metadata extraction”
 - [ ] Add “Delete All Data” (IndexedDB + chrome.storage)
 - [ ] Add manual “Rebuild Index” button
@@ -98,10 +130,9 @@ Each item can be converted into GitHub Issues.
 ---
 
 ## MEDIUM PRIORITY — AI & EXTENSIBILITY
+- [x] Add local Ollama integration (opt-in) - Issue #16 (v4.0 milestone)
 - [ ] Document scorer plugin interface
-- [ ] Add AI embedding scorer (opt-in)
-- [ ] Store embeddings only with user consent
-- [ ] Add API key management in settings
+- [ ] Store embeddings locally with user consent
 
 ---
 
