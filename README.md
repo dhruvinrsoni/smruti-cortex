@@ -110,13 +110,20 @@ src/
 
 ### 🤖 AI Search Setup (Optional)
 
-SmrutiCortex supports **semantic AI search** using local [Ollama](https://ollama.ai). This is 100% local — no cloud, no tracking.
+SmrutiCortex supports **AI-powered keyword expansion** using local [Ollama](https://ollama.ai). This is 100% local — no cloud, no tracking.
+
+**How it works:**
+1. You type: "war"
+2. AI expands to: ["war", "battle", "fight", "combat", "conflict", "military"]
+3. Fast keyword matching finds URLs with ANY of these terms
+
+This is ONE LLM call per search, not 600+ embedding generations. Fast and smart.
 
 **Setup:**
 ```bash
 # 1. Install Ollama (https://ollama.ai)
-# 2. Pull an embedding model
-ollama pull embeddinggemma:300m
+# 2. Pull a generation model (for keyword expansion)
+ollama pull llama3.2:1b
 
 # 3. Enable CORS for Chrome extension (REQUIRED)
 # Windows (PowerShell - run as admin):
@@ -130,6 +137,11 @@ export OLLAMA_ORIGINS="*"
 # Docker:
 docker run -e OLLAMA_ORIGINS="*" -p 11434:11434 ollama/ollama
 ```
+
+**Timeout Settings:**
+- Default: 30 seconds (first model load takes 5-15s)
+- Set to `-1` for infinite timeout (recommended for AI workloads)
+- Settings → AI Integration → Timeout
 
 **Enable in SmrutiCortex:** Settings → AI Integration → Enable AI search
 

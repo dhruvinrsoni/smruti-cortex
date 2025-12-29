@@ -3,7 +3,12 @@
 import { IndexedItem } from '../background/schema';
 
 export interface ScorerContext {
-    queryEmbedding?: number[];  // Optional query embedding for AI scoring
+    // AI keyword expansion (prompting approach - RECOMMENDED)
+    expandedTokens?: string[];     // Original + AI-expanded keywords
+    aiExpanded?: boolean;          // True if AI expansion was successful
+    
+    // Legacy embedding approach (deprecated - not recommended)
+    queryEmbedding?: number[];     // Query embedding for cosine similarity
 }
 
 export interface Scorer {
