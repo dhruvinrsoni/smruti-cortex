@@ -707,6 +707,27 @@ function initializePopup() {
     if (focusDelayInput) {
       focusDelayInput.value = String(currentFocusDelay);
     }
+
+    // Ollama settings
+    const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
+    if (ollamaEnabledInput) {
+      ollamaEnabledInput.checked = SettingsManager.getSetting('ollamaEnabled') || false;
+    }
+
+    const ollamaEndpointInput = modal.querySelector('#modal-ollamaEndpoint') as HTMLInputElement;
+    if (ollamaEndpointInput) {
+      ollamaEndpointInput.value = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+    }
+
+    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLSelectElement;
+    if (ollamaModelInput) {
+      ollamaModelInput.value = SettingsManager.getSetting('ollamaModel') || 'embeddinggemma:300m';
+    }
+
+    const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
+    if (ollamaTimeoutInput) {
+      ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') || 2000);
+    }
   }
 
   // Close settings modal
@@ -797,6 +818,54 @@ function initializePopup() {
         await SettingsManager.setSetting('focusDelayMs', val);
         focusDelayInput.value = String(val);
         showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`);
+      });
+    }
+
+    // Ollama enabled toggle
+    const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
+    if (ollamaEnabledInput) {
+      ollamaEnabledInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('ollamaEnabled', target.checked);
+        console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
+        showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'));
+      });
+    }
+
+    // Ollama endpoint changes
+    const ollamaEndpointInput = modal.querySelector('#modal-ollamaEndpoint') as HTMLInputElement;
+    if (ollamaEndpointInput) {
+      ollamaEndpointInput.addEventListener('change', async () => {
+        const val = ollamaEndpointInput.value.trim();
+        if (val) {
+          await SettingsManager.setSetting('ollamaEndpoint', val);
+          showToast('Ollama endpoint updated');
+        }
+      });
+    }
+
+    // Ollama model changes
+    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLSelectElement;
+    if (ollamaModelInput) {
+      ollamaModelInput.addEventListener('change', async () => {
+        const val = ollamaModelInput.value;
+        if (val) {
+          await SettingsManager.setSetting('ollamaModel', val);
+          showToast('Ollama model updated');
+        }
+      });
+    }
+
+    // Ollama timeout changes
+    const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
+    if (ollamaTimeoutInput) {
+      ollamaTimeoutInput.addEventListener('change', async () => {
+        let val = parseInt(ollamaTimeoutInput.value);
+        if (isNaN(val) || val < 500) {val = 500;}
+        if (val > 5000) {val = 5000;}
+        await SettingsManager.setSetting('ollamaTimeout', val);
+        ollamaTimeoutInput.value = String(val);
+        showToast(`Ollama timeout set to ${val} ms`);
       });
     }
 

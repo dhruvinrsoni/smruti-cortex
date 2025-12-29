@@ -148,6 +148,49 @@
           </div>
         </div>
         <div class="settings-section">
+          <h3>AI Integration (Local Ollama)</h3>
+          <p>Enable semantic search using local AI embeddings.<br>
+          <b>Requires:</b> Ollama running locally with embedding model.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-ollamaEnabled">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Enable AI search</strong>
+                <small>Uses local Ollama for semantic understanding (privacy-first)</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="text" id="modal-ollamaEndpoint" placeholder="http://localhost:11434" style="width:200px;">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Ollama Endpoint</strong>
+                <small>Local Ollama API URL (default: http://localhost:11434)</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <select id="modal-ollamaModel" style="width:200px;">
+                <option value="embeddinggemma:300m">embeddinggemma:300m (recommended)</option>
+                <option value="all-minilm">all-minilm (faster, less accurate)</option>
+                <option value="nomic-embed-text">nomic-embed-text (balanced)</option>
+              </select>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Embedding Model</strong>
+                <small>Choose model for generating text embeddings</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="number" id="modal-ollamaTimeout" min="500" max="5000" step="100" style="width:80px;">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Timeout (ms)</strong>
+                <small>Max time for embedding generation (default: 2000)</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
           <h3>Result Focus Delay</h3>
           <p>Control how quickly focus shifts to results after typing.<br>
           <b>0 ms</b> disables auto-focus. <b>100-2000 ms</b> is recommended for natural UX.</p>

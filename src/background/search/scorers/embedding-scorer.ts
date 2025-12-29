@@ -25,7 +25,7 @@ const embeddingScorer: Scorer = {
   score: (_item, _query, _allItems) => {
     // Embeddings require async operations
     // Return 0 until we implement async scoring in search-engine.ts
-    Logger.trace(COMPONENT, 'score', 'Embedding scorer not yet implemented (requires async)');
+    // Note: This is called per-item, so logging here would spam console
     return 0;
   }
 };

@@ -6,6 +6,7 @@ import { IndexedItem } from '../schema';
 import { tokenize } from './tokenizer';
 import { browserAPI } from '../../core/helpers';
 import { Logger } from '../../core/logger';
+import { SettingsManager } from '../../core/settings';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     const logger = Logger.forComponent('SearchEngine');
@@ -19,6 +20,20 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
     const tokens = tokenize(q);
     logger.debug('runSearch', 'Query tokens:', tokens);
+
+    // Ensure SettingsManager is initialized before reading settings
+    await SettingsManager.init();
+    
+    // Check if AI embeddings are enabled
+    const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') || false;
+    const ollamaEndpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+    const ollamaModel = SettingsManager.getSetting('ollamaModel') || 'embeddinggemma:300m';
+    
+    if (ollamaEnabled) {
+        logger.info('runSearch', `🤖 AI search enabled: model=${ollamaModel}, endpoint=${ollamaEndpoint}`);
+    } else {
+        logger.info('runSearch', `🔍 Keyword search (AI disabled in settings)`);
+    }
 
     const scorers = getAllScorers();
     logger.trace('runSearch', 'Loaded scorers:', scorers.length);
