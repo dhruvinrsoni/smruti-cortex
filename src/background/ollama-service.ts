@@ -59,6 +59,7 @@ export class OllamaService {
     
     // Use cached result if recent
     if (now - this.lastCheckTime < this.CHECK_INTERVAL && this.isAvailable) {
+      Logger.debug(COMPONENT, 'checkAvailability', 'Using cached availability (still valid)');
       return {
         available: true,
         model: this.config.model,
@@ -84,9 +85,11 @@ export class OllamaService {
         this.isAvailable = hasModel;
         this.lastCheckTime = now;
 
-        Logger.info(COMPONENT, 'checkAvailability', `Available: ${hasModel}`, {
-          models: models.map((m: any) => m.name)
-        });
+        if (hasModel) {
+          Logger.info(COMPONENT, 'checkAvailability', `✅ Ollama available - model '${this.config.model}' loaded`);
+        } else {
+          Logger.info(COMPONENT, 'checkAvailability', `❌ Model '${this.config.model}' not found. Available: ${models.map((m: any) => m.name).join(', ')}`);
+        }
 
         return {
           available: hasModel,
@@ -109,7 +112,7 @@ export class OllamaService {
       this.lastCheckTime = now;
       
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      Logger.debug(COMPONENT, 'checkAvailability', `Not available: ${errorMsg}`);
+      Logger.info(COMPONENT, 'checkAvailability', `❌ Ollama not available: ${errorMsg}`);
 
       return {
         available: false,
@@ -129,6 +132,7 @@ export class OllamaService {
     // Quick availability check
     const status = await this.checkAvailability();
     if (!status.available) {
+      Logger.info(COMPONENT, 'generateEmbedding', `❌ Cannot generate embedding: ${status.error || 'Ollama not available'}`);
       return {
         embedding: [],
         model: this.config.model,
@@ -162,9 +166,7 @@ export class OllamaService {
       const data = await response.json();
       const duration = Date.now() - startTime;
 
-      Logger.debug(COMPONENT, 'generateEmbedding', `Success in ${duration}ms`, {
-        dimensions: data.embedding?.length || 0
-      });
+      Logger.info(COMPONENT, 'generateEmbedding', `✅ Embedding generated in ${duration}ms (${data.embedding?.length || 0} dimensions)`);
 
       return {
         embedding: data.embedding || [],
@@ -177,9 +179,7 @@ export class OllamaService {
       const duration = Date.now() - startTime;
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       
-      Logger.error(COMPONENT, 'generateEmbedding', `Failed after ${duration}ms`, {
-        error: errorMsg
-      });
+      Logger.info(COMPONENT, 'generateEmbedding', `❌ Embedding failed after ${duration}ms: ${errorMsg}`);
 
       return {
         embedding: [],
@@ -241,6 +241,11 @@ let ollamaService: OllamaService | null = null;
  */
 export function getOllamaService(config?: Partial<OllamaConfig>): OllamaService {
   if (!ollamaService || config) {
+    Logger.info(COMPONENT, 'getOllamaService', 'Initializing Ollama service', {
+      endpoint: config?.endpoint || 'http://localhost:11434',
+      model: config?.model || 'embeddinggemma:300m',
+      timeout: config?.timeout || 2000
+    });
     ollamaService = new OllamaService(config);
   }
   return ollamaService;
