@@ -1,6 +1,7 @@
 // scorer-manager.ts — Collects all scorers into a single weighted scoring pipeline
 
 import { Scorer } from '../../core/scorer-types';
+import { SettingsManager } from '../../core/settings';
 import titleScorer from './scorers/title-scorer';
 import urlScorer from './scorers/url-scorer';
 import recencyScorer from './scorers/recency-scorer';
@@ -32,13 +33,20 @@ const domainFamiliarityScorer: Scorer = {
 };
 
 export function getAllScorers(): Scorer[] {
+    // Dynamic embedding scorer weight based on AI settings
+    const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') || false;
+    const dynamicEmbeddingScorer: Scorer = {
+        ...embeddingScorer,
+        weight: ollamaEnabled ? 0.4 : 0,  // ✅ 0.4 when AI enabled, 0 when disabled
+    };
+
     return [
         titleScorer,
         urlScorer,
         recencyScorer,
         visitCountScorer,
         metaScorer,
-        embeddingScorer,         // AI-powered semantic search (local Ollama)
+        dynamicEmbeddingScorer,  // AI-powered semantic search (dynamic weight)
         domainFamiliarityScorer, // Organic biasing based on user behavior
         aiScorer,                // placeholder (weight = 0)
     ];
