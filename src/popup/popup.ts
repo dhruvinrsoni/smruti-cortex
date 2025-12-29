@@ -721,7 +721,10 @@ function initializePopup() {
 
     const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLSelectElement;
     if (ollamaModelInput) {
-      ollamaModelInput.value = SettingsManager.getSetting('ollamaModel') || 'embeddinggemma:300m';
+      const savedModel = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
+      // Check if saved model exists in dropdown, otherwise use default
+      const optionExists = Array.from(ollamaModelInput.options).some(opt => opt.value === savedModel);
+      ollamaModelInput.value = optionExists ? savedModel : 'llama3.2:1b';
     }
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;

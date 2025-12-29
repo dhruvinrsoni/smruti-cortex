@@ -139,22 +139,16 @@ async function callOllamaForKeywords(
 ): Promise<string[]> {
   const originalTokens = query.split(/\s+/).filter(t => t.length > 0);
 
-  // Craft a precise prompt for strict JSON output
-  const prompt = `You are a keyword expansion assistant. Given search keywords, provide synonyms and related terms.
+  // Craft a MINIMAL prompt for fast, valid JSON output
+  // Key: Ask for LESS data to avoid truncation
+  const prompt = `Expand these search keywords with 5 synonyms. Output ONLY a JSON array, nothing else.
 
-STRICT RULES:
-1. Output ONLY valid JSON, no markdown, no code blocks, no explanations
-2. Use the exact format shown below
-3. Keep keywords lowercase, single words only
-4. Provide 3-8 synonyms/related terms per original keyword
-5. Include common misspellings if relevant
+Keywords: ${originalTokens.join(', ')}
 
-INPUT KEYWORDS: ${originalTokens.join(', ')}
+Example input: "war"
+Example output: ["war","battle","fight","combat","conflict","military"]
 
-OUTPUT FORMAT (JSON only):
-{"original":["word1","word2"],"expanded":["synonym1","synonym2","related1"]}
-
-Your response:`;
+Your JSON array:`;
 
   const requestUrl = `${endpoint}/api/generate`;
   const requestBody = {
@@ -162,8 +156,9 @@ Your response:`;
     prompt: prompt,
     stream: false,
     options: {
-      temperature: 0.3, // Low temperature for consistent output
-      num_predict: 200  // Limit response length
+      temperature: 0.2,   // Very low for consistent output
+      num_predict: 150,   // Enough for ~15-20 keywords in array format
+      stop: ["\n\n", "```"]  // Stop at double newline or code block start
     }
   };
 
@@ -225,86 +220,117 @@ Your response:`;
 
 /**
  * Parse LLM response and extract keywords
- * Handles various edge cases: markdown wrappers, malformed JSON, etc.
+ * Handles: simple arrays, object format, markdown wrappers, malformed JSON
  */
 function parseKeywordResponse(responseText: string, originalTokens: string[]): string[] {
   let cleanedText = responseText.trim();
 
   // Remove markdown code blocks if present
-  // Handle: ```json ... ``` or ``` ... ``` or ```language ... ```
   const codeBlockMatch = cleanedText.match(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/);
   if (codeBlockMatch) {
     cleanedText = codeBlockMatch[1].trim();
     logger.trace('parseKeywordResponse', 'Extracted from code block', { cleanedText });
   }
 
-  // Remove any leading/trailing non-JSON characters
+  // Try to find JSON array first (new simpler format)
+  const arrayStart = cleanedText.indexOf('[');
+  const arrayEnd = cleanedText.lastIndexOf(']');
+  
+  if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
+    const arrayText = cleanedText.substring(arrayStart, arrayEnd + 1);
+    try {
+      const parsed = JSON.parse(arrayText);
+      if (Array.isArray(parsed)) {
+        const allKeywords = new Set<string>();
+        originalTokens.forEach(t => allKeywords.add(t.toLowerCase()));
+        
+        parsed.forEach((k: unknown) => {
+          if (typeof k === 'string' && k.length >= 2) {
+            const cleaned = k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (cleaned.length >= 2) {
+              allKeywords.add(cleaned);
+            }
+          }
+        });
+        
+        const result = Array.from(allKeywords);
+        logger.debug('parseKeywordResponse', '✅ Parsed array format', { 
+          original: originalTokens,
+          expanded: result.length - originalTokens.length,
+          total: result.length
+        });
+        return result;
+      }
+    } catch {
+      // Fall through to object format
+    }
+  }
+
+  // Try object format (legacy)
   const jsonStart = cleanedText.indexOf('{');
   const jsonEnd = cleanedText.lastIndexOf('}');
   
   if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
     cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
-  }
-
-  try {
-    const parsed: KeywordExpansionResponse = JSON.parse(cleanedText);
     
-    // Combine original and expanded, deduplicate, filter
-    const allKeywords = new Set<string>();
-    
-    // Add original tokens first
-    originalTokens.forEach(t => allKeywords.add(t.toLowerCase()));
-    
-    // Add parsed original (in case LLM understood differently)
-    if (Array.isArray(parsed.original)) {
-      parsed.original.forEach(k => {
-        if (typeof k === 'string' && k.length > 0) {
-          allKeywords.add(k.toLowerCase().trim());
-        }
-      });
-    }
-    
-    // Add expanded keywords
-    if (Array.isArray(parsed.expanded)) {
-      parsed.expanded.forEach(k => {
-        if (typeof k === 'string' && k.length > 0) {
-          // Clean up and validate each keyword
-          const cleaned = k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-          if (cleaned.length >= 2) { // Skip single-char keywords
-            allKeywords.add(cleaned);
+    try {
+      const parsed: KeywordExpansionResponse = JSON.parse(cleanedText);
+      const allKeywords = new Set<string>();
+      originalTokens.forEach(t => allKeywords.add(t.toLowerCase()));
+      
+      if (Array.isArray(parsed.original)) {
+        parsed.original.forEach(k => {
+          if (typeof k === 'string' && k.length > 0) {
+            allKeywords.add(k.toLowerCase().trim());
           }
-        }
-      });
-    }
-
-    const result = Array.from(allKeywords);
-    logger.debug('parseKeywordResponse', '✅ Parsed keywords', { 
-      original: originalTokens,
-      expanded: result.length - originalTokens.length,
-      total: result.length
-    });
-
-    return result;
-
-  } catch (parseError) {
-    logger.warn('parseKeywordResponse', '⚠️ JSON parse failed, falling back to regex extraction', {
-      error: parseError,
-      rawResponse: cleanedText.substring(0, 300)
-    });
-
-    // Fallback: extract quoted strings that look like keywords
-    const quotedStrings = cleanedText.match(/"([a-zA-Z0-9]+)"/g) || [];
-    const extractedKeywords = new Set<string>(originalTokens);
-    
-    quotedStrings.forEach(qs => {
-      const keyword = qs.replace(/"/g, '').toLowerCase();
-      if (keyword.length >= 2) {
-        extractedKeywords.add(keyword);
+        });
       }
-    });
+      
+      if (Array.isArray(parsed.expanded)) {
+        parsed.expanded.forEach(k => {
+          if (typeof k === 'string' && k.length > 0) {
+            const cleaned = k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (cleaned.length >= 2) {
+              allKeywords.add(cleaned);
+            }
+          }
+        });
+      }
 
-    return Array.from(extractedKeywords);
+      const result = Array.from(allKeywords);
+      logger.debug('parseKeywordResponse', '✅ Parsed object format', { 
+        original: originalTokens,
+        expanded: result.length - originalTokens.length,
+        total: result.length
+      });
+      return result;
+    } catch {
+      // Fall through to regex extraction
+    }
   }
+
+  // Fallback: extract quoted strings that look like keywords
+  logger.debug('parseKeywordResponse', '⚠️ Using regex fallback extraction', {
+    rawResponse: responseText.substring(0, 200)
+  });
+  
+  const quotedStrings = responseText.match(/"([a-zA-Z0-9]+)"/g) || [];
+  const extractedKeywords = new Set<string>(originalTokens);
+  
+  quotedStrings.forEach(qs => {
+    const keyword = qs.replace(/"/g, '').toLowerCase();
+    if (keyword.length >= 2) {
+      extractedKeywords.add(keyword);
+    }
+  });
+
+  logger.debug('parseKeywordResponse', '✅ Regex extracted keywords', { 
+    original: originalTokens,
+    extracted: extractedKeywords.size - originalTokens.length,
+    total: extractedKeywords.size
+  });
+
+  return Array.from(extractedKeywords);
 }
 
 /**
