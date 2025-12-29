@@ -160,11 +160,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       margin-right: 12px;
       display: block;
       flex-shrink: 0;
-    }
-    .logo svg {
-      width: 100%;
-      height: 100%;
-      display: block;
+      object-fit: contain;
     }
     .search-input {
       flex: 1;
@@ -404,17 +400,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     const header = document.createElement('div');
     header.className = 'header';
     
-    const logo = document.createElement('span');
+    const logo = document.createElement('img');
     logo.className = 'logo';
-    // Inline SVG for the icon (v11 design - simplified for overlay)
-    logo.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="28" height="28">
-      <circle cx="24" cy="24" r="21.5" fill="#1e3a8a"/>
-      <path d="M 10.5 12.5 C 10.5 7, 22 4, 30 5.5 C 38 8, 41 15, 38 21 C 35 27, 28 27.5, 24 27.5 C 20 27.5, 13.5 28.5, 11 34 C 8.5 39.5, 14 45, 24 44 C 32 43, 37.5 39, 37.5 35" fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round"/>
-      <circle cx="10.5" cy="12.5" r="2.8" fill="#ffffff"/>
-      <circle cx="10.5" cy="12.5" r="1.6" fill="#3b82f6"/>
-      <circle cx="37.5" cy="35" r="2.8" fill="#ffffff"/>
-      <circle cx="37.5" cy="35" r="1.6" fill="#3b82f6"/>
-    </svg>`;
+    logo.src = chrome.runtime.getURL('../assets/icon-48.svg');
+    logo.alt = 'SmrutiCortex';
     
     inputEl = document.createElement('input');
     inputEl.type = 'text';
