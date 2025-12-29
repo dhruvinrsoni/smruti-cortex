@@ -3,16 +3,20 @@
  * 
  * ⚠️ STATUS: NOT IMPLEMENTED (Placeholder only)
  * 
+ * Weight is DYNAMIC (controlled by scorer-manager.ts):
+ * - ollamaEnabled=true → weight=0.4 (high priority for AI matches)
+ * - ollamaEnabled=false → weight=0 (disabled)
+ * 
  * Current state:
- * - Weight: 0 (disabled, no contribution to search)
- * - Always returns 0 (no Ollama calls)
+ * - Always returns 0 (no Ollama calls yet)
  * - No embeddings generated or compared
+ * - Acts as placeholder for future implementation
  * 
  * What needs to be done:
  * 1. Generate embeddings during indexing (store in IndexedDB)
  * 2. Generate query embedding at search time (async Ollama call)
  * 3. Calculate cosine similarity between query and stored embeddings
- * 4. Enable scorer with weight > 0
+ * 4. Return similarity score (0-1)
  * 5. Add logging: "🤖 AI scoring: similarity=0.85 for 'page title'"
  * 
  * Why your "war" search didn't find "fight":
@@ -34,7 +38,7 @@ const COMPONENT = 'EmbeddingScorer';
  */
 const embeddingScorer: Scorer = {
   name: 'embedding',
-  weight: 0, // ❌ DISABLED - No AI scoring happening
+  weight: 0.4, // Base weight (dynamically set to 0 by scorer-manager if AI disabled)
 
   score: (_item, _query, _allItems) => {
     // When AI is implemented, this will log:
