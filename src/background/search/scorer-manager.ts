@@ -6,6 +6,7 @@ import urlScorer from './scorers/url-scorer';
 import recencyScorer from './scorers/recency-scorer';
 import visitCountScorer from './scorers/visitcount-scorer';
 import metaScorer from './scorers/meta-scorer';
+import embeddingScorer from './scorers/embedding-scorer';
 import aiScorer from './scorers/ai-scorer-placeholder';
 
 // Domain familiarity scorer - learns from user behavior patterns
@@ -37,7 +38,8 @@ export function getAllScorers(): Scorer[] {
         recencyScorer,
         visitCountScorer,
         metaScorer,
+        embeddingScorer,         // AI-powered semantic search (local Ollama)
         domainFamiliarityScorer, // Organic biasing based on user behavior
-        aiScorer,   // placeholder (weight = 0)
+        aiScorer,                // placeholder (weight = 0)
     ];
 }
