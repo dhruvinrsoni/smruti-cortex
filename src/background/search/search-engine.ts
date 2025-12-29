@@ -8,8 +8,7 @@ import { browserAPI } from '../../core/helpers';
 import { Logger } from '../../core/logger';
 import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
-import { getOllamaService } from '../ollama-service';
-import { generateItemEmbedding } from './scorers/embedding-scorer';
+import { expandQueryKeywords } from '../ai-keyword-expander';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     const logger = Logger.forComponent('SearchEngine');
@@ -21,49 +20,48 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         return [];
     }
 
-    const tokens = tokenize(q);
-    logger.trace('runSearch', 'Query tokens:', tokens);
+    // Original tokens from query
+    const originalTokens = tokenize(q);
+    logger.trace('runSearch', 'Original query tokens:', originalTokens);
 
     // Ensure SettingsManager is initialized before reading settings
     await SettingsManager.init();
     
-    // Check if AI embeddings are enabled
+    // Check if AI keyword expansion is enabled
     const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') || false;
-    const ollamaEndpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
-    const ollamaModel = SettingsManager.getSetting('ollamaModel') || 'embeddinggemma:300m';
+    
+    // AI-expanded tokens (includes synonyms, related terms)
+    // This is ONE LLM call, not 600+ embeddings!
+    let searchTokens: string[] = originalTokens;
+    let aiExpanded = false;
     
     if (ollamaEnabled) {
-        // AI search is now ACTIVE
-        logger.info('runSearch', `🤖 AI search ACTIVE: model=${ollamaModel} | endpoint=${ollamaEndpoint}`);
+        logger.info('runSearch', `🤖 AI keyword expansion ACTIVE`);
+        try {
+            const expandedTokens = await expandQueryKeywords(q);
+            if (expandedTokens.length > originalTokens.length) {
+                searchTokens = expandedTokens;
+                aiExpanded = true;
+                logger.info('runSearch', `✅ Expanded "${q}" → ${searchTokens.length} keywords`, {
+                    original: originalTokens,
+                    expanded: searchTokens.filter(t => !originalTokens.includes(t))
+                });
+            }
+        } catch (error) {
+            logger.warn('runSearch', `⚠️ Keyword expansion failed, using original query`, { error });
+        }
     } else {
-        logger.info('runSearch', `🔍 Keyword search (AI disabled in settings, embedding scorer weight=0)`);
+        logger.info('runSearch', `🔍 Keyword search (AI disabled)`);
     }
 
     const scorers = getAllScorers();
     logger.trace('runSearch', 'Loaded scorers:', scorers.length);
 
-    // Generate query embedding if AI is enabled
-    const context: ScorerContext = {};
-    if (ollamaEnabled) {
-        try {
-            logger.info('runSearch', '🤖 Generating query embedding...');
-            const ollamaService = getOllamaService({
-                endpoint: ollamaEndpoint,
-                model: ollamaModel,
-                timeout: SettingsManager.getSetting('ollamaTimeout') || 2000
-            });
-            const result = await ollamaService.generateEmbedding(q);
-            
-            if (result.success && result.embedding.length > 0) {
-                context.queryEmbedding = result.embedding;
-                logger.info('runSearch', `✅ Query embedding ready (${result.duration}ms, ${result.embedding.length} dimensions)`);
-            } else {
-                logger.warn('runSearch', `⚠️ Query embedding failed: ${result.error || 'unknown error'} - using keyword search only`);
-            }
-        } catch (error) {
-            logger.error('runSearch', '❌ Query embedding error:', error);
-        }
-    }
+    // Context for scorers - pass expanded tokens
+    const context: ScorerContext = {
+        expandedTokens: searchTokens,
+        aiExpanded: aiExpanded
+    };
 
     // Get all indexed items
     const items = await getAllIndexedItems();
@@ -97,80 +95,47 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     logger.trace('runSearch', 'Processing items for scoring');
     const results: Array<{ item: IndexedItem; finalScore: number; keywordMatch: boolean; aiMatch: boolean }> = [];
 
-    // Generate embeddings for items that don't have them (if AI enabled and query embedding available)
-    const shouldGenerateItemEmbeddings = ollamaEnabled && context.queryEmbedding && context.queryEmbedding.length > 0;
-    if (shouldGenerateItemEmbeddings) {
-        logger.info('runSearch', '🤖 Generating embeddings for items without them...');
-        const embeddingPromises: Promise<void>[] = [];
-        let generatedCount = 0;
-        
-        for (const item of items) {
-            if (!item.embedding || item.embedding.length === 0) {
-                embeddingPromises.push(
-                    generateItemEmbedding(item).then(embedding => {
-                        if (embedding.length > 0) {
-                            item.embedding = embedding;
-                            generatedCount++;
-                        }
-                    })
-                );
-                
-                // Batch generation to avoid overwhelming Ollama
-                if (embeddingPromises.length >= 10) {
-                    await Promise.all(embeddingPromises);
-                    embeddingPromises.length = 0;
-                    logger.trace('runSearch', `Generated ${generatedCount} item embeddings so far...`);
-                }
-            }
-        }
-        
-        // Wait for remaining embeddings
-        if (embeddingPromises.length > 0) {
-            await Promise.all(embeddingPromises);
-        }
-        
-        if (generatedCount > 0) {
-            logger.info('runSearch', `✅ Generated ${generatedCount} item embeddings`);
-        }
-    }
-
+    // NO MORE 600+ EMBEDDINGS! Use keyword matching with expanded tokens instead
     for (const item of items) {
-        // More flexible matching: ANY token match (not ALL tokens required)
-        const haystack = (item.title + ' ' + item.url + ' ' + item.hostname).toLowerCase();
-        const hasAnyMatch = tokens.some(token => haystack.includes(token));
+        // Match against expanded tokens (includes AI-generated synonyms)
+        const haystack = (item.title + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '')).toLowerCase();
+        const matchedTokens = searchTokens.filter(token => haystack.includes(token));
+        const hasAnyMatch = matchedTokens.length > 0;
+        
+        // Track if match came from AI-expanded keywords
+        const aiOnlyTokens = searchTokens.filter(t => !originalTokens.includes(t));
+        const hasAiMatch = aiExpanded && aiOnlyTokens.some(t => haystack.includes(t));
 
         // Calculate score using all scorers
         let score = 0;
-        let aiScore = 0;
-        let keywordScore = 0;
         const scorerDetails: Array<{ name: string; score: number; weight: number }> = [];
         
         for (const scorer of scorers) {
             const scorerScore = scorer.weight * scorer.score(item, q, items, context);
             score += scorerScore;
             scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
-            
-            // Track AI vs keyword contributions
-            if (scorer.name === 'embedding' && scorerScore > 0) {
-                aiScore += scorerScore;
-            } else if (scorerScore > 0) {
-                keywordScore += scorerScore;
-            }
+        }
+
+        // Boost score for AI-expanded keyword matches
+        if (hasAiMatch && score > 0) {
+            score *= 1.2; // 20% boost for AI-discovered matches
         }
 
         logger.trace('runSearch', `Item scored: ${item.title.substring(0, 50)}...`, {
             url: item.url,
             totalScore: score,
+            matchedTokens,
+            aiMatch: hasAiMatch,
             scorerBreakdown: scorerDetails
         });
 
-        // Include items with meaningful scores OR AI matches (even without keyword match)
+        // Include items with meaningful scores
         if (score > 0.01) {
             results.push({ 
                 item, 
                 finalScore: score,
                 keywordMatch: hasAnyMatch,
-                aiMatch: aiScore > 0
+                aiMatch: hasAiMatch
             });
         }
     }
