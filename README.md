@@ -38,6 +38,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | ⚡ **Instant Search** | Results < 50ms as you type |
 | ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
 | 🎯 **Smart Ranking** | Recency + frequency scoring |
+| 🤖 **AI Search** | Optional semantic search via local Ollama |
 | 🔍 **Omnibox** | Type `sc ` in address bar |
 | 📋 **Copy Links** | `Ctrl+M` for markdown |
 | 🎨 **Clean UI** | Minimal, distraction-free |
@@ -106,6 +107,31 @@ src/
 ├── core/            # Shared utilities
 └── shared/          # UI abstractions
 ```
+
+### 🤖 AI Search Setup (Optional)
+
+SmrutiCortex supports **semantic AI search** using local [Ollama](https://ollama.ai). This is 100% local — no cloud, no tracking.
+
+**Setup:**
+```bash
+# 1. Install Ollama (https://ollama.ai)
+# 2. Pull an embedding model
+ollama pull embeddinggemma:300m
+
+# 3. Enable CORS for Chrome extension (REQUIRED)
+# Windows (PowerShell - run as admin):
+setx OLLAMA_ORIGINS "*"
+# Then restart Ollama
+
+# Linux/Mac:
+export OLLAMA_ORIGINS="*"
+# Or add to ~/.bashrc / ~/.zshrc
+
+# Docker:
+docker run -e OLLAMA_ORIGINS="*" -p 11434:11434 ollama/ollama
+```
+
+**Enable in SmrutiCortex:** Settings → AI Integration → Enable AI search
 
 **Test coverage report** is generated in `coverage/` folder after running `npm run test:coverage`. Open `coverage/index.html` in a browser to see detailed coverage.
 

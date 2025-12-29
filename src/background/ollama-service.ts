@@ -218,12 +218,32 @@ export class OllamaService {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'No error details');
+        
+        // Provide helpful error message for common issues
+        let errorMsg = `Ollama API error: ${response.status} ${response.statusText}`;
+        let helpText = '';
+        
+        if (response.status === 403) {
+          // CORS issue - Ollama is blocking the extension origin
+          helpText = 'CORS blocked. Set OLLAMA_ORIGINS=* environment variable and restart Ollama.';
+          logger.warn('generateEmbedding', '🔒 CORS BLOCKED: Ollama is rejecting requests from Chrome extensions');
+          logger.info('generateEmbedding', '💡 FIX: Set environment variable OLLAMA_ORIGINS=* and restart Ollama');
+          logger.debug('generateEmbedding', '📖 Instructions:', {
+            windows: 'setx OLLAMA_ORIGINS "*" then restart Ollama',
+            linux: 'export OLLAMA_ORIGINS="*" or add to ~/.bashrc',
+            mac: 'launchctl setenv OLLAMA_ORIGINS "*" or add to ~/.zshrc',
+            docker: 'docker run -e OLLAMA_ORIGINS="*" ...'
+          });
+        }
+        
         logger.debug('generateEmbedding', '❌ Ollama API returned error', {
           status: response.status,
           statusText: response.statusText,
-          errorBody: errorText
+          errorBody: errorText,
+          helpText
         });
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText} - ${errorText}`);
+        
+        throw new Error(helpText ? `${errorMsg} - ${helpText}` : `${errorMsg} - ${errorText}`);
       }
 
       const data = await response.json();

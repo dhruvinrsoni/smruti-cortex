@@ -13,7 +13,7 @@ import { generateItemEmbedding } from './scorers/embedding-scorer';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     const logger = Logger.forComponent('SearchEngine');
-    logger.debug('runSearch', 'Search called with query:', query);
+    logger.trace('runSearch', 'Search called with query:', query);
 
     const q = query.trim().toLowerCase();
     if (!q) {
@@ -22,7 +22,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     }
 
     const tokens = tokenize(q);
-    logger.debug('runSearch', 'Query tokens:', tokens);
+    logger.trace('runSearch', 'Query tokens:', tokens);
 
     // Ensure SettingsManager is initialized before reading settings
     await SettingsManager.init();
@@ -94,7 +94,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         return fallbackItems;
     }
 
-    logger.debug('runSearch', 'Processing items for scoring');
+    logger.trace('runSearch', 'Processing items for scoring');
     const results: Array<{ item: IndexedItem; finalScore: number; keywordMatch: boolean; aiMatch: boolean }> = [];
 
     // Generate embeddings for items that don't have them (if AI enabled and query embedding available)
@@ -119,7 +119,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 if (embeddingPromises.length >= 10) {
                     await Promise.all(embeddingPromises);
                     embeddingPromises.length = 0;
-                    logger.debug('runSearch', `Generated ${generatedCount} item embeddings so far...`);
+                    logger.trace('runSearch', `Generated ${generatedCount} item embeddings so far...`);
                 }
             }
         }
@@ -158,7 +158,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             }
         }
 
-        logger.debug('runSearch', `Item scored: ${item.title.substring(0, 50)}...`, {
+        logger.trace('runSearch', `Item scored: ${item.title.substring(0, 50)}...`, {
             url: item.url,
             totalScore: score,
             scorerBreakdown: scorerDetails
@@ -180,10 +180,11 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const aiOnlyMatches = results.filter(r => r.aiMatch && !r.keywordMatch).length;
     const hybridMatches = results.filter(r => r.aiMatch && r.keywordMatch).length;
 
-    logger.debug('runSearch', `Found ${results.length} matching items before sorting`, {
+    logger.debug('runSearch', `Match summary: ${results.length} items passed threshold`, {
         keywordOnly: keywordMatches - hybridMatches,
         aiOnly: aiOnlyMatches,
-        hybrid: hybridMatches
+        hybrid: hybridMatches,
+        total: results.length
     });
 
     // Sort by score (highest first)
@@ -203,7 +204,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         }
     }
 
-    logger.debug('runSearch', 'Diversification completed', {
+    logger.trace('runSearch', 'Diversification completed', {
         originalResults: results.length,
         diversifiedResults: diversified.length,
         domainDistribution: Object.fromEntries(domainCount.entries())
