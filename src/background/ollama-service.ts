@@ -51,7 +51,7 @@ export class OllamaService {
     this.config = {
       endpoint: config?.endpoint || 'http://localhost:11434',
       model: config?.model || 'embeddinggemma:300m',
-      timeout: config?.timeout || 2000,     // 2s max
+      timeout: config?.timeout || 10000,    // 10s max (first request needs time for model loading)
       maxRetries: config?.maxRetries || 1
     };
 
@@ -205,6 +205,9 @@ export class OllamaService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
+      logger.debug('generateEmbedding', `⏱️ Sending POST request (timeout: ${this.config.timeout}ms)...`);
+      const fetchStartTime = Date.now();
+      
       const response = await fetch(requestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -213,8 +216,9 @@ export class OllamaService {
       });
 
       clearTimeout(timeoutId);
+      const fetchDuration = Date.now() - fetchStartTime;
 
-      logger.trace('generateEmbedding', `Response status: ${response.status} ${response.statusText}`);
+      logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'No error details');
@@ -246,8 +250,13 @@ export class OllamaService {
         throw new Error(helpText ? `${errorMsg} - ${helpText}` : `${errorMsg} - ${errorText}`);
       }
 
+      logger.debug('generateEmbedding', '📄 Parsing JSON response...');
+      const parseStartTime = Date.now();
       const data = await response.json();
+      const parseDuration = Date.now() - parseStartTime;
       const duration = Date.now() - startTime;
+
+      logger.debug('generateEmbedding', `✅ JSON parsed in ${parseDuration}ms`);
 
       // /api/embed returns { embeddings: number[][] } - take first embedding
       const embedding = data.embeddings?.[0] || [];
@@ -280,12 +289,22 @@ export class OllamaService {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       const isTimeout = errorMsg.includes('abort');
       
-      logger.debug('generateEmbedding', '❌ Embedding generation failed', {
-        error: errorMsg,
-        isTimeout,
-        durationMs: duration,
-        configuredTimeout: this.config.timeout
-      });
+      if (isTimeout) {
+        logger.warn('generateEmbedding', `⏱️ REQUEST TIMEOUT after ${duration}ms (limit: ${this.config.timeout}ms)`);
+        logger.info('generateEmbedding', '💡 First embedding may take 5-10s for model loading. Try increasing timeout in settings.');
+        logger.debug('generateEmbedding', 'Timeout details', {
+          durationMs: duration,
+          configuredTimeout: this.config.timeout,
+          suggestion: 'Increase ollamaTimeout in settings to 10000ms or higher'
+        });
+      } else {
+        logger.debug('generateEmbedding', '❌ Embedding generation failed', {
+          error: errorMsg,
+          isTimeout,
+          durationMs: duration,
+          configuredTimeout: this.config.timeout
+        });
+      }
       logger.info('generateEmbedding', `❌ Embedding failed after ${duration}ms: ${errorMsg}`);
 
       return {
