@@ -73,10 +73,17 @@ export class SettingsManager {
         this.initialized = true;
 
         try {
+            this.logger.info('init', '🔄 Loading settings from storage...');
             // Load stored settings in background (non-blocking for UI)
             const stored = await this.loadFromStorage();
+            this.logger.info('init', '📦 Loaded from storage:', JSON.stringify(stored));
+            
             if (stored) {
+                this.logger.info('init', '🔀 Merging with defaults...');
                 this.settings = { ...this.settings, ...stored };
+                this.logger.info('init', '✅ Merged settings:', JSON.stringify(this.settings));
+            } else {
+                this.logger.info('init', '⚠️ No stored settings, using defaults:', JSON.stringify(this.settings));
             }
 
             // Ensure displayMode always defaults to list
@@ -84,10 +91,11 @@ export class SettingsManager {
 
             // Apply current settings (non-critical)
             await this.applySettings();
-            this.logger.debug('init', '✅ Settings loaded from storage');
+            this.logger.info('init', '✅ Settings initialized and applied');
         } catch (error) {
             // Already using defaults, just log the error
-            this.logger.warn('init', 'Using defaults, storage load failed:', error);
+            this.logger.error('init', '❌ Settings initialization failed:', error);
+            this.logger.info('init', '📋 Using defaults:', JSON.stringify(this.settings));
         }
     }
 
@@ -103,13 +111,16 @@ export class SettingsManager {
      */
     static async updateSettings(updates: Partial<AppSettings>): Promise<void> {
         try {
-            Logger.debug('[Settings] Updating settings:', updates);
+            this.logger.debug('updateSettings', '📝 Before update:', JSON.stringify(this.settings));
+            this.logger.info('updateSettings', '📝 Applying updates:', JSON.stringify(updates));
             this.settings = { ...this.settings, ...updates };
+            this.logger.info('updateSettings', '📝 After merge:', JSON.stringify(this.settings));
             await this.saveToStorage();
+            this.logger.info('updateSettings', '💾 Saved to storage');
             await this.applySettings();
-            Logger.info('[Settings] Settings updated successfully');
+            this.logger.info('updateSettings', '✅ Settings updated and applied successfully');
         } catch (error) {
-            Logger.error('[Settings] Failed to update settings:', error);
+            this.logger.error('updateSettings', '❌ Failed to update settings:', error);
             throw error;
         }
     }
@@ -125,7 +136,9 @@ export class SettingsManager {
      * Set specific setting value
      */
     static async setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> {
+        this.logger.info('setSetting', `Setting '${String(key)}' to:`, value);
         await this.updateSettings({ [key]: value });
+        this.logger.info('setSetting', `✅ '${String(key)}' saved. Current value:`, this.settings[key]);
     }
 
     /**
@@ -295,7 +308,38 @@ export class SettingsManager {
                 this.logger.debug('validateSettings', 'focusDelayMs validation failed, using default:', validated.focusDelayMs);
             }
 
-            // Future: validate other settings
+            // Validate Ollama settings
+            if (typeof settings.ollamaEnabled === 'boolean') {
+                validated.ollamaEnabled = settings.ollamaEnabled;
+                this.logger.debug('validateSettings', 'ollamaEnabled validated:', validated.ollamaEnabled);
+            } else {
+                validated.ollamaEnabled = false; // Default to disabled
+                this.logger.debug('validateSettings', 'ollamaEnabled not found, using default: false');
+            }
+
+            if (typeof settings.ollamaEndpoint === 'string' && settings.ollamaEndpoint.length > 0) {
+                validated.ollamaEndpoint = settings.ollamaEndpoint;
+                this.logger.debug('validateSettings', 'ollamaEndpoint validated:', validated.ollamaEndpoint);
+            } else {
+                validated.ollamaEndpoint = 'http://localhost:11434';
+                this.logger.debug('validateSettings', 'ollamaEndpoint not found, using default');
+            }
+
+            if (typeof settings.ollamaModel === 'string' && settings.ollamaModel.length > 0) {
+                validated.ollamaModel = settings.ollamaModel;
+                this.logger.debug('validateSettings', 'ollamaModel validated:', validated.ollamaModel);
+            } else {
+                validated.ollamaModel = 'embeddinggemma:300m';
+                this.logger.debug('validateSettings', 'ollamaModel not found, using default');
+            }
+
+            if (typeof settings.ollamaTimeout === 'number' && settings.ollamaTimeout >= 500 && settings.ollamaTimeout <= 5000) {
+                validated.ollamaTimeout = settings.ollamaTimeout;
+                this.logger.debug('validateSettings', 'ollamaTimeout validated:', validated.ollamaTimeout);
+            } else {
+                validated.ollamaTimeout = 2000;
+                this.logger.debug('validateSettings', 'ollamaTimeout not found, using default: 2000');
+            }
 
             this.logger.debug('validateSettings', 'Final validated settings:', validated);
             return validated;
