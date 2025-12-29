@@ -9,4 +9,5 @@ export interface IndexedItem {
     visitCount: number;
     lastVisit: number; // timestamp
     tokens: string[];  // tokenized text for search
+    embedding?: number[];  // AI embeddings (optional, generated on-demand)
 }

@@ -2,8 +2,12 @@
 
 import { IndexedItem } from '../background/schema';
 
+export interface ScorerContext {
+    queryEmbedding?: number[];  // Optional query embedding for AI scoring
+}
+
 export interface Scorer {
     name: string;                   // unique name
     weight: number;                 // 0–1 normalized weight
-    score: (item: IndexedItem, query: string, allItems?: IndexedItem[]) => number;
+    score: (item: IndexedItem, query: string, allItems?: IndexedItem[], context?: ScorerContext) => number;
 }
