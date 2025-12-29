@@ -30,7 +30,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const ollamaModel = SettingsManager.getSetting('ollamaModel') || 'embeddinggemma:300m';
     
     if (ollamaEnabled) {
-        logger.info('runSearch', `🤖 AI search enabled: model=${ollamaModel}, endpoint=${ollamaEndpoint}`);
+        // HONEST LOGGING: AI is configured but NOT implemented yet
+        logger.info('runSearch', `⚙️ AI configured (NOT ACTIVE): model=${ollamaModel} | endpoint=${ollamaEndpoint}`);
+        logger.info('runSearch', `⚠️ Embedding scorer disabled (weight=0) - using keyword search only`);
     } else {
         logger.info('runSearch', `🔍 Keyword search (AI disabled in settings)`);
     }
