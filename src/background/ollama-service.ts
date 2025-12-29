@@ -160,7 +160,8 @@ export class OllamaService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text().catch(() => 'No error details');
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
