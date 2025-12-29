@@ -26,19 +26,83 @@ export interface AppSettings {
     maxResults?: number;
 }
 
+/**
+ * Schema-driven setting definition
+ * Add new settings here - validation is automatic!
+ */
+interface SettingSchema<T> {
+    default: T;
+    validate?: (value: any) => boolean;
+    transform?: (value: any) => T;
+}
+
+/**
+ * SINGLE SOURCE OF TRUTH for all settings
+ * Adding a new setting = ONE entry here. That's it!
+ */
+const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSettings[K]> } = {
+    // Display settings
+    displayMode: {
+        default: DisplayMode.LIST,
+        validate: (val) => Object.values(DisplayMode).includes(val),
+    },
+    logLevel: {
+        default: 2, // INFO
+        validate: (val) => typeof val === 'number' && val >= 0 && val <= 4,
+    },
+    highlightMatches: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    focusDelayMs: {
+        default: 300,
+        validate: (val) => typeof val === 'number' && val >= 0 && val <= 2000,
+    },
+    
+    // Ollama AI settings
+    ollamaEnabled: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    ollamaEndpoint: {
+        default: 'http://localhost:11434',
+        validate: (val) => typeof val === 'string' && val.length > 0,
+    },
+    ollamaModel: {
+        default: 'embeddinggemma:300m',
+        validate: (val) => typeof val === 'string' && val.length > 0,
+    },
+    ollamaTimeout: {
+        default: 2000,
+        validate: (val) => typeof val === 'number' && val >= 500 && val <= 5000,
+    },
+    
+    // Future settings (placeholders)
+    theme: {
+        default: 'auto' as const,
+        validate: (val) => ['light', 'dark', 'auto'].includes(val),
+    },
+    maxResults: {
+        default: 100,
+        validate: (val) => typeof val === 'number' && val > 0 && val <= 1000,
+    },
+};
+
 export class SettingsManager {
     private static readonly STORAGE_KEY = 'smrutiCortexSettings';
-    private static settings: AppSettings = {
-        displayMode: DisplayMode.LIST, // Default to list
-        logLevel: 2, // INFO level
-        highlightMatches: true, // Enable match highlighting by default
-        focusDelayMs: 300, // Default to 300ms
-        // Ollama defaults (disabled by default for safety)
-        ollamaEnabled: false,
-        ollamaEndpoint: 'http://localhost:11434',
-        ollamaModel: 'embeddinggemma:300m',
-        ollamaTimeout: 2000, // 2 seconds max
-    };
+    
+    /**
+     * Get default settings from schema (computed once)
+     */
+    private static getDefaults(): AppSettings {
+        const defaults: any = {};
+        for (const [key, schema] of Object.entries(SETTINGS_SCHEMA)) {
+            defaults[key] = schema.default;
+        }
+        return defaults as AppSettings;
+    }
+    
+    private static settings: AppSettings = SettingsManager.getDefaults();
 
     private static initialized = false;
     private static _logger: ComponentLogger | null = null;
@@ -146,12 +210,7 @@ export class SettingsManager {
      */
     static async resetToDefaults(): Promise<void> {
         Logger.info('[Settings] Resetting to default settings');
-        this.settings = {
-            displayMode: DisplayMode.LIST,
-            logLevel: 2, // INFO level
-            highlightMatches: true,
-            focusDelayMs: 300,
-        };
+        this.settings = this.getDefaults();
         await this.saveToStorage();
         await this.applySettings();
     }
@@ -261,90 +320,39 @@ export class SettingsManager {
     }
 
     /**
-     * Validate settings object
+     * Validate settings object using schema
+     * ✅ AUTOMATIC: All settings validated based on SETTINGS_SCHEMA
+     * ✅ SCALABLE: Adding new settings = add to schema only
      */
     private static validateSettings(settings: any): AppSettings | null {
         try {
-            const validated: AppSettings = {
-                displayMode: DisplayMode.LIST,
-                logLevel: 2, // INFO level
-                highlightMatches: true,
-                focusDelayMs: 300,
-            };
+            const validated: any = {};
 
-            this.logger.debug('validateSettings', 'Validating settings object:', settings);
-            this.logger.debug('validateSettings', `DisplayMode values: ${Object.values(DisplayMode)}`);
-            this.logger.debug('validateSettings', `settings.displayMode type: ${typeof settings.displayMode}, value: ${settings.displayMode}`);
+            this.logger.debug('validateSettings', '🔍 Validating settings object');
 
-            // Validate displayMode
-            if (settings.displayMode && Object.values(DisplayMode).includes(settings.displayMode)) {
-                validated.displayMode = settings.displayMode;
-                this.logger.debug('validateSettings', 'DisplayMode validated successfully:', validated.displayMode);
-            } else {
-                this.logger.debug('validateSettings', 'DisplayMode validation failed, using default:', validated.displayMode);
+            // Iterate through schema and validate each setting
+            for (const [key, schema] of Object.entries(SETTINGS_SCHEMA)) {
+                const value = settings[key];
+                
+                // If value exists and passes validation, use it
+                if (value !== undefined && (!schema.validate || schema.validate(value))) {
+                    validated[key] = schema.transform ? schema.transform(value) : value;
+                    this.logger.debug('validateSettings', `✅ ${key}:`, value);
+                } else {
+                    // Use default if missing or invalid
+                    validated[key] = schema.default;
+                    if (value !== undefined) {
+                        this.logger.debug('validateSettings', `⚠️ ${key}: invalid, using default:`, schema.default);
+                    } else {
+                        this.logger.debug('validateSettings', `ℹ️ ${key}: not found, using default:`, schema.default);
+                    }
+                }
             }
 
-            // Validate logLevel
-            if (typeof settings.logLevel === 'number' && settings.logLevel >= 0 && settings.logLevel <= 4) {
-                validated.logLevel = settings.logLevel;
-                this.logger.debug('validateSettings', 'LogLevel validated successfully:', validated.logLevel);
-            } else {
-                this.logger.debug('validateSettings', 'LogLevel validation failed, using default:', validated.logLevel);
-            }
-
-            // Validate highlightMatches
-            if (typeof settings.highlightMatches === 'boolean') {
-                validated.highlightMatches = settings.highlightMatches;
-                this.logger.debug('validateSettings', 'HighlightMatches validated successfully:', validated.highlightMatches);
-            } else {
-                this.logger.debug('validateSettings', 'HighlightMatches validation failed, using default:', validated.highlightMatches);
-            }
-
-            // Validate focusDelayMs
-            if (typeof settings.focusDelayMs === 'number' && settings.focusDelayMs >= 0 && settings.focusDelayMs <= 2000) {
-                validated.focusDelayMs = settings.focusDelayMs;
-                this.logger.debug('validateSettings', 'focusDelayMs validated successfully:', validated.focusDelayMs);
-            } else {
-                this.logger.debug('validateSettings', 'focusDelayMs validation failed, using default:', validated.focusDelayMs);
-            }
-
-            // Validate Ollama settings
-            if (typeof settings.ollamaEnabled === 'boolean') {
-                validated.ollamaEnabled = settings.ollamaEnabled;
-                this.logger.debug('validateSettings', 'ollamaEnabled validated:', validated.ollamaEnabled);
-            } else {
-                validated.ollamaEnabled = false; // Default to disabled
-                this.logger.debug('validateSettings', 'ollamaEnabled not found, using default: false');
-            }
-
-            if (typeof settings.ollamaEndpoint === 'string' && settings.ollamaEndpoint.length > 0) {
-                validated.ollamaEndpoint = settings.ollamaEndpoint;
-                this.logger.debug('validateSettings', 'ollamaEndpoint validated:', validated.ollamaEndpoint);
-            } else {
-                validated.ollamaEndpoint = 'http://localhost:11434';
-                this.logger.debug('validateSettings', 'ollamaEndpoint not found, using default');
-            }
-
-            if (typeof settings.ollamaModel === 'string' && settings.ollamaModel.length > 0) {
-                validated.ollamaModel = settings.ollamaModel;
-                this.logger.debug('validateSettings', 'ollamaModel validated:', validated.ollamaModel);
-            } else {
-                validated.ollamaModel = 'embeddinggemma:300m';
-                this.logger.debug('validateSettings', 'ollamaModel not found, using default');
-            }
-
-            if (typeof settings.ollamaTimeout === 'number' && settings.ollamaTimeout >= 500 && settings.ollamaTimeout <= 5000) {
-                validated.ollamaTimeout = settings.ollamaTimeout;
-                this.logger.debug('validateSettings', 'ollamaTimeout validated:', validated.ollamaTimeout);
-            } else {
-                validated.ollamaTimeout = 2000;
-                this.logger.debug('validateSettings', 'ollamaTimeout not found, using default: 2000');
-            }
-
-            this.logger.debug('validateSettings', 'Final validated settings:', validated);
-            return validated;
+            this.logger.debug('validateSettings', '✅ Validation complete:', validated);
+            return validated as AppSettings;
         } catch (error) {
-            this.logger.warn('validateSettings', 'Settings validation failed:', error);
+            this.logger.warn('validateSettings', '❌ Validation failed:', error);
             return null;
         }
     }
