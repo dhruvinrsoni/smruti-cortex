@@ -670,12 +670,14 @@ The icon must look excellent on:
 
 ```
 src/assets/
-├── icon.svg           # Master source (1024×1024 viewBox)
-├── icon-16.svg        # 16px optimized variant (if different)
-├── icon-16.png        # Export for manifest
-├── icon-48.png        # Export for manifest
-├── icon-128.png       # Export for store
-└── icon-512.png       # Marketing use (optional)
+├── icon-1024.svg      # Master source (1024×1024)
+├── icon-512.svg       # Marketing/promotional
+├── icon-256.svg       # High-DPI displays
+├── icon-128.svg       # Chrome Web Store hero
+├── icon-48.svg        # Extension management
+├── icon-16.svg        # Toolbar icon
+├── [PNG exports for each size]
+└── [Version history files]
 ```
 
 ### Manifest.json Update
@@ -683,11 +685,27 @@ src/assets/
 ```json
 {
   "icons": {
-    "16": "assets/icon-16.png",
-    "48": "assets/icon-48.png",
-    "128": "assets/icon-128.png"
+    "16": "assets/icon-16.svg",
+    "48": "assets/icon-48.svg",
+    "128": "assets/icon-128.svg"
   }
 }
+```
+
+### Usage in Extension
+
+**Popup (popup.html):**
+```html
+<link rel="icon" type="image/svg+xml" href="../assets/icon-48.svg" />
+<img src="../assets/icon-48.svg" alt="SmrutiCortex" class="logo-icon" />
+```
+
+**Content Script Overlay (quick-search.ts):**
+```typescript
+// Inlined SVG for shadow DOM isolation
+logo.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- icon-48.svg content inlined -->
+</svg>`;
 ```
 
 ---
