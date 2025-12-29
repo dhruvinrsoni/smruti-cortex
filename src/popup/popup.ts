@@ -726,7 +726,7 @@ function initializePopup() {
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
-      ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') || 10000);
+      ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') || 30000);
     }
   }
 
@@ -861,8 +861,19 @@ function initializePopup() {
     if (ollamaTimeoutInput) {
       ollamaTimeoutInput.addEventListener('change', async () => {
         let val = parseInt(ollamaTimeoutInput.value);
-        if (isNaN(val) || val < 2000) {val = 2000;}  // Minimum 2s
-        if (val > 30000) {val = 30000;}  // Maximum 30s
+        
+        // Handle special cases
+        if (val === -1) {
+          // Infinite timeout (no timeout)
+          await SettingsManager.setSetting('ollamaTimeout', -1);
+          ollamaTimeoutInput.value = '-1';
+          showToast('Timeout disabled (infinite wait)');
+          return;
+        }
+        
+        // Validate range for non-infinite timeouts
+        if (isNaN(val) || val < 5000) {val = 5000;}  // Minimum 5s
+        if (val > 120000) {val = 120000;}  // Maximum 2min
         await SettingsManager.setSetting('ollamaTimeout', val);
         ollamaTimeoutInput.value = String(val);
         showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`);

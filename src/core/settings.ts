@@ -20,7 +20,7 @@ export interface AppSettings {
     ollamaEnabled?: boolean;      // Enable/disable Ollama integration (default: false)
     ollamaEndpoint?: string;      // Ollama API endpoint (default: 'http://localhost:11434')
     ollamaModel?: string;         // Ollama model to use (default: 'embeddinggemma:300m')
-    ollamaTimeout?: number;       // Max embedding generation time in ms (default: 10000 = 10s)
+    ollamaTimeout?: number;       // Max embedding generation time in ms (default: 30000 = 30s, -1 = infinite/no timeout)
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -73,8 +73,8 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
     ollamaTimeout: {
-        default: 10000,  // 10 seconds (first request needs time for model loading)
-        validate: (val) => typeof val === 'number' && val >= 500 && val <= 30000,  // Allow up to 30s
+        default: 30000,  // 30 seconds (generous for first-time model loading on slower systems)
+        validate: (val) => typeof val === 'number' && (val === -1 || (val >= 5000 && val <= 120000)),  // -1 = infinite, or 5s-120s
     },
     
     // Future settings (placeholders)

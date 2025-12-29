@@ -203,9 +203,15 @@ export class OllamaService {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+      
+      // Support infinite timeout: -1 or 0 = no timeout, positive = timeout value
+      const hasTimeout = this.config.timeout > 0;
+      const timeoutId = hasTimeout 
+        ? setTimeout(() => controller.abort(), this.config.timeout)
+        : undefined;
 
-      logger.debug('generateEmbedding', `⏱️ Sending POST request (timeout: ${this.config.timeout}ms)...`);
+      const timeoutDisplay = hasTimeout ? `${this.config.timeout}ms` : 'infinite';
+      logger.debug('generateEmbedding', `⏱️ Sending POST request (timeout: ${timeoutDisplay})...`);
       const fetchStartTime = Date.now();
       
       const response = await fetch(requestUrl, {
@@ -215,7 +221,9 @@ export class OllamaService {
         signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
+      if (hasTimeout && timeoutId) {
+        clearTimeout(timeoutId);
+      }
       const fetchDuration = Date.now() - fetchStartTime;
 
       logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
@@ -370,28 +378,29 @@ let ollamaService: OllamaService | null = null;
 
 /**
  * Get or create Ollama service instance
+ * Always updates config if provided (no recreation needed - fixes settings not updating bug)
  */
 export function getOllamaService(config?: Partial<OllamaConfig>): OllamaService {
-  if (!ollamaService || config) {
-    logger.info('getOllamaService', '🚀 Initializing Ollama service', {
-      endpoint: config?.endpoint || 'http://localhost:11434',
-      model: config?.model || 'embeddinggemma:300m',
-      timeout: config?.timeout || 2000
-    });
-    logger.debug('getOllamaService', '📋 Full initialization config', {
-      providedConfig: config,
-      defaults: {
-        endpoint: 'http://localhost:11434',
-        model: 'embeddinggemma:300m',
-        timeout: 2000,
-        maxRetries: 1
-      },
-      // PRIVACY: Emphasize local-only processing
-      privacyNote: 'All AI processing is LOCAL via Ollama - no cloud calls'
-    });
+  // Create if doesn't exist
+  if (!ollamaService) {
+    logger.info('getOllamaService', '🚀 Creating NEW Ollama service instance');
+    logger.debug('getOllamaService', '📋 Initial config', config || {});
     ollamaService = new OllamaService(config);
-  } else {
-    logger.trace('getOllamaService', 'Returning existing service instance');
+    return ollamaService;
   }
+  
+  // Update existing instance if config provided (CRITICAL: allows settings changes to take effect)
+  if (config) {
+    const oldTimeout = ollamaService.getConfig().timeout;
+    logger.debug('getOllamaService', '🔄 Updating existing service config', {
+      newConfig: config,
+      oldTimeout,
+      newTimeout: config.timeout
+    });
+    ollamaService.updateConfig(config);
+  } else {
+    logger.trace('getOllamaService', 'Returning existing service instance (no config update)');
+  }
+  
   return ollamaService;
 }

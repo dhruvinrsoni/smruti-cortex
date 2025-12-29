@@ -189,11 +189,11 @@
               </div>
             </label>
             <label class="setting-option">
-              <input type="number" id="modal-ollamaTimeout" min="2000" max="30000" step="1000" style="width:100px;">
+              <input type="number" id="modal-ollamaTimeout" min="-1" max="120000" step="5000" style="width:120px;">
               <span class="option-indicator"></span>
               <div class="option-content">
                 <strong>Timeout (ms)</strong>
-                <small>Max time for embedding (default: 10000 = 10s, first request may need more)</small>
+                <small>-1 = infinite (no timeout), default: 30000 (30s), max: 120000 (2min)</small>
               </div>
             </label>
           </div>
