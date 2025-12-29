@@ -420,7 +420,15 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'settings-btn';
     settingsBtn.title = 'Open settings';
-    settingsBtn.textContent = '⚙️';
+    
+    const settingsIcon = document.createElement('img');
+    settingsIcon.src = chrome.runtime.getURL('../assets/icon-settings.svg');
+    settingsIcon.alt = 'Settings';
+    settingsIcon.style.width = '16px';
+    settingsIcon.style.height = '16px';
+    settingsIcon.style.display = 'block';
+    settingsBtn.appendChild(settingsIcon);
+    
     settingsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       // Open the extension popup page in a new tab
