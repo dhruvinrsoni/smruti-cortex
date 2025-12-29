@@ -376,7 +376,7 @@ function initializePopup() {
         try {
           fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
         } catch {
-          fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
+          fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         }
 
         const details = document.createElement('div');
@@ -412,7 +412,7 @@ function initializePopup() {
         try {
           fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
         } catch {
-          fav.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23ccc'/%3E%3C/svg%3E";
+          fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         }
 
         const details = document.createElement('div');
