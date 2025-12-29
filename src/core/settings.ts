@@ -16,6 +16,11 @@ export interface AppSettings {
      * Delay in ms before focus shifts to results after typing (0 disables auto-focus)
      */
     focusDelayMs?: number;
+    // Ollama AI integration settings
+    ollamaEnabled?: boolean;      // Enable/disable Ollama integration (default: false)
+    ollamaEndpoint?: string;      // Ollama API endpoint (default: 'http://localhost:11434')
+    ollamaModel?: string;         // Ollama model to use (default: 'embeddinggemma:300m')
+    ollamaTimeout?: number;       // Max embedding generation time in ms (default: 2000)
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -28,6 +33,11 @@ export class SettingsManager {
         logLevel: 2, // INFO level
         highlightMatches: true, // Enable match highlighting by default
         focusDelayMs: 300, // Default to 300ms
+        // Ollama defaults (disabled by default for safety)
+        ollamaEnabled: false,
+        ollamaEndpoint: 'http://localhost:11434',
+        ollamaModel: 'embeddinggemma:300m',
+        ollamaTimeout: 2000, // 2 seconds max
     };
 
     private static initialized = false;
