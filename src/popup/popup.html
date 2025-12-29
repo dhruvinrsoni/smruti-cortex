@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>SmrutiCortex</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/icon-48.svg" />
   <link rel="preconnect" href="https://www.google.com" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="dns-prefetch" href="https://www.google.com" />
@@ -13,6 +14,7 @@
     .app{width:100%;height:100%;min-width:760px;min-height:468px;padding:16px;box-sizing:border-box;display:flex;flex-direction:column}
     .header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 4px}
     .brand{display:flex;gap:8px;align-items:center}
+    .logo-icon{width:32px;height:32px;display:block;flex-shrink:0}
     .title{font-weight:700;font-size:14px}
     .subtitle{font-size:11px;color:var(--muted);margin-top:2px}
     .controls{display:flex;gap:8px;align-items:center}
@@ -38,7 +40,7 @@
   <div id="app" class="app">
     <header class="header">
       <div class="brand">
-        <span class="logo-text">🧠</span>
+        <img src="../assets/icon-48.svg" alt="SmrutiCortex" class="logo-icon" />
         <div class="title-block">
           <div class="title">SmrutiCortex</div>
           <div class="subtitle">Instant browser memory search</div>
