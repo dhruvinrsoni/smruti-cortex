@@ -1,0 +1,26 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="cortexGrad128" x1="20" y1="20" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#3b82f6"/> <stop offset="100%" stop-color="#8b5cf6"/> </linearGradient>
+</defs>
+
+<g transform="translate(2,2)">
+    <path d="M88 88 L110 110 L122 108 L108 122 L118 132" stroke="#06b6d4" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter"/>
+
+    <g stroke="url(#cortexGrad128)" stroke-width="4" fill="none">
+        <circle cx="60" cy="60" r="48" stroke-width="6"/>
+        
+        <path d="M60 30 L86 45 L86 75 L60 90 L34 75 L34 45 Z" />
+        <path d="M60 30 L60 12 M86 45 L102 36 M86 75 L102 84 M60 90 L60 108 M34 75 L18 84 M34 45 L18 36" />
+    </g>
+
+    <g fill="url(#cortexGrad128)">
+        <circle cx="60" cy="30" r="6"/> <circle cx="86" cy="45" r="6"/>
+        <circle cx="86" cy="75" r="6"/> <circle cx="60" cy="90" r="6"/>
+        <circle cx="34" cy="75" r="6"/> <circle cx="34" cy="45" r="6"/>
+        <circle cx="60" cy="12" r="5"/> <circle cx="102" cy="36" r="5"/>
+        <circle cx="102" cy="84" r="5"/> <circle cx="60" cy="108" r="5"/>
+        <circle cx="18" cy="84" r="5"/> <circle cx="18" cy="36" r="5"/>
+    </g>
+</g>
+</svg>

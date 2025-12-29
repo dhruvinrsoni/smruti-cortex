@@ -1,0 +1,53 @@
+Create a Chrome extension icon set for "SmrutiCortex" - an ultra-fast, privacy-first browser history search engine.
+
+CONCEPT & PHILOSOPHY:
+- Smruti (स्मृति) = Sanskrit for "memory"
+- Cortex = Brain's intelligence center
+- Core purpose: Instant memory recall, like "Everything" search for browsers
+- Values: Minimalism, Privacy, Speed, Intelligence
+
+VISUAL METAPHOR:
+Combine these elements into a single, recognizable icon:
+1. Brain/neural network (memory/intelligence)
+2. Search/magnifying glass (discovery)
+3. Lightning bolt (speed < 50ms)
+4. Lock/shield (privacy-first, local-only)
+
+DESIGN REQUIREMENTS:
+- Style: Modern, flat design, minimal, geometric
+- Must work at 16x16px (clear even when tiny)
+- Recognizable in grayscale
+- No text/words in icon
+- Single focal point (brain OR search, not both cluttered)
+
+COLOR PALETTE:
+Primary: Deep blue (#3b82f6) - trust, intelligence
+Secondary: Purple (#8b5cf6) - creativity, memory
+Accent: Electric cyan (#06b6d4) - speed, technology
+Background: White or transparent
+
+DELIVERABLES (all PNG format):
+1. icon-16.png (16x16px) - Toolbar icon, simplest version
+2. icon-48.png (48x48px) - Extension management page
+3. icon-128.png (128x128px) - Chrome Web Store tile
+
+SUGGESTED CONCEPTS (choose one):
+A) Minimalist brain outline with search dot/pin inside
+B) Neural network nodes forming a magnifying glass shape
+C) Geometric brain made of interconnected search circles
+D) Lightning bolt integrated into brain cortex folds
+E) Abstract "memory chip" with search rays
+
+REFERENCE STYLE:
+Similar to: Notion (clean), Linear (geometric), Arc Browser (modern)
+Avoid: Overly detailed, gradient-heavy, corporate stock imagery
+
+TECHNICAL SPECS:
+- Format: PNG with transparency
+- Color depth: 32-bit RGBA
+- Compression: Optimized for web
+- Background: Transparent preferred, white acceptable
+- Edge treatment: 2px padding from canvas edge
+
+OUTPUT:
+Generate 3 sizes (16x, 48x, 128x) of the same icon design scaled appropriately, with details simplified at smaller sizes.

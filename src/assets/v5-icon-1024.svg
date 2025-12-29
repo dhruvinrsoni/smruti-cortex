@@ -1,0 +1,33 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="gradMasterCortex" x1="200" y1="200" x2="800" y2="800" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#3b82f6"/> <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="gradMasterBolt" x1="500" y1="500" x2="1000" y2="1000" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#06b6d4"/> <stop offset="30%" stop-color="#06b6d4"/> <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+    </linearGradient>
+</defs>
+
+<g transform="translate(30,30) scale(0.94)"> <g stroke-linecap="square" stroke-linejoin="miter">
+        <path d="M600 600 L 750 750 L 920 720 L 800 900 L 950 980" stroke="#06b6d4" stroke-width="80" opacity="0.3"/>
+        <path d="M600 600 L 750 750 L 920 720 L 800 900 L 950 980" stroke="#06b6d4" stroke-width="40"/>
+    </g>
+
+    <g stroke="url(#gradMasterCortex)" stroke-width="32" fill="none" stroke-linecap="round">
+        <path d="M450 100 C 250 100, 100 300, 150 550 C 180 700, 300 850, 500 880"/>
+        <path d="M550 100 C 750 120, 900 300, 880 550 C 860 700, 750 820, 600 850"/>
+        
+        <path d="M300 300 C 350 150, 650 150, 700 300 C 750 450, 650 650, 500 700 C 350 750, 200 650, 300 500 C 350 400, 550 400, 600 500"/>
+        <path d="M150 550 C 200 500, 300 500, 350 400"/>
+        <path d="M880 550 C 800 550, 700 450, 650 350"/>
+    </g>
+
+    <g fill="url(#gradMasterCortex)">
+        <circle cx="500" cy="500" r="50"/> <circle cx="300" cy="300" r="35"/> <circle cx="700" cy="300" r="35"/>
+        <circle cx="500" cy="700" r="35"/> <circle cx="350" cy="400" r="30"/>
+        <circle cx="650" cy="350" r="30"/> <circle cx="150" cy="550" r="30"/>
+    </g>
+    
+    <circle cx="600" cy="600" r="45" fill="#06b6d4"/>
+</g>
+</svg>

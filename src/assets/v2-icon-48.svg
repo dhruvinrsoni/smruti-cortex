@@ -1,0 +1,23 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="cortexGrad48" x1="5" y1="5" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#3b82f6"/>
+    <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+</defs>
+
+<g transform="translate(1,1)">
+    <path d="M34 34 L42 42 L46 41 L41 46 L47 52" stroke="#06b6d4" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+
+    <g stroke="url(#cortexGrad48)" stroke-width="2.5" fill="none">
+        <circle cx="22" cy="22" r="18" stroke-width="3"/>
+        
+        <path d="M22 8 L22 36 M8 22 L36 22 M12 12 L32 32 M32 12 L12 32"/>
+    </g>
+
+    <g fill="url(#cortexGrad48)">
+        <circle cx="22" cy="8" r="3"/> <circle cx="36" cy="22" r="3"/>
+        <circle cx="22" cy="36" r="3"/> <circle cx="8" cy="22" r="3"/>
+        <circle cx="22" cy="22" r="3.5"/> </g>
+</g>
+</svg>
