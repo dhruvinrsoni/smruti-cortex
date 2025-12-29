@@ -142,17 +142,18 @@ export class OllamaService {
       };
     }
 
-    // Generate embedding
+    // Generate embedding using Ollama's /api/embed endpoint
+    // API: POST /api/embed { model: string, input: string } -> { embeddings: number[][] }
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
-      const response = await fetch(`${this.config.endpoint}/api/embeddings`, {
+      const response = await fetch(`${this.config.endpoint}/api/embed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.config.model,
-          prompt: text
+          input: text  // Use 'input' not 'prompt' for /api/embed
         }),
         signal: controller.signal
       });
@@ -167,10 +168,12 @@ export class OllamaService {
       const data = await response.json();
       const duration = Date.now() - startTime;
 
-      Logger.info(COMPONENT, 'generateEmbedding', `✅ Embedding generated in ${duration}ms (${data.embedding?.length || 0} dimensions)`);
+      // /api/embed returns { embeddings: number[][] } - take first embedding
+      const embedding = data.embeddings?.[0] || [];
+      Logger.info(COMPONENT, 'generateEmbedding', `✅ Embedding generated in ${duration}ms (${embedding.length} dimensions)`);
 
       return {
-        embedding: data.embedding || [],
+        embedding,  // Use the extracted embedding, not data.embedding
         model: this.config.model,
         success: true,
         duration
