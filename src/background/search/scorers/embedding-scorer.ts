@@ -1,10 +1,24 @@
 /**
  * Embedding Scorer - AI-powered semantic search using local Ollama
  * 
- * Note: This scorer returns 0 for now as embeddings require async generation.
- * Full implementation requires pre-generating embeddings during indexing.
+ * ⚠️ STATUS: NOT IMPLEMENTED (Placeholder only)
  * 
- * TODO: Implement async embedding generation in search-engine.ts
+ * Current state:
+ * - Weight: 0 (disabled, no contribution to search)
+ * - Always returns 0 (no Ollama calls)
+ * - No embeddings generated or compared
+ * 
+ * What needs to be done:
+ * 1. Generate embeddings during indexing (store in IndexedDB)
+ * 2. Generate query embedding at search time (async Ollama call)
+ * 3. Calculate cosine similarity between query and stored embeddings
+ * 4. Enable scorer with weight > 0
+ * 5. Add logging: "🤖 AI scoring: similarity=0.85 for 'page title'"
+ * 
+ * Why your "war" search didn't find "fight":
+ * - Keyword search only matches exact text
+ * - Semantic AI (war≈fight≈conflict) is NOT running yet
+ * - This scorer is a placeholder returning 0
  */
 
 import { Scorer } from '../../../core/scorer-types';
@@ -20,12 +34,13 @@ const COMPONENT = 'EmbeddingScorer';
  */
 const embeddingScorer: Scorer = {
   name: 'embedding',
-  weight: 0, // Disabled until async scoring implemented
+  weight: 0, // ❌ DISABLED - No AI scoring happening
 
   score: (_item, _query, _allItems) => {
-    // Embeddings require async operations
-    // Return 0 until we implement async scoring in search-engine.ts
-    // Note: This is called per-item, so logging here would spam console
+    // When AI is implemented, this will log:
+    // Logger.info(COMPONENT, `🤖 AI match: similarity=${similarity.toFixed(2)} | item="${item.title}"`);
+    // 
+    // For now: returns 0, no Ollama calls, pure keyword search
     return 0;
   }
 };
