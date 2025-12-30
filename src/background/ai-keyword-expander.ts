@@ -11,6 +11,10 @@
  * 
  * === PRIVACY ===
  * All processing is LOCAL via Ollama. No external API calls.
+ * 
+ * === NO CACHE ===
+ * Cache removed intentionally. Since Ollama is local, there's no API cost concern.
+ * This simplifies the code and avoids cache invalidation issues when toggling AI.
  */
 
 import { Logger } from '../core/logger';
@@ -18,10 +22,6 @@ import { SettingsManager } from '../core/settings';
 
 const COMPONENT = 'AIKeywordExpander';
 const logger = Logger.forComponent(COMPONENT);
-
-// Cache expanded keywords to avoid repeated LLM calls for same query
-const expansionCache = new Map<string, { keywords: string[]; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
 /**
  * Response format we expect from the LLM (strict JSON)
@@ -44,32 +44,24 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
     return [];
   }
 
-  // Check cache first
-  const cached = expansionCache.get(normalizedQuery);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    logger.debug('expandQueryKeywords', '📦 Cache hit for query', { 
-      query: normalizedQuery, 
-      cachedKeywords: cached.keywords.length 
-    });
-    return cached.keywords;
-  }
-
-  // Get Ollama settings
+  // CRITICAL: Check if AI is enabled FIRST
+  // Settings may have changed since last search
   await SettingsManager.init();
   const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') || false;
   
   if (!ollamaEnabled) {
+    // AI disabled - return original tokens only
     logger.trace('expandQueryKeywords', 'AI disabled, returning original tokens');
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
 
+  // AI is enabled - call LLM for expansion (no cache - local is free)
   const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
-  const model = SettingsManager.getSetting('ollamaModel') || 'embeddinggemma:300m';
+  const model = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
   const timeout = SettingsManager.getSetting('ollamaTimeout') || 30000;
 
-  // We need a chat/generate capable model, not just embeddings
-  // Check if we have a generation model configured, otherwise use llama3.2:1b as default
-  // embeddinggemma can only do embeddings, not text generation
+  // Check if we have a generation model configured
+  // Embedding-only models can't do text generation
   const generationModel = getGenerationModel(model);
   
   logger.info('expandQueryKeywords', `🤖 Expanding keywords for: "${normalizedQuery}"`, {
@@ -80,12 +72,6 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
   try {
     const expandedKeywords = await callOllamaForKeywords(endpoint, generationModel, normalizedQuery, timeout);
     
-    // Cache the result
-    expansionCache.set(normalizedQuery, {
-      keywords: expandedKeywords,
-      timestamp: Date.now()
-    });
-
     logger.info('expandQueryKeywords', `✅ Expanded "${normalizedQuery}" → ${expandedKeywords.length} keywords`, {
       sample: expandedKeywords.slice(0, 10)
     });
@@ -333,20 +319,3 @@ function parseKeywordResponse(responseText: string, originalTokens: string[]): s
   return Array.from(extractedKeywords);
 }
 
-/**
- * Clear the expansion cache (useful for testing or memory management)
- */
-export function clearExpansionCache(): void {
-  expansionCache.clear();
-  logger.debug('clearExpansionCache', 'Cache cleared');
-}
-
-/**
- * Get cache stats for debugging
- */
-export function getExpansionCacheStats(): { size: number; keys: string[] } {
-  return {
-    size: expansionCache.size,
-    keys: Array.from(expansionCache.keys())
-  };
-}

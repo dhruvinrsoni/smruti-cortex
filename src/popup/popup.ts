@@ -719,12 +719,10 @@ function initializePopup() {
       ollamaEndpointInput.value = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
     }
 
-    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLSelectElement;
+    // Model is now a text input, not select
+    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
     if (ollamaModelInput) {
-      const savedModel = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
-      // Check if saved model exists in dropdown, otherwise use default
-      const optionExists = Array.from(ollamaModelInput.options).some(opt => opt.value === savedModel);
-      ollamaModelInput.value = optionExists ? savedModel : 'llama3.2:1b';
+      ollamaModelInput.value = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
     }
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
@@ -847,14 +845,49 @@ function initializePopup() {
       });
     }
 
-    // Ollama model changes
-    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLSelectElement;
+    // Ollama model changes (now text input)
+    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
     if (ollamaModelInput) {
       ollamaModelInput.addEventListener('change', async () => {
-        const val = ollamaModelInput.value;
+        const val = ollamaModelInput.value.trim();
         if (val) {
           await SettingsManager.setSetting('ollamaModel', val);
-          showToast('Ollama model updated');
+          showToast(`Model set to: ${val}`);
+        }
+      });
+    }
+    
+    // Refresh models button - fetch available models from Ollama
+    const refreshModelsBtn = modal.querySelector('#refresh-models-btn') as HTMLButtonElement;
+    if (refreshModelsBtn) {
+      refreshModelsBtn.addEventListener('click', async () => {
+        const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+        refreshModelsBtn.disabled = true;
+        refreshModelsBtn.textContent = '⏳';
+        
+        try {
+          const response = await fetch(`${endpoint}/api/tags`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const data = await response.json();
+          const models = data.models || [];
+          
+          // Update datalist with available models
+          const datalist = document.getElementById('ollama-models');
+          if (datalist && models.length > 0) {
+            datalist.innerHTML = models.map((m: { name: string }) => 
+              `<option value="${m.name}">${m.name}</option>`
+            ).join('');
+            showToast(`Found ${models.length} models`);
+          } else {
+            showToast('No models found');
+          }
+        } catch (error) {
+          showToast('Failed to fetch models. Is Ollama running?');
+          console.error('Fetch models error:', error);
+        } finally {
+          refreshModelsBtn.disabled = false;
+          refreshModelsBtn.textContent = '🔄';
         }
       });
     }

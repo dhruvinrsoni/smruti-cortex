@@ -177,17 +177,22 @@
               </div>
             </label>
             <label class="setting-option">
-              <select id="modal-ollamaModel" style="width:200px;">
-                <option value="llama3.2:1b">llama3.2:1b (fast, recommended)</option>
-                <option value="llama3.2:3b">llama3.2:3b (better quality)</option>
-                <option value="gemma2:2b">gemma2:2b (alternative)</option>
-                <option value="phi3:mini">phi3:mini (Microsoft)</option>
-                <option value="qwen2.5:1.5b">qwen2.5:1.5b (Alibaba)</option>
-              </select>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="text" id="modal-ollamaModel" placeholder="llama3.2:1b" style="width:160px;" list="ollama-models">
+                <datalist id="ollama-models">
+                  <option value="llama3.2:1b">Fast, recommended</option>
+                  <option value="llama3.2:3b">Better quality</option>
+                  <option value="gemma2:2b">Alternative</option>
+                  <option value="phi3:mini">Microsoft</option>
+                  <option value="qwen2.5:1.5b">Alibaba</option>
+                  <option value="mistral:7b">Mistral</option>
+                </datalist>
+                <button type="button" id="refresh-models-btn" style="padding:4px 8px; cursor:pointer;" title="Fetch available models from Ollama">🔄</button>
+              </div>
               <span class="option-indicator"></span>
               <div class="option-content">
                 <strong>AI Model</strong>
-                <small>Generation model for keyword expansion (not embedding)</small>
+                <small>Type any model name or pick from suggestions. Click 🔄 to fetch installed models.</small>
               </div>
             </label>
             <label class="setting-option">
