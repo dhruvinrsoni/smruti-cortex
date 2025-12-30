@@ -22,12 +22,14 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 
 **100% local. Zero telemetry. No cloud sync.**
 
-- All data stored in IndexedDB on your device
-- No external servers, no tracking, no analytics
-- Open source — inspect the code anytime
-- Delete all data anytime
+- All data in IndexedDB on your device
+- Optional favicon loading (Google API) - disable in Settings
+- Sensitive-site blacklist (banks, password managers) - no metadata extraction
+- Local AI only (Ollama) - no cloud calls
+- Open source — audit anytime
+- One-click data deletion
 
-**You own your data.**
+**You control everything.**
 
 ---
 
@@ -38,7 +40,10 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | ⚡ **Instant Search** | Results < 50ms as you type |
 | ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
 | 🎯 **Smart Ranking** | Recency + frequency scoring |
-| 🤖 **AI Search** | Optional semantic search via local Ollama |
+| 🤖 **AI Search** | Optional keyword expansion via local Ollama |
+| 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
+| 🔒 **Privacy Controls** | Favicon toggle, sensitive-site blacklist |
+| 💾 **Data Management** | Storage quota, rebuild, clear & rebuild |
 | 🔍 **Omnibox** | Type `sc ` in address bar |
 | 📋 **Copy Links** | `Ctrl+M` for markdown |
 | 🎨 **Clean UI** | Minimal, distraction-free |
@@ -108,82 +113,37 @@ src/
 └── shared/          # UI abstractions
 ```
 
-### 🤖 AI Search Setup (Optional)
+### 🤖 AI Search (Optional)
 
-SmrutiCortex supports **AI-powered keyword expansion** using local [Ollama](https://ollama.ai). This is 100% local — no cloud, no tracking.
+**Local AI keyword expansion** via [Ollama](https://ollama.ai). 100% local, no cloud.
 
-**How it works:**
-1. You type: "war"
-2. AI expands to: ["war", "battle", "fight", "combat", "conflict", "military"]
-3. Fast keyword matching finds URLs with ANY of these terms
+**How:** Type "war" → AI expands to ["war", "battle", "combat", "conflict"] → finds matching URLs.
 
-This is ONE LLM call per search, not 600+ embedding generations. Fast and smart.
+ONE LLM call per search. Fast and smart.
 
 **Setup:**
 ```bash
-# 1. Install Ollama (https://ollama.ai)
-# 2. Pull a generation model (for keyword expansion)
+# 1. Install Ollama: https://ollama.ai
+# 2. Pull model
 ollama pull llama3.2:1b
 
-# 3. Enable CORS for Chrome extension (REQUIRED)
-# Windows (PowerShell - run as admin):
-setx OLLAMA_ORIGINS "*"
-# Then restart Ollama
-
-# Linux/Mac:
-export OLLAMA_ORIGINS="*"
-# Or add to ~/.bashrc / ~/.zshrc
-
-# Docker:
-docker run -e OLLAMA_ORIGINS="*" -p 11434:11434 ollama/ollama
+# 3. Enable CORS (REQUIRED)
+# Windows: setx OLLAMA_ORIGINS "*" (restart Ollama)
+# Linux/Mac: export OLLAMA_ORIGINS="*"
 ```
 
-**Timeout Settings:**
-- Default: 30 seconds (first model load takes 5-15s)
-- Set to `-1` for infinite timeout (recommended for AI workloads)
-- Settings → AI Integration → Timeout
+**Enable:** Settings → AI Integration → Enable AI search
+**Timeout:** Default 30s, set -1 for infinite (Settings → AI Integration)
 
-**Enable in SmrutiCortex:** Settings → AI Integration → Enable AI search
-
-**Test coverage report** is generated in `coverage/` folder after running `npm run test:coverage`. Open `coverage/index.html` in a browser to see detailed coverage.
-
-### 🔍 Linting & Code Quality
-
-**ESLint** catches bugs and enforces consistent code style:
+### 🔍 Quality Checks
 
 ```bash
-# Check for issues
-npm run lint
-
-# Auto-fix what's fixable
-npm run lint:fix
+npm run lint        # ESLint code quality
+npm run test        # Run 44 unit tests
+npm run build       # Verify build
 ```
 
-**Linting rules:**
-- TypeScript best practices
-- No unused variables
-- Consistent formatting
-- Chrome extension API usage patterns
-
-### 🤖 Local Workflow (Before Committing)
-
-Run these commands before pushing code to ensure quality:
-
-```bash
-npm run lint        # Check code quality
-npm run test        # Run tests
-npm run build       # Verify it builds
-```
-
-If everything passes, you're good to commit!
-
-### Debug Checklist
-1. **Extension loads** without errors in `chrome://extensions`
-2. **Service worker** shows "Ready" in background console
-3. **Database initializes** and shows indexing progress
-4. **Popup opens** and input field is focused
-5. **Search works** and returns relevant results
-6. **Debug toggle** controls console output
+**Before committing:** Run all three commands above.
 
 ---
 

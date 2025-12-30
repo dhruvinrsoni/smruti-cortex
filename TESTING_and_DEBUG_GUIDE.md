@@ -118,6 +118,13 @@ When TRACE is enabled, the Ollama AI service logs:
 - Long query: "how to build chrome extensions with typescript"
 ```
 
+### v4.0 Features
+- **Self-Healing**: Clear All Data → auto-rebuilds on next init
+- **Health Status**: Green/yellow/red indicator in Settings
+- **Storage Quota**: Shows used/total/percentage/items
+- **Privacy**: Favicon toggle, sensitive-site blacklist
+- **AI Search**: Enable Ollama, test keyword expansion
+
 ### Keyboard Navigation
 - **Arrow Up/Down**: Navigate results
 - **Enter**: Open result
@@ -144,33 +151,20 @@ When TRACE is enabled, the Ollama AI service logs:
 
 ### Extension Won't Load
 - **Symptom**: Red error icon or missing from toolbar
-- **Check**: `chrome://extensions` for error messages
-- **Fix**: Rebuild with `npm run build`
-- **Verify**: `dist/` folder contains all files
+- **Fix**: Rebuild with `npm run build`, check `chrome://extensions` errors
 
 ### No Search Results
 - **Symptom**: Typing shows no results
-- **Check**: Debug logs show "Retrieved items from DB: 0"
-- **Fix**: Wait for initial indexing (check console for completion)
-- **Verify**: Browser history API permissions granted
+- **Fix**: Wait for initial indexing, check health status in Settings
+- **Self-Healing**: Extension auto-recovers from empty index
 
 ### Popup Not Opening
 - **Symptom**: Clicking icon does nothing
-- **Check**: Console for "popup.js" errors
-- **Fix**: Check `dist/popup/popup.html` exists
-- **Verify**: Manifest points to correct popup path
-
-### Log Level Buttons Not Working
-- **Symptom**: Clicking buttons doesn't change console output or visual state
-- **Check**: Console shows level change confirmation: "Log level changed to: DEBUG"
-- **Fix**: Reload extension after changing setting
-- **Verify**: Selected button appears dark, others light; setting persists across browser restarts and popup openings
+- **Fix**: Check `dist/popup/popup.html` exists, reload extension
 
 ### Build Errors
 - **Symptom**: `npm run build` fails
-- **Check**: Node.js version (must be 18+)
-- **Fix**: `npm install` and check for TypeScript errors
-- **Verify**: All source files compile successfully
+- **Fix**: Node.js 18+, run `npm install`, check TypeScript errors
 
 ---
 
@@ -181,11 +175,12 @@ When TRACE is enabled, the Ollama AI service logs:
 - **First search**: < 500ms (after indexing)
 - **Subsequent searches**: < 100ms
 - **Memory usage**: < 50MB for 10k history items
+- **Health checks**: Every 60 seconds (auto-heal if needed)
 
 ### Monitoring
 - **DevTools**: Performance tab for runtime metrics
-- **Console**: Search timing logs
-- **Task Manager**: Chrome extension memory usage
+- **Console**: Search timing logs (use DEBUG level)
+- **Settings**: Health indicator, storage quota display
 
 ---
 
@@ -193,12 +188,13 @@ When TRACE is enabled, the Ollama AI service logs:
 
 ### Pre-Release
 - [ ] `npm run build` (development build with source maps)
-- [ ] Test all functionality with development build
-- [ ] Set default log level to INFO for production (not DEBUG)
-- [ ] Verify manifest.json is valid
+- [ ] Test all v4.0 features: self-healing, privacy controls, AI search
+- [ ] Run all 44 unit tests: `npm run test`
+- [ ] Verify health monitoring works (green indicator)
 - [ ] Test on clean browser profile
+- [ ] Default log level: INFO (production-ready)
 
 ### Post-Release
 - [ ] Monitor Chrome Web Store reviews
 - [ ] Check for runtime errors in production
-- [ ] Prepare hotfix process if needed
+- [ ] Monitor self-healing effectiveness
