@@ -195,6 +195,14 @@ setupPortBasedMessaging();
             break;
           case 'SETTINGS_CHANGED':
             logger.debug('onMessage', 'Handling SETTINGS_CHANGED:', msg.settings);
+            
+            // CRITICAL: Update SettingsManager cache with new settings
+            // This ensures search-engine reads fresh ollamaEnabled value
+            if (msg.settings) {
+              await SettingsManager.updateSettings(msg.settings);
+              logger.debug('onMessage', 'SettingsManager cache updated with new settings');
+            }
+            
             // Check if log level changed and update logger if needed
             if (msg.settings && typeof msg.settings.logLevel === 'number') {
               const currentLevel = Logger.getLevel();
