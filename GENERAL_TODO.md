@@ -13,20 +13,21 @@ Each item can be converted into GitHub Issues.
 | v2.0 | ✅ Released | Ultra-fast overlay, SOLID/DRY refactor, two UI architecture |
 | v3.0 | ✅ Released | Documentation, CI/CD, testing, store-ready |
 | v4.0 | ✅ Released | Professional branding, local Ollama AI, privacy hardening |
+| v5.0 | 🔄 Planning | AI enhancements, UX improvements, advanced features |
 
 ---
 
-## ✅ COMPLETED — v4.0 (In Progress)
+## ✅ COMPLETED — v4.0 (Released Dec 31, 2025)
 - [x] **Professional Icon System** - v11 "Neural S" design across all sizes
 - [x] **Remove Hardcoded Content** - All assets loaded from files (no emojis, no inline SVG)
-- [x] **Local Ollama Integration** - Privacy-first AI with prompting-based keyword expansion
+- [x] **Local Ollama Integration** - Privacy-first AI with prompting-based keyword expansion (Issue #16)
 - [x] **Delete All Data Button** - Clear IndexedDB + chrome.storage with auto-rebuild on next use
 - [x] **Rebuild Index Button** - Manual full history re-import with progress feedback
-- [x] **Background Resilience** - Service worker restart recovery with proper initialization
+- [x] **Background Resilience** - Service worker restart recovery with proper initialization (Issue #10)
 - [x] **IndexedDB Quota Handling** - Storage status display on settings page
-- [x] **Unit Tests for mergeMetadata** - 16 tests covering core indexing logic
-- [x] **Default Local-Only Processing** - Favicon toggle controls Google API calls (privacy-first)
-- [x] **Sensitive-Site Blacklist** - Built-in patterns + user-configurable domains for banks/auth sites
+- [x] **Unit Tests for mergeMetadata** - 16 tests covering core indexing logic (Issue #8)
+- [x] **Default Local-Only Processing** - Favicon toggle controls Google API calls (privacy-first) (Issue #4)
+- [x] **Sensitive-Site Blacklist** - Built-in patterns + user-configurable domains for banks/auth sites (Issue #6)
 
 ## ✅ COMPLETED — v3.0
 - [x] **CI/CD Pipeline** - GitHub Actions workflow (build, lint, test, release)
@@ -62,29 +63,28 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## 🎯 v4.0 ROADMAP (LOCAL AI + PRIVACY)
+## 🔄 v5.0 ROADMAP (AI Enhancements & UX Polish)
 
-### Core Features
-- [ ] **Local Ollama Integration** - Issue #16
-  - Enable/disable toggle (default: disabled)
-  - Auto-detect Ollama at localhost:11434
-  - Model selection dropdown
-  - Graceful fallback to keyword search
-- [ ] **Developer Insights Panel** - Issue #16
-  - Real-time embedding generation metrics
-  - Model performance tracking
-  - Token usage visualization
-  - Success/failure rates
-- [ ] **Default Local-Only Processing** - Issue #4
-  - Audit all network calls
-  - Settings page with clear toggles
-  - Privacy-first architecture
-- [ ] **Sensitive-Site Blacklist** - Issue #6
-  - Disable extractor on banks, password portals
-  - User-configurable blacklist
-  - Smart defaults for common sensitive domains
+### Core Features (Q1 2026)
+- [ ] **Enhanced AI Integration** - Multi-model support, performance metrics dashboard
+- [ ] **Advanced Privacy Controls** - Granular permission management, data retention settings
+- [ ] **Smart Onboarding** - 3-step setup flow with privacy explanations
+- [ ] **Favorites & Pinned Results** - Save frequently accessed pages
+- [ ] **Favicon Caching** - Faster rendering with local icon storage
+
+### Developer Experience
+- [ ] **Plugin Architecture** - Document scorer plugin interface for custom search algorithms
+- [ ] **Advanced Diagnostics** - Export diagnostics for bug reporting
+- [ ] **Performance Monitoring** - Real-time metrics and optimization suggestions
+
+### Quality & Reliability
+- [ ] **Comprehensive Test Coverage** - 80%+ code coverage target
+- [ ] **Error Recovery** - Enhanced self-healing for edge cases
+- [ ] **Cross-Browser Compatibility** - Firefox, Edge, Safari extension support
 
 ---
+
+## v6.0+ FUTURE ROADMAP (Advanced Features)
 
 ## v5.0+ FUTURE ROADMAP
 
@@ -105,39 +105,42 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## HIGH PRIORITY — PRIVACY & SECURITY (v4.0)
-- [x] Default to "Local-only" processing (no external data usage) - Issue #4 (v4.0 milestone)
-- [x] Add sensitive-site blacklist (disable extractor on banks, password portals) - Issue #6 (v4.0 milestone)
-- [x] Add "Delete All Data" (IndexedDB + chrome.storage) with auto-rebuild
-- [x] Add manual "Rebuild Index" button
+## HIGH PRIORITY — PRIVACY & SECURITY (v5.0)
+- [x] Default to "Local-only" processing (no external data usage) - Issue #4 (v4.0 ✅)
+- [x] Add sensitive-site blacklist (disable extractor on banks, password portals) - Issue #6 (v4.0 ✅)
+- [x] Add "Delete All Data" (IndexedDB + chrome.storage) with auto-rebuild (v4.0 ✅)
+- [x] Add manual "Rebuild Index" button (v4.0 ✅)
 - [ ] Add onboarding privacy prompt (explain metadata extraction clearly to user)
-- [ ] Explain permissions within extension Options page
-- [ ] Add toggle: "Disable metadata extraction"
+- [ ] Explain permissions within extension Options page - Issue #5
+- [ ] Add toggle: "Disable metadata extraction" - Issue #7
 - [ ] Implement data retention settings (e.g., keep last 90 days)
 
 ---
 
-## HIGH PRIORITY — CORRECTNESS & RELIABILITY
-- [x] Unit tests for mergeMetadata logic
-- [x] Background resilience (SW restart recovery)
-- [ ] Build index rebuild flow (full history import)
-- [ ] Handle IndexedDB quota gracefully
+## HIGH PRIORITY — CORRECTNESS & RELIABILITY (v5.0)
+- [x] Unit tests for mergeMetadata logic - Issue #8 (v4.0 ✅)
+- [x] Background resilience (SW restart recovery) - Issue #10 (v4.0 ✅)
+- [x] Build index rebuild flow (full history import) - Issue #9 (v4.0 ✅)
+- [x] Handle IndexedDB quota gracefully (v4.0 ✅)
+- [ ] Add comprehensive error handling for edge cases
+- [ ] Implement graceful degradation for low-memory devices
 
 ---
 
-## MEDIUM PRIORITY — UX & DISCOVERABILITY
-- [ ] Add onboarding 3-step flow for new users
-- [x] **Improve keyboard navigation** (Home, End, PageUp/PageDown) - Basic navigation implemented
-- [ ] Add "Pinned results" or favorites
-- [ ] Add favicon caching
-- [ ] Add preview snippet or metadata snippet
+## MEDIUM PRIORITY — UX & DISCOVERABILITY (v5.0)
+- [ ] Add onboarding 3-step flow for new users - Issue #11
+- [x] **Improve keyboard navigation** (Home, End, PageUp/PageDown) - Basic navigation implemented (v2.0 ✅)
+- [ ] Add "Pinned results" or favorites - Issue #12
+- [ ] Add favicon caching - Issue #13
+- [ ] Add preview snippet or metadata snippet - Issue #14
 
 ---
 
-## MEDIUM PRIORITY — AI & EXTENSIBILITY
-- [x] Add local Ollama integration (opt-in) - Issue #16 (v4.0 milestone)
-- [ ] Document scorer plugin interface
-- [ ] Store embeddings locally with user consent
+## MEDIUM PRIORITY — AI & EXTENSIBILITY (v5.0)
+- [x] Add local Ollama integration (opt-in) - Issue #16 (v4.0 ✅)
+- [ ] Document scorer plugin interface - Issue #15
+- [ ] Store embeddings locally with user consent - Issue #17
+- [ ] Add API key management in settings (for future cloud features) - Issue #18
 
 ---
 
