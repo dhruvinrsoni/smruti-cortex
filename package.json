@@ -1,6 +1,6 @@
 {
   "name": "smruti-cortex",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "description": "SmrutiCortex — Everything-like instant browser history search (MV3).",
   "scripts": {
