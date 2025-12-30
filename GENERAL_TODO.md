@@ -12,7 +12,7 @@ Each item can be converted into GitHub Issues.
 | v1.0 | ✅ Released | Initial working extension |
 | v2.0 | ✅ Released | Ultra-fast overlay, SOLID/DRY refactor, two UI architecture |
 | v3.0 | ✅ Released | Documentation, CI/CD, testing, store-ready |
-| v4.0 | 🔄 In Progress | Professional branding, local Ollama AI, privacy hardening |
+| v4.0 | ✅ Released | Professional branding, local Ollama AI, privacy hardening |
 
 ---
 
@@ -25,8 +25,8 @@ Each item can be converted into GitHub Issues.
 - [x] **Background Resilience** - Service worker restart recovery with proper initialization
 - [x] **IndexedDB Quota Handling** - Storage status display on settings page
 - [x] **Unit Tests for mergeMetadata** - 16 tests covering core indexing logic
-- [ ] **Default Local-Only Processing** - No external calls without explicit consent
-- [ ] **Sensitive-Site Blacklist** - Disable extractor on banks/password portals
+- [x] **Default Local-Only Processing** - Favicon toggle controls Google API calls (privacy-first)
+- [x] **Sensitive-Site Blacklist** - Built-in patterns + user-configurable domains for banks/auth sites
 
 ## ✅ COMPLETED — v3.0
 - [x] **CI/CD Pipeline** - GitHub Actions workflow (build, lint, test, release)
