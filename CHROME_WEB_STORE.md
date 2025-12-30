@@ -34,8 +34,12 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 ⚡ **Ultra-Fast Search** — Results appear as you type (< 50ms)
 🎯 **Smart Ranking** — Recent + frequent results first
 🔐 **100% Private** — All data stays local in IndexedDB
+🛡️ **Self-Healing** — Auto-recovery from errors, health monitoring
+🔧 **Privacy Controls** — Favicon toggle, sensitive-site blacklist
+💾 **Data Management** — Storage quota monitoring, one-click rebuild
 ⌨️ **Keyboard-First** — Ctrl+Shift+S instant access, full arrow key navigation
 🎨 **Clean UI** — Minimal, distraction-free interface
+🤖 **AI Search** — Optional local keyword expansion (Ollama)
 🔧 **Zero Config** — Works out of the box
 
 **PRIVACY GUARANTEE:**
@@ -43,6 +47,8 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 • All data stored locally on your device
 • No cloud sync, no external servers
 • No analytics, no tracking
+• Optional favicon loading (configurable)
+• Sensitive-site blacklist (banks, password managers)
 • Open source — inspect the code anytime
 • You can delete all data anytime
 
@@ -88,11 +94,11 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 ## 🖼️ Store Assets Required
 
 ### Icons (Required)
-- ✅ 16x16px — `src/assets/icon16.svg`
-- ✅ 48x48px — `src/assets/icon48.svg`
-- ✅ 128x128px — `src/assets/icon128.svg` (for store listing)
+- ✅ 16x16px — `src/assets/icon-16.png`
+- ✅ 48x48px — `src/assets/icon-48.png`
+- ✅ 128x128px — `src/assets/icon-128.png` (for store listing)
 
-**Note:** Currently using SVG placeholders. Replace with proper PNG icons before submission.
+**Note:** PNG icons are available and ready for submission.
 
 ### Screenshots (Required — 1-5 images)
 **Recommended size:** 1280x800px or 640x400px
@@ -213,7 +219,7 @@ Chrome requires explaining why each permission is needed:
 
 ### Before Upload:
 1. Build production package: `npm run package`
-2. Verify zip file: `release/smruti-cortex-v3.0.0.zip`
+2. Verify zip file: `release/smruti-cortex-v4.0.0.zip`
 3. Test in Chrome incognito mode
 4. Prepare 128x128 store icon PNG
 5. Create 3-5 screenshots (1280x800px)
