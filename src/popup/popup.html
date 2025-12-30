@@ -229,15 +229,21 @@
               <span id="storage-used">Loading...</span>
               <span class="storage-separator">•</span>
               <span id="storage-items">-- items</span>
+              <span class="storage-separator">•</span>
+              <a href="#" id="storage-inspect-link" class="storage-link" title="Copy IndexedDB inspector URL">🔍 Inspect</a>
             </div>
             <div class="storage-bar-container">
               <div class="storage-bar" id="storage-bar" style="width: 0%"></div>
+            </div>
+            <div class="health-status" id="health-status">
+              <span class="health-indicator" id="health-indicator">●</span>
+              <span id="health-text">Checking...</span>
             </div>
           </div>
           <div class="setting-actions">
             <button class="action-btn primary" id="modal-rebuild" title="Re-index all browser history">🔄 Rebuild Index</button>
             <button class="action-btn secondary" id="modal-reset">Reset Settings</button>
-            <button class="action-btn danger" id="modal-clear">🗑️ Clear All Data</button>
+            <button class="action-btn danger" id="modal-clear">🗑️ Clear & Rebuild</button>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
 import { Logger, LogLevel } from '../core/logger';
 import { SettingsManager } from '../core/settings';
+import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring, ensureReady } from './resilience';
 
 // Logger will be initialized below - don't log before that
 
@@ -255,19 +256,16 @@ setupPortBasedMessaging();
               case 'CLEAR_ALL_DATA': {
                 logger.info('onMessage', '🗑️ CLEAR_ALL_DATA requested by user');
                 try {
-                  // Clear IndexedDB
-                  await clearIndexedDB();
-                  logger.info('onMessage', '✅ IndexedDB cleared');
+                  // Use clearAndRebuild for immediate self-healing
+                  const result = await clearAndRebuild();
                   
-                  // Set force rebuild flag so next init rebuilds index
-                  await setForceRebuildFlag(true);
-                  logger.info('onMessage', '🔄 Force rebuild flag set for next init');
-                  
-                  // Reset settings to defaults
-                  await SettingsManager.resetToDefaults();
-                  logger.info('onMessage', '✅ Settings reset to defaults');
-                  
-                  sendResponse({ status: 'OK', message: 'All data cleared. Index will rebuild on next use.' });
+                  if (result.success) {
+                    logger.info('onMessage', '✅ CLEAR_ALL_DATA completed', { itemCount: result.itemCount });
+                    sendResponse({ status: 'OK', message: result.message, itemCount: result.itemCount });
+                  } else {
+                    logger.error('onMessage', '❌ CLEAR_ALL_DATA failed', { message: result.message });
+                    sendResponse({ status: 'ERROR', message: result.message });
+                  }
                 } catch (error) {
                   logger.error('onMessage', '❌ CLEAR_ALL_DATA failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
@@ -283,6 +281,36 @@ setupPortBasedMessaging();
                   sendResponse({ status: 'OK', data: quotaInfo });
                 } catch (error) {
                   logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_HEALTH_STATUS': {
+                logger.debug('onMessage', 'GET_HEALTH_STATUS requested');
+                try {
+                  const health = await checkHealth();
+                  logger.debug('onMessage', 'Health status retrieved', health);
+                  sendResponse({ status: 'OK', data: health });
+                } catch (error) {
+                  logger.error('onMessage', 'GET_HEALTH_STATUS failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'SELF_HEAL': {
+                logger.info('onMessage', '🔧 SELF_HEAL requested by user');
+                try {
+                  const success = await selfHeal('User requested self-heal');
+                  const health = await checkHealth();
+                  sendResponse({ 
+                    status: success ? 'OK' : 'PARTIAL', 
+                    message: success ? 'Self-heal completed successfully' : 'Self-heal completed with issues',
+                    data: health
+                  });
+                } catch (error) {
+                  logger.error('onMessage', 'SELF_HEAL failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -380,6 +408,9 @@ async function init() {
 
             // Keep service worker alive to reduce cold start delays for keyboard shortcuts
             keepServiceWorkerAlive();
+
+            // Start health monitoring for self-healing
+            startHealthMonitoring();
 
             // Command listener is already registered at module load level for ultra-fast response
             // Command listener is already registered at module load level for ultra-fast response

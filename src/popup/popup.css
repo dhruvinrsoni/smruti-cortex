@@ -451,6 +451,46 @@ input[type="radio"] {
   background: #ef4444;
 }
 
+.storage-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.storage-link:hover {
+  text-decoration: underline;
+}
+
+/* Health Status */
+.health-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.health-indicator {
+  font-size: 10px;
+}
+
+.health-indicator.healthy {
+  color: #10b981;
+}
+
+.health-indicator.warning {
+  color: #f59e0b;
+}
+
+.health-indicator.error {
+  color: #ef4444;
+}
+
+#health-text {
+  color: var(--muted);
+}
+
 /* Toast notifications */
 .toast {
   position: fixed;
