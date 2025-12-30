@@ -545,7 +545,7 @@ input[type="radio"] {
   background: var(--bg);
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
+  max-width: 650px;
   max-height: 90%;
   overflow: hidden;
   display: flex;
