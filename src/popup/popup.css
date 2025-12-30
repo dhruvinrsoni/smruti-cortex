@@ -244,12 +244,12 @@ html,body { margin:0; padding:0; width:800px; height:400px; color:var(--text); b
 
 .settings-content {
   flex: 1;
-  padding: 16px;
+  padding: 12px; /* Reduced from 16px */
   overflow-y: auto;
 }
 
 .settings-section {
-  margin-bottom: 32px;
+  margin-bottom: 20px; /* Reduced from 32px */
 }
 
 .settings-section:last-child {
@@ -257,31 +257,31 @@ html,body { margin:0; padding:0; width:800px; height:400px; color:var(--text); b
 }
 
 .settings-section h3 {
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 6px 0; /* Reduced from 8px */
+  font-size: 15px; /* Reduced from 16px */
   font-weight: 600;
   color: var(--text);
 }
 
 .settings-section > p {
-  margin: 0 0 16px 0;
+  margin: 0 0 10px 0; /* Reduced from 16px */
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px; /* Reduced from 14px */
 }
 
 .setting-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px; /* Reduced from 12px */
 }
 
 .setting-option {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px; /* Reduced from 12px */
+  padding: 10px 12px; /* Reduced from 16px */
   border: 2px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px; /* Reduced from 8px */
   cursor: pointer;
   transition: all 0.2s ease;
   background: var(--card);
@@ -334,12 +334,13 @@ html,body { margin:0; padding:0; width:800px; height:400px; color:var(--text); b
   display: block;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 4px;
+  margin-bottom: 2px; /* Reduced from 4px */
+  font-size: 14px;
 }
 
 .option-content small {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px; /* Reduced from 13px */
 }
 
 input[type="radio"] {
@@ -350,20 +351,20 @@ input[type="radio"] {
 
 .setting-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px; /* Reduced from 12px */
   flex-wrap: wrap;
 }
 
 .action-btn {
-  padding: 10px 16px;
+  padding: 8px 12px; /* Reduced from 10px 16px */
   border: none;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px; /* Reduced from 14px */
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   flex: 1;
-  min-width: 120px;
+  min-width: 100px; /* Reduced from 120px */
 }
 
 .action-btn.secondary {
@@ -546,7 +547,7 @@ input[type="radio"] {
   border-radius: 12px;
   width: 90%;
   max-width: 650px;
-  max-height: 90%;
+  max-height: 85vh; /* More constrained height for popup context */
   overflow: hidden;
   display: flex;
   flex-direction: column;
