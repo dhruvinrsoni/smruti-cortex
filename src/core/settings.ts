@@ -21,6 +21,9 @@ export interface AppSettings {
     ollamaEndpoint?: string;      // Ollama API endpoint (default: 'http://localhost:11434')
     ollamaModel?: string;         // Ollama model for keyword expansion (default: 'llama3.2:1b')
     ollamaTimeout?: number;       // Max embedding generation time in ms (default: 30000 = 30s, -1 = infinite/no timeout)
+    // Privacy settings
+    loadFavicons?: boolean;       // Load favicons from Google API (default: true)
+    sensitiveUrlBlacklist?: string[];  // User-defined domains/patterns to skip metadata extraction (default: [])
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -75,6 +78,16 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     ollamaTimeout: {
         default: 30000,  // 30 seconds (generous for first-time model loading on slower systems)
         validate: (val) => typeof val === 'number' && (val === -1 || (val >= 5000 && val <= 120000)),  // -1 = infinite, or 5s-120s
+    },
+    
+    // Privacy settings
+    loadFavicons: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    sensitiveUrlBlacklist: {
+        default: [],
+        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'),
     },
     
     // Future settings (placeholders)

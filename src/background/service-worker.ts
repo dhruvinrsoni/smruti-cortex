@@ -329,6 +329,13 @@ setupPortBasedMessaging();
                 break;
               }
 
+              case 'GET_SETTINGS': {
+                // Return current settings for extractor to check blacklist
+                const settings = SettingsManager.getSettings();
+                sendResponse({ status: 'OK', settings });
+                break;
+              }
+
               default:
                 logger.warn('onMessage', 'Unknown message type received:', msg.type);
                 sendResponse({ error: 'Unknown message type' });

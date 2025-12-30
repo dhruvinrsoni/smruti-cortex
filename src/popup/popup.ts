@@ -348,6 +348,7 @@ function initializePopup() {
   // Fast rendering
   function renderResults() {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+    const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true; // Default: true
     resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
 
     resultsNode.innerHTML = '';
@@ -374,7 +375,11 @@ function initializePopup() {
         const fav = document.createElement('img');
         fav.className = 'card-favicon';
         try {
-          fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
+          if (loadFavicons) {
+            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
+          } else {
+            fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+          }
         } catch {
           fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         }
@@ -410,7 +415,11 @@ function initializePopup() {
         const fav = document.createElement('img');
         fav.className = 'favicon';
         try {
-          fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
+          if (loadFavicons) {
+            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
+          } else {
+            fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+          }
         } catch {
           fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         }
@@ -735,6 +744,18 @@ function initializePopup() {
     if (ollamaTimeoutInput) {
       ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') || 30000);
     }
+
+    // Privacy settings
+    const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
+    if (loadFaviconsInput) {
+      loadFaviconsInput.checked = SettingsManager.getSetting('loadFavicons') ?? true;
+    }
+
+    const sensitiveUrlBlacklistInput = modal.querySelector('#modal-sensitiveUrlBlacklist') as HTMLTextAreaElement;
+    if (sensitiveUrlBlacklistInput) {
+      const blacklist = SettingsManager.getSetting('sensitiveUrlBlacklist') || [];
+      sensitiveUrlBlacklistInput.value = blacklist.join('\n');
+    }
   }
 
   // Close settings modal
@@ -1001,6 +1022,28 @@ function initializePopup() {
         await SettingsManager.setSetting('ollamaTimeout', val);
         ollamaTimeoutInput.value = String(val);
         showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`);
+      });
+    }
+
+    // Privacy settings - Load Favicons
+    const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
+    if (loadFaviconsInput) {
+      loadFaviconsInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('loadFavicons', target.checked);
+        showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`);
+        renderResults(); // Re-render to apply changes immediately
+      });
+    }
+
+    // Privacy settings - Sensitive URL Blacklist
+    const sensitiveUrlBlacklistInput = modal.querySelector('#modal-sensitiveUrlBlacklist') as HTMLTextAreaElement;
+    if (sensitiveUrlBlacklistInput) {
+      sensitiveUrlBlacklistInput.addEventListener('change', async () => {
+        const val = sensitiveUrlBlacklistInput.value.trim();
+        const blacklist = val ? val.split('\n').map(s => s.trim()).filter(Boolean) : [];
+        await SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist);
+        showToast(`Blacklist updated (${blacklist.length} entries)`);
       });
     }
 
