@@ -1,13 +1,41 @@
 // indexing.ts — URL ingestion, merging, enrichment, and storage
 
 import { browserAPI } from '../core/helpers';
-import { saveIndexedItem, getIndexedItem, getSetting, setSetting } from './database';
+import { saveIndexedItem, getIndexedItem, getSetting, setSetting, clearIndexedDB } from './database';
 import { tokenize } from './search/tokenizer';
 import { IndexedItem } from './schema';
 import { BRAND_NAME } from '../core/constants';
 import { Logger } from '../core/logger';
 
 const logger = Logger.forComponent('Indexing');
+
+/**
+ * Force a full rebuild of the index (used after CLEAR_ALL_DATA or manual rebuild)
+ */
+export async function performFullRebuild(): Promise<void> {
+    const startTime = Date.now();
+    logger.info('performFullRebuild', '🔄 Starting FULL INDEX REBUILD (user requested)');
+    
+    try {
+        // Clear existing data first
+        logger.info('performFullRebuild', '🗑️ Clearing existing index data...');
+        await clearIndexedDB();
+        
+        // Perform full history index
+        await performFullHistoryIndex();
+        
+        // Update version marker
+        const currentVersion = chrome.runtime.getManifest().version;
+        await setSetting('lastIndexedVersion', currentVersion);
+        await setSetting('lastIndexedTimestamp', Date.now());
+        
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        logger.info('performFullRebuild', `✅ Full rebuild completed in ${duration}s`);
+    } catch (error) {
+        logger.error('performFullRebuild', '❌ Full rebuild failed:', error);
+        throw error;
+    }
+}
 
 export async function ingestHistory(): Promise<void> {
     const overallStartTime = Date.now();

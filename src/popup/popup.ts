@@ -680,6 +680,9 @@ function initializePopup() {
     if (window.location.hash === '#settings') {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
+    
+    // Fetch storage quota info
+    fetchStorageQuotaInfo();
 
     // Load current settings into form
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
@@ -741,6 +744,45 @@ function initializePopup() {
       if (input) {
         input.focus();
       }
+    }
+  }
+
+  // Fetch and display storage quota info
+  async function fetchStorageQuotaInfo() {
+    const storageUsedEl = document.getElementById('storage-used');
+    const storageItemsEl = document.getElementById('storage-items');
+    const storageBarEl = document.getElementById('storage-bar');
+    
+    if (!storageUsedEl || !storageItemsEl || !storageBarEl) return;
+    
+    try {
+      storageUsedEl.textContent = 'Loading...';
+      
+      const resp = await sendMessage({ type: 'GET_STORAGE_QUOTA' });
+      if (resp && resp.status === 'OK' && resp.data) {
+        const { usedFormatted, totalFormatted, percentage, itemCount } = resp.data;
+        
+        storageUsedEl.textContent = `${usedFormatted} / ${totalFormatted}`;
+        storageItemsEl.textContent = `${itemCount.toLocaleString()} items`;
+        storageBarEl.style.width = `${Math.min(percentage, 100)}%`;
+        
+        // Add warning colors based on usage
+        storageBarEl.classList.remove('warning', 'danger');
+        if (percentage >= 90) {
+          storageBarEl.classList.add('danger');
+        } else if (percentage >= 70) {
+          storageBarEl.classList.add('warning');
+        }
+        
+        logger.debug('openSettingsPage', 'Storage quota updated', resp.data);
+      } else {
+        storageUsedEl.textContent = 'Unknown';
+        storageItemsEl.textContent = '-- items';
+      }
+    } catch (error) {
+      storageUsedEl.textContent = 'Error';
+      storageItemsEl.textContent = '-- items';
+      logger.debug('openSettingsPage', 'Failed to fetch storage quota', error);
     }
   }
 
@@ -930,25 +972,65 @@ function initializePopup() {
       });
     }
 
+    // Rebuild Index button
+    const rebuildBtn = modal.querySelector('#modal-rebuild') as HTMLButtonElement;
+    if (rebuildBtn) {
+      rebuildBtn.addEventListener('click', async () => {
+        if (!confirm('Rebuild the entire history index? This may take a few minutes for large history.')) {
+          return;
+        }
+        
+        rebuildBtn.disabled = true;
+        rebuildBtn.textContent = '⏳ Rebuilding...';
+        showToast('🔄 Rebuilding index... This may take a while.');
+        
+        try {
+          const resp = await sendMessage({ type: 'REBUILD_INDEX' });
+          if (resp && resp.status === 'OK') {
+            showToast('✅ Index rebuilt successfully!');
+            // Refresh storage quota display
+            await fetchStorageQuotaInfo();
+          } else {
+            showToast('❌ Rebuild failed: ' + (resp?.message || 'Unknown error'), true);
+          }
+        } catch (error) {
+          showToast('❌ Rebuild failed', true);
+          console.error('Rebuild error:', error);
+        } finally {
+          rebuildBtn.disabled = false;
+          rebuildBtn.textContent = '🔄 Rebuild Index';
+        }
+      });
+    }
+
     // Clear data button
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (confirm('Clear all extension data? This will delete your browsing history index.')) {
-          try {
-            // Lazy load clearIndexedDB only when needed
-            const clearDB = await getClearIndexedDB();
-            await clearDB();
-            await SettingsManager.resetToDefaults();
-            await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
+        if (!confirm('Clear ALL extension data?\n\nThis will:\n• Delete your browsing history index\n• Reset all settings to defaults\n• The index will rebuild on next use\n\nThis cannot be undone.')) {
+          return;
+        }
+        
+        clearBtn.disabled = true;
+        clearBtn.textContent = '⏳ Clearing...';
+        
+        try {
+          const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+          if (resp && resp.status === 'OK') {
+            showToast('✅ All data cleared. Index will rebuild on next use.');
             closeSettingsModal();
             resultsLocal = [];
             activeIndex = -1;
             renderResults();
-            showToast('All data cleared');
-          } catch (error) {
-            showToast('Failed to clear data', true);
+          } else {
+            showToast('❌ Clear failed: ' + (resp?.message || 'Unknown error'), true);
           }
+        } catch (error) {
+          showToast('❌ Failed to clear data', true);
+          console.error('Clear data error:', error);
+        } finally {
+          clearBtn.disabled = false;
+          clearBtn.textContent = '🗑️ Clear All Data';
         }
       });
     }
