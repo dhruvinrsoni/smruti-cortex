@@ -4,16 +4,17 @@
 SmrutiCortex is a Chrome Manifest V3 extension for ultra-fast, intelligent browser history search. It uses IndexedDB for local storage, a modular scorer system for ranking, and a service worker for background processing. The codebase is TypeScript-first and organized for maintainability and speed.
 
 ## Architecture & Key Components
-- **src/background/**: Core background logic, including:
-  - `database.ts`: IndexedDB schema and access
-  - `indexing.ts`: Real-time history indexing
+- **src/background/**: Core background logic
+  - `database.ts`: IndexedDB schema, storage quota info
+  - `indexing.ts`: Real-time history indexing, mergeMetadata
+  - `resilience.ts`: Self-healing, health monitoring, auto-recovery
   - `messaging.ts`: Message passing between extension parts
-  - `search/`: Modular scoring system (see `scorer-manager.ts`, `search-engine.ts`, and `scorers/`)
+  - `search/`: Modular scoring system (scorer-manager, search-engine, scorers/)
 - **src/content_scripts/**: 
-  - `extractor.ts`: Page metadata extraction
-  - `quick-search.ts`: **Ultra-fast inline search overlay** (bypasses service worker wake-up delays)
-- **src/core/**: Shared utilities, constants, logger, and settings
-- **src/popup/**: UI for search popup (HTML, CSS, TS)
+  - `extractor.ts`: Page metadata extraction with sensitive-site blacklist
+  - `quick-search.ts`: Ultra-fast inline search overlay (< 50ms, no service worker wake-up)
+- **src/core/**: Shared utilities, constants, logger, settings
+- **src/popup/**: Search UI (HTML, CSS, TS) with settings modal
 - **manifest.json**: Chrome extension manifest (MV3)
 
 ## Two UI Implementations
@@ -41,13 +42,14 @@ SmrutiCortex has **two distinct user interfaces**:
 3. Via omnibox (`sc ` in address bar) - popup mode
 
 ## Performance Philosophy
-- **Content script-first for shortcuts**: The `quick-search.ts` runs directly in page context, providing instant keyboard shortcut response (no service worker wake-up)
-- **Shadow DOM isolation**: Search overlay uses closed Shadow DOM for complete style isolation from page CSS
-- **Port-based messaging**: Uses `chrome.runtime.connect()` for faster search-as-you-type (2-5ms vs 5-15ms one-shot)
-- **Service worker pre-warming**: Ping on visibility change and first keypress to eliminate cold starts
-- **requestIdleCallback pre-creation**: Overlay pre-created during browser idle time for instant appearance
-- **CSS containment**: Uses `contain: layout style` and `content-visibility: auto` for faster rendering
-- **Non-blocking initialization**: Logger and Settings use async init to avoid blocking popup load
+- **Content script-first**: `quick-search.ts` runs in page context for instant keyboard shortcuts (< 50ms, no service worker wake-up)
+- **Shadow DOM isolation**: Complete style isolation from page CSS
+- **Port-based messaging**: `chrome.runtime.connect()` for faster search (2-5ms vs 5-15ms one-shot)
+- **Self-healing architecture**: Auto-recovery, health monitoring every 60s
+- **Service worker pre-warming**: Ping on visibility change to eliminate cold starts
+- **requestIdleCallback**: Pre-create overlay during browser idle for instant appearance
+- **Non-blocking init**: Logger and Settings use async init to avoid blocking popup load
+- **Module-level listeners**: Command listeners registered at load time, before async init
 - **Lazy loading**: Heavy imports are loaded on-demand, not at startup
 - **Module-level listeners**: Command listeners registered at module load time, before async init
 
