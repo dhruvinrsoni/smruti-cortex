@@ -221,6 +221,28 @@
           </div>
         </div>
         <div class="settings-section">
+          <h3>Privacy</h3>
+          <p>Control external connections and sensitive site handling.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-loadFavicons">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Load favicons from Google</strong>
+                <small>Fetches site icons via Google API. Disable for maximum privacy (uses fallback icons).</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <div class="option-content" style="margin-bottom: 8px;">
+                <strong>Sensitive URL Blacklist</strong>
+                <small>Skip metadata extraction on these domains/patterns (one per line). Built-in patterns: banks, password managers, login pages.</small>
+              </div>
+              <textarea id="modal-sensitiveUrlBlacklist" placeholder="mybankingsite.com&#10;secure.mycompany.com&#10;vault.example.org" 
+                        rows="4" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-family:monospace; font-size:12px;"></textarea>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
           <h3>Data Management</h3>
           <p>Manage your indexed history and extension data.</p>
           <div class="storage-status" id="storage-status">
