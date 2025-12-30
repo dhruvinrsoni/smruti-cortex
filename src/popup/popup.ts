@@ -681,8 +681,11 @@ function initializePopup() {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
     
-    // Fetch storage quota info
+    // Fetch storage quota info and health status
     fetchStorageQuotaInfo();
+    
+    // Set up inspect link
+    setupInspectLink();
 
     // Load current settings into form
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
@@ -752,12 +755,15 @@ function initializePopup() {
     const storageUsedEl = document.getElementById('storage-used');
     const storageItemsEl = document.getElementById('storage-items');
     const storageBarEl = document.getElementById('storage-bar');
+    const healthIndicatorEl = document.getElementById('health-indicator');
+    const healthTextEl = document.getElementById('health-text');
     
     if (!storageUsedEl || !storageItemsEl || !storageBarEl) return;
     
     try {
       storageUsedEl.textContent = 'Loading...';
       
+      // Fetch storage quota
       const resp = await sendMessage({ type: 'GET_STORAGE_QUOTA' });
       if (resp && resp.status === 'OK' && resp.data) {
         const { usedFormatted, totalFormatted, percentage, itemCount } = resp.data;
@@ -779,10 +785,50 @@ function initializePopup() {
         storageUsedEl.textContent = 'Unknown';
         storageItemsEl.textContent = '-- items';
       }
+      
+      // Fetch health status
+      if (healthIndicatorEl && healthTextEl) {
+        const healthResp = await sendMessage({ type: 'GET_HEALTH_STATUS' });
+        if (healthResp && healthResp.status === 'OK' && healthResp.data) {
+          const { isHealthy, indexedItems, issues } = healthResp.data;
+          
+          healthIndicatorEl.classList.remove('healthy', 'warning', 'error');
+          if (isHealthy) {
+            healthIndicatorEl.classList.add('healthy');
+            healthTextEl.textContent = `Healthy • ${indexedItems} items indexed`;
+          } else if (indexedItems === 0) {
+            healthIndicatorEl.classList.add('error');
+            healthTextEl.textContent = 'Index empty - Click Rebuild to fix';
+          } else {
+            healthIndicatorEl.classList.add('warning');
+            healthTextEl.textContent = `Issues: ${issues.join(', ')}`;
+          }
+        } else {
+          healthTextEl.textContent = 'Unable to check health';
+        }
+      }
     } catch (error) {
       storageUsedEl.textContent = 'Error';
       storageItemsEl.textContent = '-- items';
+      if (healthTextEl) healthTextEl.textContent = 'Check failed';
       logger.debug('openSettingsPage', 'Failed to fetch storage quota', error);
+    }
+  }
+  
+  // Set up inspect link handler
+  function setupInspectLink() {
+    const inspectLink = document.getElementById('storage-inspect-link');
+    if (inspectLink) {
+      inspectLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        // IndexedDB is browser-internal, copy the debug URL for developers
+        const debugUrl = 'chrome://indexeddb-internals';
+        navigator.clipboard.writeText(debugUrl).then(() => {
+          showToast(`📋 Copied: ${debugUrl}\nPaste in address bar to inspect storage.`);
+        }).catch(() => {
+          showToast('Open chrome://indexeddb-internals in a new tab to inspect storage');
+        });
+      });
     }
   }
 
@@ -1007,30 +1053,34 @@ function initializePopup() {
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('Clear ALL extension data?\n\nThis will:\n• Delete your browsing history index\n• Reset all settings to defaults\n• The index will rebuild on next use\n\nThis cannot be undone.')) {
+        if (!confirm('Clear ALL data and rebuild index?\n\nThis will:\n• Delete your browsing history index\n• Immediately rebuild from browser history\n• Reset all settings to defaults\n\nThis operation takes a few seconds.')) {
           return;
         }
         
         clearBtn.disabled = true;
-        clearBtn.textContent = '⏳ Clearing...';
+        clearBtn.textContent = '⏳ Clearing & Rebuilding...';
+        showToast('🔄 Clearing data and rebuilding index...');
         
         try {
           const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
           if (resp && resp.status === 'OK') {
-            showToast('✅ All data cleared. Index will rebuild on next use.');
-            closeSettingsModal();
+            const itemCount = resp.itemCount || 0;
+            showToast(`✅ Done! ${itemCount} items re-indexed.`);
+            // Refresh storage quota display
+            await fetchStorageQuotaInfo();
+            // Clear local results
             resultsLocal = [];
             activeIndex = -1;
             renderResults();
           } else {
-            showToast('❌ Clear failed: ' + (resp?.message || 'Unknown error'), true);
+            showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), true);
           }
         } catch (error) {
           showToast('❌ Failed to clear data', true);
           console.error('Clear data error:', error);
         } finally {
           clearBtn.disabled = false;
-          clearBtn.textContent = '🗑️ Clear All Data';
+          clearBtn.textContent = '🗑️ Clear & Rebuild';
         }
       });
     }
