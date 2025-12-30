@@ -19,7 +19,12 @@ Each item can be converted into GitHub Issues.
 ## ✅ COMPLETED — v4.0 (In Progress)
 - [x] **Professional Icon System** - v11 "Neural S" design across all sizes
 - [x] **Remove Hardcoded Content** - All assets loaded from files (no emojis, no inline SVG)
-- [ ] **Local Ollama Integration** - Privacy-first AI with developer insights panel
+- [x] **Local Ollama Integration** - Privacy-first AI with prompting-based keyword expansion
+- [x] **Delete All Data Button** - Clear IndexedDB + chrome.storage with auto-rebuild on next use
+- [x] **Rebuild Index Button** - Manual full history re-import with progress feedback
+- [x] **Background Resilience** - Service worker restart recovery with proper initialization
+- [x] **IndexedDB Quota Handling** - Storage status display on settings page
+- [x] **Unit Tests for mergeMetadata** - 16 tests covering core indexing logic
 - [ ] **Default Local-Only Processing** - No external calls without explicit consent
 - [ ] **Sensitive-Site Blacklist** - Disable extractor on banks/password portals
 
@@ -103,19 +108,19 @@ Each item can be converted into GitHub Issues.
 ## HIGH PRIORITY — PRIVACY & SECURITY (v4.0)
 - [x] Default to "Local-only" processing (no external data usage) - Issue #4 (v4.0 milestone)
 - [x] Add sensitive-site blacklist (disable extractor on banks, password portals) - Issue #6 (v4.0 milestone)
+- [x] Add "Delete All Data" (IndexedDB + chrome.storage) with auto-rebuild
+- [x] Add manual "Rebuild Index" button
 - [ ] Add onboarding privacy prompt (explain metadata extraction clearly to user)
 - [ ] Explain permissions within extension Options page
-- [ ] Add toggle: “Disable metadata extraction”
-- [ ] Add “Delete All Data” (IndexedDB + chrome.storage)
-- [ ] Add manual “Rebuild Index” button
+- [ ] Add toggle: "Disable metadata extraction"
 - [ ] Implement data retention settings (e.g., keep last 90 days)
 
 ---
 
 ## HIGH PRIORITY — CORRECTNESS & RELIABILITY
-- [ ] Unit tests for mergeMetadata logic
+- [x] Unit tests for mergeMetadata logic
+- [x] Background resilience (SW restart recovery)
 - [ ] Build index rebuild flow (full history import)
-- [ ] Add background resilience (SW restart recovery)
 - [ ] Handle IndexedDB quota gracefully
 
 ---

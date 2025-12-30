@@ -375,6 +375,20 @@ input[type="radio"] {
   background: #6b7280;
 }
 
+.action-btn.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.action-btn.primary:hover {
+  background: #2563eb;
+}
+
+.action-btn.primary:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
 .action-btn.danger {
   background: #dc2626;
   color: white;
@@ -382,6 +396,59 @@ input[type="radio"] {
 
 .action-btn.danger:hover {
   background: #b91c1c;
+}
+
+/* Storage Status Display */
+.storage-status {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.storage-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.storage-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.storage-separator {
+  color: var(--muted);
+}
+
+#storage-used, #storage-items {
+  color: var(--muted);
+}
+
+.storage-bar-container {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.storage-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.storage-bar.warning {
+  background: #f59e0b;
+}
+
+.storage-bar.danger {
+  background: #ef4444;
 }
 
 /* Toast notifications */

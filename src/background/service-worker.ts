@@ -1,7 +1,7 @@
 // service-worker.ts — Core brain of SmrutiCortex
 
-import { openDatabase } from './database';
-import { ingestHistory } from './indexing';
+import { openDatabase, getStorageQuotaInfo, setForceRebuildFlag, getForceRebuildFlag, clearIndexedDB } from './database';
+import { ingestHistory, performFullRebuild } from './indexing';
 import { runSearch } from './search/search-engine';
 import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
@@ -11,6 +11,7 @@ import { SettingsManager } from '../core/settings';
 // Logger will be initialized below - don't log before that
 
 let initialized = false;
+let initializationPromise: Promise<void> | null = null;
 const logger = Logger.forComponent('ServiceWorker');
 
 // === ULTRA-FAST KEYBOARD SHORTCUT HANDLER ===
@@ -238,11 +239,54 @@ setupPortBasedMessaging();
                 break;
               }
 
-              case 'REBUILD_INDEX':
-                logger.debug('onMessage', 'Handling REBUILD_INDEX');
-                await ingestHistory();
-                sendResponse({ status: 'OK' });
+              case 'REBUILD_INDEX': {
+                logger.info('onMessage', '🔄 REBUILD_INDEX requested by user');
+                try {
+                  await performFullRebuild();
+                  logger.info('onMessage', '✅ REBUILD_INDEX completed successfully');
+                  sendResponse({ status: 'OK', message: 'Index rebuilt successfully' });
+                } catch (error) {
+                  logger.error('onMessage', '❌ REBUILD_INDEX failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
                 break;
+              }
+
+              case 'CLEAR_ALL_DATA': {
+                logger.info('onMessage', '🗑️ CLEAR_ALL_DATA requested by user');
+                try {
+                  // Clear IndexedDB
+                  await clearIndexedDB();
+                  logger.info('onMessage', '✅ IndexedDB cleared');
+                  
+                  // Set force rebuild flag so next init rebuilds index
+                  await setForceRebuildFlag(true);
+                  logger.info('onMessage', '🔄 Force rebuild flag set for next init');
+                  
+                  // Reset settings to defaults
+                  await SettingsManager.resetToDefaults();
+                  logger.info('onMessage', '✅ Settings reset to defaults');
+                  
+                  sendResponse({ status: 'OK', message: 'All data cleared. Index will rebuild on next use.' });
+                } catch (error) {
+                  logger.error('onMessage', '❌ CLEAR_ALL_DATA failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_STORAGE_QUOTA': {
+                logger.debug('onMessage', 'GET_STORAGE_QUOTA requested');
+                try {
+                  const quotaInfo = await getStorageQuotaInfo();
+                  logger.debug('onMessage', 'Storage quota retrieved', quotaInfo);
+                  sendResponse({ status: 'OK', data: quotaInfo });
+                } catch (error) {
+                  logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
 
               // inside messaging onMessage handler
               case 'METADATA_CAPTURE': {
@@ -277,50 +321,99 @@ setupPortBasedMessaging();
 })();
 
 async function init() {
-    logger.info('init', '[SmrutiCortex] Init function called');
-    try {
-        logger.debug('init', 'Initializing service worker…');
-
-        logger.info('init', '🗄️ Opening database...');
-        await openDatabase();
-        logger.info('init', '✅ Database ready');
-
-        // Always perform indexing on startup (smart indexing will decide what to do)
-        logger.info('init', '🔄 Starting history indexing...');
-        await ingestHistory();
-        logger.info('init', '✅ History indexing complete');
-
-        // Listen for new visits (incremental updates with debouncing)
-        logger.debug('init', 'Setting up history listener for incremental updates');
-        browserAPI.history.onVisited.addListener(async (item) => {
-            logger.trace('onVisited', 'New visit detected, scheduling incremental index:', item.url);
-            // Debounce incremental indexing to avoid too frequent updates
-            if (this.indexingTimeout) {
-                clearTimeout(this.indexingTimeout);
-            }
-            this.indexingTimeout = setTimeout(async () => {
-                logger.debug('onVisited', 'Performing debounced incremental indexing');
-                await ingestHistory();
-            }, 10000); // Wait 10 seconds after last visit before indexing
-        });
-
-        // Set up messaging
-        logger.debug('init', 'Setting up messaging');
-
-        initialized = true;
-        logger.debug('init', 'Service worker initialized flag set');
-
-        // Keep service worker alive to reduce cold start delays for keyboard shortcuts
-        keepServiceWorkerAlive();
-
-        // Command listener is already registered at module load level for ultra-fast response
-        // Just ensure it's registered if not already
-        registerCommandsListenerEarly();
-
-        logger.info('init', 'Service worker ready.');
-        logger.info('init', '[SmrutiCortex] Service worker ready');
-    } catch (error) {
-        logger.error('init', 'Init error:', error);
-        logger.error('init', '[SmrutiCortex] Init error:', error);
+    // Prevent concurrent initialization
+    if (initializationPromise) {
+        logger.debug('init', 'Initialization already in progress, waiting...');
+        return initializationPromise;
     }
+    
+    // If already initialized, just return
+    if (initialized) {
+        logger.debug('init', 'Service worker already initialized, skipping');
+        return;
+    }
+
+    initializationPromise = (async () => {
+        const initStartTime = performance.now();
+        logger.info('init', '[SmrutiCortex] Init function called');
+        try {
+            logger.debug('init', 'Initializing service worker…');
+
+            logger.info('init', '🗄️ Opening database...');
+            await openDatabase();
+            logger.info('init', '✅ Database ready');
+
+            // Check if force rebuild flag is set (after CLEAR_ALL_DATA)
+            const forceRebuild = await getForceRebuildFlag();
+            if (forceRebuild) {
+                logger.info('init', '🔄 Force rebuild flag detected - performing full rebuild');
+                await performFullRebuild();
+                await setForceRebuildFlag(false);
+                logger.info('init', '✅ Force rebuild completed');
+            } else {
+                // Normal indexing (smart indexing will decide what to do)
+                logger.info('init', '🔄 Starting history indexing...');
+                await ingestHistory();
+                logger.info('init', '✅ History indexing complete');
+            }
+
+            // Listen for new visits (incremental updates with debouncing)
+            logger.debug('init', 'Setting up history listener for incremental updates');
+            let indexingTimeout: ReturnType<typeof setTimeout> | null = null;
+            browserAPI.history.onVisited.addListener(async (item) => {
+                logger.trace('onVisited', 'New visit detected, scheduling incremental index:', item.url);
+                // Debounce incremental indexing to avoid too frequent updates
+                if (indexingTimeout) {
+                    clearTimeout(indexingTimeout);
+                }
+                indexingTimeout = setTimeout(async () => {
+                    logger.debug('onVisited', 'Performing debounced incremental indexing');
+                    await ingestHistory();
+                }, 10000); // Wait 10 seconds after last visit before indexing
+            });
+
+            // Set up messaging
+            logger.debug('init', 'Setting up messaging');
+
+            initialized = true;
+            logger.debug('init', 'Service worker initialized flag set');
+
+            // Keep service worker alive to reduce cold start delays for keyboard shortcuts
+            keepServiceWorkerAlive();
+
+            // Command listener is already registered at module load level for ultra-fast response
+            // Command listener is already registered at module load level for ultra-fast response
+            // Just ensure it's registered if not already
+            registerCommandsListenerEarly();
+
+            const initDuration = (performance.now() - initStartTime).toFixed(1);
+            logger.info('init', `✅ Service worker ready in ${initDuration}ms`);
+            logger.info('init', '[SmrutiCortex] Service worker ready');
+        } catch (error) {
+            logger.error('init', '❌ Init error:', error);
+            logger.error('init', '[SmrutiCortex] Init error:', error);
+            // Reset initialization state so it can be retried
+            initialized = false;
+            initializationPromise = null;
+            throw error;
+        }
+    })();
+    
+    await initializationPromise;
 }
+
+// Background resilience: re-initialize on wake from suspension
+browserAPI.runtime.onStartup.addListener(async () => {
+    logger.info('onStartup', '🔄 Browser startup detected, ensuring service worker is initialized');
+    if (!initialized) {
+        await init();
+    }
+});
+
+// Ensure initialization on install/update
+browserAPI.runtime.onInstalled.addListener(async (details) => {
+    logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
+    if (!initialized) {
+        await init();
+    }
+});

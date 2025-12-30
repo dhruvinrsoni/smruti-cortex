@@ -221,10 +221,23 @@
           </div>
         </div>
         <div class="settings-section">
-          <h3>Actions</h3>
+          <h3>Data Management</h3>
+          <p>Manage your indexed history and extension data.</p>
+          <div class="storage-status" id="storage-status">
+            <div class="storage-info">
+              <span class="storage-label">📊 Storage:</span>
+              <span id="storage-used">Loading...</span>
+              <span class="storage-separator">•</span>
+              <span id="storage-items">-- items</span>
+            </div>
+            <div class="storage-bar-container">
+              <div class="storage-bar" id="storage-bar" style="width: 0%"></div>
+            </div>
+          </div>
           <div class="setting-actions">
-            <button class="action-btn secondary" id="modal-reset">Reset to Defaults</button>
-            <button class="action-btn danger" id="modal-clear">Clear All Data</button>
+            <button class="action-btn primary" id="modal-rebuild" title="Re-index all browser history">🔄 Rebuild Index</button>
+            <button class="action-btn secondary" id="modal-reset">Reset Settings</button>
+            <button class="action-btn danger" id="modal-clear">🗑️ Clear All Data</button>
           </div>
         </div>
       </div>

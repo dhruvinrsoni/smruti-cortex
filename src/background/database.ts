@@ -129,3 +129,89 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
         browserAPI.storage.local.set({ [key]: value }, () => resolve());
     });
 }
+
+// -------------------------------------------------------------------
+// Storage Quota Management
+// -------------------------------------------------------------------
+export interface StorageQuotaInfo {
+    used: number;           // Bytes used
+    total: number;          // Total bytes available (0 if unlimited/unknown)
+    usedFormatted: string;  // Human-readable used (e.g., "12.5 MB")
+    totalFormatted: string; // Human-readable total (e.g., "5 GB")
+    percentage: number;     // Percentage used (0-100)
+    itemCount: number;      // Number of indexed items
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
+    const logger = Logger.forComponent('Database');
+    logger.debug('getStorageQuotaInfo', 'Retrieving storage quota information');
+    
+    try {
+        // Get IndexedDB item count
+        const items = await getAllIndexedItems();
+        const itemCount = items.length;
+        
+        // Try to get storage estimate (modern browsers)
+        let used = 0;
+        let total = 0;
+        
+        if ('storage' in navigator && 'estimate' in navigator.storage) {
+            try {
+                const estimate = await navigator.storage.estimate();
+                used = estimate.usage || 0;
+                total = estimate.quota || 0;
+                logger.trace('getStorageQuotaInfo', 'Storage estimate retrieved', { used, total });
+            } catch (e) {
+                logger.debug('getStorageQuotaInfo', 'Storage estimate not available, using fallback');
+            }
+        }
+        
+        // Fallback: estimate based on item count (rough estimate: ~1KB per item average)
+        if (used === 0 && itemCount > 0) {
+            used = itemCount * 1024; // Rough estimate
+            logger.trace('getStorageQuotaInfo', 'Using item-based estimate', { itemCount, estimatedBytes: used });
+        }
+        
+        const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
+        
+        const info: StorageQuotaInfo = {
+            used,
+            total,
+            usedFormatted: formatBytes(used),
+            totalFormatted: total > 0 ? formatBytes(total) : 'Unlimited',
+            percentage,
+            itemCount,
+        };
+        
+        logger.info('getStorageQuotaInfo', 'Storage quota info', info);
+        return info;
+    } catch (error) {
+        logger.error('getStorageQuotaInfo', 'Failed to get storage quota', error);
+        return {
+            used: 0,
+            total: 0,
+            usedFormatted: 'Unknown',
+            totalFormatted: 'Unknown',
+            percentage: 0,
+            itemCount: 0,
+        };
+    }
+}
+
+// Force rebuild index flag
+export async function setForceRebuildFlag(value: boolean): Promise<void> {
+    await setSetting('forceRebuildIndex', value);
+    Logger.info('setForceRebuildFlag', value ? '🔄 Force rebuild flag set' : '✅ Force rebuild flag cleared');
+}
+
+export async function getForceRebuildFlag(): Promise<boolean> {
+    return getSetting<boolean>('forceRebuildIndex', false);
+}
