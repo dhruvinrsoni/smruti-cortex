@@ -3,13 +3,16 @@
 
 import { Logger } from '../core/logger';
 import { openDatabase, getAllIndexedItems, clearIndexedDB, getForceRebuildFlag, setForceRebuildFlag } from './database';
-import { performFullRebuild, ingestHistory } from './indexing';
+import { performFullRebuild } from './indexing';
+import { performanceTracker } from './performance-monitor';
 
 const logger = Logger.forComponent('Resilience');
 
 // Health check thresholds
 const MIN_EXPECTED_ITEMS = 10; // Minimum items expected for a "healthy" index
 const HEALTH_CHECK_INTERVAL_MS = 60 * 1000; // Check every 60 seconds
+const MAX_RETRY_ATTEMPTS = 3; // Maximum retry attempts for operations
+const RETRY_DELAY_MS = 1000; // Delay between retries
 
 /**
  * Health status of the extension
@@ -230,6 +233,144 @@ export function getLastHealthStatus(): HealthStatus | null {
 }
 
 /**
+ * Retry a function with exponential backoff
+ */
+async function retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxAttempts: number = MAX_RETRY_ATTEMPTS,
+    baseDelay: number = RETRY_DELAY_MS,
+    operationName: string = 'operation'
+): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error as Error;
+            const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+            
+            if (attempt < maxAttempts) {
+                logger.warn('retryWithBackoff', 
+                    `${operationName} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms...`, 
+                    { error: lastError.message }
+                );
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    logger.error('retryWithBackoff', `${operationName} failed after ${maxAttempts} attempts`);
+    throw lastError;
+}
+
+/**
+ * Graceful degradation: try operation, return fallback on failure
+ * @internal Reserved for future use
+ */
+async function _gracefulDegrade<T>(
+    fn: () => Promise<T>,
+    fallback: T,
+    operationName: string = 'operation'
+): Promise<T> {
+    try {
+        return await fn();
+    } catch (error) {
+        logger.warn('_gracefulDegrade', `${operationName} failed, using fallback`, { 
+            error: (error as Error).message 
+        });
+        return fallback;
+    }
+}
+
+// Export for potential future use
+export { _gracefulDegrade as gracefulDegrade };
+
+/**
+ * Safe database operation with retry and fallback
+ */
+export async function safeDatabaseOperation<T>(
+    operation: () => Promise<T>,
+    fallback: T,
+    operationName: string
+): Promise<T> {
+    try {
+        return await retryWithBackoff(
+            async () => {
+                // Ensure database is open before operation
+                await openDatabase();
+                return await operation();
+            },
+            MAX_RETRY_ATTEMPTS,
+            RETRY_DELAY_MS,
+            operationName
+        );
+    } catch (error) {
+        logger.error('safeDatabaseOperation', `${operationName} failed after retries, using fallback`);
+        return fallback;
+    }
+}
+
+/**
+ * Recover from corrupted database state
+ */
+export async function recoverFromCorruption(): Promise<boolean> {
+    logger.info('recoverFromCorruption', '🔧 Attempting database corruption recovery...');
+    
+    try {
+        // Step 1: Clear IndexedDB completely
+        logger.info('recoverFromCorruption', '🗑️ Clearing corrupted database...');
+        await clearIndexedDB();
+        
+        // Step 2: Wait a moment for cleanup
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Step 3: Reopen database (fresh schema)
+        logger.info('recoverFromCorruption', '📂 Reopening fresh database...');
+        await openDatabase();
+        
+        // Step 4: Rebuild from browser history
+        logger.info('recoverFromCorruption', '🔄 Rebuilding from browser history...');
+        await performFullRebuild();
+        
+        // Step 5: Verify recovery
+        const items = await getAllIndexedItems();
+        const success = items.length > 0;
+        
+        if (success) {
+            logger.info('recoverFromCorruption', `✅ Recovery successful: ${items.length} items restored`);
+            performanceTracker.recordSelfHeal();
+        } else {
+            logger.warn('recoverFromCorruption', '⚠️ Recovery completed but no items found');
+        }
+        
+        return success;
+    } catch (error) {
+        logger.error('recoverFromCorruption', '❌ Corruption recovery failed', error);
+        return false;
+    }
+}
+
+/**
+ * Handle quota exceeded errors
+ */
+export async function handleQuotaExceeded(): Promise<boolean> {
+    logger.warn('handleQuotaExceeded', '⚠️ Storage quota exceeded, attempting cleanup...');
+    
+    try {
+        // Clear old data to free up space
+        const { clearExpiredFavicons } = await import('./favicon-cache');
+        await clearExpiredFavicons();
+        
+        logger.info('handleQuotaExceeded', '✅ Cleaned up expired data');
+        return true;
+    } catch (error) {
+        logger.error('handleQuotaExceeded', '❌ Quota cleanup failed', error);
+        return false;
+    }
+}
+
+/**
  * Ensure the extension is ready for use
  * Call this before any critical operation
  */
@@ -238,7 +379,11 @@ export async function ensureReady(): Promise<boolean> {
     
     if (!health.isHealthy && health.indexedItems === 0) {
         logger.info('ensureReady', '⚠️ Extension not ready, attempting self-heal');
-        return await selfHeal('ensureReady check failed');
+        const healed = await selfHeal('ensureReady check failed');
+        if (healed) {
+            performanceTracker.recordSelfHeal();
+        }
+        return healed;
     }
     
     return health.isHealthy;
