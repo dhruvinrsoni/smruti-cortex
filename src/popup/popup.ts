@@ -132,40 +132,6 @@ function setupEventListeners() {
     settingsButton.addEventListener('click', openSettingsPage);
   }
   
-  // Bookmark button: copy URL and make draggable
-  const bookmarkBtn = document.getElementById('bookmarkBtn') as HTMLButtonElement;
-  if (bookmarkBtn) {
-    const extensionURL = chrome.runtime.getURL('popup/popup.html');
-    
-    // Click to copy URL
-    bookmarkBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      navigator.clipboard.writeText(extensionURL).then(() => {
-        showToast('📋 Extension URL copied! Now add as bookmark.');
-      }).catch(() => {
-        showToast('❌ Failed to copy URL', true);
-      });
-    });
-    
-    // Drag-and-drop to bookmarks bar
-    bookmarkBtn.addEventListener('dragstart', (e) => {
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = 'link';
-        e.dataTransfer.setData('text/uri-list', extensionURL);
-        e.dataTransfer.setData('text/plain', extensionURL);
-        // Set bookmark data with title for browser
-        e.dataTransfer.setData('text/x-moz-url', `${extensionURL}\nSmrutiCortex - Browser History Search`);
-        // For Chrome bookmark creation
-        e.dataTransfer.setData('text/html', `<a href="${extensionURL}">SmrutiCortex Search</a>`);
-      }
-    });
-    
-    // Visual feedback on drag
-    bookmarkBtn.addEventListener('dragend', () => {
-      showToast('✅ Drag complete! Check your bookmarks.');
-    });
-  }
-  
   // Auto-open settings if URL has #settings hash
   if (window.location.hash === '#settings') {
     setTimeout(() => {
@@ -767,6 +733,45 @@ function initializePopup() {
     if (sensitiveUrlBlacklistInput) {
       const blacklist = SettingsManager.getSetting('sensitiveUrlBlacklist') || [];
       sensitiveUrlBlacklistInput.value = blacklist.join('\n');
+    }
+
+    // Initialize bookmark button in settings modal
+    initializeBookmarkButton();
+  }
+
+  // Initialize bookmark button in settings modal
+  function initializeBookmarkButton() {
+    const bookmarkBtn = document.getElementById('bookmarkBtn') as HTMLButtonElement;
+    if (bookmarkBtn) {
+      const extensionURL = chrome.runtime.getURL('popup/popup.html');
+
+      // Click to copy URL
+      bookmarkBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        navigator.clipboard.writeText(extensionURL).then(() => {
+          showToast('📋 Extension URL copied! Now add as bookmark.');
+        }).catch(() => {
+          showToast('❌ Failed to copy URL', true);
+        });
+      });
+
+      // Drag-and-drop to bookmarks bar
+      bookmarkBtn.addEventListener('dragstart', (e) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'link';
+          e.dataTransfer.setData('text/uri-list', extensionURL);
+          e.dataTransfer.setData('text/plain', extensionURL);
+          // Set bookmark data with title for browser
+          e.dataTransfer.setData('text/x-moz-url', `${extensionURL}\nSmrutiCortex - Browser History Search`);
+          // For Chrome bookmark creation
+          e.dataTransfer.setData('text/html', `<a href="${extensionURL}">SmrutiCortex Search</a>`);
+        }
+      });
+
+      // Visual feedback on drag
+      bookmarkBtn.addEventListener('dragend', () => {
+        showToast('✅ Drag complete! Check your bookmarks.');
+      });
     }
   }
 
