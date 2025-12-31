@@ -96,12 +96,21 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     logger.trace('runSearch', 'Processing items for scoring');
     const results: ScoredItem[] = [];
 
+    // Check if strict matching is enabled (default: true = only show matching results)
+    const showNonMatchingResults = SettingsManager.getSetting('showNonMatchingResults') || false;
+
     // NO MORE 600+ EMBEDDINGS! Use keyword matching with expanded tokens instead
     for (const item of items) {
         // Match against expanded tokens (includes AI-generated synonyms)
         const haystack = (item.title + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '')).toLowerCase();
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
-        const hasAnyMatch = matchedTokens.length > 0;
+        const hasTokenMatch = matchedTokens.length > 0;
+        
+        // Also check for literal substring match (the raw query in the content)
+        const hasLiteralMatch = haystack.includes(q);
+        
+        // Combined match: either token match or literal substring match
+        const hasAnyMatch = hasTokenMatch || hasLiteralMatch;
         
         // Track if match came from AI-expanded keywords
         const aiOnlyTokens = searchTokens.filter(t => !originalTokens.includes(t));
@@ -117,6 +126,11 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
         }
 
+        // Boost score for literal substring matches (exact query found)
+        if (hasLiteralMatch && score > 0) {
+            score *= 1.5; // 50% boost for exact literal matches
+        }
+
         // Boost score for AI-expanded keyword matches
         if (hasAiMatch && score > 0) {
             score *= 1.2; // 20% boost for AI-discovered matches
@@ -126,12 +140,20 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             url: item.url,
             totalScore: score,
             matchedTokens,
+            hasLiteralMatch,
             aiMatch: hasAiMatch,
             scorerBreakdown: scorerDetails
         });
 
-        // Include items with meaningful scores
-        if (score > 0.01) {
+        // Include items based on matching criteria
+        // Default: only include items that actually match the query
+        // If showNonMatchingResults is enabled, include all items with score > 0.01
+        const meetsScoreThreshold = score > 0.01;
+        const shouldInclude = showNonMatchingResults 
+            ? meetsScoreThreshold 
+            : (meetsScoreThreshold && hasAnyMatch);
+
+        if (shouldInclude) {
             results.push({ 
                 item, 
                 finalScore: score,

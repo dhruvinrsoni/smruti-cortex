@@ -45,6 +45,19 @@ On first run, SmrutiCortex imports your browser history, which may contain thous
 - Use specific keywords that appear in the page title or URL
 - Use multiple words for better matching
 - Recent and frequently visited pages rank higher
+- Type exact phrases from URLs for literal substring boost (50% score increase)
+
+### Why am I seeing duplicate results?
+
+SmrutiCortex now filters duplicate URLs by default. If you see the same page with different query parameters (like `?pvs=12` vs `?pvs=25`), go to **Settings → "Show duplicate URLs"** to toggle this behavior. Default is OFF (diversity ON) for better variety.
+
+### Why don't I see results that don't contain my search term?
+
+SmrutiCortex uses **strict matching** by default - only results containing your search terms are shown. This ensures relevant results without random suggestions. To see non-matching results, toggle **Settings → "Show non-matching results"** to ON.
+
+### How does literal substring matching work?
+
+If your search term appears exactly in a URL or title (case-insensitive), that result gets a 50% score boost. For example, searching "war" will rank URLs containing "war" higher than pages that only match via tokenization.
 
 ---
 
@@ -167,4 +180,4 @@ Created by [Dhruvin Soni](https://github.com/dhruvinrsoni), inspired by the "Eve
 
 *Have a question not answered here? [Open an issue](https://github.com/dhruvinrsoni/SmrutiCortex/issues) and we'll add it!*
 
-*Last updated: December 2025 | SmrutiCortex v2.0*
+*Last updated: December 2025 | SmrutiCortex v4.0*

@@ -124,6 +124,9 @@ When TRACE is enabled, the Ollama AI service logs:
 - **Storage Quota**: Shows used/total/percentage/items
 - **Privacy**: Favicon toggle, sensitive-site blacklist
 - **AI Search**: Enable Ollama, test keyword expansion
+- **Strict Matching**: Toggle "Show non-matching results" - OFF = only shows results with query matches
+- **Diverse Results**: Toggle "Show duplicate URLs" - OFF = filters URLs with same base (strips query params)
+- **Literal Substring Boost**: URLs/titles with exact query string get 50% score boost
 
 ### Keyboard Navigation
 - **Arrow Up/Down**: Navigate results

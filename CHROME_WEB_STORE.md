@@ -32,8 +32,9 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 **KEY FEATURES:**
 
 ⚡ **Ultra-Fast Search** — Results appear as you type (< 50ms)
-🎯 **Smart Ranking** — Recent + frequent results first
-🎲 **Diverse Results** — Filters duplicate URLs automatically for variety
+🎯 **Smart Ranking** — Recent + frequent results with literal substring boost
+🎯 **Strict Matching** — Only shows results containing your search terms (default ON, configurable)
+🎲 **Diverse Results** — Filters duplicate URLs automatically for variety (default ON, configurable)
 🔐 **100% Private** — All data stays local in IndexedDB
 🛡️ **Self-Healing** — Auto-recovery from errors, health monitoring
 🔧 **Privacy Controls** — Favicon toggle, sensitive-site blacklist
