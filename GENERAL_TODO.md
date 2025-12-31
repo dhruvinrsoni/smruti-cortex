@@ -85,31 +85,416 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## 🔄 v7.0+ FUTURE ROADMAP (Deferred Features)
+## 🔄 v7.0+ FUTURE ROADMAP (Strategic Vision)
 
-### AI & UX Enhancements
-- [ ] **Enhanced AI Integration** - Multi-model support, cloud embeddings (opt-in)
-- [ ] **Advanced Privacy Controls** - Granular permission management, data retention settings
-- [ ] **Smart Onboarding** - 3-step setup flow with privacy explanations
-- [ ] **Favorites & Pinned Results** - Save frequently accessed pages
+> **Philosophy**: Each task should be completable in 1-2 hours. Baby steps = consistent progress.
+> **Priority Key**: 🔴 Critical | 🟡 Important | 🟢 Nice-to-have
 
-### Developer Experience
-- [ ] **Comprehensive Test Coverage** - 80%+ code coverage target
+---
 
-### AI & Intelligence
-- [ ] External API embedding scorer (privacy review needed)
-- [ ] Semantic search with cloud embeddings (opt-in)
-- [ ] API key management for cloud features
+## 📚 v7.0 — Documentation Completeness (Low Effort, High Value)
 
-### Premium Features (Potential)
-- [ ] Cross-device sync (Chrome Sync API)
-- [ ] End-to-end encrypted sync engine
-- [ ] Session snapshots + restore workspaces
-- [ ] Full-text indexing (opt-in)
+> **Theme**: Complete the documentation suite from master prompt vision.
+> **Estimated Effort**: 2-3 sessions
 
-### Analytics & Telemetry
-- [ ] Opt-in anonymized local analytics
-- [ ] Export diagnostics for bug reporting
+### 7.1 User Documentation
+- [ ] 🔴 **HOW_TO.md** - Step-by-step user guide (Issue #5 partial)
+  ```
+  PROMPT: "Create HOW_TO.md for SmrutiCortex with: installation steps (Chrome/Edge),
+  first-time setup, search usage, keyboard shortcuts, settings explanation, 
+  indexing behavior, troubleshooting tips. Keep it user-friendly, not developer-focused."
+  ```
+
+- [ ] 🔴 **FAQ.md** - Common questions answered
+  ```
+  PROMPT: "Create FAQ.md for SmrutiCortex covering: Why doesn't X page appear?
+  How does indexing work? Is my data uploaded? How to reset? Why Manifest V3?
+  How to debug? Privacy questions. Format as Q&A with clear answers."
+  ```
+
+- [ ] 🟡 **PERMISSIONS_EXPLAINED.md** - Why each permission is needed (Issue #5)
+  ```
+  PROMPT: "Create PERMISSIONS_EXPLAINED.md explaining each Chrome extension permission
+  used by SmrutiCortex (history, bookmarks, storage, scripting, tabs, activeTab, 
+  alarms, commands, host_permissions). Use non-technical language for end users."
+  ```
+
+### 7.2 Developer Documentation
+- [ ] 🔴 **CONTRIBUTING.md** - How to contribute code
+  ```
+  PROMPT: "Create CONTRIBUTING.md for SmrutiCortex TypeScript extension: coding standards,
+  how to add a new scorer, how to add tests, PR guidelines, branch naming, 
+  commit message format, code review process."
+  ```
+
+- [ ] 🟡 **DEVELOPER_ONBOARDING.md** - New developer quick-start
+  ```
+  PROMPT: "Create DEVELOPER_ONBOARDING.md explaining SmrutiCortex architecture:
+  folder structure, data flow (history → indexing → search → UI), message passing,
+  scorer system, key files to understand first, debugging tips, common gotchas."
+  ```
+
+- [ ] 🟡 **ARCHITECTURE.md** - Technical deep-dive with diagrams
+  ```
+  PROMPT: "Create ARCHITECTURE.md with ASCII diagrams showing: data pipeline
+  (browser history → IndexedDB → search engine → popup), scorer architecture,
+  message passing flow, content script ↔ service worker communication."
+  ```
+
+### 7.3 Branding & Assets
+- [ ] 🟢 **BRANDING.md** - Visual identity guide
+  ```
+  PROMPT: "Create BRANDING.md for SmrutiCortex: explain the name meaning
+  (Smriti = Sanskrit for memory + Cortex = brain's memory center), color palette
+  (primary, secondary, accent), typography guidelines, logo usage rules, 
+  icon variations, tagline options."
+  ```
+
+- [ ] 🟢 **LOGO_CONCEPTS.md** - 5 logo design concepts
+  ```
+  PROMPT: "Generate 5 textual logo concepts for SmrutiCortex browser extension:
+  1) Neural network inspired, 2) Sanskrit-inspired, 3) Brain/cortex visual,
+  4) Minimal geometric, 5) Letter-based. Describe each visually."
+  ```
+
+---
+
+## 🎨 v8.0 — User Experience Polish (Medium Effort)
+
+> **Theme**: Onboarding, favorites, and UX refinements.
+> **Estimated Effort**: 3-4 sessions
+
+### 8.1 Onboarding Flow (Issue #11)
+- [ ] 🔴 **First-run welcome modal** - Show on first install
+  ```
+  PROMPT: "Add a first-run welcome modal to SmrutiCortex popup that shows:
+  Step 1: What this extension does, Step 2: Privacy guarantee (local-only),
+  Step 3: Keyboard shortcut (Ctrl+Shift+S). Save 'onboardingComplete' flag.
+  Show only once. Include 'Don't show again' checkbox."
+  ```
+
+- [ ] 🟡 **Permissions explanation screen** - During onboarding
+  ```
+  PROMPT: "Add a permissions explanation step to the onboarding flow that shows
+  each permission with a friendly icon and one-sentence explanation of why
+  it's needed. User can click 'I understand' to proceed."
+  ```
+
+- [ ] 🟡 **Quick tips overlay** - First few searches
+  ```
+  PROMPT: "Add subtle tooltip hints that appear during user's first 3 searches:
+  Hint 1: 'Press Enter to open', Hint 2: 'Ctrl+Enter for new tab',
+  Hint 3: 'Use arrow keys to navigate'. Track hint state in settings."
+  ```
+
+### 8.2 Favorites & Pinned Results (Issue #12)
+- [ ] 🔴 **Pin result to top** - Right-click or button to pin
+  ```
+  PROMPT: "Add 'Pin to top' functionality to search results. Pinned items
+  always appear first regardless of search query. Store pins in chrome.storage.
+  Add pin icon button on hover. Max 10 pins. Show pin indicator (📌)."
+  ```
+
+- [ ] 🟡 **Favorites management UI** - View/remove pinned items
+  ```
+  PROMPT: "Add 'Manage Favorites' section to Settings modal. Show list of
+  all pinned URLs with title, URL, and remove button. Allow reordering
+  via drag-and-drop or up/down arrows."
+  ```
+
+- [ ] 🟢 **Quick-pin keyboard shortcut** - Press P to pin selected
+  ```
+  PROMPT: "Add keyboard shortcut 'P' to pin/unpin the currently selected
+  search result. Show toast notification: 'Pinned!' or 'Unpinned!'"
+  ```
+
+### 8.3 Result Preview (Issue #14)
+- [ ] 🟡 **Metadata preview on hover** - Show description snippet
+  ```
+  PROMPT: "Add tooltip preview on search result hover showing: page description
+  (from meta tag), last visited date, visit count, bookmark folders (if any).
+  Delay 500ms before showing. Use existing metadata from index."
+  ```
+
+- [ ] 🟢 **Preview pane (optional)** - Split view for preview
+  ```
+  PROMPT: "Add optional preview pane toggle in Settings. When enabled,
+  clicking a result shows iframe preview on the right side (50/50 split).
+  Handle X-Frame-Options errors gracefully with 'Preview unavailable'."
+  ```
+
+---
+
+## 🧠 v9.0 — AI Enhancement (Medium-High Effort)
+
+> **Theme**: Smarter search with local and optional cloud AI.
+> **Estimated Effort**: 4-5 sessions
+
+### 9.1 Enhanced Local AI (Ollama)
+- [ ] 🔴 **Multi-model support** - Choose from installed Ollama models
+  ```
+  PROMPT: "Enhance Ollama integration to auto-detect installed models via
+  /api/tags endpoint. Show dropdown in Settings with available models.
+  Default to smallest model. Show model size/description if available."
+  ```
+
+- [ ] 🟡 **Semantic query understanding** - Parse user intent
+  ```
+  PROMPT: "Add query intent parsing via Ollama: detect if user wants
+  'recent' (boost recency), 'frequent' (boost visit count), or 'exact'
+  (disable fuzzy). Example: 'recent github' boosts last 7 days."
+  ```
+
+- [ ] 🟡 **AI-powered result reranking** - Rerank top results
+  ```
+  PROMPT: "After initial search, send top 10 results to Ollama for semantic
+  reranking based on query relevance. Add 'AI Rerank' toggle in Settings.
+  Show reranking indicator while processing."
+  ```
+
+### 9.2 Embedding-Based Search (Issue #17)
+- [ ] 🔴 **Local embedding generation** - Use Ollama embeddings
+  ```
+  PROMPT: "Add embedding generation for indexed pages using Ollama's
+  embedding API. Store embeddings in IndexedDB alongside page data.
+  Generate embeddings in background during idle time. Schema migration."
+  ```
+
+- [ ] 🟡 **Vector similarity search** - Find semantically similar
+  ```
+  PROMPT: "Implement cosine similarity search using stored embeddings.
+  When user searches, embed the query and find top matches by similarity.
+  Blend with keyword score (50/50 configurable). Add 'Semantic Search' toggle."
+  ```
+
+- [ ] 🟢 **Similar pages feature** - "Find similar to this"
+  ```
+  PROMPT: "Add 'Find Similar' button on search results that finds pages
+  with similar embeddings. Opens new search with similar results.
+  Useful for discovering related content."
+  ```
+
+### 9.3 Cloud AI Integration (Issue #18) — Optional, Privacy Review
+- [ ] 🟡 **API key management UI** - Secure key storage
+  ```
+  PROMPT: "Add API key management in Settings for OpenAI/Anthropic.
+  Store keys encrypted in chrome.storage.local. Mask display (****).
+  Add 'Test Connection' button. Clear warnings about data leaving device."
+  ```
+
+- [ ] 🟡 **Cloud embedding option** - Opt-in for better quality
+  ```
+  PROMPT: "Add optional cloud embedding via OpenAI/Cohere API when API key
+  is provided. Clear consent checkbox: 'I understand page titles/URLs will
+  be sent to [Provider]'. Compare quality vs local embeddings."
+  ```
+
+- [ ] 🟢 **Hybrid search mode** - Local + Cloud combined
+  ```
+  PROMPT: "Implement hybrid search: try local Ollama first, fall back to
+  cloud API if local unavailable or times out. User configurable priority.
+  Show which mode was used in results."
+  ```
+
+---
+
+## 🔒 v10.0 — Privacy & Security Hardening (Medium Effort)
+
+> **Theme**: Enterprise-grade privacy controls and data management.
+> **Estimated Effort**: 3-4 sessions
+
+### 10.1 Advanced Privacy Controls
+- [ ] 🔴 **Data retention settings** - Auto-delete old entries
+  ```
+  PROMPT: "Add data retention settings: keep history for X days (30/60/90/forever).
+  Background job runs daily to purge old entries. Show 'Data will be deleted
+  after X days' warning. Exclude pinned/bookmarked items from deletion."
+  ```
+
+- [ ] 🟡 **Disable metadata extraction toggle** (Issue #7)
+  ```
+  PROMPT: "Add toggle to completely disable content script metadata extraction.
+  When disabled, only use browser history API data (title, URL, visit time).
+  Explain trade-off: faster but less rich search."
+  ```
+
+- [ ] 🟡 **Incognito mode handling** - Never index incognito
+  ```
+  PROMPT: "Ensure extension never indexes incognito/private browsing.
+  Add explicit check in indexing pipeline. Show badge indicator when
+  in incognito: 'Not indexing (private mode)'."
+  ```
+
+### 10.2 Export & Backup
+- [ ] 🔴 **Export all data** - Download complete index
+  ```
+  PROMPT: "Add 'Export All Data' button in Settings that downloads complete
+  index as JSON file. Include: history items, bookmarks, settings, pins.
+  File named: smruticortex-backup-YYYY-MM-DD.json"
+  ```
+
+- [ ] 🟡 **Import data** - Restore from backup
+  ```
+  PROMPT: "Add 'Import Data' button to restore from exported backup.
+  Validate JSON schema before import. Option to merge or replace existing.
+  Show import progress and summary."
+  ```
+
+- [ ] 🟢 **Selective export** - Export only certain data
+  ```
+  PROMPT: "Add export options: export only settings, only history, only
+  bookmarks, or date range. Checkbox selection before export."
+  ```
+
+---
+
+## 🚀 v11.0 — Advanced Features (High Effort)
+
+> **Theme**: Power user features and cross-device capabilities.
+> **Estimated Effort**: 5-6 sessions
+
+### 11.1 Session Management
+- [ ] 🟡 **Session snapshots** - Save current tabs
+  ```
+  PROMPT: "Add 'Save Session' feature that captures all open tabs with
+  titles and URLs. Store in chrome.storage with timestamp and custom name.
+  List saved sessions in Settings with restore/delete options."
+  ```
+
+- [ ] 🟢 **Session restore** - Open saved session
+  ```
+  PROMPT: "Add 'Restore Session' that opens all tabs from a saved session.
+  Options: open in current window, new window, or as tab group.
+  Confirm before restoring large sessions (>10 tabs)."
+  ```
+
+### 11.2 Full-Text Search (Opt-in)
+- [ ] 🟡 **Page content indexing** - Index page text
+  ```
+  PROMPT: "Add opt-in full-text indexing: content script extracts visible
+  text (first 5000 chars) and stores in index. Heavy storage warning.
+  Enable per-domain or globally. Exclude sensitive sites."
+  ```
+
+- [ ] 🟡 **Content search** - Search within page text
+  ```
+  PROMPT: "When full-text enabled, search within indexed page content.
+  Show matching snippet in results. Highlight match context.
+  Toggle: 'Search page content' in search bar."
+  ```
+
+### 11.3 Cross-Device Sync (Chrome Sync API)
+- [ ] 🔴 **Chrome Sync integration** - Sync settings across devices
+  ```
+  PROMPT: "Use chrome.storage.sync (limited to 100KB) to sync user settings,
+  pins, and favorites across Chrome instances. History stays local.
+  Show sync status indicator. Handle sync conflicts gracefully."
+  ```
+
+- [ ] 🟢 **Encrypted sync option** - E2E encrypted history sync
+  ```
+  PROMPT: "For users wanting full history sync: implement E2E encryption
+  using user-provided passphrase. Encrypt before upload, decrypt on device.
+  Use Web Crypto API. Heavy privacy warnings and consent."
+  ```
+
+---
+
+## 🧪 v12.0 — Quality & Testing (Ongoing)
+
+> **Theme**: Production-grade reliability and test coverage.
+> **Estimated Effort**: Continuous
+
+### 12.1 Test Coverage Expansion
+- [ ] 🔴 **Search engine unit tests** - Test all scorers
+  ```
+  PROMPT: "Add comprehensive unit tests for search-engine.ts and all scorers.
+  Test: scoring accuracy, edge cases (empty query, special chars, long URLs),
+  normalization, result ordering. Target 80% coverage for search module."
+  ```
+
+- [ ] 🟡 **Integration tests** - End-to-end search flow
+  ```
+  PROMPT: "Add integration tests that simulate: history import, search query,
+  result rendering. Use mocked chrome APIs. Test message passing between
+  popup and service worker."
+  ```
+
+- [ ] 🟡 **Performance benchmarks** - Automated timing tests
+  ```
+  PROMPT: "Add performance benchmark tests: search must complete <100ms for
+  10K items, indexing must process 1000 items/sec. Run in CI. Fail build
+  if benchmarks regress by >20%."
+  ```
+
+### 12.2 Error Handling
+- [ ] 🔴 **Global error boundary** - Catch all errors
+  ```
+  PROMPT: "Add global error handler in popup and service worker that catches
+  unhandled errors, logs to console, and shows user-friendly toast.
+  Include 'Report Bug' link to GitHub issues with error details."
+  ```
+
+- [ ] 🟡 **Graceful degradation** - Work with partial failures
+  ```
+  PROMPT: "Ensure extension works even if: IndexedDB unavailable (use memory),
+  content script blocked (use history API only), Ollama offline (disable AI).
+  Show degradation status in Settings."
+  ```
+
+---
+
+## 📊 v13.0 — Analytics & Insights (Optional)
+
+> **Theme**: Help users understand their browsing patterns.
+> **Estimated Effort**: 2-3 sessions
+
+### 13.1 Local Analytics (Privacy-First)
+- [ ] 🟢 **Usage statistics dashboard** - Personal insights
+  ```
+  PROMPT: "Add local-only usage stats in Settings: most visited domains,
+  search frequency, peak browsing hours, bookmark usage. All computed
+  locally from index. Export as chart or CSV."
+  ```
+
+- [ ] 🟢 **Search history** - What you searched for
+  ```
+  PROMPT: "Optionally log search queries locally. Show recent searches
+  in Settings with clear button. Auto-suggest from history. Never sync."
+  ```
+
+---
+
+## 📋 IMPLEMENTATION PRIORITY MATRIX
+
+| Version | Theme | Effort | Impact | Priority |
+|---------|-------|--------|--------|----------|
+| v7.0 | Documentation | Low | High | 🔴 Do First |
+| v8.0 | UX Polish | Medium | High | 🔴 Do Second |
+| v9.0 | AI Enhancement | High | High | 🟡 Strategic |
+| v10.0 | Privacy | Medium | Medium | 🟡 Important |
+| v11.0 | Advanced | High | Medium | 🟢 Future |
+| v12.0 | Testing | Ongoing | High | 🔴 Continuous |
+| v13.0 | Analytics | Low | Low | 🟢 Optional |
+
+---
+
+## 🎯 QUICK START PROMPTS
+
+### Start v7.0 (Documentation):
+```
+"I'm working on SmrutiCortex v7.0 - Documentation Completeness. 
+Create [FILE_NAME].md following the SmrutiCortex documentation style.
+Keep it concise, user-friendly, and consistent with existing docs."
+```
+
+### Start Any Task:
+```
+"I'm implementing [TASK_NAME] for SmrutiCortex browser extension.
+Context: TypeScript, Manifest V3, IndexedDB, modular scorer architecture.
+Files to modify: [LIST_FILES]. Keep changes minimal and atomic.
+Build command: npm run build. Test with: npm run test."
+```
 
 ---
 
@@ -129,14 +514,16 @@ Each item can be converted into GitHub Issues.
 - [x] [#13 - Favicon caching](https://github.com/dhruvinrsoni/smruti-cortex/issues/13) ✅
 - [x] [#15 - Document scorer plugin interface](https://github.com/dhruvinrsoni/smruti-cortex/issues/15) ✅
 
-### Open Issues (v7.0+)
-- [ ] [#5 - Explain permissions in Options page](https://github.com/dhruvinrsoni/smruti-cortex/issues/5)
-- [ ] [#7 - Disable metadata extraction toggle](https://github.com/dhruvinrsoni/smruti-cortex/issues/7)
-- [ ] [#11 - Onboarding 3-step flow](https://github.com/dhruvinrsoni/smruti-cortex/issues/11)
-- [ ] [#12 - Pinned results / favorites](https://github.com/dhruvinrsoni/smruti-cortex/issues/12)
-- [ ] [#14 - Preview snippet / metadata snippet](https://github.com/dhruvinrsoni/smruti-cortex/issues/14)
-- [ ] [#17 - Store embeddings with consent](https://github.com/dhruvinrsoni/smruti-cortex/issues/17)
-- [ ] [#18 - API key management](https://github.com/dhruvinrsoni/smruti-cortex/issues/18)
+### Open Issues (Mapped to Roadmap)
+| Issue | Title | Version | Task |
+|-------|-------|---------|------|
+| #5 | Explain permissions | v7.0 | PERMISSIONS_EXPLAINED.md |
+| #7 | Disable metadata toggle | v10.0 | Privacy controls |
+| #11 | Onboarding flow | v8.0 | First-run modal |
+| #12 | Pinned results | v8.0 | Favorites system |
+| #14 | Preview snippet | v8.0 | Metadata preview |
+| #17 | Store embeddings | v9.0 | Embedding search |
+| #18 | API key management | v9.0 | Cloud AI integration |
 
 ---
 
