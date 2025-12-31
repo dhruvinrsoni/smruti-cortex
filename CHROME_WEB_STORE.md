@@ -1,6 +1,8 @@
-# Chrome Web Store Submission Guide
+# Chrome & Edge Web Store Submission Guide
 
-Complete checklist and content for publishing SmrutiCortex to Chrome/Edge extension stores.
+Complete checklist and content for publishing SmrutiCortex to Chrome and Edge extension stores.
+
+> **Note:** Chrome and Edge use the same Manifest V3 format. One package works for both stores!
 
 ---
 
@@ -35,14 +37,19 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 🎯 **Smart Ranking** — Recent + frequent results with literal substring boost
 🎯 **Strict Matching** — Only shows results containing your search terms (default ON, configurable)
 🎲 **Diverse Results** — Filters duplicate URLs automatically for variety (default ON, configurable)
+⭐ **Bookmark Search** — Search bookmarks alongside history with ★ indicator (v6.0)
+🔍 **Query Expansion** — Find related terms with synonym matching (v6.0)
+🖼️ **Favicon Caching** — Local cache for fast icon loading (v6.0)
+📊 **Performance Monitor** — Real-time search metrics and timing (v6.0)
+🔧 **Advanced Diagnostics** — Export system info for bug reports (v6.0)
 🔐 **100% Private** — All data stays local in IndexedDB
-🛡️ **Self-Healing** — Auto-recovery from errors, health monitoring
+🛡️ **Self-Healing** — Auto-recovery from errors with retry logic
 🔧 **Privacy Controls** — Favicon toggle, sensitive-site blacklist
 💾 **Data Management** — Storage quota monitoring, one-click rebuild
 ⌨️ **Keyboard-First** — Ctrl+Shift+S instant access, full arrow key navigation
 🎨 **Clean UI** — Minimal, distraction-free interface
 🤖 **AI Search** — Optional local keyword expansion (Ollama)
-🔧 **Zero Config** — Works out of the box
+🌐 **Cross-Browser** — Works on Chrome, Edge, and Firefox
 
 **PRIVACY GUARANTEE:**
 
@@ -129,7 +136,7 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 
 **SmrutiCortex Privacy Policy**
 
-**Last Updated:** December 28, 2025
+**Last Updated:** January 1, 2026
 
 **1. Data Collection**
 
@@ -175,6 +182,7 @@ You have full control to:
 **7. Permissions Used**
 
 - `history`: Read browser history for indexing
+- `bookmarks`: Read bookmarks for search integration
 - `storage`: Save settings and indexed data locally
 - `scripting`: Extract page metadata (optional)
 - `tabs`: Open search results
@@ -211,6 +219,7 @@ Chrome requires explaining why each permission is needed:
 | Permission | Justification |
 |------------|---------------|
 | `history` | Required to read and index browser history for search functionality |
+| `bookmarks` | Required to index bookmarks for unified search (v6.0) |
 | `storage` | Store settings and indexed data locally for fast search |
 | `scripting` | Extract page metadata (title, keywords) to improve search relevance |
 | `tabs` | Open search results in current/new/background tabs |
@@ -225,13 +234,13 @@ Chrome requires explaining why each permission is needed:
 
 ### Before Upload:
 1. Build production package: `npm run package`
-2. Verify zip file: `release/smruti-cortex-v4.0.0.zip`
-3. Test in Chrome incognito mode
+2. Verify zip file: `release/smruti-cortex-v6.0.0.zip`
+3. Test in Chrome/Edge incognito mode
 4. Prepare 128x128 store icon PNG
 5. Create 3-5 screenshots (1280x800px)
 6. Write promotional copy (optional)
 
-### Upload Steps:
+### Chrome Upload Steps:
 1. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devcenter/dashboard)
 2. Click "New Item"
 3. Upload `release/smruti-cortex-v3.0.0.zip`
@@ -252,12 +261,34 @@ Chrome requires explaining why each permission is needed:
 
 ## 🌐 Edge Add-ons Store (Microsoft)
 
-Same content works for Edge store with minor adjustments:
+SmrutiCortex works natively on Edge with the same package!
 
+### Edge Upload Steps:
 1. Go to [Microsoft Partner Center](https://partner.microsoft.com/en-us/dashboard/microsoftedge/overview)
-2. Upload same zip file
-3. Use same descriptions
-4. Edge review is typically faster (1-2 days)
+2. Sign in with Microsoft account (one-time setup)
+3. Click "Create new extension"
+4. Upload `release/smruti-cortex-v6.0.0.zip` (same as Chrome!)
+5. Fill store listing (copy from Chrome content above)
+6. Upload icons and screenshots (same assets work)
+7. Add privacy policy URL
+8. Select category: **Productivity**
+9. Submit for review
+
+### Edge vs Chrome Differences:
+| Aspect | Chrome | Edge |
+|--------|--------|------|
+| Package | Same .zip file | Same .zip file |
+| Manifest | MV3 (both) | MV3 (both) |
+| Review time | 1-3 days | 1-2 days (faster) |
+| Dashboard | Chrome Developer Dashboard | Microsoft Partner Center |
+| Bookmarks API | ✅ Supported | ✅ Supported |
+| Firefox settings | Ignored | Ignored |
+
+### Edge-Specific Notes:
+- Edge uses Chromium engine — extension works identically
+- Same permissions, same APIs, same behavior
+- Edge may show "Designed for Chrome" badge initially
+- Review is typically faster than Chrome
 
 ---
 
