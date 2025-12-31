@@ -9,6 +9,7 @@ import { Logger } from '../../core/logger';
 import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
 import { expandQueryKeywords } from '../ai-keyword-expander';
+import { applyDiversityFilter, ScoredItem } from './diversity-filter';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     const logger = Logger.forComponent('SearchEngine');
@@ -93,7 +94,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     }
 
     logger.trace('runSearch', 'Processing items for scoring');
-    const results: Array<{ item: IndexedItem; finalScore: number; keywordMatch: boolean; aiMatch: boolean }> = [];
+    const results: ScoredItem[] = [];
 
     // NO MORE 600+ EMBEDDINGS! Use keyword matching with expanded tokens instead
     for (const item of items) {
@@ -155,12 +156,17 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     // Sort by score (highest first)
     results.sort((a, b) => b.finalScore - a.finalScore);
 
-    // Less restrictive diversification for power users - allow more results per domain
-    const diversified: Array<{ item: IndexedItem; finalScore: number }> = [];
-    const domainCount = new Map<string, number>();
-    const maxPerDomain = 10; // Increased from 3 to 10 for power users
+    // Apply diversity filter to remove duplicate URLs (same page, different query params)
+    const showDuplicateUrls = SettingsManager.getSetting('showDuplicateUrls') || false;
+    const enableDiversity = !showDuplicateUrls; // Diversity ON = filter duplicates
+    const diverseResults = applyDiversityFilter(results, enableDiversity);
 
-    for (const res of results) {
+    // Less restrictive domain diversification for power users - allow more results per domain
+    const diversified: ScoredItem[] = [];
+    const domainCount = new Map<string, number>();
+    const maxPerDomain = 10; // Allow up to 10 results per domain
+
+    for (const res of diverseResults) {
         const domain = res.item.hostname || 'unknown';
         const count = domainCount.get(domain) || 0;
         if (count < maxPerDomain) {
@@ -171,8 +177,10 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
     logger.trace('runSearch', 'Diversification completed', {
         originalResults: results.length,
-        diversifiedResults: diversified.length,
-        domainDistribution: Object.fromEntries(domainCount.entries())
+        afterUrlDiversity: diverseResults.length,
+        afterDomainLimit: diversified.length,
+        domainDistribution: Object.fromEntries(domainCount.entries()),
+        diversityEnabled: enableDiversity
     });
 
     const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50

@@ -33,6 +33,7 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 
 ⚡ **Ultra-Fast Search** — Results appear as you type (< 50ms)
 🎯 **Smart Ranking** — Recent + frequent results first
+🎲 **Diverse Results** — Filters duplicate URLs automatically for variety
 🔐 **100% Private** — All data stays local in IndexedDB
 🛡️ **Self-Healing** — Auto-recovery from errors, health monitoring
 🔧 **Privacy Controls** — Favicon toggle, sensitive-site blacklist

@@ -751,6 +751,12 @@ function initializePopup() {
       loadFaviconsInput.checked = SettingsManager.getSetting('loadFavicons') ?? true;
     }
 
+    // Search result diversity setting
+    const showDuplicateUrlsInput = modal.querySelector('#modal-showDuplicateUrls') as HTMLInputElement;
+    if (showDuplicateUrlsInput) {
+      showDuplicateUrlsInput.checked = SettingsManager.getSetting('showDuplicateUrls') ?? false;
+    }
+
     const sensitiveUrlBlacklistInput = modal.querySelector('#modal-sensitiveUrlBlacklist') as HTMLTextAreaElement;
     if (sensitiveUrlBlacklistInput) {
       const blacklist = SettingsManager.getSetting('sensitiveUrlBlacklist') || [];
@@ -1033,6 +1039,21 @@ function initializePopup() {
         await SettingsManager.setSetting('loadFavicons', target.checked);
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`);
         renderResults(); // Re-render to apply changes immediately
+      });
+    }
+
+    // Search result diversity - Show Duplicate URLs
+    const showDuplicateUrlsInput = modal.querySelector('#modal-showDuplicateUrls') as HTMLInputElement;
+    if (showDuplicateUrlsInput) {
+      showDuplicateUrlsInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('showDuplicateUrls', target.checked);
+        showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`);
+        // Trigger re-search to apply diversity filter
+        const searchInput = $('search-input') as HTMLInputElement;
+        if (searchInput && searchInput.value.trim()) {
+          doSearch(searchInput.value);
+        }
       });
     }
 

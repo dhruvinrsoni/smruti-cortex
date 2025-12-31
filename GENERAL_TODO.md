@@ -28,6 +28,7 @@ Each item can be converted into GitHub Issues.
 - [x] **Unit Tests for mergeMetadata** - 16 tests covering core indexing logic (Issue #8)
 - [x] **Default Local-Only Processing** - Favicon toggle controls Google API calls (privacy-first) (Issue #4)
 - [x] **Sensitive-Site Blacklist** - Built-in patterns + user-configurable domains for banks/auth sites (Issue #6)
+- [x] **Diverse Results Filter** - URL normalization to filter duplicates with different query params (configurable toggle)
 
 ## ✅ COMPLETED — v3.0
 - [x] **CI/CD Pipeline** - GitHub Actions workflow (build, lint, test, release)
