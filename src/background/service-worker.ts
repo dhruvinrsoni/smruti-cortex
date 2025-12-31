@@ -224,6 +224,34 @@ setupPortBasedMessaging();
             logger.info('onMessage', `[PopupPerf] ${msg.stage} | ts=${msg.timestamp} | elapsedMs=${msg.elapsedMs}`);
             sendResponse({ status: 'ok' });
             break;
+          case 'GET_PERFORMANCE_METRICS': {
+            // Performance metrics work even before full initialization
+            logger.debug('onMessage', 'GET_PERFORMANCE_METRICS requested');
+            try {
+              const { getPerformanceMetrics, formatMetricsForDisplay } = await import('./performance-monitor');
+              const metrics = getPerformanceMetrics();
+              const formatted = formatMetricsForDisplay(metrics);
+              sendResponse({ status: 'OK', metrics, formatted });
+            } catch (error) {
+              logger.error('onMessage', 'GET_PERFORMANCE_METRICS failed:', error);
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
+          case 'EXPORT_DIAGNOSTICS': {
+            // Diagnostics export works even before full initialization
+            logger.info('onMessage', '📋 EXPORT_DIAGNOSTICS requested');
+            try {
+              const { exportDiagnosticsAsJson } = await import('./diagnostics');
+              const diagnosticsJson = await exportDiagnosticsAsJson();
+              logger.info('onMessage', '✅ EXPORT_DIAGNOSTICS completed');
+              sendResponse({ status: 'OK', data: diagnosticsJson });
+            } catch (error) {
+              logger.error('onMessage', 'EXPORT_DIAGNOSTICS failed:', error);
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
           default:
             // For other messages, check if initialized
             if (!initialized) {
@@ -295,6 +323,33 @@ setupPortBasedMessaging();
                   sendResponse({ status: 'OK', data: quotaInfo });
                 } catch (error) {
                   logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_FAVICON_CACHE': {
+                logger.info('onMessage', '🖼️ CLEAR_FAVICON_CACHE requested');
+                try {
+                  const { clearFaviconCache } = await import('./favicon-cache');
+                  const result = await clearFaviconCache();
+                  logger.info('onMessage', '✅ CLEAR_FAVICON_CACHE completed', result);
+                  sendResponse({ status: 'OK', ...result });
+                } catch (error) {
+                  logger.error('onMessage', '❌ CLEAR_FAVICON_CACHE failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_FAVICON_CACHE_STATS': {
+                logger.debug('onMessage', 'GET_FAVICON_CACHE_STATS requested');
+                try {
+                  const { getFaviconCacheStats } = await import('./favicon-cache');
+                  const stats = await getFaviconCacheStats();
+                  sendResponse({ status: 'OK', ...stats });
+                } catch (error) {
+                  logger.error('onMessage', 'GET_FAVICON_CACHE_STATS failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
