@@ -18,6 +18,14 @@
   --debug-dark: #16a34a;
   --trace-light: #fef3c7;
   --trace-dark: #d97706;
+  --bookmark: #f59e0b;
+}
+
+/* Bookmark indicator star */
+.bookmark-indicator {
+  color: var(--bookmark);
+  font-size: 12px;
+  margin-right: 2px;
 }
 
 /* Detect tab mode: if viewport is wider than typical popup, we're in a tab */

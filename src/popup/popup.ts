@@ -355,7 +355,9 @@ function initializePopup() {
 
         const title = document.createElement('div');
         title.className = 'card-title';
-        title.innerHTML = highlightMatches(item.title || item.url, currentQuery);
+        // Add bookmark indicator if item is bookmarked
+        const bookmarkIndicator = (item as any).isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
+        title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
 
         const url = document.createElement('div');
         url.className = 'card-url';
@@ -395,7 +397,9 @@ function initializePopup() {
 
         const title = document.createElement('div');
         title.className = 'result-title';
-        title.innerHTML = highlightMatches(item.title || item.url, currentQuery);
+        // Add bookmark indicator if item is bookmarked
+        const bookmarkIndicator = (item as any).isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
+        title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
 
         const url = document.createElement('div');
         url.className = 'result-url';
@@ -715,6 +719,12 @@ function initializePopup() {
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
     if (loadFaviconsInput) {
       loadFaviconsInput.checked = SettingsManager.getSetting('loadFavicons') ?? true;
+    }
+
+    // Bookmarks indexing setting
+    const indexBookmarksInput = modal.querySelector('#modal-indexBookmarks') as HTMLInputElement;
+    if (indexBookmarksInput) {
+      indexBookmarksInput.checked = SettingsManager.getSetting('indexBookmarks') ?? true;
     }
 
     // Search result diversity setting
@@ -1050,6 +1060,22 @@ function initializePopup() {
         await SettingsManager.setSetting('loadFavicons', target.checked);
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`);
         renderResults(); // Re-render to apply changes immediately
+      });
+    }
+
+    // Bookmarks indexing
+    const indexBookmarksInput = modal.querySelector('#modal-indexBookmarks') as HTMLInputElement;
+    if (indexBookmarksInput) {
+      indexBookmarksInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('indexBookmarks', target.checked);
+        if (target.checked) {
+          showToast('Bookmarks indexing enabled. Rebuilding index...');
+          // Trigger bookmark indexing via service worker
+          chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' });
+        } else {
+          showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.');
+        }
       });
     }
 

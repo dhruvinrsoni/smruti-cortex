@@ -6,6 +6,7 @@ import { tokenize } from './search/tokenizer';
 import { IndexedItem } from './schema';
 import { BRAND_NAME } from '../core/constants';
 import { Logger } from '../core/logger';
+import { SettingsManager } from '../core/settings';
 
 const logger = Logger.forComponent('Indexing');
 
@@ -23,6 +24,13 @@ export async function performFullRebuild(): Promise<void> {
         
         // Perform full history index
         await performFullHistoryIndex();
+        
+        // Index bookmarks if enabled
+        await SettingsManager.init();
+        const indexBookmarks = SettingsManager.getSetting('indexBookmarks');
+        if (indexBookmarks) {
+            await performBookmarksIndex(true);
+        }
         
         // Update version marker
         const currentVersion = chrome.runtime.getManifest().version;
@@ -376,6 +384,156 @@ function compareVersions(version1: string, version2: string): number {
 
 // Called by content script metadata updates
 // indexing.ts — URL ingestion, merging, enrichment, and storage
+
+/**
+ * Get bookmark folder path as an array of folder names
+ */
+function getBookmarkFolderPath(node: chrome.bookmarks.BookmarkTreeNode, path: string[] = []): string[] {
+    return path;
+}
+
+/**
+ * Recursively collect all bookmarks from a bookmark tree
+ */
+function collectBookmarks(
+    nodes: chrome.bookmarks.BookmarkTreeNode[],
+    folderPath: string[] = []
+): { url: string; title: string; folders: string[] }[] {
+    const bookmarks: { url: string; title: string; folders: string[] }[] = [];
+    
+    for (const node of nodes) {
+        if (node.url) {
+            // It's a bookmark
+            bookmarks.push({
+                url: node.url,
+                title: node.title || '',
+                folders: folderPath,
+            });
+        } else if (node.children) {
+            // It's a folder - recurse
+            const newPath = node.title ? [...folderPath, node.title] : folderPath;
+            bookmarks.push(...collectBookmarks(node.children, newPath));
+        }
+    }
+    
+    return bookmarks;
+}
+
+/**
+ * Index all bookmarks - marks existing items as bookmarks or creates new items
+ * @param indexBookmarks - whether to index bookmarks (from settings)
+ */
+export async function performBookmarksIndex(indexBookmarks: boolean = true): Promise<{ indexed: number; updated: number }> {
+    if (!indexBookmarks) {
+        logger.info('performBookmarksIndex', '📚 Bookmarks indexing disabled, skipping');
+        return { indexed: 0, updated: 0 };
+    }
+
+    const startTime = Date.now();
+    logger.info('performBookmarksIndex', '📚 Starting bookmarks indexing...');
+
+    let indexed = 0;
+    let updated = 0;
+
+    try {
+        // Get all bookmarks
+        const tree = await new Promise<chrome.bookmarks.BookmarkTreeNode[]>((resolve) => {
+            browserAPI.bookmarks.getTree((nodes: chrome.bookmarks.BookmarkTreeNode[]) => resolve(nodes));
+        });
+
+        // Collect all bookmarks with their folder paths
+        const allBookmarks = collectBookmarks(tree);
+        logger.info('performBookmarksIndex', `📚 Found ${allBookmarks.length} bookmarks`);
+
+        // Process bookmarks
+        for (const bookmark of allBookmarks) {
+            try {
+                // Skip invalid URLs
+                if (!bookmark.url || !bookmark.url.startsWith('http')) {
+                    continue;
+                }
+
+                // Check if we already have this URL indexed
+                const existing = await getIndexedItem(bookmark.url);
+
+                if (existing) {
+                    // Update existing item to mark as bookmark
+                    existing.isBookmark = true;
+                    existing.bookmarkFolders = bookmark.folders;
+                    // Update tokens to include folder names
+                    existing.tokens = tokenize(
+                        existing.title + ' ' + 
+                        (existing.metaDescription || '') + ' ' + 
+                        bookmark.folders.join(' ') + ' ' + 
+                        existing.url
+                    );
+                    await saveIndexedItem(existing);
+                    updated++;
+                } else {
+                    // Create new indexed item for bookmark
+                    const newItem: IndexedItem = {
+                        url: bookmark.url,
+                        title: bookmark.title,
+                        hostname: new URL(bookmark.url).hostname,
+                        metaDescription: '',
+                        metaKeywords: [],
+                        visitCount: 1, // Bookmarks get base visit count
+                        lastVisit: Date.now(),
+                        tokens: tokenize(bookmark.title + ' ' + bookmark.folders.join(' ') + ' ' + bookmark.url),
+                        isBookmark: true,
+                        bookmarkFolders: bookmark.folders,
+                    };
+                    await saveIndexedItem(newItem);
+                    indexed++;
+                }
+            } catch (error) {
+                logger.warn('performBookmarksIndex', 'Failed to index bookmark', { 
+                    url: bookmark.url, 
+                    error: (error as Error).message 
+                });
+            }
+        }
+
+        const duration = Date.now() - startTime;
+        logger.info('performBookmarksIndex', `📚 Bookmarks indexing completed in ${duration}ms`, {
+            indexed,
+            updated,
+            total: allBookmarks.length
+        });
+
+    } catch (error) {
+        logger.error('performBookmarksIndex', '❌ Bookmarks indexing failed:', error);
+    }
+
+    return { indexed, updated };
+}
+
+/**
+ * Remove bookmark flags from all items (when bookmarks indexing is disabled)
+ */
+export async function clearBookmarkFlags(): Promise<void> {
+    logger.info('clearBookmarkFlags', '📚 Clearing bookmark flags from all items...');
+    
+    try {
+        const { getAllIndexedItems } = await import('./database');
+        const allItems = await getAllIndexedItems();
+        
+        let cleared = 0;
+        for (const item of allItems) {
+            if (item.isBookmark) {
+                item.isBookmark = false;
+                item.bookmarkFolders = undefined;
+                await saveIndexedItem(item);
+                cleared++;
+            }
+        }
+        
+        logger.info('clearBookmarkFlags', `📚 Cleared bookmark flags from ${cleared} items`);
+    } catch (error) {
+        logger.error('clearBookmarkFlags', '❌ Failed to clear bookmark flags:', error);
+    }
+}
+
 /**
  * mergeMetadata: update existing item with metadata captured by content script.
  */
