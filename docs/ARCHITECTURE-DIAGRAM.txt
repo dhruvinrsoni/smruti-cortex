@@ -78,7 +78,11 @@ SmrutiCortex - Two UI Architecture with Shared Code Layer
 │                                                                     │
 │ • Command Handler - Routes Ctrl+Shift+S                            │
 │ • Port-based Messaging - Fast search-as-you-type                   │
-│ • Search Engine Integration - scorer-manager.ts                    │
+│ • Search Engine Integration - search-engine.ts                     │
+│   ├─ Strict Matching Mode - Only show results with query matches   │
+│   ├─ Literal Substring Boost - 50% boost for exact matches         │
+│   ├─ Diversity Filter - Filter duplicate URLs (diversity-filter.ts)│
+│   └─ Scorer Manager - Modular scoring algorithms                   │
 │ • IndexedDB Access - database.ts                                   │
 │ • Message Routing - OPEN_INLINE_SEARCH, OPEN_SETTINGS, etc.        │
 │                                                                     │

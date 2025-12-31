@@ -39,8 +39,9 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 |---------|-------------|
 | ⚡ **Instant Search** | Results < 50ms as you type |
 | ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
-| 🎯 **Smart Ranking** | Recency + frequency scoring |
-| 🎲 **Diverse Results** | Filters duplicate URLs for variety (configurable) |
+| 🎯 **Smart Ranking** | Recency + frequency + literal substring scoring |
+| 🎯 **Strict Matching** | Only show results containing your search terms (default) |
+| 🎲 **Diverse Results** | Filters duplicate URLs for variety (default ON) |
 | 🤖 **AI Search** | Optional keyword expansion via local Ollama |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
 | 🔒 **Privacy Controls** | Favicon toggle, sensitive-site blacklist |
@@ -86,6 +87,16 @@ npm run build
 
 **Quick Access:**
 - Type `sc ` in address bar + query
+
+**Search Quality Controls:**
+- **Strict Matching** (default ON): Only shows results containing your search terms
+  - Toggle OFF: Settings → "Show non-matching results"
+  - Ensures relevant results, no random suggestions
+- **Diverse Results** (default ON): Filters duplicate URLs with different query parameters
+  - Toggle OFF: Settings → "Show duplicate URLs"
+  - Example: Notion page with `?pvs=12` vs `?pvs=25` shows only once
+- **Literal Substring Boost**: Results with exact query string get 50% score boost
+  - Ensures URLs containing your search term rank higher
 
 ---
 

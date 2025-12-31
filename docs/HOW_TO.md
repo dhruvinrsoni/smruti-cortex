@@ -164,6 +164,35 @@ SmrutiCortex maintains a local index of your browsing history:
 |---------|-------------|
 | **Debug Mode** | Enable verbose console logging |
 | **Log Level** | Control logging detail (ERROR, INFO, DEBUG, TRACE) |
+| **Show non-matching results** | Include results without search term matches (default OFF = strict matching) |
+| **Show duplicate URLs** | Display same URLs with different query params (default OFF = diversity ON) |
+| **Load Favicons** | Fetch site icons from Google (disable for privacy) |
+| **AI Search** | Enable local AI keyword expansion via Ollama |
+
+---
+
+## 🎯 Search Quality Controls
+
+SmrutiCortex v4.0+ includes intelligent filtering for better results:
+
+### Strict Matching Mode (Default: ON)
+By default, only results **containing your search terms** are shown. This eliminates irrelevant suggestions.
+
+**Example:** Searching "war" only shows pages with "war" in the title/URL.
+
+**To see all results:** Settings → Toggle "Show non-matching results" to ON
+
+### Diversity Filter (Default: ON)
+Automatically filters duplicate URLs with different query parameters for better variety.
+
+**Example:** A Notion page visited with `?pvs=12`, `?pvs=25`, and `?pvs=30` shows only once (highest scoring version).
+
+**To see all variants:** Settings → Toggle "Show duplicate URLs" to ON
+
+### Literal Substring Boost
+Results with your **exact search term** (case-insensitive) get a **50% score boost**.
+
+**Example:** Searching "war" ranks `google.com/search?q=war` higher than pages matching only via tokenization.
 
 ---
 
@@ -185,23 +214,29 @@ The index will rebuild automatically on next use.
 ## 💡 Power User Tips
 
 ### 1. Use Specific Keywords
-More specific queries = better results
+More specific queries = better results. Type **exact phrases from URLs** for literal substring boost.
 ```
 "github actions" → finds CI/CD pages
 "react hooks" → finds React documentation
+"war" → URLs containing "war" rank 50% higher
 ```
 
-### 2. Leverage Modifier Keys
+### 2. Control Result Quality
+- **Strict matching ON** (default): Only relevant results containing your search terms
+- **Diversity filter ON** (default): No duplicate URLs with different query params
+- Adjust in Settings if you need more/fewer results
+
+### 3. Leverage Modifier Keys
 - `Ctrl+Enter` → Open without leaving current tab
 - `Shift+Enter` → Background tab for batch opening
 
-### 3. Copy Markdown Links
+### 4. Copy Markdown Links
 Press `Ctrl+M` to copy results as `[Title](URL)` format — perfect for documentation!
 
-### 4. Use the Omnibox for Quick Access
+### 5. Use the Omnibox for Quick Access
 Type `sc github` in the address bar for ultra-fast search
 
-### 5. Pin the Extension
+### 6. Pin the Extension
 Right-click the extension icon → **Pin** for one-click access
 
 ---
@@ -218,4 +253,4 @@ See [FAQ.md](./FAQ.md) for answers to common questions.
 
 ---
 
-*Last updated: December 2025 | SmrutiCortex v2.0*
+*Last updated: December 2025 | SmrutiCortex v4.0*

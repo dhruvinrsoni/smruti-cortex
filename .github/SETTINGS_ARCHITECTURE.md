@@ -75,6 +75,20 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         default: 'http://localhost:11434',
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
+    // Privacy settings
+    loadFavicons: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    // Search quality controls (v4.0+)
+    showDuplicateUrls: {
+        default: false,  // false = diversity ON (filter duplicates)
+        validate: (val) => typeof val === 'boolean',
+    },
+    showNonMatchingResults: {
+        default: false,  // false = strict matching (only show matches)
+        validate: (val) => typeof val === 'boolean',
+    },
     // Adding new setting = ONE entry here. That's it!
 };
 

@@ -757,6 +757,12 @@ function initializePopup() {
       showDuplicateUrlsInput.checked = SettingsManager.getSetting('showDuplicateUrls') ?? false;
     }
 
+    // Strict matching setting
+    const showNonMatchingResultsInput = modal.querySelector('#modal-showNonMatchingResults') as HTMLInputElement;
+    if (showNonMatchingResultsInput) {
+      showNonMatchingResultsInput.checked = SettingsManager.getSetting('showNonMatchingResults') ?? false;
+    }
+
     const sensitiveUrlBlacklistInput = modal.querySelector('#modal-sensitiveUrlBlacklist') as HTMLTextAreaElement;
     if (sensitiveUrlBlacklistInput) {
       const blacklist = SettingsManager.getSetting('sensitiveUrlBlacklist') || [];
@@ -1050,6 +1056,21 @@ function initializePopup() {
         await SettingsManager.setSetting('showDuplicateUrls', target.checked);
         showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`);
         // Trigger re-search to apply diversity filter
+        const searchInput = $('search-input') as HTMLInputElement;
+        if (searchInput && searchInput.value.trim()) {
+          doSearch(searchInput.value);
+        }
+      });
+    }
+
+    // Strict matching - Show Non-Matching Results
+    const showNonMatchingResultsInput = modal.querySelector('#modal-showNonMatchingResults') as HTMLInputElement;
+    if (showNonMatchingResultsInput) {
+      showNonMatchingResultsInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('showNonMatchingResults', target.checked);
+        showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`);
+        // Trigger re-search to apply strict matching
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
           doSearch(searchInput.value);

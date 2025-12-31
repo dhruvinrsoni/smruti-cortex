@@ -26,6 +26,7 @@ export interface AppSettings {
     sensitiveUrlBlacklist?: string[];  // User-defined domains/patterns to skip metadata extraction (default: [])
     // Search result diversity
     showDuplicateUrls?: boolean;  // Show duplicate URLs with different query params (default: false = diversity ON)
+    showNonMatchingResults?: boolean; // Show results that don't match the query (default: false = strict matching)
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -94,6 +95,12 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     
     // Search result diversity - default false = diversity ON (filter duplicates)
     showDuplicateUrls: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    
+    // Strict matching - default false = only show matching results
+    showNonMatchingResults: {
         default: false,
         validate: (val) => typeof val === 'boolean',
     },

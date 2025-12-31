@@ -9,7 +9,11 @@ SmrutiCortex is a Chrome Manifest V3 extension for ultra-fast, intelligent brows
   - `indexing.ts`: Real-time history indexing, mergeMetadata
   - `resilience.ts`: Self-healing, health monitoring, auto-recovery
   - `messaging.ts`: Message passing between extension parts
-  - `search/`: Modular scoring system (scorer-manager, search-engine, scorers/, diversity-filter)
+  - `search/`: Modular scoring system
+    - `search-engine.ts`: Core search with literal substring matching & strict mode
+    - `scorer-manager.ts`: Manages multiple scoring algorithms
+    - `diversity-filter.ts`: URL normalization & duplicate filtering
+    - `scorers/`: Individual scoring algorithms (title, URL, recency, frequency, metadata)
 - **src/content_scripts/**: 
   - `extractor.ts`: Page metadata extraction with sensitive-site blacklist
   - `quick-search.ts`: Ultra-fast inline search overlay (< 50ms, no service worker wake-up)
