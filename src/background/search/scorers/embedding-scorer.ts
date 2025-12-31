@@ -72,7 +72,7 @@ const embeddingScorer: Scorer = {
     
     // Log high-confidence matches only (reduce log spam)
     if (similarity > 0.6) {
-      Logger.info(COMPONENT, `score`, `🤖 AI match: similarity=${similarity.toFixed(2)} | item="${item.title.substring(0, 50)}..."`);
+      Logger.info(COMPONENT, 'score', `🤖 AI match: similarity=${similarity.toFixed(2)} | item="${item.title.substring(0, 50)}..."`);
     }
     
     return similarity;
