@@ -10,8 +10,11 @@ import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
 import { expandQueryKeywords } from '../ai-keyword-expander';
 import { applyDiversityFilter, ScoredItem } from './diversity-filter';
+import { performanceTracker } from '../performance-monitor';
+import { getExpandedTerms } from './query-expansion';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
+    const searchStartTime = performance.now();
     const logger = Logger.forComponent('SearchEngine');
     logger.trace('runSearch', 'Search called with query:', query);
 
@@ -25,6 +28,12 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const originalTokens = tokenize(q);
     logger.trace('runSearch', 'Original query tokens:', originalTokens);
 
+    // Apply local synonym expansion (fast, no AI)
+    const synonymExpandedTokens = getExpandedTerms(q);
+    if (synonymExpandedTokens.length > originalTokens.length) {
+        logger.debug('runSearch', `📚 Synonym expansion: ${originalTokens.join(', ')} → ${synonymExpandedTokens.join(', ')}`);
+    }
+
     // Ensure SettingsManager is initialized before reading settings
     await SettingsManager.init();
     
@@ -33,11 +42,11 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     
     // AI-expanded tokens (includes synonyms, related terms)
     // This is ONE LLM call, not 600+ embeddings!
-    let searchTokens: string[] = originalTokens;
+    let searchTokens: string[] = synonymExpandedTokens; // Start with synonym-expanded tokens
     let aiExpanded = false;
     
     if (ollamaEnabled) {
-        logger.info('runSearch', `🤖 AI keyword expansion ACTIVE`);
+        logger.info('runSearch', '🤖 AI keyword expansion ACTIVE');
         try {
             const expandedTokens = await expandQueryKeywords(q);
             if (expandedTokens.length > originalTokens.length) {
@@ -49,10 +58,10 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 });
             }
         } catch (error) {
-            logger.warn('runSearch', `⚠️ Keyword expansion failed, using original query`, { error });
+            logger.warn('runSearch', '⚠️ Keyword expansion failed, using original query', { error });
         }
     } else {
-        logger.info('runSearch', `🔍 Keyword search (AI disabled)`);
+        logger.info('runSearch', '🔍 Keyword search (AI disabled)');
     }
 
     const scorers = getAllScorers();
@@ -102,7 +111,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     // NO MORE 600+ EMBEDDINGS! Use keyword matching with expanded tokens instead
     for (const item of items) {
         // Match against expanded tokens (includes AI-generated synonyms)
-        const haystack = (item.title + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '')).toLowerCase();
+        // Include bookmark folders in searchable content
+        const bookmarkFolders = (item as any).bookmarkFolders?.join(' ') || '';
+        const haystack = (item.title + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
         const hasTokenMatch = matchedTokens.length > 0;
         
@@ -206,6 +217,10 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     });
 
     const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
+    
+    // Record search performance
+    const searchDuration = performance.now() - searchStartTime;
+    performanceTracker.recordSearch(searchDuration);
     
     // Enhanced logging with AI breakdown
     if (aiOnlyMatches > 0 || hybridMatches > 0) {
