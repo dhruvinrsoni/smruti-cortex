@@ -428,6 +428,34 @@ input[type="radio"] {
   border-radius: 8px;
 }
 
+/* Favicon Cache Status Display */
+.favicon-cache-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0 12px 0;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.cache-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cache-label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+#favicon-cache-count, #favicon-cache-size {
+  color: var(--muted);
+}
+
 .storage-info {
   display: flex;
   align-items: center;
@@ -572,4 +600,60 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Performance Modal Specific Styles */
+.performance-modal-content {
+  max-width: 500px;
+}
+
+.perf-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.perf-section:last-child {
+  border-bottom: none;
+}
+
+.perf-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 12px 0;
+}
+
+.perf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.perf-stat {
+  background: var(--card);
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perf-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.perf-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+.perf-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
 }
