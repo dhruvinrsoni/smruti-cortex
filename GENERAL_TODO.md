@@ -13,9 +13,18 @@ Each item can be converted into GitHub Issues.
 | v2.0 | ✅ Released | Ultra-fast overlay, SOLID/DRY refactor, two UI architecture |
 | v3.0 | ✅ Released | Documentation, CI/CD, testing, store-ready |
 | v4.0 | ✅ Released | Professional branding, local Ollama AI, privacy hardening |
-| v5.0 | 🔄 Planning | AI enhancements, UX improvements, advanced features |
+| v5.0 | ✅ Released | Search quality controls, UX polish, Chrome Store ready |
+| v6.0 | 🔄 Planning | AI enhancements, advanced features (deferred) |
 
 ---
+
+## ✅ COMPLETED — v5.0 (Released Jan 1, 2026)
+- [x] **Diverse Results Filter** - URL normalization to filter duplicates with different query params (configurable toggle)
+- [x] **Strict Matching Mode** - Only show results containing search terms, with literal substring boost (configurable)
+- [x] **Literal Substring Boost** - 50% score increase for exact query matches in URL/title
+- [x] **Search Quality Controls Documentation** - Comprehensive guide (docs/SEARCH_QUALITY_CONTROLS.md)
+- [x] **UX Improvements** - Bookmark button moved to settings, compact settings header
+- [x] **Chrome Store Readiness** - Store tags, complete submission guide
 
 ## ✅ COMPLETED — v4.0 (Released Dec 31, 2025)
 - [x] **Professional Icon System** - v11 "Neural S" design across all sizes
@@ -28,8 +37,6 @@ Each item can be converted into GitHub Issues.
 - [x] **Unit Tests for mergeMetadata** - 16 tests covering core indexing logic (Issue #8)
 - [x] **Default Local-Only Processing** - Favicon toggle controls Google API calls (privacy-first) (Issue #4)
 - [x] **Sensitive-Site Blacklist** - Built-in patterns + user-configurable domains for banks/auth sites (Issue #6)
-- [x] **Diverse Results Filter** - URL normalization to filter duplicates with different query params (configurable toggle)
-- [x] **Strict Matching Mode** - Only show results containing search terms, with literal substring boost (configurable)
 
 ## ✅ COMPLETED — v3.0
 - [x] **CI/CD Pipeline** - GitHub Actions workflow (build, lint, test, release)
@@ -65,9 +72,9 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## 🔄 v5.0 ROADMAP (AI Enhancements & UX Polish)
+## 🔄 v6.0+ FUTURE ROADMAP (Deferred Features)
 
-### Core Features (Q1 2026)
+### AI & UX Enhancements
 - [ ] **Enhanced AI Integration** - Multi-model support, performance metrics dashboard
 - [ ] **Advanced Privacy Controls** - Granular permission management, data retention settings
 - [ ] **Smart Onboarding** - 3-step setup flow with privacy explanations
@@ -84,109 +91,50 @@ Each item can be converted into GitHub Issues.
 - [ ] **Error Recovery** - Enhanced self-healing for edge cases
 - [ ] **Cross-Browser Compatibility** - Firefox, Edge, Safari extension support
 
----
+### AI & Intelligence
+- [ ] External API embedding scorer (privacy review needed)
+- [ ] Semantic search with cloud embeddings (opt-in)
+- [ ] Query expansion algorithms
+- [ ] API key management for cloud features
 
-## v6.0+ FUTURE ROADMAP (Advanced Features)
-
-## v5.0+ FUTURE ROADMAP
-
-### AI & Intelligence (Deferred)
-- [ ] External API embedding scorer (6+ months, privacy review needed)
-- [ ] Semantic search with cloud embeddings (privacy concerns)
-- [ ] Query expansion
-- [ ] API key management (only if external APIs approved)
-
-### Premium Features (Potential Monetization)
+### Premium Features (Potential)
 - [ ] Cross-device sync (Chrome Sync API)
 - [ ] End-to-end encrypted sync engine
 - [ ] Session snapshots + restore workspaces
+- [ ] Full-text indexing (opt-in)
 
-### Analytics (Privacy-Respecting)
+### Analytics & Telemetry
 - [ ] Opt-in anonymized local analytics
 - [ ] Export diagnostics for bug reporting
 
 ---
 
-## HIGH PRIORITY — PRIVACY & SECURITY (v5.0)
-- [x] Default to "Local-only" processing (no external data usage) - Issue #4 (v4.0 ✅)
-- [x] Add sensitive-site blacklist (disable extractor on banks, password portals) - Issue #6 (v4.0 ✅)
-- [x] Add "Delete All Data" (IndexedDB + chrome.storage) with auto-rebuild (v4.0 ✅)
-- [x] Add manual "Rebuild Index" button (v4.0 ✅)
-- [ ] Add onboarding privacy prompt (explain metadata extraction clearly to user)
-- [ ] Explain permissions within extension Options page - Issue #5
-- [ ] Add toggle: "Disable metadata extraction" - Issue #7
-- [ ] Implement data retention settings (e.g., keep last 90 days)
+## 📋 GITHUB ISSUES REFERENCE
 
----
+> **Note**: Many issues below are now complete. See COMPLETED sections above for resolved items.
 
-## HIGH PRIORITY — CORRECTNESS & RELIABILITY (v5.0)
-- [x] Unit tests for mergeMetadata logic - Issue #8 (v4.0 ✅)
-- [x] Background resilience (SW restart recovery) - Issue #10 (v4.0 ✅)
-- [x] Build index rebuild flow (full history import) - Issue #9 (v4.0 ✅)
-- [x] Handle IndexedDB quota gracefully (v4.0 ✅)
-- [ ] Add comprehensive error handling for edge cases
-- [ ] Implement graceful degradation for low-memory devices
+### Completed Issues (v4.0)
+- [x] [#4 - Default to Local-only processing](https://github.com/dhruvinrsoni/smruti-cortex/issues/4) ✅
+- [x] [#6 - Sensitive-site blacklist](https://github.com/dhruvinrsoni/smruti-cortex/issues/6) ✅
+- [x] [#8 - Unit tests for mergeMetadata](https://github.com/dhruvinrsoni/smruti-cortex/issues/8) ✅
+- [x] [#9 - Build index rebuild flow](https://github.com/dhruvinrsoni/smruti-cortex/issues/9) ✅
+- [x] [#10 - Background resilience](https://github.com/dhruvinrsoni/smruti-cortex/issues/10) ✅
+- [x] [#16 - Local Ollama AI integration](https://github.com/dhruvinrsoni/smruti-cortex/issues/16) ✅
 
----
-
-## MEDIUM PRIORITY — UX & DISCOVERABILITY (v5.0)
-- [ ] Add onboarding 3-step flow for new users - Issue #11
-- [x] **Improve keyboard navigation** (Home, End, PageUp/PageDown) - Basic navigation implemented (v2.0 ✅)
-- [ ] Add "Pinned results" or favorites - Issue #12
-- [ ] Add favicon caching - Issue #13
-- [ ] Add preview snippet or metadata snippet - Issue #14
-
----
-
-## MEDIUM PRIORITY — AI & EXTENSIBILITY (v5.0)
-- [x] Add local Ollama integration (opt-in) - Issue #16 (v4.0 ✅)
-- [ ] Document scorer plugin interface - Issue #15
-- [ ] Store embeddings locally with user consent - Issue #17
-- [ ] Add API key management in settings (for future cloud features) - Issue #18
-
----
-
-## LOW PRIORITY — TELEMETRY (OPT-IN ONLY)
-- [ ] Add anonymized local-only analytics
-- [ ] Export diagnostics file for bug reporting
-
----
-
-## LOW PRIORITY — PACKAGING
-- [ ] Create promo screenshots for Chrome/Edge store
-- [ ] Write Store Description + Release Notes
-- [ ] Add GitHub Action to auto-zip builds
-- [ ] Prepare automated release upload
-
----
-
-## LONG-TERM / FUTURE IDEAS
-- [ ] End-to-end encrypted sync engine
-- [ ] Optional native companion app for deeper local search
-- [ ] Full-text indexing (opt-in)
-- [ ] Session snapshots + restore workspaces
+### Open Issues (v6.0+)
+- [ ] [#5 - Explain permissions in Options page](https://github.com/dhruvinrsoni/smruti-cortex/issues/5)
+- [ ] [#7 - Disable metadata extraction toggle](https://github.com/dhruvinrsoni/smruti-cortex/issues/7)
+- [ ] [#11 - Onboarding 3-step flow](https://github.com/dhruvinrsoni/smruti-cortex/issues/11)
+- [ ] [#12 - Pinned results / favorites](https://github.com/dhruvinrsoni/smruti-cortex/issues/12)
+- [ ] [#13 - Favicon caching](https://github.com/dhruvinrsoni/smruti-cortex/issues/13)
+- [ ] [#14 - Preview snippet / metadata snippet](https://github.com/dhruvinrsoni/smruti-cortex/issues/14)
+- [ ] [#15 - Document scorer plugin interface](https://github.com/dhruvinrsoni/smruti-cortex/issues/15)
+- [ ] [#17 - Store embeddings with consent](https://github.com/dhruvinrsoni/smruti-cortex/issues/17)
+- [ ] [#18 - API key management](https://github.com/dhruvinrsoni/smruti-cortex/issues/18)
 
 ---
 
 ## HOW TO USE THIS FILE
-- Convert each into GitHub Issues
+- Convert items into GitHub Issues as needed
 - Track progress milestone by milestone
-- Maintain privacy/security parity with browser store requirements- [ ] [Default to Local-only processing](https://github.com/dhruvinrsoni/smruti-cortex/issues/4)  Labels: priority/high, area/privacy
-- [ ] [Explain extension permissions in Options page](https://github.com/dhruvinrsoni/smruti-cortex/issues/5)  Labels: priority/high, area/privacy
-- [ ] [Sensitive-site blacklist for extractor](https://github.com/dhruvinrsoni/smruti-cortex/issues/6)  Labels: priority/high, area/privacy
-- [ ] [Disable metadata extraction toggle](https://github.com/dhruvinrsoni/smruti-cortex/issues/7)  Labels: priority/high, area/privacy
-- [ ] [Unit tests for mergeMetadata logic](https://github.com/dhruvinrsoni/smruti-cortex/issues/8)  Labels: priority/high, area/tests
-- [ ] [Build index rebuild flow (full history import)](https://github.com/dhruvinrsoni/smruti-cortex/issues/9)  Labels: priority/high, area/indexing
-- [ ] [Background resilience: service worker restart recovery](https://github.com/dhruvinrsoni/smruti-cortex/issues/10)  Labels: priority/high, area/background
-- [ ] [Add onboarding 3-step flow for new users](https://github.com/dhruvinrsoni/smruti-cortex/issues/11)  Labels: priority/medium, area/ux
-- [ ] [Pinned results / favorites](https://github.com/dhruvinrsoni/smruti-cortex/issues/12)  Labels: priority/medium, area/ux
-- [ ] [Favicon caching for faster rendering](https://github.com/dhruvinrsoni/smruti-cortex/issues/13)  Labels: priority/medium, area/ux
-- [ ] [Add preview snippet or metadata snippet](https://github.com/dhruvinrsoni/smruti-cortex/issues/14)  Labels: priority/medium, area/ux
-- [ ] [Document scorer plugin interface](https://github.com/dhruvinrsoni/smruti-cortex/issues/15)  Labels: priority/medium, area/docs
-- [ ] [Add AI embedding scorer (opt-in)](https://github.com/dhruvinrsoni/smruti-cortex/issues/16)  Labels: priority/medium, area/ai
-- [ ] [Store embeddings only with user consent](https://github.com/dhruvinrsoni/smruti-cortex/issues/17)  Labels: priority/medium, area/privacy
-- [ ] [Add API key management in settings](https://github.com/dhruvinrsoni/smruti-cortex/issues/18)  Labels: priority/medium, area/settings
-- [ ] [Create promo screenshots for Chrome/Edge store](https://github.com/dhruvinrsoni/smruti-cortex/issues/19)  Labels: priority/low, area/marketing
-- [ ] [Write Store Description + Release Notes](https://github.com/dhruvinrsoni/smruti-cortex/issues/20)  Labels: priority/low, area/marketing
-- [ ] [Add GitHub Action to auto-zip builds](https://github.com/dhruvinrsoni/smruti-cortex/issues/21)  Labels: priority/low, area/ci
-- [ ] [Prepare automated release upload](https://github.com/dhruvinrsoni/smruti-cortex/issues/22)  Labels: priority/low, area/ci
+- Maintain privacy/security parity with browser store requirements

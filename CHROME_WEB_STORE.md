@@ -91,6 +91,10 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 ### Language
 **English**
 
+### Store Tags
+**Primary Tag:** History Search
+**Secondary Tags:** Browser History, Quick Search, Privacy, Local Search, Keyboard Navigation, Developer Tools
+
 ---
 
 ## 🖼️ Store Assets Required
