@@ -40,6 +40,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | ⚡ **Instant Search** | Results < 50ms as you type |
 | ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
 | 🎯 **Smart Ranking** | Recency + frequency scoring |
+| 🎲 **Diverse Results** | Filters duplicate URLs for variety (configurable) |
 | 🤖 **AI Search** | Optional keyword expansion via local Ollama |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
 | 🔒 **Privacy Controls** | Favicon toggle, sensitive-site blacklist |
