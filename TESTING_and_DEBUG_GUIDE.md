@@ -128,6 +128,15 @@ When TRACE is enabled, the Ollama AI service logs:
 - **Diverse Results**: Toggle "Show duplicate URLs" - OFF = filters URLs with same base (strips query params)
 - **Literal Substring Boost**: URLs/titles with exact query string get 50% score boost
 
+### v6.0 Features
+- **Bookmark Search**: Toggle "Index Bookmarks" in Settings; bookmarks show ★ indicator
+- **Query Expansion**: Synonyms expand search (file→document, error→bug, etc.)
+- **Favicon Caching**: Local cache with 30-day expiry; "Clear Expired Cache" button in Settings
+- **Performance Monitor**: Click "Performance Monitor" in Settings → real-time metrics (5s auto-refresh)
+- **Diagnostics Export**: Click "Export Diagnostics" → download JSON for bug reports
+- **Select All on Focus**: Toggle in Settings → Tab behavior (select all vs cursor at end)
+- **Cross-Browser**: Firefox support with browser_specific_settings in manifest
+
 ### Keyboard Navigation
 - **Arrow Up/Down**: Navigate results
 - **Enter**: Open result
@@ -191,8 +200,8 @@ When TRACE is enabled, the Ollama AI service logs:
 
 ### Pre-Release
 - [ ] `npm run build` (development build with source maps)
-- [ ] Test all v4.0 features: self-healing, privacy controls, AI search
-- [ ] Run all 44 unit tests: `npm run test`
+- [ ] Test all v6.0 features: bookmarks, favicon cache, performance monitor, diagnostics
+- [ ] Run all 63 unit tests: `npm run test`
 - [ ] Verify health monitoring works (green indicator)
 - [ ] Test on clean browser profile
 - [ ] Default log level: INFO (production-ready)

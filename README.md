@@ -42,8 +42,14 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | 🎯 **Smart Ranking** | Recency + frequency + literal substring scoring |
 | 🎯 **Strict Matching** | Only show results containing your search terms (default) |
 | 🎲 **Diverse Results** | Filters duplicate URLs for variety (default ON) |
+| ⭐ **Bookmark Search** | Index and search bookmarks with ★ indicator |
+| 🔍 **Query Expansion** | Find related terms with synonym matching |
 | 🤖 **AI Search** | Optional keyword expansion via local Ollama |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
+| 📊 **Performance Monitor** | Real-time search timing and cache stats |
+| 🔧 **Diagnostics Export** | Export system info for bug reports |
+| 🖼️ **Favicon Caching** | Local cache with 30-day expiry |
+| 🌐 **Cross-Browser** | Chrome, Edge, Firefox (MV3) support |
 | 🔒 **Privacy Controls** | Favicon toggle, sensitive-site blacklist |
 | 💾 **Data Management** | Storage quota, rebuild, clear & rebuild |
 | 🔍 **Omnibox** | Type `sc ` in address bar |
