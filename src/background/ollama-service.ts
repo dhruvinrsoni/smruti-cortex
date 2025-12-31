@@ -143,7 +143,7 @@ export class OllamaService {
       this.lastCheckTime = now;
       
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      logger.debug('checkAvailability', `❌ Ollama connection failed`, { error: errorMsg });
+      logger.debug('checkAvailability', '❌ Ollama connection failed', { error: errorMsg });
       logger.info('checkAvailability', `❌ Ollama not available: ${errorMsg}`);
 
       return {
@@ -232,7 +232,7 @@ export class OllamaService {
         const errorText = await response.text().catch(() => 'No error details');
         
         // Provide helpful error message for common issues
-        let errorMsg = `Ollama API error: ${response.status} ${response.statusText}`;
+        const errorMsg = `Ollama API error: ${response.status} ${response.statusText}`;
         let helpText = '';
         
         if (response.status === 403) {

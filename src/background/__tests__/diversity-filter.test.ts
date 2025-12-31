@@ -37,7 +37,7 @@ function applyDiversityFilter<T extends ScoredItem>(
     results: T[],
     enableDiversity: boolean
 ): T[] {
-    if (!enableDiversity) return results;
+    if (!enableDiversity) {return results;}
 
     const seenUrls = new Map<string, T>();
     for (const result of results) {

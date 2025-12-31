@@ -80,7 +80,7 @@ if ((window as any).top !== window) {
             
             for (const pattern of blacklist) {
               const lowerPattern = pattern.toLowerCase().trim();
-              if (!lowerPattern) continue;
+              if (!lowerPattern) {continue;}
               
               // Check if pattern matches URL or hostname
               if (lowerUrl.includes(lowerPattern) || hostname.includes(lowerPattern)) {

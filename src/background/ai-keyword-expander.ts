@@ -78,7 +78,7 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
 
     return expandedKeywords;
   } catch (error) {
-    logger.warn('expandQueryKeywords', `❌ Expansion failed, using original query`, { error });
+    logger.warn('expandQueryKeywords', '❌ Expansion failed, using original query', { error });
     // Fallback to original query tokens
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
@@ -144,7 +144,7 @@ Your JSON array:`;
     options: {
       temperature: 0.2,   // Very low for consistent output
       num_predict: 150,   // Enough for ~15-20 keywords in array format
-      stop: ["\n\n", "```"]  // Stop at double newline or code block start
+      stop: ['\n\n', '```']  // Stop at double newline or code block start
     }
   };
 
