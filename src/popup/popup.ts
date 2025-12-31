@@ -196,6 +196,24 @@ function initializePopup() {
     return highlighted;
   }
 
+  /**
+   * Focus input with configurable select behavior
+   * If selectAllOnFocus setting is true (default), select all text for fresh typing
+   * If false, just place cursor at end
+   */
+  function focusInputWithSelectBehavior() {
+    if (!input) {return;}
+    input.focus();
+    const selectAll = SettingsManager.getSetting('selectAllOnFocus') ?? true;
+    if (selectAll) {
+      input.select();
+    } else {
+      // Move cursor to end
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }
+  }
+
 
   // Immediate focus for keyboard shortcut
   if (input) {
@@ -463,17 +481,14 @@ function initializePopup() {
           }
         } else {
           // No results, cycle back to search input
-          input.focus();
-          // Do not select text when focusing from Tab navigation
+          focusInputWithSelectBehavior();
         }
       } else if (currentElement === settingsButton) {
         // From settings button -> search input
-        input.focus();
-        // Do not select text when focusing from Tab navigation
+        focusInputWithSelectBehavior();
       } else if (resultsNode.contains(currentElement)) {
         // From any result item -> search input (cycle back)
-        input.focus();
-        // Do not select text when focusing from Tab navigation
+        focusInputWithSelectBehavior();
       }
       return;
     }
@@ -498,13 +513,11 @@ function initializePopup() {
           }
         } else {
           // No results, go to search input
-          input.focus();
-          // Do not select text when focusing from Tab navigation
+          focusInputWithSelectBehavior();
         }
       } else if (resultsNode.contains(currentElement)) {
         // From any result item -> search input
-        input.focus();
-        // Do not select text when focusing from Tab navigation
+        focusInputWithSelectBehavior();
       }
       return;
     }
@@ -693,6 +706,11 @@ function initializePopup() {
       focusDelayInput.value = String(currentFocusDelay);
     }
 
+    const selectAllOnFocusInput = modal.querySelector('#modal-selectAllOnFocus') as HTMLInputElement;
+    if (selectAllOnFocusInput) {
+      selectAllOnFocusInput.checked = SettingsManager.getSetting('selectAllOnFocus') ?? true;
+    }
+
     // Ollama settings
     const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
     if (ollamaEnabledInput) {
@@ -798,6 +816,30 @@ function initializePopup() {
     }
   }
 
+  // Load favicon cache statistics
+  async function loadFaviconCacheStats() {
+    const countEl = document.getElementById('favicon-cache-count');
+    const sizeEl = document.getElementById('favicon-cache-size');
+    
+    if (!countEl || !sizeEl) {return;}
+    
+    try {
+      const response = await new Promise<any>((resolve) => {
+        chrome.runtime.sendMessage({ type: 'GET_FAVICON_CACHE_STATS' }, resolve);
+      });
+      
+      if (response?.status === 'OK') {
+        countEl.textContent = `${response.count} icons`;
+        sizeEl.textContent = `${Math.round(response.totalSize / 1024)} KB`;
+      } else {
+        countEl.textContent = '-- icons';
+        sizeEl.textContent = '-- KB';
+      }
+    } catch (err) {
+      countEl.textContent = '-- icons';
+      sizeEl.textContent = '-- KB';
+    }
+  }
   // Fetch and display storage quota info
   async function fetchStorageQuotaInfo() {
     const storageUsedEl = document.getElementById('storage-used');
@@ -806,7 +848,7 @@ function initializePopup() {
     const healthIndicatorEl = document.getElementById('health-indicator');
     const healthTextEl = document.getElementById('health-text');
     
-    if (!storageUsedEl || !storageItemsEl || !storageBarEl) return;
+    if (!storageUsedEl || !storageItemsEl || !storageBarEl) {return;}
     
     try {
       storageUsedEl.textContent = 'Loading...';
@@ -858,7 +900,7 @@ function initializePopup() {
     } catch (error) {
       storageUsedEl.textContent = 'Error';
       storageItemsEl.textContent = '-- items';
-      if (healthTextEl) healthTextEl.textContent = 'Check failed';
+      if (healthTextEl) {healthTextEl.textContent = 'Check failed';}
       logger.debug('openSettingsPage', 'Failed to fetch storage quota', error);
     }
   }
@@ -958,6 +1000,16 @@ function initializePopup() {
       });
     }
 
+    // Select all on focus toggle
+    const selectAllOnFocusInput = modal.querySelector('#modal-selectAllOnFocus') as HTMLInputElement;
+    if (selectAllOnFocusInput) {
+      selectAllOnFocusInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('selectAllOnFocus', target.checked);
+        showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end');
+      });
+    }
+
     // Ollama enabled toggle
     const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
     if (ollamaEnabledInput) {
@@ -1003,7 +1055,7 @@ function initializePopup() {
         
         try {
           const response = await fetch(`${endpoint}/api/tags`);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          if (!response.ok) {throw new Error(`HTTP ${response.status}`);}
           
           const data = await response.json();
           const models = data.models || [];
@@ -1060,6 +1112,31 @@ function initializePopup() {
         await SettingsManager.setSetting('loadFavicons', target.checked);
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`);
         renderResults(); // Re-render to apply changes immediately
+      });
+    }
+
+    // Favicon cache - load stats and handle clear button
+    loadFaviconCacheStats();
+    const clearFaviconCacheBtn = modal.querySelector('#clear-favicon-cache') as HTMLButtonElement;
+    if (clearFaviconCacheBtn) {
+      clearFaviconCacheBtn.addEventListener('click', async () => {
+        clearFaviconCacheBtn.disabled = true;
+        clearFaviconCacheBtn.textContent = 'Clearing...';
+        try {
+          const response = await new Promise<any>((resolve) => {
+            chrome.runtime.sendMessage({ type: 'CLEAR_FAVICON_CACHE' }, resolve);
+          });
+          if (response?.status === 'OK') {
+            showToast(`Cleared ${response.cleared} favicons, freed ${Math.round(response.freedBytes / 1024)}KB`);
+            loadFaviconCacheStats();
+          } else {
+            showToast('Failed to clear favicon cache');
+          }
+        } catch (err) {
+          showToast('Error clearing favicon cache');
+        }
+        clearFaviconCacheBtn.disabled = false;
+        clearFaviconCacheBtn.textContent = 'Clear Cache';
       });
     }
 
@@ -1200,6 +1277,144 @@ function initializePopup() {
         }
       });
     }
+
+    // Performance Monitor Modal with auto-polling
+    const perfBtn = modal.querySelector('#show-performance-modal') as HTMLButtonElement;
+    const perfModal = document.getElementById('performance-modal');
+    const perfCloseBtn = perfModal?.querySelector('#performance-close');
+    const perfRefreshBtn = perfModal?.querySelector('#perf-refresh');
+    let perfPollingInterval: ReturnType<typeof setInterval> | null = null;
+
+    // Stop polling and cleanup
+    function stopPerfPolling() {
+      if (perfPollingInterval) {
+        clearInterval(perfPollingInterval);
+        perfPollingInterval = null;
+      }
+    }
+
+    // Start auto-polling (every 5 seconds)
+    function startPerfPolling() {
+      stopPerfPolling(); // Ensure no duplicate intervals
+      perfPollingInterval = setInterval(async () => {
+        // Safety check: stop if modal is hidden or removed
+        if (!perfModal || perfModal.classList.contains('hidden')) {
+          stopPerfPolling();
+          return;
+        }
+        try {
+          await loadPerformanceMetrics();
+        } catch {
+          // On error, stop polling to prevent dangling
+          stopPerfPolling();
+        }
+      }, 5000);
+    }
+
+    // Close performance modal and stop polling
+    function closePerfModal() {
+      stopPerfPolling();
+      if (perfModal) {
+        perfModal.classList.add('hidden');
+      }
+    }
+
+    if (perfBtn && perfModal) {
+      perfBtn.addEventListener('click', async () => {
+        perfModal.classList.remove('hidden');
+        await loadPerformanceMetrics();
+        startPerfPolling();
+      });
+
+      if (perfCloseBtn) {
+        perfCloseBtn.addEventListener('click', closePerfModal);
+      }
+
+      perfModal.addEventListener('click', (e) => {
+        if (e.target === perfModal) {
+          closePerfModal();
+        }
+      });
+
+      // Stop polling on Escape key
+      perfModal.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closePerfModal();
+        }
+      });
+
+      if (perfRefreshBtn) {
+        perfRefreshBtn.addEventListener('click', loadPerformanceMetrics);
+      }
+    }
+
+    // Stop polling when popup/window closes
+    window.addEventListener('beforeunload', stopPerfPolling);
+    window.addEventListener('unload', stopPerfPolling);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopPerfPolling();
+      }
+    });
+
+    // Diagnostics Export
+    const diagBtn = modal.querySelector('#export-diagnostics') as HTMLButtonElement;
+    if (diagBtn) {
+      diagBtn.addEventListener('click', async () => {
+        diagBtn.disabled = true;
+        diagBtn.textContent = '📋 Exporting...';
+        try {
+          const response = await sendMessage({ type: 'EXPORT_DIAGNOSTICS' });
+          if (response?.status === 'OK' && response.data) {
+            // Download as JSON file
+            const blob = new Blob([response.data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `smruticortex-diagnostics-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('✅ Diagnostics exported!');
+          } else {
+            showToast('❌ Failed to export diagnostics');
+          }
+        } catch (err) {
+          showToast('❌ Error exporting diagnostics');
+          console.error('Diagnostics export error:', err);
+        }
+        diagBtn.disabled = false;
+        diagBtn.textContent = '📋 Export Diagnostics';
+      });
+    }
+  }
+
+  // Load performance metrics from service worker
+  async function loadPerformanceMetrics() {
+    try {
+      const response = await sendMessage({ type: 'GET_PERFORMANCE_METRICS' });
+      if (response?.status === 'OK' && response.formatted) {
+        const f = response.formatted;
+        updatePerfElement('perf-search-count', f['Search Count']);
+        updatePerfElement('perf-avg-time', f['Avg Search Time']);
+        updatePerfElement('perf-min-max', f['Min/Max Search']);
+        updatePerfElement('perf-last-time', f['Last Search']);
+        updatePerfElement('perf-items-indexed', f['Items Indexed']);
+        updatePerfElement('perf-index-time', f['Last Index Time']);
+        updatePerfElement('perf-memory', f['Memory Used']);
+        updatePerfElement('perf-uptime', f['Uptime']);
+        updatePerfElement('perf-restarts', f['SW Restarts']);
+        updatePerfElement('perf-self-heals', f['Self-Heals']);
+      }
+    } catch (err) {
+      console.error('Failed to load performance metrics:', err);
+    }
+  }
+
+  function updatePerfElement(id: string, value: string) {
+    const el = document.getElementById(id);
+    if (el) {el.textContent = value;}
   }
 
   // Assign global

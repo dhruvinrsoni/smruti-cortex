@@ -234,6 +234,14 @@
                 <small>Time to wait after typing before focusing results (0 disables)</small>
               </div>
             </label>
+            <label class="setting-option">
+              <input type="checkbox" id="modal-selectAllOnFocus" checked>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Select all on Tab focus</strong>
+                <small>When pressing Tab to return to search, select all text for fresh typing. If off, cursor goes to end.</small>
+              </div>
+            </label>
           </div>
         </div>
         <div class="settings-section">
@@ -248,6 +256,15 @@
                 <small>Fetches site icons via Google API. Disable for maximum privacy (uses fallback icons).</small>
               </div>
             </label>
+            <div class="favicon-cache-status" id="favicon-cache-status">
+              <div class="cache-info">
+                <span class="cache-label">🖼️ Favicon Cache:</span>
+                <span id="favicon-cache-count">-- icons</span>
+                <span class="storage-separator">•</span>
+                <span id="favicon-cache-size">-- KB</span>
+              </div>
+              <button class="action-btn secondary" id="clear-favicon-cache" title="Clear cached favicons">Clear Cache</button>
+            </div>
             <label class="setting-option">
               <div class="option-content" style="margin-bottom: 8px;">
                 <strong>Sensitive URL Blacklist</strong>
@@ -304,6 +321,86 @@
               <img src="../assets/icon-bookmark.svg" alt="" class="bookmark-icon" />
               Bookmark This Page
             </button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Diagnostics & Performance</h3>
+          <p>Monitor extension performance and export diagnostics for troubleshooting.</p>
+          <div class="setting-options">
+            <button class="action-btn secondary" id="show-performance-modal" title="View real-time performance metrics">📊 Performance Monitor</button>
+            <button class="action-btn secondary" id="export-diagnostics" title="Export diagnostic data for bug reports">📋 Export Diagnostics</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Monitor Modal -->
+  <div id="performance-modal" class="settings-modal hidden">
+    <div class="settings-modal-content performance-modal-content">
+      <div class="settings-header">
+        <h2>📊 Performance Monitor</h2>
+        <button id="performance-close" class="settings-close" title="Close">×</button>
+      </div>
+      <div class="settings-content">
+        <div class="perf-section">
+          <h3>🔍 Search Performance</h3>
+          <div class="perf-grid">
+            <div class="perf-stat">
+              <span class="perf-label">Searches</span>
+              <span class="perf-value" id="perf-search-count">--</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Avg Time</span>
+              <span class="perf-value" id="perf-avg-time">-- ms</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Min/Max</span>
+              <span class="perf-value" id="perf-min-max">-- / -- ms</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Last Search</span>
+              <span class="perf-value" id="perf-last-time">-- ms</span>
+            </div>
+          </div>
+        </div>
+        <div class="perf-section">
+          <h3>📚 Index Status</h3>
+          <div class="perf-grid">
+            <div class="perf-stat">
+              <span class="perf-label">Items Indexed</span>
+              <span class="perf-value" id="perf-items-indexed">--</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Last Index Time</span>
+              <span class="perf-value" id="perf-index-time">-- s</span>
+            </div>
+          </div>
+        </div>
+        <div class="perf-section">
+          <h3>💾 Memory & System</h3>
+          <div class="perf-grid">
+            <div class="perf-stat">
+              <span class="perf-label">Memory Used</span>
+              <span class="perf-value" id="perf-memory">-- MB</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Uptime</span>
+              <span class="perf-value" id="perf-uptime">--</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">SW Restarts</span>
+              <span class="perf-value" id="perf-restarts">--</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Self-Heals</span>
+              <span class="perf-value" id="perf-self-heals">--</span>
+            </div>
+          </div>
+        </div>
+        <div class="perf-section">
+          <div class="perf-actions">
+            <button class="action-btn secondary" id="perf-refresh" title="Refresh metrics">🔄 Refresh</button>
           </div>
         </div>
       </div>
