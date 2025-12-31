@@ -253,6 +253,20 @@ setupPortBasedMessaging();
                 break;
               }
 
+              case 'INDEX_BOOKMARKS': {
+                logger.info('onMessage', '📚 INDEX_BOOKMARKS requested by user');
+                try {
+                  const { performBookmarksIndex } = await import('./indexing');
+                  const result = await performBookmarksIndex(true);
+                  logger.info('onMessage', '✅ INDEX_BOOKMARKS completed', result);
+                  sendResponse({ status: 'OK', ...result });
+                } catch (error) {
+                  logger.error('onMessage', '❌ INDEX_BOOKMARKS failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
               case 'CLEAR_ALL_DATA': {
                 logger.info('onMessage', '🗑️ CLEAR_ALL_DATA requested by user');
                 try {

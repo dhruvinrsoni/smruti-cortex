@@ -24,6 +24,8 @@ export interface AppSettings {
     // Privacy settings
     loadFavicons?: boolean;       // Load favicons from Google API (default: true)
     sensitiveUrlBlacklist?: string[];  // User-defined domains/patterns to skip metadata extraction (default: [])
+    // Bookmarks indexing
+    indexBookmarks?: boolean;     // Include bookmarks in search index (default: true)
     // Search result diversity
     showDuplicateUrls?: boolean;  // Show duplicate URLs with different query params (default: false = diversity ON)
     showNonMatchingResults?: boolean; // Show results that don't match the query (default: false = strict matching)
@@ -91,6 +93,12 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     sensitiveUrlBlacklist: {
         default: [],
         validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'),
+    },
+    
+    // Bookmarks indexing - default true = index bookmarks
+    indexBookmarks: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
     },
     
     // Search result diversity - default false = diversity ON (filter duplicates)

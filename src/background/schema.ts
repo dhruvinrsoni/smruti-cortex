@@ -10,4 +10,6 @@ export interface IndexedItem {
     lastVisit: number; // timestamp
     tokens: string[];  // tokenized text for search
     embedding?: number[];  // AI embeddings (optional, generated on-demand)
+    isBookmark?: boolean;  // true if this URL is bookmarked (v6.0+)
+    bookmarkFolders?: string[];  // bookmark folder path(s) if applicable
 }
