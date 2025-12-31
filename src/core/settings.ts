@@ -16,6 +16,10 @@ export interface AppSettings {
      * Delay in ms before focus shifts to results after typing (0 disables auto-focus)
      */
     focusDelayMs?: number;
+    /**
+     * When Tab returns focus to input, select all text (true) or place cursor at end (false)
+     */
+    selectAllOnFocus?: boolean;
     // Ollama AI integration settings
     ollamaEnabled?: boolean;      // Enable/disable Ollama integration (default: false)
     ollamaEndpoint?: string;      // Ollama API endpoint (default: 'http://localhost:11434')
@@ -110,6 +114,12 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     // Strict matching - default false = only show matching results
     showNonMatchingResults: {
         default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    
+    // Focus behavior - default true = select all text when Tab focuses input
+    selectAllOnFocus: {
+        default: true,
         validate: (val) => typeof val === 'boolean',
     },
     
