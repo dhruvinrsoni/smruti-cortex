@@ -14,7 +14,7 @@ Each item can be converted into GitHub Issues.
 | v3.0 | ✅ Released | Documentation, CI/CD, testing, store-ready |
 | v4.0 | ✅ Released | Professional branding, local Ollama AI, privacy hardening |
 | v5.0 | ✅ Released | Search quality controls, UX polish, Chrome Store ready |
-| v6.0 | 🔄 Planning | AI enhancements, advanced features (deferred) |
+| v6.0 | ✅ Released | Bookmarks, favicon cache, query expansion, diagnostics, performance monitor |
 
 ---
 
@@ -72,29 +72,33 @@ Each item can be converted into GitHub Issues.
 
 ---
 
-## 🔄 v6.0+ FUTURE ROADMAP (Deferred Features)
+## ✅ COMPLETED — v6.0 (Released Jan 1, 2026)
+- [x] **Bookmark Search** - Index and search bookmarks with ★ indicator (toggle in Settings)
+- [x] **Favicon Caching** - Local IndexedDB cache with 30-day expiry and cleanup UI
+- [x] **Query Expansion** - Synonym matching (~50 terms) for broader search results
+- [x] **Advanced Diagnostics** - Open-closed design with 5 collectors, export JSON for bug reports
+- [x] **Performance Monitor** - Real-time metrics modal with 5s auto-refresh
+- [x] **Enhanced Error Recovery** - Retry logic with exponential backoff, corruption detection
+- [x] **Cross-Browser Support** - Firefox browser_specific_settings, Edge-compatible bookmarks
+- [x] **Plugin Placeholder** - Documented IScorer interface for custom scorers
+- [x] **Select All on Focus** - Toggle for Tab behavior (select all vs cursor at end)
+
+---
+
+## 🔄 v7.0+ FUTURE ROADMAP (Deferred Features)
 
 ### AI & UX Enhancements
-- [ ] **Enhanced AI Integration** - Multi-model support, performance metrics dashboard
+- [ ] **Enhanced AI Integration** - Multi-model support, cloud embeddings (opt-in)
 - [ ] **Advanced Privacy Controls** - Granular permission management, data retention settings
 - [ ] **Smart Onboarding** - 3-step setup flow with privacy explanations
 - [ ] **Favorites & Pinned Results** - Save frequently accessed pages
-- [ ] **Favicon Caching** - Faster rendering with local icon storage
 
 ### Developer Experience
-- [ ] **Plugin Architecture** - Document scorer plugin interface for custom search algorithms
-- [ ] **Advanced Diagnostics** - Export diagnostics for bug reporting
-- [ ] **Performance Monitoring** - Real-time metrics and optimization suggestions
-
-### Quality & Reliability
 - [ ] **Comprehensive Test Coverage** - 80%+ code coverage target
-- [ ] **Error Recovery** - Enhanced self-healing for edge cases
-- [ ] **Cross-Browser Compatibility** - Firefox, Edge, Safari extension support
 
 ### AI & Intelligence
 - [ ] External API embedding scorer (privacy review needed)
 - [ ] Semantic search with cloud embeddings (opt-in)
-- [ ] Query expansion algorithms
 - [ ] API key management for cloud features
 
 ### Premium Features (Potential)
@@ -121,14 +125,16 @@ Each item can be converted into GitHub Issues.
 - [x] [#10 - Background resilience](https://github.com/dhruvinrsoni/smruti-cortex/issues/10) ✅
 - [x] [#16 - Local Ollama AI integration](https://github.com/dhruvinrsoni/smruti-cortex/issues/16) ✅
 
-### Open Issues (v6.0+)
+### Completed Issues (v6.0)
+- [x] [#13 - Favicon caching](https://github.com/dhruvinrsoni/smruti-cortex/issues/13) ✅
+- [x] [#15 - Document scorer plugin interface](https://github.com/dhruvinrsoni/smruti-cortex/issues/15) ✅
+
+### Open Issues (v7.0+)
 - [ ] [#5 - Explain permissions in Options page](https://github.com/dhruvinrsoni/smruti-cortex/issues/5)
 - [ ] [#7 - Disable metadata extraction toggle](https://github.com/dhruvinrsoni/smruti-cortex/issues/7)
 - [ ] [#11 - Onboarding 3-step flow](https://github.com/dhruvinrsoni/smruti-cortex/issues/11)
 - [ ] [#12 - Pinned results / favorites](https://github.com/dhruvinrsoni/smruti-cortex/issues/12)
-- [ ] [#13 - Favicon caching](https://github.com/dhruvinrsoni/smruti-cortex/issues/13)
 - [ ] [#14 - Preview snippet / metadata snippet](https://github.com/dhruvinrsoni/smruti-cortex/issues/14)
-- [ ] [#15 - Document scorer plugin interface](https://github.com/dhruvinrsoni/smruti-cortex/issues/15)
 - [ ] [#17 - Store embeddings with consent](https://github.com/dhruvinrsoni/smruti-cortex/issues/17)
 - [ ] [#18 - API key management](https://github.com/dhruvinrsoni/smruti-cortex/issues/18)
 

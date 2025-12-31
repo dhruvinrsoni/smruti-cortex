@@ -24,8 +24,11 @@
 /* Bookmark indicator star */
 .bookmark-indicator {
   color: var(--bookmark);
-  font-size: 12px;
-  margin-right: 2px;
+  font-size: 16px;
+  font-weight: bold;
+  margin-right: 4px;
+  text-shadow: 0 0 2px rgba(245, 158, 11, 0.5);
+  vertical-align: middle;
 }
 
 /* Detect tab mode: if viewport is wider than typical popup, we're in a tab */
