@@ -287,6 +287,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== FETCH LOG LEVEL FROM SETTINGS =====
   function fetchLogLevel(): void {
+    if (!chrome.runtime?.id) {
+      // Extension context invalidated
+      return;
+    }
     try {
       chrome.runtime.sendMessage({ type: 'GET_LOG_LEVEL' }, (response) => {
         if (chrome.runtime.lastError) {
@@ -307,7 +311,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SERVICE WORKER PRE-WARMING =====
   function prewarmServiceWorker(): void {
-    if (prewarmed) {return;}
+    if (prewarmed || !chrome.runtime?.id) {return;}
     prewarmed = true;
     const t0 = performance.now();
     try {
@@ -324,7 +328,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== PORT-BASED MESSAGING =====
   function openSearchPort(): void {
-    if (searchPort) {return;}
+    if (searchPort || !chrome.runtime?.id) {return;}
     const t0 = performance.now();
     try {
       searchPort = chrome.runtime.connect({ name: 'quick-search' });
@@ -411,6 +415,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.placeholder = 'Search your browsing history...';
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
+    inputEl.tabIndex = 0; // Ensure focusable
     
     const escKbd = document.createElement('span');
     escKbd.className = 'kbd';
@@ -431,6 +436,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     settingsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (!chrome.runtime?.id) {
+        console.warn('[SmrutiCortex] Cannot open settings: extension context invalidated');
+        return;
+      }
       // Open the extension popup page in a new tab
       chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
       hideOverlay();
@@ -490,6 +499,18 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     inputEl.addEventListener('input', handleInput);
     inputEl.addEventListener('keydown', handleKeydown);
+    
+    // Debug focus issues
+    inputEl.addEventListener('focus', () => {
+      if (currentLogLevel >= LOG_LEVEL.DEBUG) {
+        console.debug('[SmrutiCortex] Input focused');
+      }
+    });
+    inputEl.addEventListener('blur', () => {
+      if (currentLogLevel >= LOG_LEVEL.DEBUG) {
+        console.debug('[SmrutiCortex] Input blurred');
+      }
+    });
 
     // Append to document
     document.documentElement.appendChild(shadowHost);
@@ -510,8 +531,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     if (!shadowHost || !overlayEl || !inputEl) {return;}
 
-    // Open port for faster messaging
-    openSearchPort();
+    // Open port for faster messaging (only if extension context is valid)
+    if (chrome.runtime?.id) {
+      openSearchPort();
+    }
 
     // Show overlay
     shadowHost.classList.add('visible');
@@ -523,11 +546,38 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selectedIndex = 0;
     renderResults([]);
     
-    // Focus input (requestAnimationFrame for smoother focus)
-    requestAnimationFrame(() => {
-      inputEl?.focus();
-      perfLog('Overlay visible + input focused', t0);
-    });
+    // Focus input with browser-specific handling
+    // Use multiple attempts for better Edge compatibility
+    const focusInput = () => {
+      if (inputEl) {
+        try {
+          inputEl.focus();
+          // Force selection to start for better UX
+          inputEl.setSelectionRange(0, 0);
+          if (document.activeElement === inputEl) {
+            perfLog('Input focused successfully', t0);
+            return true;
+          }
+        } catch (focusError) {
+          console.warn('[SmrutiCortex] Focus failed:', focusError);
+        }
+      }
+      return false;
+    };
+    
+    // Try focus immediately
+    if (!focusInput()) {
+      // Fallback with setTimeout
+      setTimeout(() => {
+        if (!focusInput()) {
+          // Final fallback with requestAnimationFrame
+          requestAnimationFrame(() => {
+            focusInput();
+            perfLog('Input focus final fallback attempted', t0);
+          });
+        }
+      }, 10);
+    }
   }
 
   function hideOverlay(): void {
@@ -569,12 +619,21 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
       perfLog('Search query sent via port', t0);
     } else {
+      if (!chrome.runtime?.id) {
+        console.warn('[SmrutiCortex] Cannot search: extension context invalidated');
+        // Show error message in results
+        currentResults = [];
+        renderErrorResults('Extension context invalidated. Please refresh the page or reload the extension.');
+        return;
+      }
       try {
         chrome.runtime.sendMessage(
           { type: 'SEARCH_QUERY', query, source: 'inline' },
           (response) => {
             if (chrome.runtime.lastError) {
               console.warn('[SmrutiCortex] Search error:', chrome.runtime.lastError);
+              currentResults = [];
+              renderErrorResults('Search failed. Please try again.');
               return;
             }
             if (response?.results) {
@@ -587,6 +646,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         );
       } catch (e) {
         console.warn('[SmrutiCortex] Search failed:', e);
+        currentResults = [];
+        renderErrorResults('Search failed. Please try again.');
       }
     }
   }
@@ -622,6 +683,22 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     resultsEl.appendChild(fragment);
     perfLog(`renderResults (${results.length} items)`, t0);
+  }
+
+  // ===== RENDER ERROR MESSAGE =====
+  function renderErrorResults(message: string): void {
+    if (!resultsEl) {return;}
+    
+    // Clear existing results
+    while (resultsEl.firstChild) {
+      resultsEl.removeChild(resultsEl.firstChild);
+    }
+
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'empty';
+    errorDiv.textContent = message;
+    errorDiv.style.color = 'var(--text-secondary)';
+    resultsEl.appendChild(errorDiv);
   }
 
   // ===== COPY TO CLIPBOARD (using shared utility) =====
@@ -726,6 +803,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== GLOBAL KEYBOARD LISTENER =====
   function handleGlobalKeydown(e: KeyboardEvent): void {
+    // Don't handle shortcuts if input is focused (let normal typing work)
+    if (document.activeElement === inputEl) {
+      return;
+    }
+    
     // Ctrl+Shift+S (or Cmd+Shift+S on Mac)
     const isShortcut = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's';
     
@@ -802,7 +884,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     }, { passive: true });
 
     // Message listener from service worker
-    if (chrome?.runtime?.onMessage) {
+    if (chrome?.runtime?.onMessage && chrome.runtime.id) {
       chrome.runtime.onMessage.addListener(handleMessage);
     }
     
