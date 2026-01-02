@@ -496,7 +496,21 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     overlayEl.addEventListener('click', (e) => {
       if (e.target === overlayEl) {hideOverlay();}
     });
-
+    
+    // Prevent keyboard events from bubbling out of the overlay
+    overlayEl.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+    }, true); // Use capture phase
+    
+    // Maintain focus on input when overlay is clicked
+    overlayEl.addEventListener('mousedown', (e) => {
+      // If clicking on non-interactive elements, refocus input
+      if (e.target === overlayEl || e.target === resultsEl || 
+          (e.target as Element)?.classList.contains('result')) {
+        setTimeout(() => inputEl?.focus(), 0);
+      }
+    });
+    
     inputEl.addEventListener('input', handleInput);
     inputEl.addEventListener('keydown', handleKeydown);
     
@@ -509,6 +523,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.addEventListener('blur', () => {
       if (currentLogLevel >= LOG_LEVEL.DEBUG) {
         console.debug('[SmrutiCortex] Input blurred');
+      }
+      // AGGRESSIVE: Force refocus immediately when overlay is visible
+      if (isOverlayVisible()) {
+        setTimeout(() => {
+          if (inputEl && isOverlayVisible()) {
+            inputEl.focus();
+          }
+        }, 0);
       }
     });
 
@@ -531,12 +553,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     if (!shadowHost || !overlayEl || !inputEl) {return;}
 
-    // Open port for faster messaging (only if extension context is valid)
-    if (chrome.runtime?.id) {
-      openSearchPort();
-    }
-
-    // Show overlay
+    // Show overlay FIRST
     shadowHost.classList.add('visible');
     overlayEl.classList.add('visible');
     
@@ -546,37 +563,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selectedIndex = 0;
     renderResults([]);
     
-    // Focus input with browser-specific handling
-    // Use multiple attempts for better Edge compatibility
-    const focusInput = () => {
-      if (inputEl) {
-        try {
-          inputEl.focus();
-          // Force selection to start for better UX
-          inputEl.setSelectionRange(0, 0);
-          if (document.activeElement === inputEl) {
-            perfLog('Input focused successfully', t0);
-            return true;
-          }
-        } catch (focusError) {
-          console.warn('[SmrutiCortex] Focus failed:', focusError);
-        }
-      }
-      return false;
-    };
-    
-    // Try focus immediately
-    if (!focusInput()) {
-      // Fallback with setTimeout
-      setTimeout(() => {
-        if (!focusInput()) {
-          // Final fallback with requestAnimationFrame
-          requestAnimationFrame(() => {
-            focusInput();
-            perfLog('Input focus final fallback attempted', t0);
-          });
-        }
-      }, 10);
+    // AGGRESSIVE FOCUS: Focus immediately and keep focused
+    inputEl.focus();
+    inputEl.setSelectionRange(0, 0);
+    perfLog('Input focused immediately', t0);
+
+    // Open port for faster messaging (only if extension context is valid)
+    if (chrome.runtime?.id) {
+      openSearchPort();
     }
   }
 
@@ -803,38 +797,87 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== GLOBAL KEYBOARD LISTENER =====
   function handleGlobalKeydown(e: KeyboardEvent): void {
-    // Don't handle shortcuts if input is focused (let normal typing work)
-    if (document.activeElement === inputEl) {
-      return;
-    }
-    
-    // Ctrl+Shift+S (or Cmd+Shift+S on Mac)
-    const isShortcut = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's';
-    
-    if (isShortcut) {
-      const t0 = performance.now();
-      perfLog('Keyboard shortcut detected');
-      
+    // COMPLETE KEYBOARD TAKEOVER when overlay is visible
+    if (isOverlayVisible()) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
       
-      if (isOverlayVisible()) {
+      // Handle escape to close
+      if (e.key === 'Escape') {
         hideOverlay();
-      } else {
-        showOverlay();
+        return;
       }
       
-      perfLog('Shortcut handler complete', t0);
+      // Handle all other keys by inserting into input
+      if (inputEl) {
+        handleKeyInput(e);
+      }
       return;
     }
     
-    // ESC to close if visible
-    if (e.key === 'Escape' && isOverlayVisible()) {
+    // Handle shortcut to open overlay
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault();
       e.stopPropagation();
-      hideOverlay();
+      e.stopImmediatePropagation();
+      showOverlay();
     }
+  }
+
+  // ===== DIRECT KEY INPUT HANDLING =====
+  function handleKeyInput(e: KeyboardEvent): void {
+    if (!inputEl) return;
+    
+    const key = e.key;
+    const start = inputEl.selectionStart || 0;
+    const end = inputEl.selectionEnd || 0;
+    
+    // Handle special keys
+    if (key === 'Backspace') {
+      if (start === end && start > 0) {
+        // Delete single character before cursor
+        inputEl.value = inputEl.value.substring(0, start - 1) + inputEl.value.substring(end);
+        inputEl.selectionStart = inputEl.selectionEnd = start - 1;
+      } else {
+        // Delete selection
+        inputEl.value = inputEl.value.substring(0, start) + inputEl.value.substring(end);
+        inputEl.selectionStart = inputEl.selectionEnd = start;
+      }
+    } else if (key === 'Delete') {
+      if (start === end) {
+        // Delete single character after cursor
+        inputEl.value = inputEl.value.substring(0, start) + inputEl.value.substring(end + 1);
+      } else {
+        // Delete selection
+        inputEl.value = inputEl.value.substring(0, start) + inputEl.value.substring(end);
+      }
+      inputEl.selectionStart = inputEl.selectionEnd = start;
+    } else if (key === 'ArrowLeft') {
+      inputEl.selectionStart = inputEl.selectionEnd = Math.max(0, start - 1);
+    } else if (key === 'ArrowRight') {
+      inputEl.selectionStart = inputEl.selectionEnd = Math.min(inputEl.value.length, end + 1);
+    } else if (key === 'Home') {
+      inputEl.selectionStart = inputEl.selectionEnd = 0;
+    } else if (key === 'End') {
+      inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+    } else if (key === 'Enter') {
+      // Let the input's keydown handler handle Enter
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true
+      });
+      inputEl.dispatchEvent(enterEvent);
+    } else if (key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      // Insert regular character
+      inputEl.value = inputEl.value.substring(0, start) + key + inputEl.value.substring(end);
+      inputEl.selectionStart = inputEl.selectionEnd = start + 1;
+    }
+    
+    // Trigger input event for search
+    const inputEvent = new Event('input', { bubbles: true });
+    inputEl.dispatchEvent(inputEvent);
   }
 
   // ===== MESSAGE LISTENER (for service worker commands) =====
