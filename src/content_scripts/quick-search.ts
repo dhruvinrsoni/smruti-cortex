@@ -60,11 +60,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   let overlayEl: HTMLDivElement | null = null;
   let inputEl: HTMLInputElement | null = null;
   let resultsEl: HTMLDivElement | null = null;
+  let settingsBtn: HTMLButtonElement | null = null;
   let selectedIndex = 0;
   let currentResults: any[] = [];
   let debounceTimer: number | null = null;
   let searchPort: chrome.runtime.Port | null = null;
   let prewarmed = false;
+  let cachedSettings: any = null;
+  let searchDebounceMs = DEBOUNCE_MS;
 
   // ===== STYLES (inlined for instant loading, with CSS containment) =====
   // Supports both light and dark themes via prefers-color-scheme
@@ -309,6 +312,33 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  // Fetch settings (non-blocking). This populates `cachedSettings` and adjusts debounce.
+  function fetchSettings(): void {
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
+        try {
+          const settings = resp?.settings || {};
+          cachedSettings = settings;
+          const focusDelay = typeof settings?.focusDelayMs === 'number' ? settings.focusDelayMs : undefined;
+          // If focusDelayMs is defined and >= 0, use it as search debounce (parity with popup)
+          if (typeof focusDelay === 'number') {
+            // Clamp to [0,2000]
+            searchDebounceMs = Math.max(0, Math.min(2000, focusDelay));
+          } else {
+            searchDebounceMs = DEBOUNCE_MS;
+          }
+          if (currentLogLevel >= LOG_LEVEL.DEBUG) {
+            console.debug('[SmrutiCortex] Fetched settings, focusDelayMs=', focusDelay, 'searchDebounceMs=', searchDebounceMs);
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+
   // ===== SERVICE WORKER PRE-WARMING =====
   function prewarmServiceWorker(): void {
     if (prewarmed || !chrome.runtime?.id) {return;}
@@ -422,9 +452,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     escKbd.textContent = 'ESC';
     
     // Settings button - opens the full popup
-    const settingsBtn = document.createElement('button');
+    settingsBtn = document.createElement('button');
     settingsBtn.className = 'settings-btn';
     settingsBtn.title = 'Open settings';
+    settingsBtn.tabIndex = 0; // Make focusable
     
     const settingsIcon = document.createElement('img');
     settingsIcon.src = chrome.runtime.getURL('../assets/icon-settings.svg');
@@ -497,16 +528,62 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (e.target === overlayEl) {hideOverlay();}
     });
     
-    // Prevent keyboard events from bubbling out of the overlay
+    // Capture-phase keyboard handling for overlay.
+    // Let input handle keys when it is focused; otherwise forward navigation/open keys here
     overlayEl.addEventListener('keydown', (e) => {
+      // Always allow Tab to flow to browser for native focus movement
+      if (e.key === 'Tab') { return; }
+
+      // Only act when overlay is visible
+      if (!isOverlayVisible()) { return; }
+
+      // If the input is focused, let its handlers process the event
+      if (document.activeElement === inputEl) { return; }
+
+      // For other focused elements (results, settings), handle navigation keys here
+      // Debug: log key and active element
+      if (currentLogLevel >= LOG_LEVEL.DEBUG) {
+        try {
+          console.debug('[SmrutiCortex] Overlay keydown:', { key: e.key, active: document.activeElement, selectedIndex });
+        } catch (err) {}
+      }
+      let action = parseKeyboardAction(e);
+      // Fallback mapping in case parseKeyboardAction returns null for some edge keys
+      if (!action) {
+        if (e.key === 'Enter') action = KeyboardAction.OPEN;
+        else if (e.key === 'ArrowDown') action = KeyboardAction.NAVIGATE_DOWN;
+        else if (e.key === 'ArrowUp') action = KeyboardAction.NAVIGATE_UP;
+        else if (e.key === 'ArrowRight') action = KeyboardAction.OPEN_NEW_TAB;
+      }
+      if (!action) { return; }
+
+      // Prevent page-level defaults and route to key handler
+      e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Re-use the same logic as input's keydown handler
+      handleKeydown(e);
     }, true); // Use capture phase
     
-    // Maintain focus on input when overlay is clicked
+    // Maintain focus behaviour on mousedown
+    // Only force focus when clicking the backdrop (overlay background).
+    // Do NOT force-focus when clicking interactive elements (results, settings, input).
     overlayEl.addEventListener('mousedown', (e) => {
-      // If clicking on non-interactive elements, refocus input
-      if (e.target === overlayEl || e.target === resultsEl || 
-          (e.target as Element)?.classList.contains('result')) {
+      const target = e.target as Element | null;
+      if (!target) { return; }
+
+      // If clicking on the overlay backdrop itself (outside the container), close overlay.
+      if (target === overlayEl) {
+        // Allow the click handler above to close; do not refocus.
+        return;
+      }
+
+      // If click landed directly on a non-interactive area inside overlay (rare),
+      // prefer focusing the input. But avoid forcing focus for interactive elements.
+      const tag = target.tagName?.toLowerCase();
+      const isInteractive = tag === 'input' || tag === 'button' || tag === 'a' || target.classList?.contains('result') || target.closest && Boolean(target.closest('button, a, input'));
+      if (!isInteractive) {
         setTimeout(() => inputEl?.focus(), 0);
       }
     });
@@ -520,17 +597,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         console.debug('[SmrutiCortex] Input focused');
       }
     });
-    inputEl.addEventListener('blur', () => {
+    // Remove aggressive refocus from blur — prefer native focus behavior and Tab navigation.
+    // Keep a light debug hook for visibility only.
+    inputEl.addEventListener('blur', (e) => {
       if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-        console.debug('[SmrutiCortex] Input blurred');
-      }
-      // AGGRESSIVE: Force refocus immediately when overlay is visible
-      if (isOverlayVisible()) {
-        setTimeout(() => {
-          if (inputEl && isOverlayVisible()) {
-            inputEl.focus();
-          }
-        }, 0);
+        console.debug('[SmrutiCortex] Input blurred (no refocus). relatedTarget:', (e as FocusEvent).relatedTarget);
       }
     });
 
@@ -538,6 +609,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     document.documentElement.appendChild(shadowHost);
 
     perfLog('Overlay created with Shadow DOM', t0);
+    // Fetch settings now to configure debounce and focus behavior
+    fetchSettings();
   }
 
   // ===== SHOW/HIDE =====
@@ -592,7 +665,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SEARCH =====
   function handleInput(): void {
-    if (debounceTimer) {clearTimeout(debounceTimer);}
+    if (debounceTimer) {clearTimeout(debounceTimer);}    
     debounceTimer = window.setTimeout(() => {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
@@ -601,7 +674,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         return;
       }
       performSearch(query);
-    }, DEBOUNCE_MS);
+    }, searchDebounceMs);
   }
 
   function performSearch(query: string): void {
@@ -670,12 +743,63 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       urlClassName: 'result-url',
       highlightClassName: 'highlight',
       emptyClassName: 'empty',
-      onResultClick: (index, _result, ctrlOrMeta) => {
-        openResult(index, ctrlOrMeta);
+      onResultClick: (index, _result, _ctrlOrMeta) => {
+        openResult(index, true);
       }
     });
 
     resultsEl.appendChild(fragment);
+    
+    // Make result elements focusable for keyboard navigation
+    resultsEl.querySelectorAll('.result').forEach((result, index) => {
+      (result as HTMLElement).tabIndex = 0;
+      (result as HTMLElement).dataset.index = String(index);
+    });
+    // After rendering, consider focusing the first result depending on settings (popup parity)
+    (async () => {
+      try {
+        // Fetch settings if not cached
+        if (!cachedSettings) {
+          cachedSettings = await new Promise((resolve) => {
+            try {
+              chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
+                resolve(resp?.settings || {});
+              });
+            } catch {
+              resolve({});
+            }
+          });
+        }
+        const rawDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : 0;
+        const focusDelay = Math.max(0, Math.min(2000, rawDelay || 0));
+        if (results.length > 0 && focusDelay > 0) {
+          // Popup behavior: focusDelayMs controls the debounce; if >0, focus the first result
+          // immediately after render (use setTimeout 0 to ensure element is ready)
+          setTimeout(() => {
+            if (!resultsEl) { return; }
+            const first = resultsEl.querySelector('.result') as HTMLElement | null;
+            if (first) {
+              selectedIndex = 0;
+              updateSelection();
+              first.focus();
+            }
+          }, 0);
+        }
+        // Final fallback: always ensure first result is focusable and focused so Enter works
+        // This ensures pages that steal focus still allow Enter to operate on results.
+        if (results.length > 0) {
+          const first = resultsEl.querySelector('.result') as HTMLElement | null;
+          if (first) {
+            selectedIndex = 0;
+            updateSelection();
+            try { first.focus(); } catch {}
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+    
     perfLog(`renderResults (${results.length} items)`, t0);
   }
 
@@ -707,6 +831,44 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     }).catch(() => {
       showToast('Failed to copy');
     });
+  }
+
+  // ===== TAB NAVIGATION =====
+  function handleTabNavigation(backward: boolean): void {
+    if (!inputEl || !resultsEl || !settingsBtn) { return; }
+    
+    const focusableElements: HTMLElement[] = [inputEl];
+    
+    // Add result elements if they exist
+    const resultElements = resultsEl.querySelectorAll('.result');
+    resultElements.forEach(el => focusableElements.push(el as HTMLElement));
+    
+    // Add settings button
+    focusableElements.push(settingsBtn);
+    
+    const currentFocused = document.activeElement as HTMLElement;
+    const currentIndex = focusableElements.indexOf(currentFocused);
+    
+    if (currentIndex === -1) {
+      // If focus is not on any of our elements, focus the input
+      inputEl.focus();
+      return;
+    }
+    
+    let nextIndex: number;
+    if (backward) {
+      nextIndex = currentIndex === 0 ? focusableElements.length - 1 : currentIndex - 1;
+    } else {
+      nextIndex = (currentIndex + 1) % focusableElements.length;
+    }
+    
+    focusableElements[nextIndex].focus();
+    
+    // If focusing on a result, update the selected index
+    if (nextIndex > 0 && nextIndex < focusableElements.length - 1) {
+      selectedIndex = nextIndex - 1; // Adjust for input being at index 0
+      updateSelection();
+    }
   }
 
   // ===== KEYBOARD NAVIGATION (using shared parseKeyboardAction) =====
@@ -768,6 +930,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           copyMarkdownLink(selectedIndex);
         }
         break;
+      
+      case KeyboardAction.TAB_FORWARD:
+        handleTabNavigation(false); // Forward tab
+        break;
+      
+      case KeyboardAction.TAB_BACKWARD:
+        handleTabNavigation(true); // Backward tab (Shift+Tab)
+        break;
     }
   }
 
@@ -779,6 +949,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Scroll into view
     const selected = resultsEl.querySelector('.result.selected');
     selected?.scrollIntoView({ block: 'nearest' });
+    // If a result is selected and currently not focused, move focus to it so arrow keys operate there
+    if (selected && document.activeElement !== selected) {
+      try {
+        (selected as HTMLElement).focus();
+      } catch {
+        // ignore focus errors
+      }
+    }
   }
 
   function openResult(index: number, newTab: boolean, _background: boolean = false): void {
@@ -799,20 +977,29 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   function handleGlobalKeydown(e: KeyboardEvent): void {
     // COMPLETE KEYBOARD TAKEOVER when overlay is visible
     if (isOverlayVisible()) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      
-      // Handle escape to close
+      // Let the browser handle Tab/Shift+Tab for native focus movement
+      if (e.key === 'Tab') { return; }
+
+      // Always handle Escape to close overlay regardless of focused element
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         hideOverlay();
         return;
       }
-      
-      // Handle all other keys by inserting into input
-      if (inputEl) {
-        handleKeyInput(e);
+
+      // Only intercept other keys when the input is focused. If focus is on results
+      // or settings button, let the overlay-level handler respond instead.
+      if (document.activeElement !== inputEl) {
+        return;
       }
+
+      // Input is focused — prevent page-level handling and route keys into the input
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (inputEl) { handleKeyInput(e); }
       return;
     }
     
@@ -827,7 +1014,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== DIRECT KEY INPUT HANDLING =====
   function handleKeyInput(e: KeyboardEvent): void {
-    if (!inputEl) return;
+    if (!inputEl) { return; }
     
     const key = e.key;
     const start = inputEl.selectionStart || 0;
@@ -896,6 +1083,20 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Update log level when settings change
     if (message?.type === 'LOG_LEVEL_CHANGED' && typeof message?.logLevel === 'number') {
       currentLogLevel = message.logLevel;
+      sendResponse({ success: true });
+      return true;
+    }
+    // Update cached settings when background notifies of changes
+    if (message?.type === 'SETTINGS_CHANGED' && message?.settings) {
+      try {
+        cachedSettings = { ...(cachedSettings || {}), ...message.settings };
+        const focusDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : undefined;
+        if (typeof focusDelay === 'number') {
+          searchDebounceMs = Math.max(0, Math.min(2000, focusDelay));
+        }
+      } catch {
+        // ignore
+      }
       sendResponse({ success: true });
       return true;
     }

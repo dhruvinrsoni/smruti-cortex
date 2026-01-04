@@ -33,6 +33,8 @@ export enum KeyboardAction {
   COPY_MARKDOWN = 'copy_markdown',
   NAVIGATE_UP = 'navigate_up',
   NAVIGATE_DOWN = 'navigate_down',
+  TAB_FORWARD = 'tab_forward',
+  TAB_BACKWARD = 'tab_backward',
   CLEAR = 'clear',
   CLOSE = 'close'
 }
@@ -208,6 +210,13 @@ export function parseKeyboardAction(e: KeyboardEvent): KeyboardAction | null {
         return KeyboardAction.OPEN_NEW_TAB;
       } else {
         return KeyboardAction.OPEN;
+      }
+    
+    case 'Tab':
+      if (e.shiftKey) {
+        return KeyboardAction.TAB_BACKWARD;
+      } else {
+        return KeyboardAction.TAB_FORWARD;
       }
     
     default:
