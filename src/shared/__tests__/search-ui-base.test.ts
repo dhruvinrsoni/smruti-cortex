@@ -192,8 +192,13 @@ describe('parseKeyboardAction', () => {
     expect(parseKeyboardAction(event)).toBeNull();
   });
 
-  it('should return null for Tab', () => {
+  it('should return TAB_FORWARD for Tab', () => {
     const event = createKeyboardEvent('Tab');
-    expect(parseKeyboardAction(event)).toBeNull();
+    expect(parseKeyboardAction(event)).toBe(KeyboardAction.TAB_FORWARD);
+  });
+
+  it('should return TAB_BACKWARD for Shift+Tab', () => {
+    const event = createKeyboardEvent('Tab', { shiftKey: true });
+    expect(parseKeyboardAction(event)).toBe(KeyboardAction.TAB_BACKWARD);
   });
 });
