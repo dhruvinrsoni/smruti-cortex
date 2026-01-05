@@ -3,7 +3,7 @@ import { tokenize } from '../tokenizer';
 
 const urlScorer: Scorer = {
     name: 'url',
-    weight: 0.15,
+    weight: 0.12, // Reduced from 0.15 to balance with cross-dimensional scorer
     score: (item, query, _allItems, context) => {
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
