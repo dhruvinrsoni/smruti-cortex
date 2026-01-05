@@ -5,7 +5,8 @@ const titleScorer: Scorer = {
     name: 'title',
     weight: 0.35, // Reduced from 0.40 to make room for cross-dimensional scorer
     score: (item, query, _allItems, context) => {
-        const title = item.title.toLowerCase();
+        // Use bookmark title if available, otherwise use page title
+        const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
         const originalTokens = tokenize(query);
         
         // Use AI-expanded tokens if available, otherwise use original
