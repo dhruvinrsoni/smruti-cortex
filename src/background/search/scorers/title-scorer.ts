@@ -3,7 +3,7 @@ import { tokenize } from '../tokenizer';
 
 const titleScorer: Scorer = {
     name: 'title',
-    weight: 0.40,
+    weight: 0.35, // Reduced from 0.40 to make room for cross-dimensional scorer
     score: (item, query, _allItems, context) => {
         const title = item.title.toLowerCase();
         const originalTokens = tokenize(query);
