@@ -69,6 +69,19 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   let cachedSettings: any = null;
   let searchDebounceMs = DEBOUNCE_MS;
 
+  // Helper: returns the currently focused element inside our shadow root if any
+  function getFocusedElement(): Element | null {
+    try {
+      if (shadowRoot) {
+        const focused = shadowRoot.querySelector(':focus') as Element | null;
+        if (focused) { return focused; }
+      }
+    } catch {
+      // ignore
+    }
+    return document.activeElement;
+  }
+
   // ===== STYLES (inlined for instant loading, with CSS containment) =====
   // Supports both light and dark themes via prefers-color-scheme
   const OVERLAY_STYLES = `
@@ -529,42 +542,42 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     });
     
     // Capture-phase keyboard handling for overlay.
-    // Let input handle keys when it is focused; otherwise forward navigation/open keys here
-    overlayEl.addEventListener('keydown', (e) => {
-      // Always allow Tab to flow to browser for native focus movement
-      if (e.key === 'Tab') { return; }
+    // DISABLED: Global handler now handles all key routing
+    // overlayEl.addEventListener('keydown', (e) => {
+    //   // Always allow Tab to flow to browser for native focus movement
+    //   if (e.key === 'Tab') { return; }
 
-      // Only act when overlay is visible
-      if (!isOverlayVisible()) { return; }
+    //   // Only act when overlay is visible
+    //   if (!isOverlayVisible()) { return; }
 
-      // If the input is focused, let its handlers process the event
-      if (document.activeElement === inputEl) { return; }
+    //   // If the input is focused, let its handlers process the event
+    //   if (document.activeElement === inputEl) { return; }
 
-      // For other focused elements (results, settings), handle navigation keys here
-      // Debug: log key and active element
-      if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-        try {
-          console.debug('[SmrutiCortex] Overlay keydown:', { key: e.key, active: document.activeElement, selectedIndex });
-        } catch (err) {}
-      }
-      let action = parseKeyboardAction(e);
-      // Fallback mapping in case parseKeyboardAction returns null for some edge keys
-      if (!action) {
-        if (e.key === 'Enter') action = KeyboardAction.OPEN;
-        else if (e.key === 'ArrowDown') action = KeyboardAction.NAVIGATE_DOWN;
-        else if (e.key === 'ArrowUp') action = KeyboardAction.NAVIGATE_UP;
-        else if (e.key === 'ArrowRight') action = KeyboardAction.OPEN_NEW_TAB;
-      }
-      if (!action) { return; }
+    //   // For other focused elements (results, settings), handle navigation keys here
+    //   // Debug: log key and active element
+    //   if (currentLogLevel >= LOG_LEVEL.DEBUG) {
+    //     try {
+    //       console.debug('[SmrutiCortex] Overlay keydown:', { key: e.key, active: document.activeElement, selectedIndex });
+    //     } catch (err) {}
+    //   }
+    //   let action = parseKeyboardAction(e);
+    //   // Fallback mapping in case parseKeyboardAction returns null for some edge keys
+    //   if (!action) {
+    //     if (e.key === 'Enter') action = KeyboardAction.OPEN;
+    //     else if (e.key === 'ArrowDown') action = KeyboardAction.NAVIGATE_DOWN;
+    //     else if (e.key === 'ArrowUp') action = KeyboardAction.NAVIGATE_UP;
+    //     else if (e.key === 'ArrowRight') action = KeyboardAction.OPEN_NEW_TAB;
+    //   }
+    //   if (!action) { return; }
 
-      // Prevent page-level defaults and route to key handler
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+    //   // Prevent page-level defaults and route to key handler
+    //   e.preventDefault();
+    //   e.stopPropagation();
+    //   e.stopImmediatePropagation();
 
-      // Re-use the same logic as input's keydown handler
-      handleKeydown(e);
-    }, true); // Use capture phase
+    //   // Re-use the same logic as input's keydown handler
+    //   handleKeydown(e);
+    // }, true); // Use capture phase
     
     // Maintain focus behaviour on mousedown
     // Only force focus when clicking the backdrop (overlay background).
@@ -877,6 +890,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     if (!action) {return;}
     
+    // Determine if a result element currently has focus and derive its index
+    const focused = getFocusedElement() as HTMLElement | null;
+    let focusedIndex: number | null = null;
+    if (focused && focused.dataset?.index) {
+      const idx = parseInt(focused.dataset.index, 10);
+      if (!Number.isNaN(idx)) { focusedIndex = idx; }
+    }
+    
     e.preventDefault();
     
     switch (action) {
@@ -895,39 +916,52 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       
       case KeyboardAction.NAVIGATE_DOWN:
         if (currentResults.length > 0) {
-          selectedIndex = (selectedIndex + 1) % currentResults.length;
+          if (focusedIndex !== null) {
+            // If a result is focused, move relative to it
+            selectedIndex = (focusedIndex + 1) % currentResults.length;
+          } else {
+            selectedIndex = (selectedIndex + 1) % currentResults.length;
+          }
           updateSelection();
         }
         break;
       
       case KeyboardAction.NAVIGATE_UP:
         if (currentResults.length > 0) {
-          selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+          if (focusedIndex !== null) {
+            selectedIndex = (focusedIndex - 1 + currentResults.length) % currentResults.length;
+          } else {
+            selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+          }
           updateSelection();
         }
         break;
       
       case KeyboardAction.OPEN_NEW_TAB:
-        if (currentResults.length > 0 && selectedIndex >= 0) {
-          openResult(selectedIndex, true, false);
+        if (currentResults.length > 0) {
+          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+          if (idx >= 0) { openResult(idx, true, false); }
         }
         break;
       
       case KeyboardAction.OPEN_BACKGROUND_TAB:
-        if (currentResults.length > 0 && selectedIndex >= 0) {
-          openResult(selectedIndex, true, true);
+        if (currentResults.length > 0) {
+          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+          if (idx >= 0) { openResult(idx, true, true); }
         }
         break;
       
       case KeyboardAction.OPEN:
-        if (currentResults.length > 0 && selectedIndex >= 0) {
-          openResult(selectedIndex, false, false);
+        if (currentResults.length > 0) {
+          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+          if (idx >= 0) { openResult(idx, false, false); }
         }
         break;
       
       case KeyboardAction.COPY_MARKDOWN:
-        if (currentResults.length > 0 && selectedIndex >= 0) {
-          copyMarkdownLink(selectedIndex);
+        if (currentResults.length > 0) {
+          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+          if (idx >= 0) { copyMarkdownLink(idx); }
         }
         break;
       
@@ -977,7 +1011,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   function handleGlobalKeydown(e: KeyboardEvent): void {
     // COMPLETE KEYBOARD TAKEOVER when overlay is visible
     if (isOverlayVisible()) {
-      // Let the browser handle Tab/Shift+Tab for native focus movement
+      // Let the browser handle Tab/Shift+Tab for native focus movement within overlay
       if (e.key === 'Tab') { return; }
 
       // Always handle Escape to close overlay regardless of focused element
@@ -989,20 +1023,31 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         return;
       }
 
-      // Only intercept other keys when the input is focused. If focus is on results
-      // or settings button, let the overlay-level handler respond instead.
-      if (document.activeElement !== inputEl) {
-        return;
-      }
-
-      // Input is focused — prevent page-level handling and route keys into the input
+      // Block ALL other keys from reaching the underlying page
+      // This prevents page shortcuts (e.g., Confluence 'c' key, Jira shortcuts, GitHub hotkeys)
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      if (inputEl) { handleKeyInput(e); }
+
+      // Route keys based on currently focused element within the overlay
+      const focusedElement = getFocusedElement();
+
+      if (focusedElement === inputEl) {
+        // Input is focused - handle typing and navigation keys
+        if (inputEl) { handleKeyInput(e); }
+      } else if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement === settingsBtn)) {
+        // Results or settings button is focused - handle navigation/action keys
+        handleKeydown(e);
+      } else {
+        // Nothing specific focused - focus input and handle the key
+        if (inputEl) {
+          inputEl.focus();
+          handleKeyInput(e);
+        }
+      }
       return;
     }
-    
+
     // Handle shortcut to open overlay
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault();
