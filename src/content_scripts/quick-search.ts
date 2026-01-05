@@ -849,42 +849,67 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== TAB NAVIGATION =====
   function handleTabNavigation(backward: boolean): void {
     if (!inputEl || !resultsEl || !settingsBtn) { return; }
-    
-    const focusableElements: HTMLElement[] = [inputEl];
-    
-    // Add result elements if they exist
-    const resultElements = resultsEl.querySelectorAll('.result');
-    resultElements.forEach(el => focusableElements.push(el as HTMLElement));
-    
-    // Add settings button
-    focusableElements.push(settingsBtn);
-    
-    const currentFocused = document.activeElement as HTMLElement;
-    const currentIndex = focusableElements.indexOf(currentFocused);
-    
-    if (currentIndex === -1) {
-      // If focus is not on any of our elements, focus the input
+
+    // Define the main focusable groups in clockwise order: Input → Results → Settings → Input
+    const focusGroups = [
+      { element: inputEl, name: 'input' },
+      { element: null, name: 'results' }, // Placeholder for results area
+      { element: settingsBtn, name: 'settings' }
+    ];
+
+    const currentFocused = getFocusedElement() as HTMLElement;
+
+    // Determine current group index
+    let currentGroupIndex = -1;
+
+    if (currentFocused === inputEl) {
+      currentGroupIndex = 0;
+    } else if (currentFocused === settingsBtn) {
+      currentGroupIndex = 2;
+    } else if (currentFocused && currentFocused.classList?.contains('result')) {
+      currentGroupIndex = 1; // Results group
+    }
+
+    // If not found in any group, default to input
+    if (currentGroupIndex === -1) {
       inputEl.focus();
       return;
     }
-    
-    let nextIndex: number;
+
+    // Calculate next group index
+    let nextGroupIndex: number;
     if (backward) {
-      nextIndex = currentIndex === 0 ? focusableElements.length - 1 : currentIndex - 1;
+      // Shift+Tab: counterclockwise
+      nextGroupIndex = currentGroupIndex === 0 ? focusGroups.length - 1 : currentGroupIndex - 1;
     } else {
-      nextIndex = (currentIndex + 1) % focusableElements.length;
+      // Tab: clockwise
+      nextGroupIndex = (currentGroupIndex + 1) % focusGroups.length;
     }
-    
-    focusableElements[nextIndex].focus();
-    
-    // If focusing on a result, update the selected index
-    if (nextIndex > 0 && nextIndex < focusableElements.length - 1) {
-      selectedIndex = nextIndex - 1; // Adjust for input being at index 0
-      updateSelection();
+
+    // Focus the next group
+    const nextGroup = focusGroups[nextGroupIndex];
+
+    if (nextGroup.name === 'results') {
+      // Focus the results area - go to currently selected result or first result
+      if (currentResults.length > 0) {
+        const selectedResult = resultsEl.querySelector('.result.selected') as HTMLElement;
+        if (selectedResult) {
+          selectedResult.focus();
+        } else {
+          // Focus first result and update selection
+          const firstResult = resultsEl.querySelector('.result') as HTMLElement;
+          if (firstResult) {
+            selectedIndex = 0;
+            updateSelection();
+            firstResult.focus();
+          }
+        }
+      }
+    } else if (nextGroup.element) {
+      // Focus the specific element (input or settings)
+      nextGroup.element.focus();
     }
   }
-
-  // ===== KEYBOARD NAVIGATION (using shared parseKeyboardAction) =====
   function handleKeydown(e: KeyboardEvent): void {
     const action = parseKeyboardAction(e);
     
