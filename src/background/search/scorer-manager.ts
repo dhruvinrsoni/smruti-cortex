@@ -13,7 +13,8 @@ const crossDimensionalScorer: Scorer = {
     name: 'crossDimensional',
     weight: 0.15, // Significant weight to promote diverse keyword matching
     score: (item, query, _allItems, context) => {
-        const title = item.title.toLowerCase();
+        // Use bookmark title if available, otherwise use page title
+        const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();

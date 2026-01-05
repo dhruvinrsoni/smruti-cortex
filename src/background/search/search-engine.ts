@@ -113,7 +113,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         // Match against expanded tokens (includes AI-generated synonyms)
         // Include bookmark folders in searchable content
         const bookmarkFolders = (item as any).bookmarkFolders?.join(' ') || '';
-        const haystack = (item.title + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
+        // Use bookmark title if available, otherwise use page title
+        const searchTitle = (item as any).bookmarkTitle || item.title;
+        const haystack = (searchTitle + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
         const hasTokenMatch = matchedTokens.length > 0;
         

@@ -12,4 +12,5 @@ export interface IndexedItem {
     embedding?: number[];  // AI embeddings (optional, generated on-demand)
     isBookmark?: boolean;  // true if this URL is bookmarked (v6.0+)
     bookmarkFolders?: string[];  // bookmark folder path(s) if applicable
+    bookmarkTitle?: string;  // custom bookmark title (if different from page title)
 }

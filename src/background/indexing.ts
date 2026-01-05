@@ -460,9 +460,14 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
                     // Update existing item to mark as bookmark
                     existing.isBookmark = true;
                     existing.bookmarkFolders = bookmark.folders;
-                    // Update tokens to include folder names
+                    // Store bookmark title separately if it's different from page title
+                    if (bookmark.title && bookmark.title.trim() && bookmark.title !== existing.title) {
+                        existing.bookmarkTitle = bookmark.title;
+                    }
+                    // Update tokens to include bookmark title (if available), page title, folders, and URL
+                    const searchTitle = existing.bookmarkTitle || existing.title;
                     existing.tokens = tokenize(
-                        existing.title + ' ' + 
+                        searchTitle + ' ' + 
                         (existing.metaDescription || '') + ' ' + 
                         bookmark.folders.join(' ') + ' ' + 
                         existing.url
@@ -482,6 +487,7 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
                         tokens: tokenize(bookmark.title + ' ' + bookmark.folders.join(' ') + ' ' + bookmark.url),
                         isBookmark: true,
                         bookmarkFolders: bookmark.folders,
+                        bookmarkTitle: bookmark.title, // Store bookmark title
                     };
                     await saveIndexedItem(newItem);
                     indexed++;
