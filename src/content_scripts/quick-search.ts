@@ -699,13 +699,38 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
       perfLog('Search query sent via port', t0);
     } else {
+      // If runtime id is missing the extension context may have been invalidated
       if (!chrome.runtime?.id) {
         console.warn('[SmrutiCortex] Cannot search: extension context invalidated');
-        // Show error message in results
-        currentResults = [];
-        renderErrorResults('Extension context invalidated. Please refresh the page or reload the extension.');
+        showToast('Extension context lost — attempting to reconnect...');
+
+        // Try to reopen the port after a short delay; if that succeeds we'll send the query.
+        // If it doesn't, show an error message to the user.
+        setTimeout(() => {
+          try {
+            openSearchPort();
+          } catch (err) {
+            // ignore - openSearchPort already logs
+          }
+
+          if (searchPort) {
+            try {
+              searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
+              perfLog('Search query sent via reopened port', t0);
+              return;
+            } catch (err) {
+              // fallthrough to error below
+            }
+          }
+
+          // Could not reconnect - show clear error in results area
+          currentResults = [];
+          renderErrorResults('Extension context invalidated. Please reload the page or reload the extension.');
+        }, 250);
         return;
       }
+
+      // Otherwise attempt one-shot sendMessage and handle errors
       try {
         chrome.runtime.sendMessage(
           { type: 'SEARCH_QUERY', query, source: 'inline' },
@@ -850,10 +875,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   function handleTabNavigation(backward: boolean): void {
     if (!inputEl || !resultsEl || !settingsBtn) { return; }
 
-    // Define the main focusable groups in clockwise order: Input → Results → Settings → Input
+    // Define the main focusable groups in clockwise order: Results → Input → Settings → Results
+    // This makes Tab cycle: Results -> Input -> Settings -> Results
     const focusGroups = [
+      { element: null, name: 'results' }, // Results area first
       { element: inputEl, name: 'input' },
-      { element: null, name: 'results' }, // Placeholder for results area
       { element: settingsBtn, name: 'settings' }
     ];
 
@@ -862,16 +888,24 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Determine current group index
     let currentGroupIndex = -1;
 
-    if (currentFocused === inputEl) {
-      currentGroupIndex = 0;
+    if (currentFocused && currentFocused.classList?.contains('result')) {
+      currentGroupIndex = 0; // Results group
+    } else if (currentFocused === inputEl) {
+      currentGroupIndex = 1;
     } else if (currentFocused === settingsBtn) {
       currentGroupIndex = 2;
-    } else if (currentFocused && currentFocused.classList?.contains('result')) {
-      currentGroupIndex = 1; // Results group
     }
 
-    // If not found in any group, default to input
+    // If focus isn't on any of our groups, default to focusing the results area
     if (currentGroupIndex === -1) {
+      // Focus selected result or first result
+      if (currentResults.length > 0) {
+        const selectedResult = resultsEl.querySelector('.result.selected') as HTMLElement;
+        if (selectedResult) { selectedResult.focus(); return; }
+        const firstResult = resultsEl.querySelector('.result') as HTMLElement;
+        if (firstResult) { selectedIndex = 0; updateSelection(); firstResult.focus(); return; }
+      }
+      // Fallback to input if there are no results
       inputEl.focus();
       return;
     }
@@ -1036,8 +1070,16 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   function handleGlobalKeydown(e: KeyboardEvent): void {
     // COMPLETE KEYBOARD TAKEOVER when overlay is visible
     if (isOverlayVisible()) {
-      // Let the browser handle Tab/Shift+Tab for native focus movement within overlay
-      if (e.key === 'Tab') { return; }
+      // Intercept Tab/Shift+Tab to keep focus cycling inside the overlay
+      if (e.key === 'Tab') {
+        // Prevent the browser from moving focus outside the overlay
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        // Route to our Tab navigation handler (Shift+Tab => backward)
+        handleTabNavigation(e.shiftKey);
+        return;
+      }
 
       // Always handle Escape to close overlay regardless of focused element
       if (e.key === 'Escape') {
