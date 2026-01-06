@@ -333,6 +333,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           const settings = resp?.settings || {};
           cachedSettings = settings;
           try {
+            const badge = shadowRoot?.querySelector('.select-all-badge') as HTMLElement | null;
+            if (badge) {
+              const enabled = Boolean(settings?.selectAllOnFocus);
+              badge.style.display = enabled ? 'inline-block' : 'none';
+            }
+          } catch {}
+          try {
             if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
           } catch {}
           const focusDelay = typeof settings?.focusDelayMs === 'number' ? settings.focusDelayMs : undefined;
@@ -468,6 +475,18 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
     inputEl.tabIndex = 0; // Ensure focusable
+    // Small badge to indicate when "Select All On Focus" is enabled
+    const selectAllBadge = document.createElement('span');
+    selectAllBadge.className = 'select-all-badge';
+    selectAllBadge.title = 'Select All On Focus is enabled';
+    selectAllBadge.textContent = 'SelectAll';
+    selectAllBadge.style.display = 'none';
+    selectAllBadge.style.marginLeft = '8px';
+    selectAllBadge.style.fontSize = '12px';
+    selectAllBadge.style.padding = '2px 6px';
+    selectAllBadge.style.borderRadius = '8px';
+    selectAllBadge.style.background = 'var(--bg-kbd)';
+    selectAllBadge.style.color = 'var(--text-secondary)';
     
     const escKbd = document.createElement('span');
     escKbd.className = 'kbd';
@@ -500,6 +519,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     header.appendChild(logo);
     header.appendChild(inputEl);
+    header.appendChild(selectAllBadge);
     header.appendChild(escKbd);
     header.appendChild(settingsBtn);
     
@@ -1295,6 +1315,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (message?.type === 'SETTINGS_CHANGED' && message?.settings) {
       try {
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
+        try {
+          const badge = shadowRoot?.querySelector('.select-all-badge') as HTMLElement | null;
+          if (badge) {
+            const enabled = Boolean(cachedSettings?.selectAllOnFocus);
+            badge.style.display = enabled ? 'inline-block' : 'none';
+          }
+        } catch {}
         try {
           if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
         } catch {}
