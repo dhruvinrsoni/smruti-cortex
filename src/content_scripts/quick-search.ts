@@ -907,6 +907,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       }
       // Fallback to input if there are no results
       inputEl.focus();
+      // Optionally select all text when focusing via Tab (controlled via settings)
+      try {
+        const selectAllOnTab = Boolean(cachedSettings?.selectAllOnTab);
+        if (selectAllOnTab) {
+          inputEl.setSelectionRange(0, inputEl.value.length);
+        }
+      } catch {}
       return;
     }
 
@@ -942,6 +949,15 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     } else if (nextGroup.element) {
       // Focus the specific element (input or settings)
       nextGroup.element.focus();
+      // If we've focused the input, optionally select all
+      try {
+        if (nextGroup.name === 'input') {
+          const selectAllOnTab = Boolean(cachedSettings?.selectAllOnTab);
+          if (selectAllOnTab && inputEl) {
+            inputEl.setSelectionRange(0, inputEl.value.length);
+          }
+        }
+      } catch {}
     }
   }
   function handleKeydown(e: KeyboardEvent): void {
@@ -1089,27 +1105,37 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         hideOverlay();
         return;
       }
+      // Route keys based on currently focused element within the overlay
+      const focusedElement = getFocusedElement();
 
-      // Block ALL other keys from reaching the underlying page
-      // This prevents page shortcuts (e.g., Confluence 'c' key, Jira shortcuts, GitHub hotkeys)
+
+      // If the input is focused, we must still prevent the underlying page from
+      // receiving the key but we need to preserve (or emulate) native input shortcuts
+      // like Ctrl+A/C/V. Prevent the event from reaching the page and route to
+      // our controlled input handler which will emulate native behaviour.
+      if (focusedElement === inputEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (inputEl) { handleKeyInput(e); }
+        return;
+      }
+
+      // For other overlay-focused elements (results, settings) we should intercept
+      // the key and prevent the page from handling it.
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
 
-      // Route keys based on currently focused element within the overlay
-      const focusedElement = getFocusedElement();
-
-      if (focusedElement === inputEl) {
-        // Input is focused - handle typing and navigation keys
-        if (inputEl) { handleKeyInput(e); }
-      } else if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement === settingsBtn)) {
+      if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement === settingsBtn)) {
         // Results or settings button is focused - handle navigation/action keys
         handleKeydown(e);
       } else {
-        // Nothing specific focused - focus input and handle the key
+        // Nothing specific focused - focus input and allow typing behavior
         if (inputEl) {
           inputEl.focus();
-          handleKeyInput(e);
+          // Do not simulate typing; let native event continue. Stop propagation so page doesn't get it.
+          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch {}
         }
       }
       return;
@@ -1132,6 +1158,64 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     const start = inputEl.selectionStart || 0;
     const end = inputEl.selectionEnd || 0;
     
+    // Handle modifier shortcuts first (Ctrl/Cmd)
+    const isMod = e.ctrlKey || e.metaKey;
+    if (isMod) {
+      const key = e.key.toLowerCase();
+      // Ctrl/Meta + A => Select All
+      if (key === 'a') {
+        inputEl.setSelectionRange(0, inputEl.value.length);
+        return;
+      }
+      // Ctrl/Meta + C => Copy selection to clipboard
+      if (key === 'c') {
+        const selection = inputEl.value.substring((inputEl.selectionStart || 0), (inputEl.selectionEnd || 0));
+        if (selection.length > 0) {
+          try { navigator.clipboard.writeText(selection); showToast('Copied'); } catch { showToast('Copy failed'); }
+        }
+        return;
+      }
+      // Ctrl/Meta + X => Cut
+      if (key === 'x') {
+        const startS = inputEl.selectionStart || 0;
+        const endS = inputEl.selectionEnd || 0;
+        const selection = inputEl.value.substring(startS, endS);
+        if (selection.length > 0) {
+          try { navigator.clipboard.writeText(selection); } catch {}
+          inputEl.value = inputEl.value.substring(0, startS) + inputEl.value.substring(endS);
+          inputEl.setSelectionRange(startS, startS);
+        }
+        return;
+      }
+      // Ctrl/Meta + V => Paste (async clipboard read)
+      if (key === 'v') {
+        try {
+          navigator.clipboard.readText().then((text) => {
+            const s = inputEl.selectionStart || 0;
+            const epos = inputEl.selectionEnd || 0;
+            inputEl.value = inputEl.value.substring(0, s) + text + inputEl.value.substring(epos);
+            const pos = s + text.length;
+            inputEl.setSelectionRange(pos, pos);
+            // Trigger input event
+            const inputEvent = new Event('input', { bubbles: true });
+            inputEl.dispatchEvent(inputEvent);
+          }).catch(() => { showToast('Paste failed'); });
+        } catch {
+          showToast('Paste failed');
+        }
+        return;
+      }
+      // Ctrl/Meta + M => copy markdown for selected/active result (keep existing behavior)
+      if (key === 'm') {
+        // If there are results, copy currently selected result; otherwise no-op
+        if (currentResults.length > 0) {
+          const idx = selectedIndex >= 0 ? selectedIndex : 0;
+          copyMarkdownLink(idx);
+        }
+        return;
+      }
+    }
+
     // Handle special keys
     if (key === 'Backspace') {
       if (start === end && start > 0) {
