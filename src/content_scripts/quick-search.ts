@@ -333,11 +333,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           const settings = resp?.settings || {};
           cachedSettings = settings;
           try {
-            const badge = shadowRoot?.querySelector('.select-all-badge') as HTMLElement | null;
-            if (badge) {
-              const enabled = Boolean(settings?.selectAllOnFocus);
-              badge.style.display = enabled ? 'inline-block' : 'none';
-            }
+            updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
           } catch {}
           try {
             if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
@@ -416,6 +412,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== TOAST NOTIFICATION =====
   let toastEl: HTMLDivElement | null = null;
   let toastTimeout: number | null = null;
+  let selectAllBadge: HTMLElement | null = null;
   
   function showToast(message: string): void {
     if (!toastEl) {return;}
@@ -425,6 +422,27 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     toastTimeout = window.setTimeout(() => {
       toastEl?.classList.remove('show');
     }, 1500);
+  }
+
+  function updateSelectAllBadge(enabled: boolean): void {
+    try {
+      if (!selectAllBadge) { return; }
+      if (enabled) {
+        selectAllBadge.textContent = 'Aa';
+        selectAllBadge.title = 'Select All On Focus is enabled — tabbing back selects all text';
+        selectAllBadge.setAttribute('aria-label', 'Select All On Focus enabled');
+        selectAllBadge.style.background = 'var(--accent-color)';
+        selectAllBadge.style.color = 'var(--bg-container)';
+      } else {
+        selectAllBadge.textContent = 'Aa|';
+        selectAllBadge.title = 'Select All On Focus is disabled — tabbing back places caret';
+        selectAllBadge.setAttribute('aria-label', 'Select All On Focus disabled');
+        selectAllBadge.style.background = 'var(--bg-kbd)';
+        selectAllBadge.style.color = 'var(--text-secondary)';
+      }
+    } catch {
+      // ignore
+    }
   }
 
   // ===== CREATE OVERLAY WITH SHADOW DOM (CSP-safe, no innerHTML) =====
@@ -476,17 +494,24 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.spellcheck = false;
     inputEl.tabIndex = 0; // Ensure focusable
     // Small badge to indicate when "Select All On Focus" is enabled
-    const selectAllBadge = document.createElement('span');
+    selectAllBadge = document.createElement('span');
     selectAllBadge.className = 'select-all-badge';
-    selectAllBadge.title = 'Select All On Focus is enabled';
-    selectAllBadge.textContent = 'SelectAll';
-    selectAllBadge.style.display = 'none';
+    selectAllBadge.title = 'When enabled, tabbing back to the input selects all text for quick replace';
+    selectAllBadge.setAttribute('aria-label', 'Select All On Focus enabled');
+    selectAllBadge.textContent = '\u2713';
+    selectAllBadge.style.display = 'inline-flex';
     selectAllBadge.style.marginLeft = '8px';
     selectAllBadge.style.fontSize = '12px';
-    selectAllBadge.style.padding = '2px 6px';
-    selectAllBadge.style.borderRadius = '8px';
-    selectAllBadge.style.background = 'var(--bg-kbd)';
-    selectAllBadge.style.color = 'var(--text-secondary)';
+    selectAllBadge.style.padding = '0 8px';
+    selectAllBadge.style.borderRadius = '999px';
+    selectAllBadge.style.background = 'var(--accent-color)';
+    selectAllBadge.style.color = 'var(--bg-container)';
+    selectAllBadge.style.minWidth = '22px';
+    selectAllBadge.style.height = '20px';
+    selectAllBadge.style.display = 'inline-flex';
+    selectAllBadge.style.alignItems = 'center';
+    selectAllBadge.style.justifyContent = 'center';
+    selectAllBadge.style.fontWeight = '600';
     
     const escKbd = document.createElement('span');
     escKbd.className = 'kbd';
@@ -671,6 +696,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Show overlay FIRST
     shadowHost.classList.add('visible');
     overlayEl.classList.add('visible');
+    // Refresh settings each time overlay is shown so UI (badge, focus behavior)
+    // reflects the most recent user preferences even if the overlay was pre-created
+    try {
+      // Apply cached settings immediately if available
+      updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
+    } catch {}
+    // Then fetch latest settings asynchronously (will update badge when done)
+    fetchSettings();
     
     // Reset state
     inputEl.value = '';
@@ -1353,11 +1386,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       try {
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
         try {
-          const badge = shadowRoot?.querySelector('.select-all-badge') as HTMLElement | null;
-          if (badge) {
-            const enabled = Boolean(cachedSettings?.selectAllOnFocus);
-            badge.style.display = enabled ? 'inline-block' : 'none';
-          }
+          updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
         } catch {}
         try {
           if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
