@@ -752,9 +752,27 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
           }
 
-          // Could not reconnect - show clear error in results area
+          // Could not reconnect - show clear error in results area with a reconnect button
           currentResults = [];
-          renderErrorResults('Extension context invalidated. Please reload the page or reload the extension.');
+          renderErrorResults('Extension context invalidated. Please reload the page or reload the extension.', async () => {
+            // Attempt to reopen the port and retry the same query
+            try {
+              openSearchPort();
+            } catch {}
+            // If port opened, post message; otherwise try one-shot sendMessage
+            setTimeout(() => {
+              if (searchPort) {
+                try {
+                  searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
+                  perfLog('Search query sent via reopened port (reconnect button)');
+                  return;
+                } catch {}
+              }
+              try {
+                chrome.runtime.sendMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
+              } catch {}
+            }, 100);
+          });
         }, 250);
         return;
       }
@@ -871,7 +889,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== RENDER ERROR MESSAGE =====
-  function renderErrorResults(message: string): void {
+  function renderErrorResults(message: string, reconnect?: () => void): void {
     if (!resultsEl) {return;}
     
     // Clear existing results
@@ -884,6 +902,25 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     errorDiv.textContent = message;
     errorDiv.style.color = 'var(--text-secondary)';
     resultsEl.appendChild(errorDiv);
+    if (reconnect) {
+      const btn = document.createElement('button');
+      btn.className = 'reconnect-btn';
+      btn.textContent = 'Reconnect extension';
+      btn.style.marginTop = '8px';
+      btn.style.display = 'inline-block';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        try {
+          btn.disabled = true;
+          btn.textContent = 'Reconnecting...';
+          reconnect();
+        } catch {
+          btn.disabled = false;
+          btn.textContent = 'Reconnect extension';
+        }
+      });
+      resultsEl.appendChild(btn);
+    }
   }
 
   // ===== COPY TO CLIPBOARD (using shared utility) =====
