@@ -332,6 +332,9 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         try {
           const settings = resp?.settings || {};
           cachedSettings = settings;
+          try {
+            if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
+          } catch {}
           const focusDelay = typeof settings?.focusDelayMs === 'number' ? settings.focusDelayMs : undefined;
           // If focusDelayMs is defined and >= 0, use it as search debounce (parity with popup)
           if (typeof focusDelay === 'number') {
@@ -429,6 +432,12 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Attach closed shadow root (complete isolation)
     shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
+    // Expose simple dataset flag so external tests or page scripts can
+    // detect whether selectAllOnFocus is enabled. This is safe even with
+    // a closed shadow root because dataset is on the host element.
+    try {
+      shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus));
+    } catch {}
     
     // Inject styles into shadow root
     const styleEl = document.createElement('style');
@@ -909,8 +918,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       inputEl.focus();
       // Optionally select all text when focusing via Tab (controlled via settings)
       try {
-        const selectAllOnTab = Boolean(cachedSettings?.selectAllOnTab);
-        if (selectAllOnTab) {
+        const selectAllOnFocus = Boolean(cachedSettings?.selectAllOnFocus);
+        if (selectAllOnFocus) {
           inputEl.setSelectionRange(0, inputEl.value.length);
         }
       } catch {}
@@ -952,8 +961,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       // If we've focused the input, optionally select all
       try {
         if (nextGroup.name === 'input') {
-          const selectAllOnTab = Boolean(cachedSettings?.selectAllOnTab);
-          if (selectAllOnTab && inputEl) {
+            const selectAllOnFocus = Boolean(cachedSettings?.selectAllOnFocus);
+            if (selectAllOnFocus && inputEl) {
             inputEl.setSelectionRange(0, inputEl.value.length);
           }
         }
@@ -1286,6 +1295,9 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (message?.type === 'SETTINGS_CHANGED' && message?.settings) {
       try {
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
+        try {
+          if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
+        } catch {}
         const focusDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : undefined;
         if (typeof focusDelay === 'number') {
           searchDebounceMs = Math.max(0, Math.min(2000, focusDelay));
