@@ -9,6 +9,7 @@ import { SettingsManager, DisplayMode } from '../core/settings';
 import {
   type SearchResult,
   createMarkdownLink,
+  copyHtmlLinkToClipboard,
   openUrl,
   parseKeyboardAction,
   KeyboardAction
@@ -635,6 +636,26 @@ function initializePopup() {
         navigator.clipboard.writeText(markdown).then(() => {
           const prev = resultCountNode.textContent;
           resultCountNode.textContent = 'Copied!';
+          setTimeout(() => resultCountNode.textContent = prev, 900);
+        });
+      }
+      return;
+    }
+
+    if (e.key.toLowerCase() === 'c' && e.ctrlKey) {
+      e.preventDefault();
+      if (resultsLocal.length === 0 || currentIndex === -1) {return;}
+      const item = resultsLocal[currentIndex];
+      if (item) {
+        // Copy as rich HTML link (like MS Teams/Edge)
+        copyHtmlLinkToClipboard(item as SearchResult).then(() => {
+          const prev = resultCountNode.textContent;
+          resultCountNode.textContent = 'Copied HTML!';
+          setTimeout(() => resultCountNode.textContent = prev, 900);
+        }).catch(() => {
+          // Fallback message if rich text failed but plain text succeeded
+          const prev = resultCountNode.textContent;
+          resultCountNode.textContent = 'Copied (text only)';
           setTimeout(() => resultCountNode.textContent = prev, 900);
         });
       }
@@ -1442,7 +1463,7 @@ function initializePopup() {
       const hintsContainer = document.getElementById('hints-container');
       if (hintsContainer && !hintsContainer.innerHTML.trim()) {
         hintsContainer.innerHTML = `
-          <span>Enter: open · Ctrl+Enter: new tab · Shift+Enter: background tab · Ctrl+M: copy markdown</span>
+          <span>Enter: open · Ctrl+Enter: new tab · Shift+Enter: background tab · Ctrl+C: copy HTML · Ctrl+M: copy markdown</span>
           <span>↓: navigate results · ↑↓←→: move · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
         `;
       }

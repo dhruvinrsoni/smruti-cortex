@@ -105,6 +105,7 @@ Search directly from the browser's address bar.
 | `Ctrl+Enter` | Open in new tab |
 | `Shift+Enter` | Open in background tab |
 | `→` Arrow Right | Open in new tab |
+| `Ctrl+C` / `Cmd+C` | Copy as rich HTML link (paste into Word, Outlook, Teams) |
 | `Ctrl+M` / `Cmd+M` | Copy as markdown link |
 | `Escape` | Close overlay / Clear search |
 
@@ -230,8 +231,9 @@ More specific queries = better results. Type **exact phrases from URLs** for lit
 - `Ctrl+Enter` → Open without leaving current tab
 - `Shift+Enter` → Background tab for batch opening
 
-### 4. Copy Markdown Links
-Press `Ctrl+M` to copy results as `[Title](URL)` format — perfect for documentation!
+### 4. Copy Links
+- Press `Ctrl+C` to copy as rich HTML link — perfect for Word, Outlook, Teams!
+- Press `Ctrl+M` to copy as markdown link `[Title](URL)` — perfect for documentation!
 
 ### 5. Use the Omnibox for Quick Access
 Type `sc github` in the address bar for ultra-fast search

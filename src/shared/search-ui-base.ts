@@ -31,6 +31,7 @@ export enum KeyboardAction {
   OPEN_NEW_TAB = 'open_new_tab',
   OPEN_BACKGROUND_TAB = 'open_background_tab',
   COPY_MARKDOWN = 'copy_markdown',
+  COPY_HTML = 'copy_html',
   NAVIGATE_UP = 'navigate_up',
   NAVIGATE_DOWN = 'navigate_down',
   TAB_FORWARD = 'tab_forward',
@@ -160,6 +161,16 @@ export function createMarkdownLink(result: SearchResult): string {
 }
 
 /**
+ * Shared utility: Create HTML link from result (rich text format)
+ * Returns an object with both HTML and plain text for clipboard
+ */
+export function createHtmlLink(result: SearchResult): { html: string; text: string } {
+  const title = result.title || result.url;
+  const html = `<a href="${result.url}">${title}</a>`;
+  return { html, text: title };
+}
+
+/**
  * Shared utility: Open URL with modifiers
  */
 export function openUrl(url: string, openInNewTab: boolean = false, openInBackground: boolean = false): void {
@@ -187,6 +198,11 @@ export function parseKeyboardAction(e: KeyboardEvent): KeyboardAction | null {
   // Copy markdown: Ctrl/Cmd + M
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
     return KeyboardAction.COPY_MARKDOWN;
+  }
+  
+  // Copy HTML (rich text): Ctrl/Cmd + C
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    return KeyboardAction.COPY_HTML;
   }
 
   switch (e.key) {
@@ -287,6 +303,27 @@ export function renderResults(
   });
 
   return fragment;
+}
+
+/**
+ * Shared utility: Copy HTML link to clipboard (rich text format)
+ * Copies both HTML and plain text representations to clipboard
+ */
+export async function copyHtmlLinkToClipboard(result: SearchResult): Promise<void> {
+  const { html, text } = createHtmlLink(result);
+  
+  try {
+    // Modern Clipboard API with multiple formats
+    const clipboardItem = new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([text], { type: 'text/plain' })
+    });
+    await navigator.clipboard.write([clipboardItem]);
+  } catch (err) {
+    // Fallback: copy just the plain text if rich text fails
+    await navigator.clipboard.writeText(text);
+    throw err; // Re-throw so caller knows rich text failed
+  }
 }
 
 /**
