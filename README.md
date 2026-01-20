@@ -53,7 +53,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | 🔒 **Privacy Controls** | Favicon toggle, sensitive-site blacklist |
 | 💾 **Data Management** | Storage quota, rebuild, clear & rebuild |
 | 🔍 **Omnibox** | Type `sc ` in address bar |
-| 📋 **Copy Links** | `Ctrl+M` for markdown |
+| 📋 **Copy Links** | `Ctrl+C` for HTML, `Ctrl+M` for markdown |
 | 🎨 **Clean UI** | Minimal, distraction-free |
 
 ---
@@ -89,6 +89,7 @@ npm run build
 - `Shift+Enter` — Background tab
 - `Arrow Keys` — Navigate
 - `Esc` — Clear
+- `Ctrl+C` — Copy as rich HTML link (paste into Word, Outlook, Teams)
 - `Ctrl+M` — Copy markdown link
 
 **Quick Access:**

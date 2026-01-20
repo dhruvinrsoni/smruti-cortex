@@ -19,6 +19,7 @@ import {
   type SearchResult,
   KeyboardAction,
   createMarkdownLink,
+  copyHtmlLinkToClipboard,
   parseKeyboardAction,
   renderResults as renderResultsShared
 } from '../shared/search-ui-base';
@@ -566,6 +567,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       ['Enter', 'Open'],
       ['→', 'New tab'],
       ['Ctrl+M', 'Copy'],
+      ['Ctrl+C', 'Copy HTML'],
       ['ESC', 'Close']
     ];
     
@@ -970,6 +972,17 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     });
   }
 
+  function copyHtmlLink(index: number): void {
+    const result = currentResults[index];
+    if (!result?.url) {return;}
+    
+    copyHtmlLinkToClipboard(result).then(() => {
+      showToast('Copied HTML link!');
+    }).catch(() => {
+      showToast('Copied (text only)');
+    });
+  }
+
   // ===== TAB NAVIGATION =====
   function handleTabNavigation(backward: boolean): void {
     if (!inputEl || !resultsEl || !settingsBtn) { return; }
@@ -1139,6 +1152,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
         break;
       
+      case KeyboardAction.COPY_HTML:
+        if (currentResults.length > 0) {
+          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+          if (idx >= 0) { copyHtmlLink(idx); }
+        }
+        break;
+      
       case KeyboardAction.TAB_FORWARD:
         handleTabNavigation(false); // Forward tab
         break;
@@ -1266,11 +1286,16 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         inputEl.setSelectionRange(0, inputEl.value.length);
         return;
       }
-      // Ctrl/Meta + C => Copy selection to clipboard
+      // Ctrl/Meta + C => Copy selection to clipboard (or copy HTML link if no selection)
       if (key === 'c') {
         const selection = inputEl.value.substring((inputEl.selectionStart || 0), (inputEl.selectionEnd || 0));
         if (selection.length > 0) {
+          // If there's text selected in the input, copy that
           try { navigator.clipboard.writeText(selection); showToast('Copied'); } catch { showToast('Copy failed'); }
+        } else if (currentResults.length > 0) {
+          // If no text selected but results exist, copy selected result as HTML
+          const idx = selectedIndex >= 0 ? selectedIndex : 0;
+          copyHtmlLink(idx);
         }
         return;
       }
