@@ -715,43 +715,69 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selectedIndex = 0;
     renderResults([]);
     
-    // ULTRA-AGGRESSIVE FOCUS: Multiple strategies to steal focus from omnibox
-    // Strategy 1: Immediate synchronous focus
+    // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
+    // Strategy 1: Blur active element (likely the omnibox with selected text)
+    try {
+      if (document.activeElement && document.activeElement !== inputEl) {
+        (document.activeElement as HTMLElement).blur();
+      }
+    } catch {}
+    
+    // Strategy 2: Immediate synchronous focus
     inputEl.focus();
     inputEl.setSelectionRange(0, 0);
     perfLog('Input focused immediately', t0);
     
-    // Strategy 2: Focus on next animation frame (after DOM paint)
-    requestAnimationFrame(() => {
-      if (inputEl && isOverlayVisible()) {
-        inputEl.focus();
-        inputEl.setSelectionRange(0, 0);
+    // Strategy 3: Continuous focus attempts with setInterval (nuclear option for selected text in omnibox)
+    let focusAttempts = 0;
+    const maxAttempts = 20; // Try for up to 1 second (20 * 50ms)
+    const focusInterval = setInterval(() => {
+      focusAttempts++;
+      
+      // Check if we've achieved focus or maxed out attempts
+      if (focusAttempts >= maxAttempts) {
+        clearInterval(focusInterval);
+        return;
       }
+      
+      // If our input has focus, stop trying
+      if (document.activeElement === inputEl || shadowRoot?.activeElement === inputEl) {
+        clearInterval(focusInterval);
+        return;
+      }
+      
+      // If overlay was closed, stop trying
+      if (!isOverlayVisible()) {
+        clearInterval(focusInterval);
+        return;
+      }
+      
+      // Force blur active element and focus our input
+      try {
+        if (document.activeElement && document.activeElement !== inputEl) {
+          (document.activeElement as HTMLElement).blur();
+        }
+      } catch {}
+      
+      inputEl.focus();
+      inputEl.setSelectionRange(0, 0);
+    }, 50); // Every 50ms
+    
+    // Strategy 4: Backup timeouts at key intervals
+    const focusAtIntervals = [0, 100, 200, 300, 500, 800];
+    focusAtIntervals.forEach(delay => {
+      setTimeout(() => {
+        if (inputEl && isOverlayVisible() && document.activeElement !== inputEl && shadowRoot?.activeElement !== inputEl) {
+          try {
+            if (document.activeElement && document.activeElement !== inputEl) {
+              (document.activeElement as HTMLElement).blur();
+            }
+          } catch {}
+          inputEl.focus();
+          inputEl.setSelectionRange(0, 0);
+        }
+      }, delay);
     });
-    
-    // Strategy 3: Focus after short delay (50ms)
-    setTimeout(() => {
-      if (inputEl && isOverlayVisible()) {
-        inputEl.focus();
-        inputEl.setSelectionRange(0, 0);
-      }
-    }, 50);
-    
-    // Strategy 4: Focus after medium delay (100ms)
-    setTimeout(() => {
-      if (inputEl && isOverlayVisible()) {
-        inputEl.focus();
-        inputEl.setSelectionRange(0, 0);
-      }
-    }, 100);
-    
-    // Strategy 5: Final focus attempt (200ms)
-    setTimeout(() => {
-      if (inputEl && isOverlayVisible()) {
-        inputEl.focus();
-        inputEl.setSelectionRange(0, 0);
-      }
-    }, 200);
 
     // Open port for faster messaging (only if extension context is valid)
     if (chrome.runtime?.id) {
