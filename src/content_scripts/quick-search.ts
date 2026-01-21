@@ -17,9 +17,11 @@
 
 import {
   type SearchResult,
+  type FocusableGroup,
   KeyboardAction,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
+  handleCyclicTabNavigation,
   parseKeyboardAction,
   renderResults as renderResultsShared
 } from '../shared/search-ui-base';
@@ -984,93 +986,66 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== TAB NAVIGATION =====
+  // Generic, extensible, fully cyclic tab navigation using shared utility
   function handleTabNavigation(backward: boolean): void {
     if (!inputEl || !resultsEl || !settingsBtn) { return; }
 
-    // Define the main focusable groups in clockwise order: Results → Input → Settings → Results
-    // This makes Tab cycle: Results -> Input -> Settings -> Results
-    const focusGroups = [
-      { element: null, name: 'results' }, // Results area first
-      { element: inputEl, name: 'input' },
-      { element: settingsBtn, name: 'settings' }
-    ];
-
-    const currentFocused = getFocusedElement() as HTMLElement;
-
-    // Determine current group index
-    let currentGroupIndex = -1;
-
-    if (currentFocused && currentFocused.classList?.contains('result')) {
-      currentGroupIndex = 0; // Results group
-    } else if (currentFocused === inputEl) {
-      currentGroupIndex = 1;
-    } else if (currentFocused === settingsBtn) {
-      currentGroupIndex = 2;
-    }
-
-    // If focus isn't on any of our groups, default to focusing the results area
-    if (currentGroupIndex === -1) {
-      // Focus selected result or first result
-      if (currentResults.length > 0) {
-        const selectedResult = resultsEl.querySelector('.result.selected') as HTMLElement;
-        if (selectedResult) { selectedResult.focus(); return; }
-        const firstResult = resultsEl.querySelector('.result') as HTMLElement;
-        if (firstResult) { selectedIndex = 0; updateSelection(); firstResult.focus(); return; }
-      }
-      // Fallback to input if there are no results
-      inputEl.focus();
-      // Optionally select all text when focusing via Tab (controlled via settings)
-      try {
-        const selectAllOnFocus = Boolean(cachedSettings?.selectAllOnFocus);
-        if (selectAllOnFocus) {
-          inputEl.setSelectionRange(0, inputEl.value.length);
-        }
-      } catch {}
-      return;
-    }
-
-    // Calculate next group index
-    let nextGroupIndex: number;
-    if (backward) {
-      // Shift+Tab: counterclockwise
-      nextGroupIndex = currentGroupIndex === 0 ? focusGroups.length - 1 : currentGroupIndex - 1;
-    } else {
-      // Tab: clockwise
-      nextGroupIndex = (currentGroupIndex + 1) % focusGroups.length;
-    }
-
-    // Focus the next group
-    const nextGroup = focusGroups[nextGroupIndex];
-
-    if (nextGroup.name === 'results') {
-      // Focus the results area - go to currently selected result or first result
-      if (currentResults.length > 0) {
-        const selectedResult = resultsEl.querySelector('.result.selected') as HTMLElement;
-        if (selectedResult) {
-          selectedResult.focus();
-        } else {
-          // Focus first result and update selection
-          const firstResult = resultsEl.querySelector('.result') as HTMLElement;
-          if (firstResult) {
-            selectedIndex = 0;
-            updateSelection();
-            firstResult.focus();
-          }
-        }
-      }
-    } else if (nextGroup.element) {
-      // Focus the specific element (input or settings)
-      nextGroup.element.focus();
-      // If we've focused the input, optionally select all
-      try {
-        if (nextGroup.name === 'input') {
+    // Define focusable groups in tab order (extensible - just add more here)
+    const focusGroups: FocusableGroup[] = [
+      {
+        name: 'input',
+        element: inputEl,
+        onFocus: () => {
+          inputEl?.focus();
+          // Apply select-all behavior based on settings
+          try {
             const selectAllOnFocus = Boolean(cachedSettings?.selectAllOnFocus);
             if (selectAllOnFocus && inputEl) {
-            inputEl.setSelectionRange(0, inputEl.value.length);
-          }
+              inputEl.setSelectionRange(0, inputEl.value.length);
+            }
+          } catch {}
         }
-      } catch {}
-    }
+      },
+      {
+        name: 'results',
+        element: null, // Custom handling
+        onFocus: () => {
+          // Focus the selected result or first result
+          if (currentResults.length > 0) {
+            const selectedResult = resultsEl?.querySelector('.result.selected') as HTMLElement;
+            if (selectedResult) {
+              selectedResult.focus();
+            } else {
+              const firstResult = resultsEl?.querySelector('.result') as HTMLElement;
+              if (firstResult) {
+                selectedIndex = 0;
+                updateSelection();
+                firstResult.focus();
+              }
+            }
+          }
+        },
+        shouldSkip: () => currentResults.length === 0 // Skip if no results
+      },
+      {
+        name: 'settings',
+        element: settingsBtn
+      }
+    ];
+
+    // Determine current focused group
+    const getCurrentGroupIndex = (): number => {
+      const currentFocused = getFocusedElement() as HTMLElement;
+      
+      if (currentFocused === inputEl) return 0;
+      if (currentFocused && currentFocused.classList?.contains('result')) return 1;
+      if (currentFocused === settingsBtn) return 2;
+      
+      return -1; // Unknown/not focused
+    };
+
+    // Use shared cyclic navigation
+    handleCyclicTabNavigation(focusGroups, getCurrentGroupIndex, backward);
   }
   function handleKeydown(e: KeyboardEvent): void {
     const action = parseKeyboardAction(e);

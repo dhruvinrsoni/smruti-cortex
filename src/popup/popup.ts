@@ -8,8 +8,10 @@ import { Logger, LogLevel, ComponentLogger } from '../core/logger';
 import { SettingsManager, DisplayMode } from '../core/settings';
 import {
   type SearchResult,
+  type FocusableGroup,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
+  handleCyclicTabNavigation,
   openUrl,
   parseKeyboardAction,
   KeyboardAction
@@ -466,60 +468,51 @@ function initializePopup() {
       }
     }
 
-    // Handle Tab navigation between main components
-    if (e.key === 'Tab' && !e.shiftKey) {
+    // Handle Tab navigation between main components (generic cyclic navigation)
+    if (e.key === 'Tab') {
       e.preventDefault();
-      if (currentElement === input) {
-        // From search input -> first result item (if results exist)
-        if (resultsLocal.length > 0) {
-          const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-          const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
-          const firstResult = resultsNode.querySelector(selector) as HTMLElement;
-          if (firstResult) {
-            activeIndex = 0;
-            highlightActive();
-            firstResult.focus();
-          }
-        } else {
-          // No results, cycle back to search input
-          focusInputWithSelectBehavior();
+      
+      const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+      const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
+      
+      // Define focusable groups in tab order (extensible - add more here as needed)
+      const focusGroups: FocusableGroup[] = [
+        {
+          name: 'input',
+          element: input,
+          onFocus: () => focusInputWithSelectBehavior()
+        },
+        {
+          name: 'results',
+          element: null, // Custom handling
+          onFocus: () => {
+            if (resultsLocal.length > 0) {
+              const firstResult = resultsNode.querySelector(selector) as HTMLElement;
+              if (firstResult) {
+                activeIndex = 0;
+                highlightActive();
+                firstResult.focus();
+              }
+            }
+          },
+          shouldSkip: () => resultsLocal.length === 0 // Skip if no results
+        },
+        {
+          name: 'settings',
+          element: settingsButton
         }
-      } else if (currentElement === settingsButton) {
-        // From settings button -> search input
-        focusInputWithSelectBehavior();
-      } else if (resultsNode.contains(currentElement)) {
-        // From any result item -> search input (cycle back)
-        focusInputWithSelectBehavior();
-      }
-      return;
-    }
+      ];
 
-    // Handle Shift+Tab navigation (reverse)
-    if (e.key === 'Tab' && e.shiftKey) {
-      e.preventDefault();
-      if (currentElement === input) {
-        // From search input -> settings button
-        settingsButton.focus();
-      } else if (currentElement === settingsButton) {
-        // From settings button -> last result item (if results exist), or search input
-        if (resultsLocal.length > 0) {
-          const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-          const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
-          const results = resultsNode.querySelectorAll(selector);
-          const lastResult = results[results.length - 1] as HTMLElement;
-          if (lastResult) {
-            activeIndex = resultsLocal.length - 1;
-            highlightActive();
-            lastResult.focus();
-          }
-        } else {
-          // No results, go to search input
-          focusInputWithSelectBehavior();
-        }
-      } else if (resultsNode.contains(currentElement)) {
-        // From any result item -> search input
-        focusInputWithSelectBehavior();
-      }
+      // Determine current focused group index
+      const getCurrentGroupIndex = (): number => {
+        if (currentElement === input) return 0;
+        if (resultsNode.contains(currentElement)) return 1;
+        if (currentElement === settingsButton) return 2;
+        return -1;
+      };
+
+      // Use shared cyclic navigation
+      handleCyclicTabNavigation(focusGroups, getCurrentGroupIndex, e.shiftKey);
       return;
     }
 
