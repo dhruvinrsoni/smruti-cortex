@@ -54,6 +54,85 @@ export interface ISearchUI {
 }
 
 /**
+ * Focusable group configuration for cyclic tab navigation
+ */
+export interface FocusableGroup {
+  name: string;
+  /** Element to focus (null for special handling like results list) */
+  element: HTMLElement | null;
+  /** Custom focus handler (e.g., for results that need to select & focus a specific item) */
+  onFocus?: () => void;
+  /** Check if this group should be skipped (e.g., results when empty) */
+  shouldSkip?: () => boolean;
+}
+
+/**
+ * Cyclic tab navigation helper (generic, extensible, open/closed principle)
+ * 
+ * Usage:
+ * 1. Define focusable groups in order
+ * 2. Call this function on Tab/Shift+Tab
+ * 3. Handles wrapping automatically (fully cyclic)
+ * 4. Skips groups that return shouldSkip() === true
+ * 
+ * @param groups Array of focusable groups in tab order
+ * @param getCurrentGroupIndex Function that returns current focused group index (-1 if unknown)
+ * @param backward True for Shift+Tab (reverse direction)
+ */
+export function handleCyclicTabNavigation(
+  groups: FocusableGroup[],
+  getCurrentGroupIndex: () => number,
+  backward: boolean = false
+): void {
+  if (groups.length === 0) return;
+
+  // Filter out groups that should be skipped
+  const activeGroups = groups.filter(g => !g.shouldSkip || !g.shouldSkip());
+  if (activeGroups.length === 0) return;
+
+  // Get current position
+  let currentIndex = getCurrentGroupIndex();
+  
+  // If no group is focused, start from first (or last if backward)
+  if (currentIndex === -1) {
+    currentIndex = backward ? activeGroups.length - 1 : 0;
+    const targetGroup = activeGroups[currentIndex];
+    focusGroup(targetGroup);
+    return;
+  }
+
+  // Find current group in active groups
+  const currentGroupName = groups[currentIndex]?.name;
+  const currentActiveIndex = activeGroups.findIndex(g => g.name === currentGroupName);
+  
+  if (currentActiveIndex === -1) {
+    // Current group not in active list, go to first/last
+    const targetIndex = backward ? activeGroups.length - 1 : 0;
+    focusGroup(activeGroups[targetIndex]);
+    return;
+  }
+
+  // Calculate next index with wrapping (fully cyclic)
+  let nextIndex: number;
+  if (backward) {
+    nextIndex = currentActiveIndex === 0 ? activeGroups.length - 1 : currentActiveIndex - 1;
+  } else {
+    nextIndex = (currentActiveIndex + 1) % activeGroups.length;
+  }
+
+  // Focus next group
+  focusGroup(activeGroups[nextIndex]);
+}
+
+function focusGroup(group: FocusableGroup): void {
+  if (group.onFocus) {
+    group.onFocus();
+  } else if (group.element) {
+    group.element.focus();
+  }
+}
+
+/**
  * Shared utility: Truncate URL for display
  */
 export function truncateUrl(url: string, maxLength: number = 60): string {
