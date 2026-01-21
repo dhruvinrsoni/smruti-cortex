@@ -715,10 +715,43 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selectedIndex = 0;
     renderResults([]);
     
-    // AGGRESSIVE FOCUS: Focus immediately and keep focused
+    // ULTRA-AGGRESSIVE FOCUS: Multiple strategies to steal focus from omnibox
+    // Strategy 1: Immediate synchronous focus
     inputEl.focus();
     inputEl.setSelectionRange(0, 0);
     perfLog('Input focused immediately', t0);
+    
+    // Strategy 2: Focus on next animation frame (after DOM paint)
+    requestAnimationFrame(() => {
+      if (inputEl && isOverlayVisible()) {
+        inputEl.focus();
+        inputEl.setSelectionRange(0, 0);
+      }
+    });
+    
+    // Strategy 3: Focus after short delay (50ms)
+    setTimeout(() => {
+      if (inputEl && isOverlayVisible()) {
+        inputEl.focus();
+        inputEl.setSelectionRange(0, 0);
+      }
+    }, 50);
+    
+    // Strategy 4: Focus after medium delay (100ms)
+    setTimeout(() => {
+      if (inputEl && isOverlayVisible()) {
+        inputEl.focus();
+        inputEl.setSelectionRange(0, 0);
+      }
+    }, 100);
+    
+    // Strategy 5: Final focus attempt (200ms)
+    setTimeout(() => {
+      if (inputEl && isOverlayVisible()) {
+        inputEl.focus();
+        inputEl.setSelectionRange(0, 0);
+      }
+    }, 200);
 
     // Open port for faster messaging (only if extension context is valid)
     if (chrome.runtime?.id) {
@@ -1240,27 +1273,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      showOverlay();
-      // AGGRESSIVE FOCUS: Multiple attempts to steal focus from omnibox/address bar
-      // First attempt: immediate
-      if (inputEl) {
-        inputEl.focus();
-        inputEl.setSelectionRange(0, 0);
-      }
-      // Second attempt: after browser event processing
-      setTimeout(() => {
-        if (inputEl && isOverlayVisible()) {
-          inputEl.focus();
-          inputEl.setSelectionRange(0, 0);
-        }
-      }, 50);
-      // Third attempt: final reinforcement
-      setTimeout(() => {
-        if (inputEl && isOverlayVisible()) {
-          inputEl.focus();
-          inputEl.setSelectionRange(0, 0);
-        }
-      }, 150);
+      showOverlay(); // showOverlay now handles all focus attempts
     }
   }
 
@@ -1390,28 +1403,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   ): boolean {
     if (message?.type === 'OPEN_INLINE_SEARCH') {
       const t0 = performance.now();
-      showOverlay();
+      showOverlay(); // showOverlay now handles all focus attempts
       perfLog('Overlay shown via message', t0);
-      // AGGRESSIVE FOCUS: Multiple attempts to steal focus from omnibox/address bar
-      // First attempt: immediate
-      if (inputEl) {
-        inputEl.focus();
-        inputEl.setSelectionRange(0, 0);
-      }
-      // Second attempt: after browser event processing
-      setTimeout(() => {
-        if (inputEl && isOverlayVisible()) {
-          inputEl.focus();
-          inputEl.setSelectionRange(0, 0);
-        }
-      }, 50);
-      // Third attempt: final reinforcement
-      setTimeout(() => {
-        if (inputEl && isOverlayVisible()) {
-          inputEl.focus();
-          inputEl.setSelectionRange(0, 0);
-        }
-      }, 150);
       sendResponse({ success: true, time: performance.now() - t0 });
       return true; // Indicate async response
     }
