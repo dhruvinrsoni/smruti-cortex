@@ -1241,6 +1241,26 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       e.stopPropagation();
       e.stopImmediatePropagation();
       showOverlay();
+      // AGGRESSIVE FOCUS: Multiple attempts to steal focus from omnibox/address bar
+      // First attempt: immediate
+      if (inputEl) {
+        inputEl.focus();
+        inputEl.setSelectionRange(0, 0);
+      }
+      // Second attempt: after browser event processing
+      setTimeout(() => {
+        if (inputEl && isOverlayVisible()) {
+          inputEl.focus();
+          inputEl.setSelectionRange(0, 0);
+        }
+      }, 50);
+      // Third attempt: final reinforcement
+      setTimeout(() => {
+        if (inputEl && isOverlayVisible()) {
+          inputEl.focus();
+          inputEl.setSelectionRange(0, 0);
+        }
+      }, 150);
     }
   }
 
@@ -1372,6 +1392,26 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       const t0 = performance.now();
       showOverlay();
       perfLog('Overlay shown via message', t0);
+      // AGGRESSIVE FOCUS: Multiple attempts to steal focus from omnibox/address bar
+      // First attempt: immediate
+      if (inputEl) {
+        inputEl.focus();
+        inputEl.setSelectionRange(0, 0);
+      }
+      // Second attempt: after browser event processing
+      setTimeout(() => {
+        if (inputEl && isOverlayVisible()) {
+          inputEl.focus();
+          inputEl.setSelectionRange(0, 0);
+        }
+      }, 50);
+      // Third attempt: final reinforcement
+      setTimeout(() => {
+        if (inputEl && isOverlayVisible()) {
+          inputEl.focus();
+          inputEl.setSelectionRange(0, 0);
+        }
+      }, 150);
       sendResponse({ success: true, time: performance.now() - t0 });
       return true; // Indicate async response
     }
