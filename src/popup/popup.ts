@@ -237,6 +237,21 @@ function initializePopup() {
     } catch (e) {
       // Ignore timing errors - not critical
     }
+    
+    // AGGRESSIVE FOCUS: Multiple attempts to steal focus from omnibox/address bar
+    // This ensures focus stays in our input even when popup is opened via keyboard shortcut from address bar
+    setTimeout(() => {
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 50);
+    setTimeout(() => {
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 150);
   }
 
   // Pre-render empty state immediately
