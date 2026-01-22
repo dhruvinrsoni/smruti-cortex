@@ -6,7 +6,9 @@ import urlScorer from './scorers/url-scorer';
 import recencyScorer from './scorers/recency-scorer';
 import visitCountScorer from './scorers/visitcount-scorer';
 import metaScorer from './scorers/meta-scorer';
+import embeddingScorer from './scorers/embedding-scorer';
 import { tokenize } from './tokenizer';
+import { SettingsManager } from '../../core/settings';
 
 // Cross-dimensional scorer - rewards results matching different keywords in different dimensions
 const crossDimensionalScorer: Scorer = {
@@ -109,12 +111,22 @@ const domainFamiliarityScorer: Scorer = {
 };
 
 export function getAllScorers(): Scorer[] {
+    // Check if embeddings are enabled for semantic search
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+
+    // Create dynamic embedding scorer with appropriate weight
+    const dynamicEmbeddingScorer = {
+        ...embeddingScorer,
+        weight: embeddingsEnabled ? 0.4 : 0.0
+    };
+
     // All scorers now use expanded tokens from AI keyword expansion
-    // No more embedding scorer - prompting approach is simpler and faster
+    // Embedding scorer provides semantic search when enabled
     return [
         titleScorer,           // Uses expandedTokens from context
         urlScorer,             // Uses expandedTokens from context
         crossDimensionalScorer, // NEW: Rewards cross-dimensional keyword matching
+        dynamicEmbeddingScorer, // AI semantic search (weight 0.4 when enabled, 0 when disabled)
         recencyScorer,         // Time-based, no token matching
         visitCountScorer,      // Visit count-based, no token matching
         metaScorer,            // Uses expandedTokens from context

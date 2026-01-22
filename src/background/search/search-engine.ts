@@ -67,10 +67,32 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const scorers = getAllScorers();
     logger.trace('runSearch', 'Loaded scorers:', scorers.length);
 
-    // Context for scorers - pass expanded tokens
+    // Check if semantic search is enabled
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+    let queryEmbedding: number[] | undefined;
+
+    // Generate query embedding for semantic search if enabled
+    if (embeddingsEnabled) {
+        logger.info('runSearch', '🧠 Semantic search ACTIVE - generating query embedding');
+        try {
+            const ollamaService = await import('../ollama-service');
+            const embeddingResult = await ollamaService.getOllamaService().generateEmbedding(q);
+            if (embeddingResult.success && embeddingResult.embedding.length > 0) {
+                queryEmbedding = embeddingResult.embedding;
+                logger.info('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
+            } else {
+                logger.warn('runSearch', '⚠️ Query embedding generation failed');
+            }
+        } catch (error) {
+            logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', { error });
+        }
+    }
+
+    // Context for scorers - pass expanded tokens and query embedding
     const context: ScorerContext = {
         expandedTokens: searchTokens,
-        aiExpanded: aiExpanded
+        aiExpanded: aiExpanded,
+        queryEmbedding: queryEmbedding
     };
 
     // Get all indexed items
@@ -108,8 +130,24 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     // Check if strict matching is enabled (default: true = only show matching results)
     const showNonMatchingResults = SettingsManager.getSetting('showNonMatchingResults') || false;
 
-    // NO MORE 600+ EMBEDDINGS! Use keyword matching with expanded tokens instead
+    // Process items for scoring
     for (const item of items) {
+        // On-demand embedding generation for semantic search
+        if (embeddingsEnabled && !item.embedding) {
+            try {
+                const ollamaService = await import('../ollama-service');
+                const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
+                const embeddingResult = await ollamaService.getOllamaService().generateEmbedding(text);
+                if (embeddingResult.success && embeddingResult.embedding.length > 0) {
+                    item.embedding = embeddingResult.embedding;
+                    // Save back to DB for future searches
+                    await import('../database').then(db => db.saveIndexedItem(item));
+                }
+            } catch (error) {
+                // Ignore embedding errors - will use keyword matching
+            }
+        }
+
         // Match against expanded tokens (includes AI-generated synonyms)
         // Include bookmark folders in searchable content
         const bookmarkFolders = (item as any).bookmarkFolders?.join(' ') || '';

@@ -11,6 +11,41 @@ import { SettingsManager } from '../core/settings';
 const logger = Logger.forComponent('Indexing');
 
 /**
+ * Generate embedding for an indexed item if semantic search is enabled
+ */
+async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }): Promise<number[] | undefined> {
+    try {
+        // Check if embeddings are enabled
+        const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+        if (!embeddingsEnabled) {
+            return undefined; // Skip embedding generation
+        }
+
+        // Lazy import to avoid circular dependencies
+        const { getOllamaService } = await import('./ollama-service');
+        const ollamaService = getOllamaService();
+
+        // Create text for embedding (title + description + url)
+        const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
+
+        logger.debug('generateItemEmbedding', `🧠 Generating embedding for: "${item.title.substring(0, 50)}..."`);
+
+        const result = await ollamaService.generateEmbedding(text);
+
+        if (result.success && result.embedding.length > 0) {
+            logger.trace('generateItemEmbedding', `✅ Embedding generated (${result.embedding.length} dimensions)`);
+            return result.embedding;
+        } else {
+            logger.debug('generateItemEmbedding', '⚠️ Embedding generation failed or returned empty');
+            return undefined;
+        }
+    } catch (error) {
+        logger.debug('generateItemEmbedding', '⚠️ Embedding generation error (non-critical):', error);
+        return undefined; // Don't fail indexing if embeddings fail
+    }
+}
+
+/**
  * Force a full rebuild of the index (used after CLEAR_ALL_DATA or manual rebuild)
  */
 export async function performFullRebuild(): Promise<void> {
@@ -151,6 +186,10 @@ async function performFullHistoryIndex(): Promise<void> {
                     tokens: tokenize(item.title + ' ' + item.url),
                 };
 
+                // NOTE: We DON'T generate embeddings during initial indexing to avoid hour-long waits
+                // Embeddings will be generated on-demand during search if semantic search is enabled
+                // indexed.embedding = await generateItemEmbedding(indexed);
+
                 await saveIndexedItem(indexed);
                 processedItems++;
             } catch (error) {
@@ -226,6 +265,10 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
                         lastVisit: item.lastVisitTime,
                         tokens: tokenize(item.title + ' ' + item.url),
                     };
+
+                    // NOTE: Embeddings generated on-demand during search, not during indexing
+                    // indexed.embedding = await generateItemEmbedding(indexed);
+
                     await saveIndexedItem(indexed);
                     added++;
                 }
