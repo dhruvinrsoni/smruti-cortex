@@ -462,8 +462,12 @@ function initializePopup() {
     const isCtrl = (event && (event as MouseEvent).ctrlKey) || (event instanceof KeyboardEvent && event.ctrlKey);
     const isShift = (event && (event as MouseEvent).shiftKey) || (event instanceof KeyboardEvent && event.shiftKey);
 
-    // Use shared openUrl - opens new tab if Ctrl or Shift, background if Shift
-    openUrl(item.url, isCtrl || isShift, isShift);
+    // POPUP-SPECIFIC BEHAVIOR: Always open in new tab to avoid breaking current page
+    // - Plain Enter: New tab (active)
+    // - Ctrl+Enter: New tab (active) - explicit
+    // - Shift+Enter: New tab (background)
+    const openInBackground = isShift && !isCtrl;
+    openUrl(item.url, true, openInBackground);
   }
 
   // Fast keyboard handling
