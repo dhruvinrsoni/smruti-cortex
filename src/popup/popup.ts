@@ -14,7 +14,8 @@ import {
   handleCyclicTabNavigation,
   openUrl,
   parseKeyboardAction,
-  KeyboardAction
+  KeyboardAction,
+  sortResults
 } from '../shared/search-ui-base';
 
 // Lazy-loaded imports for non-critical features
@@ -117,6 +118,7 @@ function setupEventListeners() {
   const resultsNode = $('results') as HTMLUListElement;
   const resultCountNode = $('result-count') as HTMLDivElement;
   const settingsButton = $('settings-button') as HTMLButtonElement;
+  const sortBySelect = $('sort-by') as HTMLSelectElement;
 
   // Make results container focusable for keyboard navigation
   // Removed - individual result items should be focusable instead
@@ -125,6 +127,8 @@ function setupEventListeners() {
     input.addEventListener('input', (ev) => debounceSearch((ev.target as HTMLInputElement).value));
     input.addEventListener('keydown', handleKeydown);
   }
+  
+  // Note: Sort dropdown handler is initialized in initializePopup() where resultsLocal is in scope
 
   if (resultsNode) {
     // Removed - individual result items handle keyboard navigation
@@ -256,6 +260,27 @@ function initializePopup() {
 
   // Pre-render empty state immediately
   renderResults();
+  
+  // Sort dropdown event handler (must be after resultsLocal is declared)
+  const sortBySelect = $local('sort-by') as HTMLSelectElement;
+  if (sortBySelect) {
+    // Load saved sort setting
+    const savedSort = SettingsManager.getSetting('sortBy') || 'best-match';
+    sortBySelect.value = savedSort;
+    
+    // Handle sort change
+    sortBySelect.addEventListener('change', async () => {
+      const newSort = sortBySelect.value;
+      await SettingsManager.setSetting('sortBy', newSort);
+      
+      // Re-sort current results without re-searching
+      if (resultsLocal.length > 0) {
+        sortResults(resultsLocal, newSort);
+        activeIndex = resultsLocal.length ? 0 : -1;
+        renderResults();
+      }
+    });
+  }
 
   // Fast message sending
   function sendMessage(msg: any): Promise<any> {
@@ -326,6 +351,11 @@ function initializePopup() {
     try {
       const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q });
       resultsLocal = (resp && resp.results) ? resp.results : [];
+      
+      // Apply current sort setting
+      const sortBy = SettingsManager.getSetting('sortBy') || 'best-match';
+      sortResults(resultsLocal, sortBy);
+      
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
       // Focus the first result item if focusDelayMs > 0

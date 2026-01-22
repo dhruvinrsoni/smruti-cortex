@@ -54,7 +54,15 @@
     </header>
 
     <main class="main">
-      <input id="search-input" class="search-input" placeholder="Type to search (press Esc to clear)" autofocus />
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input id="search-input" class="search-input" placeholder="Type to search (press Esc to clear)" autofocus style="flex: 1;" />
+        <select id="sort-by" class="sort-by" title="Sort results">
+          <option value="best-match">Best Match</option>
+          <option value="most-recent">Most Recent</option>
+          <option value="most-visited">Most Visited</option>
+          <option value="alphabetical">Alphabetical</option>
+        </select>
+      </div>
       <div id="result-count" class="result-count" aria-live="polite"></div>
       <ul id="results" class="results" role="listbox"></ul>
     </main>

@@ -9,6 +9,8 @@
  * When updating search UI behavior, update it HERE to affect both implementations.
  */
 
+import { SortBy } from '../core/constants';
+
 /**
  * Interface for search result items (matches IndexedItem from database schema)
  */
@@ -146,6 +148,39 @@ export function truncateUrl(url: string, maxLength: number = 60): string {
   } catch {
     return url.substring(0, maxLength);
   }
+}
+
+/**
+ * Shared utility: Sort search results by given sort option
+ * 
+ * @param results Search results to sort (mutates array in-place for performance)
+ * @param sortBy Sort option from SortBy enum
+ * @returns Sorted results (same reference as input)
+ */
+export function sortResults(results: SearchResult[], sortBy: string): SearchResult[] {
+  switch (sortBy) {
+    case SortBy.MOST_RECENT:
+      // Sort by lastVisit descending (most recent first)
+      results.sort((a, b) => b.lastVisit - a.lastVisit);
+      break;
+    
+    case SortBy.MOST_VISITED:
+      // Sort by visitCount descending (most visited first)
+      results.sort((a, b) => b.visitCount - a.visitCount);
+      break;
+    
+    case SortBy.ALPHABETICAL:
+      // Sort by title ascending (A-Z)
+      results.sort((a, b) => a.title.localeCompare(b.title));
+      break;
+    
+    case SortBy.BEST_MATCH:
+    default:
+      // No sorting - keep scorer algorithm order
+      break;
+  }
+  
+  return results;
 }
 
 /**

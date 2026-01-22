@@ -35,6 +35,7 @@ export interface AppSettings {
     // Search result diversity
     showDuplicateUrls?: boolean;  // Show duplicate URLs with different query params (default: false = diversity ON)
     showNonMatchingResults?: boolean; // Show results that don't match the query (default: false = strict matching)
+    sortBy?: string;  // Sort order for results: 'best-match', 'most-recent', 'most-visited', 'alphabetical' (default: 'best-match')
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -126,6 +127,12 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     showNonMatchingResults: {
         default: false,
         validate: (val) => typeof val === 'boolean',
+    },
+    
+    // Sort order for results
+    sortBy: {
+        default: 'best-match',
+        validate: (val) => typeof val === 'string' && ['best-match', 'most-recent', 'most-visited', 'alphabetical'].includes(val),
     },
     
     // Focus behavior - default true = select all text when Tab focuses input
