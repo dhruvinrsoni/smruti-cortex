@@ -5,6 +5,16 @@ export const DB_NAME = 'smruti_cortex_db';
 export const INJECTED_FLAG = '__smruti_cortex_injected';
 
 /**
+ * Sort options for search results
+ */
+export enum SortBy {
+  BEST_MATCH = 'best-match',      // Default: Use scorer algorithm
+  MOST_RECENT = 'most-recent',    // Sort by lastVisit descending
+  MOST_VISITED = 'most-visited',  // Sort by visitCount descending
+  ALPHABETICAL = 'alphabetical'   // Sort by title ascending
+}
+
+/**
  * URL patterns for sensitive sites where metadata extraction should be skipped
  * Covers banking, password managers, auth pages, and payment processors
  */

@@ -23,7 +23,8 @@ import {
   copyHtmlLinkToClipboard,
   handleCyclicTabNavigation,
   parseKeyboardAction,
-  renderResults as renderResultsShared
+  renderResults as renderResultsShared,
+  sortResults
 } from '../shared/search-ui-base';
 
 // Prevent double-injection
@@ -192,6 +193,29 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     .search-input::placeholder {
       color: var(--text-secondary);
+    }
+    .sort-btn {
+      background: var(--bg-kbd);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      padding: 6px 10px;
+      margin-left: 8px;
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 16px;
+      line-height: 1;
+      transition: background 0.15s, border-color 0.2s;
+      min-width: 32px;
+      text-align: center;
+    }
+    .sort-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent-color);
+    }
+    .sort-btn:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
     }
     .kbd {
       background: var(--bg-kbd);
@@ -390,6 +414,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (response?.results) {
           perfLog('Search results received via port');
           currentResults = response.results.slice(0, MAX_RESULTS);
+          
+          // Apply current sort setting
+          const currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+          sortResults(currentResults, currentSort);
+          
           selectedIndex = 0;
           renderResults(currentResults);
         }
@@ -496,6 +525,46 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
     inputEl.tabIndex = 0; // Ensure focusable
+    
+    // Sort button (cycles through options on click)
+    const sortBtn = document.createElement('button');
+    sortBtn.className = 'sort-btn';
+    sortBtn.tabIndex = 0;
+    
+    const sortOptions = [
+      { value: 'best-match', label: '🎯', title: 'Best Match' },
+      { value: 'most-recent', label: '🕒', title: 'Most Recent' },
+      { value: 'most-visited', label: '🔥', title: 'Most Visited' },
+      { value: 'alphabetical', label: '🔤', title: 'Alphabetical' }
+    ];
+    
+    let currentSortIndex = 0;
+    const savedSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+    currentSortIndex = sortOptions.findIndex(opt => opt.value === savedSort);
+    if (currentSortIndex === -1) currentSortIndex = 0;
+    
+    const updateSortButton = () => {
+      const opt = sortOptions[currentSortIndex];
+      sortBtn.textContent = opt.label;
+      sortBtn.title = `Sort: ${opt.title} (click to cycle)`;
+    };
+    updateSortButton();
+    
+    sortBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentSortIndex = (currentSortIndex + 1) % sortOptions.length;
+      const newSort = sortOptions[currentSortIndex].value;
+      localStorage.setItem('smruti-sort-by', newSort);
+      updateSortButton();
+      
+      // Re-sort current results without re-searching
+      if (currentResults.length > 0) {
+        sortResults(currentResults, newSort);
+        selectedIndex = currentResults.length ? 0 : -1;
+        renderResults(currentResults);
+      }
+    });
+    
     // Small badge to indicate when "Select All On Focus" is enabled
     selectAllBadge = document.createElement('span');
     selectAllBadge.className = 'select-all-badge';
@@ -515,10 +584,6 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     selectAllBadge.style.alignItems = 'center';
     selectAllBadge.style.justifyContent = 'center';
     selectAllBadge.style.fontWeight = '600';
-    
-    const escKbd = document.createElement('span');
-    escKbd.className = 'kbd';
-    escKbd.textContent = 'ESC';
     
     // Settings button - opens the full popup
     settingsBtn = document.createElement('button');
@@ -547,8 +612,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     header.appendChild(logo);
     header.appendChild(inputEl);
+    header.appendChild(sortBtn);
     header.appendChild(selectAllBadge);
-    header.appendChild(escKbd);
     header.appendChild(settingsBtn);
     
     // Results
@@ -887,6 +952,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (response?.results) {
               perfLog('Search results received via sendMessage', t0);
               currentResults = response.results.slice(0, MAX_RESULTS);
+              
+              // Apply current sort setting
+              const currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+              sortResults(currentResults, currentSort);
+              
               selectedIndex = 0;
               renderResults(currentResults);
             }
@@ -1049,7 +1119,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
   function handleTabNavigation(backward: boolean): void {
     if (!inputEl || !resultsEl || !settingsBtn) { return; }
 
-    // Define focusable groups in tab order (extensible - just add more here)
+    // REVERSED ORDER: input → settings → results
+    // This makes Tab from results go back to input (most common use case)
     const focusGroups: FocusableGroup[] = [
       {
         name: 'input',
@@ -1064,6 +1135,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
           } catch {}
         }
+      },
+      {
+        name: 'settings',
+        element: settingsBtn
       },
       {
         name: 'results',
@@ -1085,10 +1160,6 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
         },
         shouldSkip: () => currentResults.length === 0 // Skip if no results
-      },
-      {
-        name: 'settings',
-        element: settingsBtn
       }
     ];
 
@@ -1097,8 +1168,8 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       const currentFocused = getFocusedElement() as HTMLElement;
       
       if (currentFocused === inputEl) return 0;
-      if (currentFocused && currentFocused.classList?.contains('result')) return 1;
-      if (currentFocused === settingsBtn) return 2;
+      if (currentFocused === settingsBtn) return 1;
+      if (currentFocused && currentFocused.classList?.contains('result')) return 2;
       
       return -1; // Unknown/not focused
     };
