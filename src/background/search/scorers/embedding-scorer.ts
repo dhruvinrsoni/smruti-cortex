@@ -21,6 +21,7 @@
 
 import { Scorer, ScorerContext } from '../../../core/scorer-types';
 import { Logger } from '../../../core/logger';
+import { SettingsManager } from '../../../core/settings';
 import { getOllamaService } from '../../ollama-service';
 
 const COMPONENT = 'EmbeddingScorer';
@@ -50,13 +51,20 @@ function cosineSimilarity(a: number[], b: number[]): number {
 /**
  * Embedding-based scorer using local Ollama
  * 
- * Now ACTIVE when ollamaEnabled=true (weight set by scorer-manager)
+ * ACTIVE when embeddingsEnabled=true (weight dynamically set)
+ * Generates embeddings during indexing for semantic search
  */
 const embeddingScorer: Scorer = {
-  name: 'embedding',
-  weight: 0.4, // Base weight (dynamically set to 0 by scorer-manager if AI disabled)
+  name: 'semantic',
+  weight: 0.0, // Dynamic weight - set to 0.4 when embeddings enabled
 
   score: (item, _query, _allItems, context) => {
+    // Check if embeddings are enabled
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+    if (!embeddingsEnabled) {
+      return 0; // Disabled
+    }
+    
     // Need query embedding from context
     if (!context?.queryEmbedding || context.queryEmbedding.length === 0) {
       return 0; // No query embedding available
@@ -71,8 +79,8 @@ const embeddingScorer: Scorer = {
     const similarity = cosineSimilarity(context.queryEmbedding, item.embedding);
     
     // Log high-confidence matches only (reduce log spam)
-    if (similarity > 0.6) {
-      Logger.info(COMPONENT, 'score', `🤖 AI match: similarity=${similarity.toFixed(2)} | item="${item.title.substring(0, 50)}..."`);
+    if (similarity > 0.7) {
+      Logger.info(COMPONENT, 'score', `🤖 SEMANTIC MATCH: similarity=${similarity.toFixed(2)} | item="${item.title.substring(0, 50)}..."`);
     }
     
     return similarity;

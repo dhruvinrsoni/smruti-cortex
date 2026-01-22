@@ -222,6 +222,34 @@
           </div>
         </div>
         <div class="settings-section">
+          <h3>Semantic Search (AI Embeddings)</h3>
+          <p>Find pages by meaning, not just keywords. Uses local AI to understand content.<br>
+          <b>Requires:</b> Ollama + embedding model. <b>Storage:</b> ~4KB per page. <b>Privacy:</b> 100% local.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-embeddingsEnabled">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Enable semantic search</strong>
+                <small>Find pages by meaning (e.g., "ML tutorials" finds "machine learning guides")</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="text" id="modal-embeddingModel" placeholder="nomic-embed-text" style="width:160px;" list="embedding-models">
+              <datalist id="embedding-models">
+                <option value="nomic-embed-text">Fast, recommended</option>
+                <option value="all-minilm">Alternative</option>
+                <option value="mxbai-embed-large">High quality</option>
+              </datalist>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Embedding Model</strong>
+                <small>Dedicated model for generating text embeddings (not chat models)</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section">
           <h3>Result Focus Delay</h3>
           <p>Control how quickly focus shifts to results after typing.<br>
           <b>0 ms</b> disables auto-focus. <b>100-2000 ms</b> is recommended for natural UX.</p>

@@ -45,6 +45,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | ⭐ **Bookmark Search** | Index and search bookmarks with ★ indicator |
 | 🔍 **Query Expansion** | Find related terms with synonym matching |
 | 🤖 **AI Search** | Optional keyword expansion via local Ollama |
+| 🧠 **Semantic Search** | Find by meaning with AI embeddings (NEW) |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
 | 📊 **Performance Monitor** | Real-time search timing and cache stats |
 | 🔧 **Diagnostics Export** | Export system info for bug reports |
@@ -134,6 +135,9 @@ src/
 
 ### 🤖 AI Search (Optional)
 
+**Two AI features for maximum search power:**
+
+#### 1. AI Keyword Expansion (Fast)
 **Local AI keyword expansion** via [Ollama](https://ollama.ai). 100% local, no cloud.
 
 **How:** Type "war" → AI expands to ["war", "battle", "combat", "conflict"] → finds matching URLs.
@@ -153,6 +157,32 @@ ollama pull llama3.2:1b
 
 **Enable:** Settings → AI Integration → Enable AI search
 **Timeout:** Default 30s, set -1 for infinite (Settings → AI Integration)
+
+#### 2. Semantic Search with Embeddings (NEW)
+**Find pages by meaning**, not just keywords. Uses AI to understand content.
+
+**Example:** Search "ML tutorials" → finds "machine learning guides", "neural network courses"
+
+**Setup:**
+```bash
+# 1. Install Ollama + keyword expansion setup above
+# 2. Pull embedding model
+ollama pull nomic-embed-text
+
+# 3. Enable in Settings → Semantic Search
+```
+
+**How it works:**
+- Generates embeddings on-demand during search (cached for speed)
+- Compares meaning using vector similarity
+- Finds conceptually related pages, not just keyword matches
+
+**Performance:**
+- First search per page: 200-500ms (generates embedding)
+- Subsequent searches: ~50ms (uses cached embedding)
+- Storage: ~4KB per page
+
+**📖 Full guide:** See [SEMANTIC_SEARCH.md](docs/SEMANTIC_SEARCH.md)
 
 ### 🔍 Quality Checks
 

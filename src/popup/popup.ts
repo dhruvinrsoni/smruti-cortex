@@ -762,6 +762,17 @@ function initializePopup() {
       ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') || 30000);
     }
 
+    // Semantic search settings
+    const embeddingsEnabledInput = modal.querySelector('#modal-embeddingsEnabled') as HTMLInputElement;
+    if (embeddingsEnabledInput) {
+      embeddingsEnabledInput.checked = SettingsManager.getSetting('embeddingsEnabled') || false;
+    }
+
+    const embeddingModelInput = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
+    if (embeddingModelInput) {
+      embeddingModelInput.value = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+    }
+
     // Privacy settings
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
     if (loadFaviconsInput) {
@@ -1130,6 +1141,31 @@ function initializePopup() {
         await SettingsManager.setSetting('ollamaTimeout', val);
         ollamaTimeoutInput.value = String(val);
         showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`);
+      });
+    }
+
+    // Semantic search settings
+    const embeddingsEnabledInput = modal.querySelector('#modal-embeddingsEnabled') as HTMLInputElement;
+    if (embeddingsEnabledInput) {
+      embeddingsEnabledInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('embeddingsEnabled', target.checked);
+        console.info(`[Settings] Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
+        showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'));
+        if (target.checked) {
+          showToast('⚠️ Rebuild index to generate embeddings for existing pages', true);
+        }
+      });
+    }
+
+    const embeddingModelInput = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
+    if (embeddingModelInput) {
+      embeddingModelInput.addEventListener('change', async () => {
+        const val = embeddingModelInput.value.trim();
+        if (val) {
+          await SettingsManager.setSetting('embeddingModel', val);
+          showToast(`Embedding model set to: ${val}`);
+        }
       });
     }
 
