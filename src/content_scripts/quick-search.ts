@@ -415,8 +415,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           perfLog('Search results received via port');
           currentResults = response.results.slice(0, MAX_RESULTS);
           
-          // Apply current sort setting
-          const currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+          // Apply current sort setting (safe localStorage access)
+          let currentSort = 'best-match';
+          try {
+            currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+          } catch {
+            // Sandboxed context - use default
+          }
           sortResults(currentResults, currentSort);
           
           selectedIndex = 0;
@@ -539,9 +544,15 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     ];
     
     let currentSortIndex = 0;
-    const savedSort = localStorage.getItem('smruti-sort-by') || 'best-match';
-    currentSortIndex = sortOptions.findIndex(opt => opt.value === savedSort);
-    if (currentSortIndex === -1) currentSortIndex = 0;
+    // Safe localStorage access (fails on sandboxed pages like .mhtml)
+    try {
+      const savedSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+      currentSortIndex = sortOptions.findIndex(opt => opt.value === savedSort);
+      if (currentSortIndex === -1) currentSortIndex = 0;
+    } catch {
+      // Sandboxed context - use default
+      currentSortIndex = 0;
+    }
     
     const updateSortButton = () => {
       const opt = sortOptions[currentSortIndex];
@@ -554,7 +565,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       e.stopPropagation();
       currentSortIndex = (currentSortIndex + 1) % sortOptions.length;
       const newSort = sortOptions[currentSortIndex].value;
-      localStorage.setItem('smruti-sort-by', newSort);
+      try {
+        localStorage.setItem('smruti-sort-by', newSort);
+      } catch {
+        // Sandboxed context - can't persist preference
+      }
       updateSortButton();
       
       // Re-sort current results without re-searching
@@ -953,8 +968,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
               perfLog('Search results received via sendMessage', t0);
               currentResults = response.results.slice(0, MAX_RESULTS);
               
-              // Apply current sort setting
-              const currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+              // Apply current sort setting (safe localStorage access)
+              let currentSort = 'best-match';
+              try {
+                currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+              } catch {
+                // Sandboxed context - use default
+              }
               sortResults(currentResults, currentSort);
               
               selectedIndex = 0;
