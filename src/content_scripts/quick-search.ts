@@ -86,6 +86,29 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     return document.activeElement;
   }
 
+  // Helper: Check if extension context is still valid
+  function isExtensionContextValid(): boolean {
+    try {
+      return !!(chrome?.runtime?.id);
+    } catch {
+      return false;
+    }
+  }
+
+  // Helper: Sanitize query string to prevent issues with special characters or malformed URLs
+  function sanitizeQuery(query: string): string {
+    if (!query) {return '';}
+    // Trim whitespace
+    let sanitized = query.trim();
+    // Remove control characters that might cause issues
+    sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
+    // Limit length to prevent abuse
+    if (sanitized.length > 500) {
+      sanitized = sanitized.substring(0, 500);
+    }
+    return sanitized;
+  }
+
   // ===== STYLES (inlined for instant loading, with CSS containment) =====
   // Supports both light and dark themes via prefers-color-scheme
   const OVERLAY_STYLES = `
@@ -404,7 +427,15 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== PORT-BASED MESSAGING =====
   function openSearchPort(): void {
-    if (searchPort || !chrome.runtime?.id) {return;}
+    // Don't try to reconnect if port already exists
+    if (searchPort) {return;}
+    
+    // Check extension context validity first
+    if (!isExtensionContextValid()) {
+      console.warn('[SmrutiCortex] Cannot open port: extension context invalidated');
+      return;
+    }
+    
     const t0 = performance.now();
     try {
       searchPort = chrome.runtime.connect({ name: 'quick-search' });
@@ -430,8 +461,23 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       });
 
       searchPort.onDisconnect.addListener(() => {
-        perfLog('Search port disconnected');
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          console.warn('[SmrutiCortex] Search port disconnected with error:', lastError.message);
+        } else {
+          perfLog('Search port disconnected');
+        }
         searchPort = null;
+        
+        // If context is still valid, automatically try to reconnect after a delay
+        if (isExtensionContextValid()) {
+          setTimeout(() => {
+            if (!searchPort && isExtensionContextValid()) {
+              perfLog('Auto-reconnecting search port');
+              openSearchPort();
+            }
+          }, 500);
+        }
       });
     } catch (e) {
       console.warn('[SmrutiCortex] Failed to open search port:', e);
@@ -899,69 +945,87 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     const t0 = performance.now();
     perfLog(`performSearch: "${query}"`);
 
-    // Use port if available (faster), otherwise fallback to sendMessage
-    if (searchPort) {
-      searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
-      perfLog('Search query sent via port', t0);
-    } else {
-      // If runtime id is missing the extension context may have been invalidated
-      if (!chrome.runtime?.id) {
-        console.warn('[SmrutiCortex] Cannot search: extension context invalidated');
-        showToast('Extension context lost — attempting to reconnect...');
+    // Sanitize query to prevent issues with special characters
+    const sanitizedQuery = sanitizeQuery(query);
+    if (!sanitizedQuery) {
+      // Empty query after sanitization - show empty state
+      currentResults = [];
+      renderResults([]);
+      return;
+    }
 
-        // Try to reopen the port after a short delay; if that succeeds we'll send the query.
-        // If it doesn't, show an error message to the user.
-        setTimeout(() => {
-          try {
+    // Check extension context validity first
+    if (!isExtensionContextValid()) {
+      console.warn('[SmrutiCortex] Cannot search: extension context invalidated');
+      currentResults = [];
+      renderErrorResults(
+        '⚠️ Extension disconnected. The extension may have been reloaded or disabled.',
+        () => {
+          // Reconnect handler
+          if (isExtensionContextValid()) {
             openSearchPort();
-          } catch (err) {
-            // ignore - openSearchPort already logs
-          }
-
-          if (searchPort) {
-            try {
-              searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
-              perfLog('Search query sent via reopened port', t0);
-              return;
-            } catch (err) {
-              // fallthrough to error below
-            }
-          }
-
-          // Could not reconnect - show clear error in results area with a reconnect button
-          currentResults = [];
-          renderErrorResults('Extension context invalidated. Please reload the page or reload the extension.', async () => {
-            // Attempt to reopen the port and retry the same query
-            try {
-              openSearchPort();
-            } catch {}
-            // If port opened, post message; otherwise try one-shot sendMessage
+            // Retry search after a brief delay
             setTimeout(() => {
               if (searchPort) {
                 try {
-                  searchPort.postMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
-                  perfLog('Search query sent via reopened port (reconnect button)');
-                  return;
-                } catch {}
+                  searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
+                  showToast('Reconnected!');
+                } catch (err) {
+                  console.error('[SmrutiCortex] Failed to send query after reconnect:', err);
+                  showToast('Reconnect failed. Please reload the page.');
+                }
+              } else {
+                showToast('Reconnect failed. Please reload the page.');
               }
-              try {
-                chrome.runtime.sendMessage({ type: 'SEARCH_QUERY', query, source: 'inline' });
-              } catch {}
-            }, 100);
-          });
-        }, 250);
-        return;
-      }
+            }, 300);
+          } else {
+            showToast('Extension still unavailable. Try reloading the page.');
+          }
+        }
+      );
+      return;
+    }
 
-      // Otherwise attempt one-shot sendMessage and handle errors
+    // Use port if available (faster), otherwise fallback to sendMessage
+    if (searchPort) {
+      try {
+        searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
+        perfLog('Search query sent via port', t0);
+      } catch (err) {
+        console.warn('[SmrutiCortex] Failed to send via port, trying to reconnect:', err);
+        searchPort = null;
+        openSearchPort();
+        // Try once more with new port
+        if (searchPort) {
+          try {
+            searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
+            perfLog('Search query sent via reconnected port', t0);
+            return;
+          } catch {}
+        }
+        // Fall through to sendMessage fallback
+      }
+    }
+    
+    // Fallback to one-shot sendMessage if no port
+    if (!searchPort) {
+
+      // Attempt one-shot sendMessage and handle errors
       try {
         chrome.runtime.sendMessage(
-          { type: 'SEARCH_QUERY', query, source: 'inline' },
+          { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' },
           (response) => {
             if (chrome.runtime.lastError) {
               console.warn('[SmrutiCortex] Search error:', chrome.runtime.lastError);
               currentResults = [];
-              renderErrorResults('Search failed. Please try again.');
+              renderErrorResults(
+                'Search failed: ' + chrome.runtime.lastError.message,
+                () => {
+                  // Try to reconnect and search again
+                  openSearchPort();
+                  setTimeout(() => performSearch(query), 300);
+                }
+              );
               return;
             }
             if (response?.results) {
@@ -983,9 +1047,21 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
         );
       } catch (e) {
-        console.warn('[SmrutiCortex] Search failed:', e);
+        console.warn('[SmrutiCortex] Search request failed:', e);
         currentResults = [];
-        renderErrorResults('Search failed. Please try again.');
+        const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+        renderErrorResults(
+          `Search failed: ${errorMsg}. This may be due to page restrictions.`,
+          () => {
+            // Attempt to reconnect
+            if (isExtensionContextValid()) {
+              openSearchPort();
+              showToast('Attempting reconnect...');
+            } else {
+              showToast('Extension context lost. Please reload the page.');
+            }
+          }
+        );
       }
     }
   }
@@ -1086,26 +1162,57 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'empty';
     errorDiv.textContent = message;
-    errorDiv.style.color = 'var(--text-secondary)';
+    errorDiv.style.color = 'var(--text-danger, #ef4444)';
+    errorDiv.style.padding = '20px';
+    errorDiv.style.textAlign = 'center';
+    errorDiv.style.lineHeight = '1.5';
     resultsEl.appendChild(errorDiv);
+    
     if (reconnect) {
       const btn = document.createElement('button');
       btn.className = 'reconnect-btn';
-      btn.textContent = 'Reconnect extension';
-      btn.style.marginTop = '8px';
+      btn.textContent = '🔄 Try to Reconnect';
+      btn.style.marginTop = '12px';
+      btn.style.padding = '8px 16px';
+      btn.style.background = 'var(--bg-hover, #f0f0f0)';
+      btn.style.border = '1px solid var(--border, #ccc)';
+      btn.style.borderRadius = '6px';
+      btn.style.cursor = 'pointer';
+      btn.style.fontSize = '14px';
+      btn.style.fontWeight = '500';
       btn.style.display = 'inline-block';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (btn.disabled) {return;}
         try {
           btn.disabled = true;
-          btn.textContent = 'Reconnecting...';
+          btn.textContent = '⏳ Reconnecting...';
+          btn.style.opacity = '0.6';
           reconnect();
-        } catch {
+          // Re-enable after a delay if still showing
+          setTimeout(() => {
+            if (btn.parentElement) {
+              btn.disabled = false;
+              btn.textContent = '🔄 Try Again';
+              btn.style.opacity = '1';
+            }
+          }, 2000);
+        } catch (err) {
           btn.disabled = false;
-          btn.textContent = 'Reconnect extension';
+          btn.textContent = '❌ Failed - Try Again';
+          btn.style.opacity = '1';
+          console.error('[SmrutiCortex] Reconnect failed:', err);
         }
       });
       resultsEl.appendChild(btn);
+      
+      // Add helpful tip
+      const tipDiv = document.createElement('div');
+      tipDiv.style.marginTop = '16px';
+      tipDiv.style.fontSize = '12px';
+      tipDiv.style.color = 'var(--text-secondary, #666)';
+      tipDiv.textContent = 'Tip: If this persists, try reloading the page (F5) or reinstalling the extension.';
+      resultsEl.appendChild(tipDiv);
     }
   }
 
