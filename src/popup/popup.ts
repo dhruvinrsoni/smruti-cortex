@@ -600,6 +600,7 @@ function initializePopup() {
         // Don't focus input - let popup close naturally
         return;
       }
+      // Don't intercept any other keys in input - allow normal text editing (Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+Backspace, etc.)
       return;
     }
 
@@ -668,7 +669,8 @@ function initializePopup() {
       }
     }
 
-    if (e.key.toLowerCase() === 'm' && e.ctrlKey) {
+    // Copy shortcuts - ONLY when a result is focused (not input)
+    if (e.key.toLowerCase() === 'm' && e.ctrlKey && resultsNode.contains(currentElement)) {
       e.preventDefault();
       if (resultsLocal.length === 0 || currentIndex === -1) {return;}
       const item = resultsLocal[currentIndex];
@@ -684,7 +686,7 @@ function initializePopup() {
       return;
     }
 
-    if (e.key.toLowerCase() === 'c' && e.ctrlKey) {
+    if (e.key.toLowerCase() === 'c' && e.ctrlKey && resultsNode.contains(currentElement)) {
       e.preventDefault();
       if (resultsLocal.length === 0 || currentIndex === -1) {return;}
       const item = resultsLocal[currentIndex];
