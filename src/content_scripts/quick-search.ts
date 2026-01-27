@@ -1198,12 +1198,40 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     handleCyclicTabNavigation(focusGroups, getCurrentGroupIndex, backward);
   }
   function handleKeydown(e: KeyboardEvent): void {
-    const action = parseKeyboardAction(e);
+    // Stop propagation FIRST to prevent page from seeing any keystrokes in our overlay
+    e.stopPropagation();
     
+    // Check if input is focused - if so, only intercept specific navigation keys
+    const focused = getFocusedElement() as HTMLElement | null;
+    const isInputFocused = focused === inputEl;
+    
+    if (isInputFocused) {
+      // In input: only handle Escape, ArrowDown, Tab, Shift+Tab - allow everything else
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        hideOverlay();
+        return;
+      }
+      if (e.key === 'ArrowDown' && currentResults.length > 0) {
+        e.preventDefault();
+        selectedIndex = 0;
+        updateSelection();
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        handleTabNavigation(e.shiftKey);
+        return;
+      }
+      // All other keys (including Ctrl+Backspace, Ctrl+Z, Ctrl+V, etc.) work normally
+      return;
+    }
+    
+    // Not in input - parse action and handle result navigation
+    const action = parseKeyboardAction(e);
     if (!action) {return;}
     
     // Determine if a result element currently has focus and derive its index
-    const focused = getFocusedElement() as HTMLElement | null;
     let focusedIndex: number | null = null;
     if (focused && focused.dataset?.index) {
       const idx = parseInt(focused.dataset.index, 10);
