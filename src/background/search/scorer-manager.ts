@@ -88,6 +88,43 @@ const crossDimensionalScorer: Scorer = {
     },
 };
 
+// Multi-token match scorer - CRITICAL: heavily rewards results matching multiple query tokens
+// This ensures "zaar-api commits" prioritizes results with BOTH words over just one
+const multiTokenMatchScorer: Scorer = {
+    name: 'multiTokenMatch',
+    weight: 0.35, // HIGH weight - this is critical for multi-word query relevance
+    score: (item, query, _allItems, context) => {
+        const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
+        const url = item.url.toLowerCase();
+        const metaDescription = (item.metaDescription || '').toLowerCase();
+        const bookmarkFolders = ((item as any).bookmarkFolders?.join(' ') || '').toLowerCase();
+        
+        // Combine all searchable content
+        const haystack = `${title} ${url} ${metaDescription} ${bookmarkFolders}`;
+        
+        // Get original query tokens (not AI-expanded)
+        const originalTokens = tokenize(query);
+        
+        if (originalTokens.length < 2) { return 0; } // Only applies to multi-word queries
+        
+        // Count how many original tokens match
+        const matchedCount = originalTokens.filter(token => haystack.includes(token)).length;
+        
+        // Calculate match ratio
+        const matchRatio = matchedCount / originalTokens.length;
+        
+        // Exponential reward for matching more tokens
+        // 1 token = 0.0 (baseline)
+        // 2/2 tokens = 1.0 (perfect match)
+        // 3/3 tokens = 1.0 (perfect match)
+        // 2/3 tokens = 0.67^2 = 0.44 (partial match)
+        // This heavily prioritizes results matching ALL query terms
+        const score = matchRatio > 0 ? Math.pow(matchRatio, 1.5) : 0;
+        
+        return score;
+    },
+};
+
 // Domain familiarity scorer - learns from user behavior patterns
 const domainFamiliarityScorer: Scorer = {
     name: 'domainFamiliarity',
@@ -123,6 +160,7 @@ export function getAllScorers(): Scorer[] {
     // All scorers now use expanded tokens from AI keyword expansion
     // Embedding scorer provides semantic search when enabled
     return [
+        multiTokenMatchScorer,  // CRITICAL: Heavily rewards multi-token matches (weight 0.35)
         titleScorer,           // Uses expandedTokens from context
         urlScorer,             // Uses expandedTokens from context
         crossDimensionalScorer, // NEW: Rewards cross-dimensional keyword matching
