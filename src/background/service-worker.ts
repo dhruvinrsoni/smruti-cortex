@@ -295,6 +295,31 @@ setupPortBasedMessaging();
                 break;
               }
 
+              case 'MANUAL_INDEX': {
+                logger.info('onMessage', '⚡ MANUAL_INDEX requested by user');
+                try {
+                  const { performIncrementalHistoryIndexManual } = await import('./indexing');
+                  const { getSetting, setSetting } = await import('./database');
+                  
+                  // Get last indexed timestamp from settings
+                  const lastIndexedTimestamp = await getSetting<number>('lastIndexedTimestamp', 0);
+                  logger.debug('onMessage', 'MANUAL_INDEX: Last indexed timestamp', { lastIndexedTimestamp });
+                  
+                  // Perform incremental indexing from last timestamp
+                  const result = await performIncrementalHistoryIndexManual(lastIndexedTimestamp);
+                  
+                  // Update last indexed timestamp
+                  await setSetting('lastIndexedTimestamp', Date.now());
+                  
+                  logger.info('onMessage', '✅ MANUAL_INDEX completed', result);
+                  sendResponse({ status: 'OK', ...result });
+                } catch (error) {
+                  logger.error('onMessage', '❌ MANUAL_INDEX failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
               case 'CLEAR_ALL_DATA': {
                 logger.info('onMessage', '🗑️ CLEAR_ALL_DATA requested by user');
                 try {

@@ -564,6 +564,53 @@ input[type="radio"] {
   color: var(--muted);
 }
 
+/* Manual Index Section */
+.manual-index-section {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.manual-index-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.manual-index-section p {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.index-feedback {
+  display: inline-block;
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: opacity 0.3s ease;
+}
+
+.index-feedback.success {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.index-feedback.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.index-feedback:empty {
+  display: none;
+}
+
 /* Toast notifications */
 .toast {
   position: fixed;

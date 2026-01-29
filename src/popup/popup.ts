@@ -1343,6 +1343,53 @@ function initializePopup() {
       });
     }
 
+    // Manual Index Now button
+    const manualIndexBtn = modal.querySelector('#manual-index-btn') as HTMLButtonElement;
+    const manualIndexFeedback = modal.querySelector('#manual-index-feedback') as HTMLSpanElement;
+    if (manualIndexBtn && manualIndexFeedback) {
+      manualIndexBtn.addEventListener('click', async () => {
+        manualIndexBtn.disabled = true;
+        manualIndexBtn.textContent = '⏳ Indexing...';
+        manualIndexFeedback.textContent = '';
+        manualIndexFeedback.className = 'index-feedback';
+        
+        try {
+          const resp = await sendMessage({ type: 'MANUAL_INDEX' });
+          if (resp && resp.status === 'OK') {
+            const { added, updated, total, duration } = resp;
+            
+            if (total === 0) {
+              manualIndexFeedback.textContent = '✓ No new pages to index';
+              manualIndexFeedback.className = 'index-feedback success';
+            } else {
+              const durationSec = (duration / 1000).toFixed(1);
+              manualIndexFeedback.textContent = `✓ Indexed ${total} page${total > 1 ? 's' : ''} (${added} new, ${updated} updated) in ${durationSec}s`;
+              manualIndexFeedback.className = 'index-feedback success';
+              
+              // Refresh storage quota display
+              await fetchStorageQuotaInfo();
+            }
+          } else {
+            manualIndexFeedback.textContent = '✗ Indexing failed: ' + (resp?.message || 'Unknown error');
+            manualIndexFeedback.className = 'index-feedback error';
+          }
+        } catch (error) {
+          manualIndexFeedback.textContent = '✗ Indexing failed';
+          manualIndexFeedback.className = 'index-feedback error';
+          console.error('Manual index error:', error);
+        } finally {
+          manualIndexBtn.disabled = false;
+          manualIndexBtn.textContent = '⚡ Index Now';
+          
+          // Clear feedback after 5 seconds
+          setTimeout(() => {
+            manualIndexFeedback.textContent = '';
+            manualIndexFeedback.className = 'index-feedback';
+          }, 5000);
+        }
+      });
+    }
+
     // Clear data button
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {

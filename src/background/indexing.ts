@@ -295,6 +295,91 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
 }
 
 /**
+ * Perform incremental history indexing for manual user trigger (returns detailed results)
+ */
+export async function performIncrementalHistoryIndexManual(sinceTimestamp: number): Promise<{
+    added: number;
+    updated: number;
+    total: number;
+    duration: number;
+}> {
+    const startTime = Date.now();
+
+    // Get only items visited since the last index
+    const newHistoryItems = await getHistorySince(sinceTimestamp);
+    
+    if (newHistoryItems.length === 0) {
+        return { added: 0, updated: 0, total: 0, duration: 0 };
+    }
+
+    let updated = 0;
+    let added = 0;
+
+    // Process in batches to avoid blocking for large incremental updates
+    const batchSize = 1000;
+
+    for (let i = 0; i < newHistoryItems.length; i += batchSize) {
+        const batch = newHistoryItems.slice(i, i + batchSize);
+
+        for (const item of batch) {
+            try {
+                // Check if we already have this URL
+                const existing = await getIndexedItem(item.url);
+
+                if (existing) {
+                    // Only update if this visit is more recent
+                    if (item.lastVisitTime > existing.lastVisit) {
+                        const updatedItem: IndexedItem = {
+                            ...existing,
+                            visitCount: Math.max(existing.visitCount, item.visitCount || 1),
+                            lastVisit: item.lastVisitTime,
+                            title: item.title || existing.title, // Prefer newer title if available
+                        };
+                        await saveIndexedItem(updatedItem);
+                        updated++;
+                    }
+                } else {
+                    // Create new indexed item
+                    const indexed: IndexedItem = {
+                        url: item.url,
+                        title: item.title || '',
+                        hostname: new URL(item.url).hostname,
+                        metaDescription: '',
+                        metaKeywords: [],
+                        visitCount: item.visitCount || 1,
+                        lastVisit: item.lastVisitTime,
+                        tokens: tokenize(item.title + ' ' + item.url),
+                    };
+
+                    await saveIndexedItem(indexed);
+                    added++;
+                }
+            } catch (error) {
+                logger.warn('performIncrementalHistoryIndexManual', '[Manual Index] Failed to index item', { url: item.url, error: error.message });
+            }
+        }
+
+        // Small delay between batches to prevent blocking
+        if (i + batchSize < newHistoryItems.length) {
+            await new Promise(resolve => setTimeout(resolve, 5));
+        }
+    }
+
+    const totalDuration = Date.now() - startTime;
+    const total = added + updated;
+
+    logger.info('performIncrementalHistoryIndexManual', '[Manual Index] Completed', {
+        added,
+        updated,
+        total,
+        durationMs: totalDuration
+    });
+
+    return { added, updated, total, duration: totalDuration };
+}
+
+
+/**
  * Get full history by querying comprehensively to access all available items
  */
 async function getFullHistory(): Promise<any[]> {
