@@ -120,13 +120,21 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 });
 
 // Store Links
+// TODO_PLACEHOLDER: Update these URLs when extension is approved by Chrome/Edge stores
+// INSTRUCTIONS:
+// 1. Get Chrome Web Store URL from: https://chrome.google.com/webstore/developer/dashboard
+// 2. Get Edge Add-ons URL from: https://partner.microsoft.com/dashboard
+// 3. Replace YOUR_EXTENSION_ID with actual store IDs
+// 4. Remove alert() calls (lines 104-114)
+// 5. Uncomment window.open() calls
 const CHROME_STORE_URL = 'https://chrome.google.com/webstore/detail/smruticortex/YOUR_EXTENSION_ID';
 const EDGE_STORE_URL = 'https://microsoftedge.microsoft.com/addons/detail/smruticortex/YOUR_EXTENSION_ID';
 
 document.querySelectorAll('#chromeBtn, #chromeBtn2').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
-        // For now, show coming soon alert
+        // TODO_PLACEHOLDER: Remove this alert when Chrome Store URL is ready
+        // Then uncomment the window.open() call below
         alert('Coming soon! Extension is currently in review. Check back soon!');
         // Later: window.open(CHROME_STORE_URL, '_blank');
     });
@@ -135,6 +143,8 @@ document.querySelectorAll('#chromeBtn, #chromeBtn2').forEach(btn => {
 document.querySelectorAll('#edgeBtn, #edgeBtn2').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
+        // TODO_PLACEHOLDER: Remove this alert when Edge Store URL is ready
+        // Then uncomment the window.open() call below
         alert('Coming soon! Extension is currently in review. Check back soon!');
         // Later: window.open(EDGE_STORE_URL, '_blank');
     });

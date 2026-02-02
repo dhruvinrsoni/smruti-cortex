@@ -342,3 +342,139 @@ SmrutiCortex works natively on Edge with the same package!
 ---
 
 **Ready to publish?** Follow the checklist above and submit with confidence! 🚀
+---
+
+## 🔒 HARDCORE BACKUP: Full Privacy Policy
+
+> **CRITICAL:** This is a permanent, hardcore backup of the complete privacy policy. Even if GitHub Pages fails, this document in the repository blob provides a fallback URL for Chrome Web Store verification.
+>
+> **Primary URL:** https://dhruvinrsoni.github.io/smruti-cortex/privacy.html  
+> **Fallback URL:** https://github.com/dhruvinrsoni/smruti-cortex/blob/main/CHROME_WEB_STORE.md#-hardcore-backup-full-privacy-policy
+
+### SmrutiCortex Privacy Policy
+
+**Last Updated:** February 3, 2026
+
+#### Privacy Guarantee
+
+**SmrutiCortex is a 100% local, privacy-first browser extension.** All data processing happens on your device. We do not collect, transmit, or store any personal data externally.
+
+#### 1. Data Collection
+
+SmrutiCortex does **NOT** collect, transmit, or store any personal data externally. All data processing happens locally on your device.
+
+#### 2. What Data is Stored Locally
+
+The extension stores the following data in your browser's local IndexedDB:
+
+- Browser history URLs (obtained via Chrome History API)
+- Page titles
+- Visit timestamps and visit counts
+- Optional metadata (keywords, descriptions) extracted from pages you visit
+- Optional AI embeddings (if semantic search is enabled)
+- Extension settings and preferences
+
+#### 3. Where Data is Stored
+
+All data is stored exclusively in:
+
+- Browser IndexedDB (local database on your device)
+- Chrome Storage Local API (settings only)
+
+**No cloud storage or external servers are used.**
+
+#### 4. Data Transmission
+
+SmrutiCortex does **NOT**:
+
+- Send any data to external servers
+- Use cloud storage or sync services
+- Transmit browsing history anywhere
+- Include analytics or tracking tools
+- Use third-party services (except optional local AI)
+
+##### Optional Features:
+
+- **Favicon Loading:** When enabled, fetches site icons via Google Favicon API (can be disabled in Settings)
+- **Local AI (Ollama):** Requires user to install Ollama locally; no cloud AI calls are made
+
+#### 5. Data Retention
+
+Data is stored indefinitely until you:
+
+- Manually clear extension data via Settings ("Clear & Rebuild")
+- Uninstall the extension (automatic cleanup)
+- Clear browser data
+
+#### 6. User Control
+
+You have full control to:
+
+- Delete all extension data anytime via Settings
+- Disable metadata extraction
+- Disable favicon loading
+- Disable AI features
+- Add sensitive sites to blacklist (no indexing for banks, password managers)
+- Uninstall the extension (removes all data)
+
+#### 7. Permissions Used
+
+The extension requires these permissions for core functionality:
+
+- **history:** Read browser history for indexing and search
+- **bookmarks:** Read bookmarks for unified search
+- **storage:** Save settings and indexed data locally
+- **scripting:** Inject content scripts for inline overlay and optional metadata extraction
+- **tabs:** Open search results in current/new/background tabs
+- **activeTab:** Access current page for inline search overlay
+- **alarms:** Schedule background indexing updates
+- **commands:** Register keyboard shortcuts (Ctrl+Shift+S)
+- **<all_urls>:** Extract metadata from pages user visits (local processing only)
+
+#### 8. Third-Party Data Sharing
+
+**SmrutiCortex does NOT sell or transfer user data to third parties.**
+
+No browsing history, URLs, or personal information is shared with any external service, company, or individual.
+
+#### 9. Security
+
+All data is stored locally using browser's secure storage APIs (IndexedDB, chrome.storage). Only you have access to your data. The extension cannot access data from other extensions or websites you haven't visited.
+
+#### 10. Open Source
+
+SmrutiCortex is open source. You can review the code at any time:  
+https://github.com/dhruvinrsoni/smruti-cortex
+
+#### 11. Changes to Policy
+
+Updates to this privacy policy will be posted at:
+
+- https://dhruvinrsoni.github.io/smruti-cortex/privacy.html (primary)
+- https://github.com/dhruvinrsoni/smruti-cortex/blob/main/CHROME_WEB_STORE.md (backup)
+
+#### 12. Contact
+
+Questions or concerns about privacy?
+
+- Open an issue: https://github.com/dhruvinrsoni/smruti-cortex/issues
+- View documentation: https://github.com/dhruvinrsoni/smruti-cortex
+
+#### 13. Compliance
+
+This extension complies with:
+
+- Chrome Web Store Developer Program Policies
+- User Data Privacy requirements
+- Limited Use disclosure requirements
+
+#### Summary
+
+**SmrutiCortex is designed for maximum privacy.** Your browsing history never leaves your device. All processing, storage, and search happens locally in your browser. You control your data 100%.
+
+---
+
+**SmrutiCortex** — A gift to society. Ultra-fast, privacy-first browser history search.  
+No analytics. No tracking. No data collection. Just pure, local search that respects your privacy.
+
+© 2026 SmrutiCortex | MIT License
