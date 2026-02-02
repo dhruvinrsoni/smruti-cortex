@@ -218,15 +218,37 @@ Chrome requires explaining why each permission is needed:
 
 | Permission | Justification |
 |------------|---------------|
-| `history` | Required to read and index browser history for search functionality |
-| `bookmarks` | Required to index bookmarks for unified search (v6.0) |
-| `storage` | Store settings and indexed data locally for fast search |
-| `scripting` | Extract page metadata (title, keywords) to improve search relevance |
-| `tabs` | Open search results in current/new/background tabs |
-| `activeTab` | Access currently active tab for inline search overlay |
-| `alarms` | Schedule background jobs to keep search index up-to-date |
-| `commands` | Register keyboard shortcuts (Ctrl+Shift+S) |
-| `<all_urls>` | Extract metadata from any page user visits (local processing only) |
+| `history` | **Required** to read and index browser history for search functionality |
+| `bookmarks` | **Required** to index bookmarks for unified search (v6.0) |
+| `storage` | **Required** to store settings and indexed data locally for fast search |
+| `scripting` | **Required** to inject inline search overlay on pages |
+| `tabs` | **Required** to open search results in current/new/background tabs |
+| `activeTab` | **Required** to access currently active tab for inline search overlay and keyboard shortcuts |
+| `alarms` | **Required** to schedule background jobs to keep search index up-to-date |
+| `commands` | **Required** to register keyboard shortcuts (Ctrl+Shift+S) |
+| `<all_urls>` (optional) | **Optional permission** - Users can optionally grant this to enable metadata extraction (page titles, keywords) for improved search relevance. This feature is OFF by default and must be enabled in Settings. The extension works fully without this permission. |
+
+### 🆕 Optional Host Permissions Strategy
+
+**Important:** To comply with Chrome Web Store policies and minimize review time, `<all_urls>` is now an **optional_host_permission** instead of a required permission.
+
+**What this means:**
+- ✅ Extension installs **without** asking for broad permissions
+- ✅ Core functionality (search history, inline overlay, keyboard shortcuts) works immediately
+- ✅ Users can **optionally** grant `<all_urls>` permission in Settings to enable metadata extraction
+- ✅ Faster Chrome Store approval (no "Broad Host Permissions" warning)
+
+**User Experience:**
+1. Extension installs with minimal permissions (history, bookmarks, storage, activeTab)
+2. Search works instantly with browser history data
+3. Users can enable "Enhanced Metadata" in Settings (requires granting optional permission)
+4. Once granted, extension extracts titles/keywords from visited pages for better search
+
+**Implementation:**
+- Metadata extraction feature is disabled by default
+- Settings page shows "Enable Enhanced Metadata" toggle
+- Clicking toggle requests optional host permission via `chrome.permissions.request()`
+- If denied, extension continues working with basic history data
 
 ---
 
