@@ -9,6 +9,7 @@
     "build": "npm run sync-version && npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",
     "build:prod": "npm run sync-version && npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-prod.mjs",
     "package": "npm run build:prod && node ./scripts/package.mjs",
+    "build:site": "node ./scripts/build-site.mjs",
     "tsc": "tsc --project tsconfig.json",
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
