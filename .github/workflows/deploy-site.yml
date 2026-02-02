@@ -1,0 +1,112 @@
+name: Deploy Landing Page
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+      
+      - name: Backup privacy.html
+        run: |
+          if [ -f docs/privacy.html ]; then
+            cp docs/privacy.html /tmp/privacy.html.backup
+            echo "✅ Privacy policy backed up"
+          else
+            echo "⚠️ No existing privacy.html found"
+          fi
+      
+      - name: Clean docs directory (except privacy.html)
+        run: |
+          if [ -d docs ]; then
+            find docs -mindepth 1 ! -name 'privacy.html' -delete
+            echo "✅ Cleaned docs directory"
+          else
+            mkdir -p docs
+            echo "✅ Created docs directory"
+          fi
+      
+      - name: Copy site files to docs
+        run: |
+          cp -r site/* docs/
+          echo "✅ Copied site files to docs/"
+      
+      - name: Restore privacy.html
+        run: |
+          if [ -f /tmp/privacy.html.backup ]; then
+            cp /tmp/privacy.html.backup docs/privacy.html
+            echo "✅ Privacy policy restored"
+            echo "🔒 Privacy URL preserved at: docs/privacy.html"
+          fi
+      
+      - name: Verify deployment
+        run: |
+          echo "📁 Deployed files:"
+          ls -la docs/
+          echo ""
+          if [ -f docs/privacy.html ]; then
+            echo "✅ Privacy policy verified at docs/privacy.html"
+          else
+            echo "❌ ERROR: Privacy policy missing!"
+            exit 1
+          fi
+          if [ -f docs/index.html ]; then
+            echo "✅ Landing page verified at docs/index.html"
+          else
+            echo "❌ ERROR: Landing page missing!"
+            exit 1
+          fi
+      
+      - name: Commit and push changes
+        run: |
+          git add docs/
+          if git diff --staged --quiet; then
+            echo "ℹ️ No changes to deploy"
+          else
+            git commit -m "🚀 Deploy landing page [skip ci]
+
+            - Updated from site/ directory
+            - Privacy policy preserved at docs/privacy.html
+            - Deployed by GitHub Actions
+            
+            Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            git push origin main
+            echo "✅ Deployment successful!"
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Landing page deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📍 Live URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Landing Page:** https://dhruvinrsoni.github.io/smruti-cortex/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Privacy Policy:** https://dhruvinrsoni.github.io/smruti-cortex/privacy.html" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Deployed Files" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          ls -la docs/ >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔒 Privacy policy preserved and verified" >> $GITHUB_STEP_SUMMARY

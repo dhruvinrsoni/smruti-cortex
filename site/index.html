@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmrutiCortex - Ultra-Fast Browser History Search</title>
+    <meta name="description" content="Find any page instantly. 100% local, privacy-first browser history search. Like Everything for your browser.">
+    <link rel="icon" type="image/png" href="../src/assets/icon-48.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-content">
+                <div class="logo">
+                    <img src="../src/assets/icon-48.png" alt="SmrutiCortex" class="logo-icon">
+                    <span class="logo-text">SmrutiCortex</span>
+                </div>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#demo">Demo</a>
+                    <a href="#privacy">Privacy</a>
+                    <a href="https://github.com/dhruvinrsoni/smruti-cortex" target="_blank">GitHub</a>
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">
+                    Find Any Page <span class="gradient-text">Instantly</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Like "Everything" search for Windows, but for your browser. Ultra-fast, privacy-first history search.
+                </p>
+                <div class="typing-demo">
+                    <span class="typing-cursor">Ctrl+Shift+S</span>
+                    <span class="typing-text" id="typingText"></span>
+                </div>
+                <div class="cta-buttons">
+                    <a href="#" class="btn btn-primary" id="chromeBtn">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2z"/>
+                        </svg>
+                        Add to Chrome
+                    </a>
+                    <a href="#" class="btn btn-secondary" id="edgeBtn">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
+                        </svg>
+                        Add to Edge
+                    </a>
+                </div>
+                <p class="hero-stats">
+                    <span class="stat">⚡ &lt;50ms search</span>
+                    <span class="stat">🔐 100% local</span>
+                    <span class="stat">⭐ Open source</span>
+                </p>
+            </div>
+            <div class="hero-visual">
+                <div class="demo-window">
+                    <div class="demo-header">
+                        <div class="demo-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="demo-title">SmrutiCortex</div>
+                    </div>
+                    <div class="demo-search">
+                        <input type="text" placeholder="Type to search your history..." id="demoInput" readonly>
+                        <div class="demo-results" id="demoResults"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Why SmrutiCortex?</h2>
+            <p class="section-subtitle">The fastest way to find anything in your browser history</p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Lightning Fast</h3>
+                    <p>Results appear as you type in &lt;50ms. Instant search, zero lag.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <h3>100% Private</h3>
+                    <p>All data stays on your device. No cloud sync, no tracking, no telemetry.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⌨️</div>
+                    <h3>Keyboard First</h3>
+                    <p>Ctrl+Shift+S global shortcut. Full arrow key navigation. Zero mouse needed.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Smart Ranking</h3>
+                    <p>Multi-token matching, recency, frequency, and literal substring boost.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI Search</h3>
+                    <p>Optional local AI (Ollama) for semantic search and query expansion.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⭐</div>
+                    <h3>Bookmark Search</h3>
+                    <p>Search bookmarks alongside history with ★ indicator.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3>Self-Healing</h3>
+                    <p>Auto-recovery from errors. Health monitoring every 60s.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Performance Monitor</h3>
+                    <p>Real-time metrics: search timing, cache stats, memory usage.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔧</div>
+                    <h3>Full Control</h3>
+                    <p>One-click data clear, manual indexing, sensitive-site blacklist.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live Demo Section -->
+    <section id="demo" class="demo-section">
+        <div class="container">
+            <h2 class="section-title">See It In Action</h2>
+            <p class="section-subtitle">Type anything to search your history</p>
+            <div class="interactive-demo">
+                <div class="demo-tabs">
+                    <button class="demo-tab active" data-demo="popup">Popup Mode</button>
+                    <button class="demo-tab" data-demo="inline">Inline Overlay</button>
+                    <button class="demo-tab" data-demo="settings">Settings</button>
+                </div>
+                <div class="demo-content">
+                    <div class="demo-view active" id="demo-popup">
+                        <img src="https://via.placeholder.com/800x500/1a1a2e/eee?text=Popup+Demo+Screenshot" alt="Popup Demo">
+                        <div class="demo-overlay">
+                            <div class="demo-controls">
+                                <input type="text" placeholder="Try searching: github api..." class="demo-search-input">
+                                <div class="demo-results-live">
+                                    <div class="demo-result">
+                                        <div class="result-title">GitHub REST API Documentation</div>
+                                        <div class="result-url">docs.github.com/en/rest</div>
+                                    </div>
+                                    <div class="demo-result">
+                                        <div class="result-title">GitHub API v3 - Issues</div>
+                                        <div class="result-url">api.github.com/repos/issues</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="demo-view" id="demo-inline">
+                        <img src="https://via.placeholder.com/800x500/1a1a2e/eee?text=Inline+Overlay+Demo" alt="Inline Demo">
+                    </div>
+                    <div class="demo-view" id="demo-settings">
+                        <img src="https://via.placeholder.com/800x500/1a1a2e/eee?text=Settings+Modal+Demo" alt="Settings Demo">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Privacy Section -->
+    <section id="privacy" class="privacy-section">
+        <div class="container">
+            <div class="privacy-content">
+                <div class="privacy-text">
+                    <h2>Privacy First. Always.</h2>
+                    <p>Your browsing history never leaves your device. Period.</p>
+                    <ul class="privacy-list">
+                        <li>✓ All data stored locally in IndexedDB</li>
+                        <li>✓ No cloud sync or external servers</li>
+                        <li>✓ No analytics or tracking</li>
+                        <li>✓ Optional favicon loading (can disable)</li>
+                        <li>✓ Sensitive-site blacklist built-in</li>
+                        <li>✓ Open source - audit anytime</li>
+                    </ul>
+                    <a href="privacy.html" class="btn btn-outline">Read Privacy Policy</a>
+                </div>
+                <div class="privacy-visual">
+                    <div class="privacy-diagram">
+                        <div class="diagram-box browser">
+                            <div class="box-icon">🌐</div>
+                            <div class="box-label">Your Browser</div>
+                        </div>
+                        <div class="diagram-arrow">
+                            <div class="arrow-label">All data stays here</div>
+                        </div>
+                        <div class="diagram-box storage">
+                            <div class="box-icon">💾</div>
+                            <div class="box-label">Local Storage</div>
+                        </div>
+                        <div class="diagram-line crossed">
+                            <div class="line-label">❌ No cloud sync</div>
+                        </div>
+                        <div class="diagram-box cloud disabled">
+                            <div class="box-icon">☁️</div>
+                            <div class="box-label">External Servers</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Find Everything Instantly?</h2>
+            <p>Join thousands of users who never lose important pages again</p>
+            <div class="cta-buttons">
+                <a href="#" class="btn btn-primary btn-large" id="chromeBtn2">Add to Chrome - It's Free</a>
+                <a href="#" class="btn btn-secondary btn-large" id="edgeBtn2">Add to Edge - It's Free</a>
+            </div>
+            <p class="cta-note">⭐ Open source on <a href="https://github.com/dhruvinrsoni/smruti-cortex" target="_blank">GitHub</a></p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-col">
+                    <h4>SmrutiCortex</h4>
+                    <p>Ultra-fast browser history search. Privacy-first, always.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Links</h4>
+                    <a href="https://github.com/dhruvinrsoni/smruti-cortex" target="_blank">GitHub</a>
+                    <a href="https://github.com/dhruvinrsoni/smruti-cortex/issues" target="_blank">Report Issue</a>
+                    <a href="privacy.html">Privacy Policy</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Resources</h4>
+                    <a href="https://github.com/dhruvinrsoni/smruti-cortex#readme" target="_blank">Documentation</a>
+                    <a href="https://github.com/dhruvinrsoni/smruti-cortex/blob/main/CHROME_WEB_STORE.md" target="_blank">Store Listing</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2026 SmrutiCortex | MIT License | Made with ❤️ for privacy</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
