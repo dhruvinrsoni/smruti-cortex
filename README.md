@@ -121,9 +121,34 @@ npm run test         # Run tests
 
 # Package
 npm run package      # Create store-ready zip
+
+# Docker (alternative build method)
+npm run docker-compose-build  # Build in container
+npm run docker-compose-dev    # Watch mode in container
+npm run docker-compose-test   # Test in container
+npm run docker-validate       # Validate Docker setup (auto-cleanup)
+npm run docker-clean          # Manual cleanup volumes/containers
 ```
 
-**Project Structure:**
+**Docker Build (Optional):**
+Build without installing Node.js locally:
+```bash
+# Prerequisites: Docker Desktop or Docker Engine
+npm run docker-validate       # Full validation with auto-cleanup
+
+# Or build directly
+npm run docker-compose-build  # Produces dist/ using containerized build
+
+# Manual cleanup if needed
+npm run docker-clean
+
+# Or use docker-compose directly
+docker-compose run --rm build
+```
+
+See [docs/DOCKER.md](docs/DOCKER.md) for full Docker workflow including devcontainer and CI.
+
+**Project Structure:****
 ```
 src/
 ├── background/      # Service worker, indexing, search engine

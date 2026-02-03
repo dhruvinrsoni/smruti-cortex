@@ -17,7 +17,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "start:watch": "node ./scripts/esbuild-dev.mjs --watch"
+    "start:watch": "node ./scripts/esbuild-dev.mjs --watch",
+    "docker-build-image": "node -p \"require('./package.json').version\" | node -e \"const v=require('fs').readFileSync(0,'utf8').trim(); require('child_process').execSync('docker build -t smruti-cortex:' + v + ' .',{stdio:'inherit'});\"",
+    "docker-compose-build": "sh ./scripts/docker-build-and-extract.sh",
+    "docker-compose-dev": "node ./scripts/docker-compose.mjs run --rm dev",
+    "docker-compose-test": "node ./scripts/docker-compose.mjs run --rm test",
+    "docker-compose-lint": "node ./scripts/docker-compose.mjs run --rm lint",
+    "docker-validate": "sh ./scripts/validate-docker.sh",
+    "docker-clean": "sh ./scripts/docker-clean.sh"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.188",

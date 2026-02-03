@@ -1,0 +1,55 @@
+name: Docker Build & Verify
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    name: Build with Docker Compose
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Resolve version tag
+        run: echo "SMRUTI_CORTEX_VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: docker build -t smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }} .
+      
+      - name: Run Docker Compose build
+        run: docker-compose run --rm build
+      
+      - name: Verify dist artifacts
+        run: |
+          ls -la dist/
+          test -f dist/manifest.json || { echo "manifest.json missing"; exit 1; }
+          test -d dist/background || { echo "background bundle missing"; exit 1; }
+          test -d dist/popup || { echo "popup bundle missing"; exit 1; }
+          echo "✅ All required artifacts present"
+      
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-dist-docker
+          path: dist/
+          retention-days: 7
+      
+      - name: Show artifact summary
+        run: |
+          echo "### Docker Build Summary 🐋" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/ >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

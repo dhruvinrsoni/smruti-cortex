@@ -1,0 +1,49 @@
+services:
+  build:
+    build: .
+    image: smruti-cortex:${SMRUTI_CORTEX_VERSION:-local}
+    user: root
+    entrypoint: ["/bin/sh", "./scripts/docker-entrypoint.sh"]
+    command: npm run build
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+    environment:
+      - NODE_ENV=production
+    working_dir: /app
+
+  dev:
+    build: .
+    image: smruti-cortex:${SMRUTI_CORTEX_VERSION:-local}
+    user: root
+    entrypoint: ["/bin/sh", "./scripts/docker-entrypoint.sh"]
+    command: npm run start:watch
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    working_dir: /app
+
+  test:
+    build: .
+    image: smruti-cortex:${SMRUTI_CORTEX_VERSION:-local}
+    user: root
+    entrypoint: ["/bin/sh", "./scripts/docker-entrypoint.sh"]
+    working_dir: /app
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+      - ./coverage:/app/coverage
+    command: npm run test
+
+  lint:
+    build: .
+    image: smruti-cortex:${SMRUTI_CORTEX_VERSION:-local}
+    user: root
+    entrypoint: ["/bin/sh", "./scripts/docker-entrypoint.sh"]
+    working_dir: /app
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+    command: npm run lint
