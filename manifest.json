@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "SmrutiCortex",
+  "name": "SmrutiCortex: Instant Browser History Search",
   "short_name": "SmrutiCortex",
-  "description": "Everything-like instant search for your browser history — SmrutiCortex indexes your browsing memory and retrieves any URL instantly.",
+  "description": "SmrutiCortex is your intelligent browser history search assistant. Quickly find any URL, bookmark, or browsing session with ultra-fast search capabilities.",
   "version": "7.0.0",
   "permissions": [
     "history",
@@ -19,7 +19,7 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "SmrutiCortex",
+    "default_title": "SmrutiCortex: Search Your Browser History",
     "default_popup_width": 800,
     "default_popup_height": 500
   },

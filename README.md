@@ -2,7 +2,7 @@
 
 **Ultra-fast browser history search. Find any page instantly.**
 
-[![Build](https://github.com/dhruvinrsoni/SmrutiCortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/SmrutiCortex/actions/workflows/build.yml)
+[![Build](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
 
