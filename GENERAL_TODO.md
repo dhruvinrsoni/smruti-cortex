@@ -115,8 +115,8 @@ Each item can be converted into GitHub Issues.
 - [ ] 🟡 **PERMISSIONS_EXPLAINED.md** - Why each permission is needed (Issue #5)
   ```
   PROMPT: "Create PERMISSIONS_EXPLAINED.md explaining each Chrome extension permission
-  used by SmrutiCortex (history, bookmarks, storage, scripting, tabs, activeTab, 
-  alarms, commands, host_permissions). Use non-technical language for end users."
+  used by SmrutiCortex (history, bookmarks, storage, tabs, alarms, host_permissions). 
+  Use non-technical language for end users."
   ```
 
 ### 7.2 Developer Documentation

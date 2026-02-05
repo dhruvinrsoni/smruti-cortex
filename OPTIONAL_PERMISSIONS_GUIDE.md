@@ -166,11 +166,8 @@ Required Permissions:
 - history: Read browser history for indexing and search
 - bookmarks: Read bookmarks for unified search
 - storage: Store settings and search index locally
-- scripting: Inject inline search overlay for keyboard shortcuts
-- tabs: Open search results in tabs
-- activeTab: Access active tab for inline search overlay (Ctrl+Shift+S)
-- alarms: Schedule background indexing updates
-- commands: Register global keyboard shortcuts
+- tabs: Query active tab and send messages to content scripts for inline overlay
+- alarms: Keep service worker alive and schedule background indexing updates
 
 Optional Host Permissions:
 - <all_urls>: OPTIONAL permission for enhanced metadata extraction. Users must explicitly enable this feature in Settings. The extension works fully without this permission - it only enables extracting page titles and keywords to improve search relevance. This is OFF by default and requires user consent.
@@ -197,7 +194,7 @@ All data processing happens locally. No data is transmitted to external servers.
 |---------|--------|-------|
 | History Search | ✅ Works | Uses Chrome History API (has title + URL) |
 | Bookmark Search | ✅ Works | Full bookmark data available |
-| Inline Overlay | ✅ Works | Uses activeTab permission |
+| Inline Overlay | ✅ Works | Content script auto-injected via manifest |
 | Smart Ranking | ✅ Works | Recency, frequency, title matching |
 | AI Search | ✅ Works | Local Ollama integration |
 | Keyboard Shortcuts | ✅ Works | Ctrl+Shift+S global shortcut |

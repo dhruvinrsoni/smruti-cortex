@@ -19,6 +19,26 @@ const logger = Logger.forComponent('ServiceWorker');
 // Register command listener IMMEDIATELY at module load (before any async init)
 // This ensures keyboard shortcuts work even during cold start
 let commandsListenerRegistered = false;
+
+// Helper: Send message to content script with timeout
+function sendMessageWithTimeout(tabId: number, message: any, timeoutMs: number = 500): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('Content script response timeout'));
+    }, timeoutMs);
+    
+    browserAPI.tabs.sendMessage(tabId, message)
+      .then((response) => {
+        clearTimeout(timer);
+        resolve(response);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 function registerCommandsListenerEarly() {
   if (commandsListenerRegistered) {return;}
   if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
@@ -30,36 +50,22 @@ function registerCommandsListenerEarly() {
         // Send message to content script to open inline overlay (FASTER than popup)
         try {
           const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
-          if (tab?.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://') && !tab.url.startsWith('about:') && !tab.url.startsWith('chrome-extension://')) {
+          if (tab?.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://') && !tab.url.startsWith('about:') && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('moz-extension://')) {
             try {
-              // Try to send message to existing content script
-              const response = await browserAPI.tabs.sendMessage(tab.id, { type: 'OPEN_INLINE_SEARCH' });
+              // Try to send message to existing content script (auto-injected via manifest)
+              // Use timeout to avoid hanging if content script is unresponsive
+              const response = await sendMessageWithTimeout(tab.id, { type: 'OPEN_INLINE_SEARCH' }, 300);
               if (response?.success) {
                 logger.info('onCommand', `✅ Inline overlay opened in ${(performance.now() - t0).toFixed(1)}ms`);
                 return; // Success - don't continue
               }
+              // Response received but not successful - fall through to popup
+              throw new Error('Content script returned unsuccessful response');
             } catch (msgError) {
-              // Content script not loaded - inject it dynamically
-              logger.debug('onCommand', 'Content script not loaded, injecting dynamically...');
-              try {
-                await browserAPI.scripting.executeScript({
-                  target: { tabId: tab.id },
-                  files: ['content_scripts/quick-search.js']
-                });
-                // Wait a tiny bit for script to initialize
-                await new Promise(resolve => setTimeout(resolve, 50));
-                // Try again
-                const response = await browserAPI.tabs.sendMessage(tab.id, { type: 'OPEN_INLINE_SEARCH' });
-                if (response?.success) {
-                  logger.info('onCommand', `✅ Inline overlay opened (after inject) in ${(performance.now() - t0).toFixed(1)}ms`);
-                  return; // Success
-                }
-              } catch (injectError) {
-                logger.debug('onCommand', 'Failed to inject content script', { error: (injectError as Error).message });
-              }
+              // Content script not available on this page - fall through to popup
+              logger.debug('onCommand', 'Content script not available, using popup', { error: (msgError as Error).message });
+              throw msgError; // Re-throw to trigger popup fallback
             }
-            // If we get here, inline failed - fall through to popup
-            throw new Error('Inline overlay failed');
           } else {
             // Special page (chrome://, edge://, about:, extension page) - use popup
             logger.info('onCommand', `Special page detected (${tab?.url?.slice(0, 30)}...), using popup`);

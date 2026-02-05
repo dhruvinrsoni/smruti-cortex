@@ -579,9 +579,9 @@ function initializePopup() {
 
       // Determine current focused group index
       const getCurrentGroupIndex = (): number => {
-        if (currentElement === input) return 0;
-        if (resultsNode.contains(currentElement)) return 1;
-        if (currentElement === settingsButton) return 2;
+        if (currentElement === input) {return 0;}
+        if (resultsNode.contains(currentElement)) {return 1;}
+        if (currentElement === settingsButton) {return 2;}
         return -1;
       };
 
@@ -1731,7 +1731,7 @@ function initializePopup() {
   // Show search analytics modal
   async function showSearchAnalyticsModal() {
     const modal = document.getElementById('search-analytics-modal');
-    if (!modal) return;
+    if (!modal) {return;}
 
     modal.classList.remove('hidden');
 

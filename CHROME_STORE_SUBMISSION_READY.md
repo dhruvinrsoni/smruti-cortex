@@ -31,11 +31,8 @@ Required Permissions (Core Features):
 • history: Read browser history for indexing and search
 • bookmarks: Read bookmarks for unified search (v6.0)
 • storage: Store settings and search index locally
-• scripting: Inject inline search overlay for keyboard shortcuts
-• tabs: Open search results in current/new/background tabs
-• activeTab: Access active tab for inline search overlay (Ctrl+Shift+S)
-• alarms: Schedule background indexing updates
-• commands: Register global keyboard shortcuts (Ctrl+Shift+S)
+• tabs: Query active tab and send messages to content scripts for inline overlay
+• alarms: Keep service worker alive and schedule background indexing updates
 
 Optional Host Permissions (Enhanced Features):
 • <all_urls>: OPTIONAL permission for enhanced metadata extraction. This permission is NOT requested on install. Users must explicitly enable "Enhanced Metadata" in Settings to grant this permission. The extension works fully without it - this only enables extracting page titles and keywords to improve search relevance. OFF by default, requires user consent.
@@ -125,7 +122,7 @@ You need 1-5 screenshots (1280x800px recommended):
 - ✅ Popup search works immediately (Ctrl+Shift+S)
 - ✅ History search fully functional
 - ✅ Bookmark search works
-- ✅ Inline overlay works (activeTab permission)
+- ✅ Inline overlay works on regular pages (content script auto-injected)
 - ⚠️ Metadata extraction disabled (no optional permission granted)
 
 ### Metadata Feature (Future v6.1.0):

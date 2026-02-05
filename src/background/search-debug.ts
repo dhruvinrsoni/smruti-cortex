@@ -5,7 +5,7 @@
  * for debugging and algorithm analysis.
  */
 
-import { Logger } from "../core/logger";
+import { Logger } from '../core/logger';
 
 const logger = Logger.forComponent('SearchDebug');
 
@@ -63,7 +63,7 @@ class SearchDebugService {
   private sessionId: string;
   private searchHistory: SearchDebugEntry[] = [];
   private readonly MAX_HISTORY = 1000; // Keep last 1000 searches
-  private readonly STORAGE_KEY = "search_debug_history";
+  private readonly STORAGE_KEY = 'search_debug_history';
 
   constructor() {
     this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -75,7 +75,7 @@ class SearchDebugService {
    */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    logger.info('setEnabled', `Search debug ${enabled ? "enabled" : "disabled"}`);
+    logger.info('setEnabled', `Search debug ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -88,8 +88,8 @@ class SearchDebugService {
   /**
    * Log a search operation with full debug details
    */
-  logSearch(entry: Omit<SearchDebugEntry, "timestamp" | "sessionId">): void {
-    if (!this.enabled) return;
+  logSearch(entry: Omit<SearchDebugEntry, 'timestamp' | 'sessionId'>): void {
+    if (!this.enabled) {return;}
 
     const fullEntry: SearchDebugEntry = {
       ...entry,
@@ -198,7 +198,7 @@ class SearchDebugService {
   clearHistory(): void {
     this.searchHistory = [];
     this.saveToStorage();
-    logger.info('clearHistory', "Search debug history cleared");
+    logger.info('clearHistory', 'Search debug history cleared');
   }
 
   /**
@@ -240,7 +240,7 @@ class SearchDebugService {
         );
       }
     } catch (err) {
-      logger.error('loadFromStorage', "Failed to load search debug history", err);
+      logger.error('loadFromStorage', 'Failed to load search debug history', err);
     }
   }
 
@@ -254,7 +254,7 @@ class SearchDebugService {
         JSON.stringify(this.searchHistory)
       );
     } catch (err) {
-      logger.error('saveToStorage', "Failed to save search debug history", err);
+      logger.error('saveToStorage', 'Failed to save search debug history', err);
     }
   }
 }
