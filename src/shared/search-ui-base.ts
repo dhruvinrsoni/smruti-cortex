@@ -23,6 +23,8 @@ export interface SearchResult {
   visitCount: number;
   lastVisit: number;
   tokens?: string[];
+  isBookmark?: boolean;
+  bookmarkFolders?: string[];
 }
 
 /**
@@ -397,6 +399,18 @@ export function renderResults(
     // Title
     const titleDiv = document.createElement('div');
     titleDiv.className = options.titleClassName;
+    
+    // Add bookmark indicator if applicable
+    if (result.isBookmark) {
+      const bookmarkIcon = document.createElement('span');
+      bookmarkIcon.className = 'bookmark-indicator';
+      bookmarkIcon.textContent = '⭐';
+      bookmarkIcon.title = 'Bookmarked';
+      bookmarkIcon.style.marginRight = '6px';
+      bookmarkIcon.style.color = '#fbbf24';
+      titleDiv.appendChild(bookmarkIcon);
+    }
+    
     appendHighlightedTextToDOM(titleDiv, result.title || result.url, tokens, options.highlightClassName);
     div.appendChild(titleDiv);
 
@@ -404,6 +418,18 @@ export function renderResults(
     const urlDiv = document.createElement('div');
     urlDiv.className = options.urlClassName;
     appendHighlightedTextToDOM(urlDiv, truncateUrl(result.url), tokens, options.highlightClassName);
+    
+    // Add bookmark folder path if available
+    if (result.isBookmark && result.bookmarkFolders && result.bookmarkFolders.length > 0) {
+      const folderSpan = document.createElement('span');
+      folderSpan.className = 'bookmark-folder';
+      folderSpan.textContent = ` 📁 ${result.bookmarkFolders.join(' › ')}`;
+      folderSpan.style.color = '#6b7280';
+      folderSpan.style.fontSize = '0.85em';
+      folderSpan.style.marginLeft = '8px';
+      urlDiv.appendChild(folderSpan);
+    }
+    
     div.appendChild(urlDiv);
 
     // Click handler

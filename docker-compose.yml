@@ -8,8 +8,10 @@ services:
     volumes:
       - .:/app:cached
       - /app/node_modules
+      - ${DOCKER_OUTPUT_DIR:-./docker-output}:/output
     environment:
       - NODE_ENV=production
+      - OUTPUT_DIR=/output
     working_dir: /app
 
   dev:

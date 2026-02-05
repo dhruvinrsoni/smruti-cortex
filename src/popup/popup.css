@@ -31,6 +31,17 @@
   vertical-align: middle;
 }
 
+/* Bookmark folder path display */
+.bookmark-folder {
+  font-size: 0.85em;
+  color: #6b7280;
+  margin: 4px 0;
+  font-weight: normal;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
 /* Detect tab mode: if viewport is wider than typical popup, we're in a tab */
 @media (min-width: 800px) {
   html {

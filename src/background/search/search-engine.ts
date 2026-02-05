@@ -12,6 +12,7 @@ import { expandQueryKeywords } from '../ai-keyword-expander';
 import { applyDiversityFilter, ScoredItem } from './diversity-filter';
 import { performanceTracker } from '../performance-monitor';
 import { getExpandedTerms } from './query-expansion';
+import { recordSearchDebug } from '../diagnostics';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     const searchStartTime = performance.now();
@@ -261,6 +262,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     // Record search performance
     const searchDuration = performance.now() - searchStartTime;
     performanceTracker.recordSearch(searchDuration);
+    
+    // Record search debug (always - lightweight)
+    recordSearchDebug(q, finalResults.length, searchDuration);
     
     // Enhanced logging with AI breakdown
     if (aiOnlyMatches > 0 || hybridMatches > 0) {

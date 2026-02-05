@@ -252,6 +252,47 @@ setupPortBasedMessaging();
             }
             break;
           }
+          case 'GET_SEARCH_ANALYTICS': {
+            try {
+              const { getSearchAnalytics } = await import('./diagnostics');
+              const analytics = getSearchAnalytics();
+              sendResponse({ status: 'OK', ...analytics });
+            } catch (error) {
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
+          case 'EXPORT_SEARCH_DEBUG': {
+            try {
+              const { getSearchHistory } = await import('./diagnostics');
+              const history = getSearchHistory();
+              const data = JSON.stringify({ history, exportTimestamp: Date.now() }, null, 2);
+              sendResponse({ status: 'OK', data });
+            } catch (error) {
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
+          case 'GET_SEARCH_DEBUG_ENABLED': {
+            try {
+              const { isSearchDebugEnabled } = await import('./diagnostics');
+              const enabled = isSearchDebugEnabled();
+              sendResponse({ status: 'OK', enabled });
+            } catch (error) {
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
+          case 'SET_SEARCH_DEBUG_ENABLED': {
+            try {
+              const { setSearchDebugEnabled } = await import('./diagnostics');
+              await setSearchDebugEnabled(msg.enabled ?? false);
+              sendResponse({ status: 'OK' });
+            } catch (error) {
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
           default:
             // For other messages, check if initialized
             if (!initialized) {
@@ -471,6 +512,12 @@ async function init() {
             logger.info('init', '🗄️ Opening database...');
             await openDatabase();
             logger.info('init', '✅ Database ready');
+
+            // Initialize search debug state from storage
+            logger.debug('init', 'Initializing search debug state...');
+            const { initSearchDebugState } = await import('./diagnostics');
+            await initSearchDebugState();
+            logger.debug('init', '✅ Search debug state initialized');
 
             // Check if force rebuild flag is set (after CLEAR_ALL_DATA)
             const forceRebuild = await getForceRebuildFlag();

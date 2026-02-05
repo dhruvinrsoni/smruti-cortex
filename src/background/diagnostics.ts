@@ -8,6 +8,124 @@ import { checkHealth } from './resilience';
 const logger = Logger.forComponent('Diagnostics');
 
 /**
+ * Search debug history for tracking queries and results
+ */
+interface SearchDebugEntry {
+    timestamp: number;
+    query: string;
+    resultCount: number;
+    duration: number;
+}
+
+// In-memory search history (limited to last 50 searches)
+const searchHistory: SearchDebugEntry[] = [];
+const MAX_SEARCH_HISTORY = 50;
+
+// Search debug enabled flag (persisted via chrome.storage.local)
+let searchDebugEnabled = false;
+
+/**
+ * Initialize search debug enabled state from storage
+ */
+export async function initSearchDebugState(): Promise<void> {
+    try {
+        const result = await chrome.storage.local.get('searchDebugEnabled');
+        searchDebugEnabled = result.searchDebugEnabled ?? false;
+        logger.debug('initSearchDebugState', `Search debug initialized: ${searchDebugEnabled}`);
+    } catch (error) {
+        logger.error('initSearchDebugState', 'Failed to initialize:', error);
+        searchDebugEnabled = false;
+    }
+}
+
+/**
+ * Get search debug enabled state
+ */
+export function isSearchDebugEnabled(): boolean {
+    return searchDebugEnabled;
+}
+
+/**
+ * Set search debug enabled state
+ */
+export async function setSearchDebugEnabled(enabled: boolean): Promise<void> {
+    searchDebugEnabled = enabled;
+    try {
+        await chrome.storage.local.set({ searchDebugEnabled: enabled });
+        logger.info('setSearchDebugEnabled', `Search debug ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+        logger.error('setSearchDebugEnabled', 'Failed to persist:', error);
+    }
+}
+
+/**
+ * Record a search for debugging
+ */
+export function recordSearchDebug(query: string, resultCount: number, duration: number): void {
+    // Only record if search debug is enabled
+    if (!searchDebugEnabled) {
+        return;
+    }
+    
+    searchHistory.push({
+        timestamp: Date.now(),
+        query,
+        resultCount,
+        duration,
+    });
+    
+    // Keep only last 50
+    if (searchHistory.length > MAX_SEARCH_HISTORY) {
+        searchHistory.shift();
+    }
+}
+
+/**
+ * Get search history
+ */
+export function getSearchHistory(): SearchDebugEntry[] {
+    return [...searchHistory];
+}
+
+/**
+ * Get search analytics
+ */
+export function getSearchAnalytics() {
+    if (searchHistory.length === 0) {
+        return {
+            totalSearches: 0,
+            averageResults: 0,
+            averageDuration: 0,
+            topQueries: [],
+        };
+    }
+    
+    const queryCounts = new Map<string, number>();
+    let totalResults = 0;
+    let totalDuration = 0;
+    
+    searchHistory.forEach((entry) => {
+        const normalized = entry.query.toLowerCase().trim();
+        queryCounts.set(normalized, (queryCounts.get(normalized) || 0) + 1);
+        totalResults += entry.resultCount;
+        totalDuration += entry.duration;
+    });
+    
+    const topQueries = Array.from(queryCounts.entries())
+        .map(([query, count]) => ({ query, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    
+    return {
+        totalSearches: searchHistory.length,
+        averageResults: totalResults / searchHistory.length,
+        averageDuration: totalDuration / searchHistory.length,
+        topQueries,
+        recentSearches: searchHistory.slice(-20).reverse(),
+    };
+}
+
+/**
  * Diagnostic collector interface (Open-Closed Principle)
  * Add new collectors without modifying existing code
  */

@@ -99,10 +99,13 @@ export async function ingestHistory(): Promise<void> {
         });
     }
 
+    let didHistoryIndex = false;
+
     if (needsFullReindex) {
         await performFullHistoryIndex();
         await setSetting('lastIndexedVersion', currentVersion);
         await setSetting('lastIndexedTimestamp', Date.now());
+        didHistoryIndex = true;
     } else {
         // Check if we need incremental indexing
         const lastIndexedTimestamp = await getSetting<number>('lastIndexedTimestamp', 0);
@@ -115,17 +118,31 @@ export async function ingestHistory(): Promise<void> {
                 timeSinceLastIndex: Math.round(timeSinceLastIndex / 1000 / 60),
                 minutes: 'minutes ago'
             });
-            return;
+        } else {
+            logger.info('ingestHistory', '[Indexing] Performing incremental history index');
+            await performIncrementalHistoryIndex(lastIndexedTimestamp);
+            await setSetting('lastIndexedTimestamp', now);
+            didHistoryIndex = true;
         }
+    }
 
-        logger.info('ingestHistory', '[Indexing] Performing incremental history index');
-        await performIncrementalHistoryIndex(lastIndexedTimestamp);
-        await setSetting('lastIndexedTimestamp', now);
+    // Refresh bookmarks periodically so new bookmarks are searchable
+    await SettingsManager.init();
+    const indexBookmarks = SettingsManager.getSetting('indexBookmarks');
+    if (indexBookmarks) {
+        const now = Date.now();
+        const lastBookmarksIndexed = await getSetting<number>('lastBookmarksIndexedTimestamp', 0);
+        const refreshIntervalMs = 6 * 60 * 60 * 1000; // 6 hours
+        if (needsFullReindex || (now - lastBookmarksIndexed) > refreshIntervalMs) {
+            logger.info('ingestHistory', '📚 Refreshing bookmark index');
+            await performBookmarksIndex(true);
+            await setSetting('lastBookmarksIndexedTimestamp', now);
+        }
     }
 
     const overallDuration = Date.now() - overallStartTime;
     // Only log completion summary for full re-indexes
-    if (needsFullReindex) {
+    if (needsFullReindex || didHistoryIndex) {
         logger.info('ingestHistory', `✅ Index rebuild completed in ${Math.round(overallDuration / 1000)}s`);
     }
 }

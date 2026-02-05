@@ -1,5 +1,5 @@
 #!/bin/sh
-# Docker cleanup script - removes dangling resources and unused volumes
+# Docker cleanup script - removes dangling resources and old build outputs
 
 set -e
 
@@ -14,24 +14,42 @@ NC='\033[0m'
 
 # Stop all running containers from this project
 echo "Stopping containers..."
-docker-compose down -v 2>/dev/null || true
+docker-compose down 2>/dev/null || true
 
-# Remove project-specific volumes
-PROJECT_NAME="smruticortex"
-echo "Removing project volumes..."
+# Remove orphaned containers
+echo "Removing orphaned containers..."
+docker-compose rm -f 2>/dev/null || true
 
-# Copy dist artifacts out before cleanup
-echo "Exporting dist artifacts from volume..."
-if docker volume inspect "${PROJECT_NAME}_dist-volume" >/dev/null 2>&1; then
-  mkdir -p "$(pwd)/dist" 2>/dev/null || true
-  docker run --rm -v "${PROJECT_NAME}_dist-volume:/dist" -v "$(pwd):/host" \
-    busybox sh -c "cp -r /dist/* /host/dist/ 2>/dev/null || true" 2>/dev/null || true
+# Remove dangling volumes
+echo "Removing dangling volumes..."
+DANGLING=$(docker volume ls -q -f dangling=true 2>/dev/null | wc -l)
+if [ "$DANGLING" -gt 0 ]; then
+  docker volume prune -f 2>/dev/null || true
+  echo "${GREEN}  Removed $DANGLING dangling volumes${NC}"
+else
+  echo "  No dangling volumes"
 fi
 
-docker volume ls --format '{{.Name}}' | grep "^${PROJECT_NAME}" | while read vol; do
-  echo "  Removing: $vol"
-  docker volume rm "$vol" 2>/dev/null || true
-done
+# Remove dangling images
+echo "Removing unused images..."
+docker image prune -f 2>/dev/null || true
+
+# Clean old docker-output builds (keep last 5)
+if [ -d "./docker-output" ]; then
+  echo "Cleaning old build outputs (keeping last 5)..."
+  BUILD_COUNT=$(ls -1d ./docker-output/build-* 2>/dev/null | wc -l)
+  if [ "$BUILD_COUNT" -gt 5 ]; then
+    ls -1dt ./docker-output/build-* | tail -n +6 | xargs rm -rf
+    echo "${GREEN}  Removed $((BUILD_COUNT - 5)) old builds${NC}"
+  else
+    echo "  No old builds to remove"
+  fi
+fi
+
+echo ""
+echo "${GREEN}✓ Cleanup complete${NC}"
+echo ""
+echo "Next: npm run docker-compose-build"
 
 # Remove dangling volumes (optional)
 echo "Removing dangling volumes..."
