@@ -9,6 +9,17 @@ import { Logger } from '../core/logger';
 export function setupMessaging() {
     Logger.debug('Messaging script loaded, setting up listener');
 
+    // Handle port disconnections gracefully
+    browserAPI.runtime.onConnect.addListener((port) => {
+        port.onDisconnect.addListener(() => {
+            // Suppress the lastError by checking it
+            if (browserAPI.runtime.lastError) {
+                // Port disconnected - this is expected when page unloads
+                Logger.trace('Port disconnected (expected):', browserAPI.runtime.lastError.message);
+            }
+        });
+    });
+
     browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         Logger.debug('Message listener triggered with message:', msg);
         Logger.trace('Sender:', sender);
@@ -21,7 +32,12 @@ export function setupMessaging() {
                         Logger.debug('Handling SEARCH_QUERY for:', msg.query);
                         const results = await runSearch(msg.query);
                         Logger.debug('Search completed, results count:', results.length);
-                        sendResponse({ results });
+                        // Check if port is still open before responding
+                        try {
+                            sendResponse({ results });
+                        } catch (err) {
+                            Logger.trace('Failed to send response (port may be closed)');
+                        }
                         break;
                     }
 

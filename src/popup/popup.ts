@@ -292,6 +292,13 @@ function initializePopup() {
           return;
         }
         runtime.sendMessage(msg, (resp: any) => {
+          // If we got a response, resolve it (even if lastError is set due to bfcache)
+          // bfcache navigation causes port closure after response is sent
+          if (resp) {
+            resolve(resp);
+            return;
+          }
+          // Only reject on actual errors (no response + lastError)
           if (chrome && chrome.runtime && chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message || 'Runtime error'));
             return;
@@ -425,11 +432,20 @@ function initializePopup() {
         const bookmarkIndicator = (item as any).isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
         title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
 
+        details.appendChild(title);
+
+        // Add bookmark folder path if available
+        if ((item as any).bookmarkFolders && (item as any).bookmarkFolders.length > 0) {
+          const folderPath = document.createElement('div');
+          folderPath.className = 'bookmark-folder';
+          folderPath.innerHTML = '📁 ' + (item as any).bookmarkFolders.join(' › ');
+          details.appendChild(folderPath);
+        }
+
         const url = document.createElement('div');
         url.className = 'card-url';
         url.innerHTML = highlightMatches(item.url, currentQuery);
 
-        details.appendChild(title);
         details.appendChild(url);
         card.appendChild(fav);
         card.appendChild(details);
@@ -467,11 +483,20 @@ function initializePopup() {
         const bookmarkIndicator = (item as any).isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
         title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
 
+        details.appendChild(title);
+
+        // Add bookmark folder path if available
+        if ((item as any).bookmarkFolders && (item as any).bookmarkFolders.length > 0) {
+          const folderPath = document.createElement('div');
+          folderPath.className = 'bookmark-folder';
+          folderPath.innerHTML = '📁 ' + (item as any).bookmarkFolders.join(' › ');
+          details.appendChild(folderPath);
+        }
+
         const url = document.createElement('div');
         url.className = 'result-url';
         url.innerHTML = highlightMatches(item.url, currentQuery);
 
-        details.appendChild(title);
         details.appendChild(url);
         li.appendChild(fav);
         li.appendChild(details);
@@ -1536,6 +1561,76 @@ function initializePopup() {
         diagBtn.textContent = '📋 Export Diagnostics';
       });
     }
+
+    // Search Debug Handlers
+    const searchDebugCheckbox = modal.querySelector('#modal-searchDebugEnabled') as HTMLInputElement;
+    if (searchDebugCheckbox) {
+      // Load current state
+      sendMessage({ type: 'GET_SEARCH_DEBUG_ENABLED' }).then((response) => {
+        if (response?.enabled !== undefined) {
+          searchDebugCheckbox.checked = response.enabled;
+        }
+      });
+
+      // Toggle debug mode
+      searchDebugCheckbox.addEventListener('change', async () => {
+        await sendMessage({
+          type: 'SET_SEARCH_DEBUG_ENABLED',
+          enabled: searchDebugCheckbox.checked,
+        });
+        showToast(searchDebugCheckbox.checked ? '✅ Debug mode enabled' : '🔇 Debug mode disabled');
+      });
+    }
+
+    // View Analytics Modal
+    const analyticsBtn = modal.querySelector('#view-search-analytics') as HTMLButtonElement;
+    if (analyticsBtn) {
+      analyticsBtn.addEventListener('click', () => {
+        showSearchAnalyticsModal();
+      });
+    }
+
+    // Export Debug Data
+    const exportDebugBtn = modal.querySelector('#export-search-debug') as HTMLButtonElement;
+    if (exportDebugBtn) {
+      exportDebugBtn.addEventListener('click', async () => {
+        exportDebugBtn.disabled = true;
+        exportDebugBtn.textContent = '💾 Exporting...';
+        try {
+          const response = await sendMessage({ type: 'EXPORT_SEARCH_DEBUG' });
+          if (response?.status === 'OK' && response.data) {
+            const blob = new Blob([response.data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `smruticortex-search-debug-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('✅ Debug data exported!');
+          } else {
+            showToast('❌ No debug data available');
+          }
+        } catch (err) {
+          showToast('❌ Error exporting debug data');
+          console.error('Debug export error:', err);
+        }
+        exportDebugBtn.disabled = false;
+        exportDebugBtn.textContent = '💾 Export Debug Data';
+      });
+    }
+
+    // Clear Debug History
+    const clearDebugBtn = modal.querySelector('#clear-search-debug') as HTMLButtonElement;
+    if (clearDebugBtn) {
+      clearDebugBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all search debug history?')) {
+          await sendMessage({ type: 'CLEAR_SEARCH_DEBUG' });
+          showToast('🗑️ Debug history cleared');
+        }
+      });
+    }
   }
 
   // Load performance metrics from service worker
@@ -1631,5 +1726,91 @@ function initializePopup() {
         sendResponse({ status: 'ok' });
       }
     });
+  }
+
+  // Show search analytics modal
+  async function showSearchAnalyticsModal() {
+    const modal = document.getElementById('search-analytics-modal');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+
+    // Load analytics data
+    try {
+      const response = await sendMessage({ type: 'GET_SEARCH_ANALYTICS' });
+      if (response?.status === 'OK') {
+        const { analytics, history } = response;
+
+        // Update summary stats
+        document.getElementById('analytics-total')!.textContent = analytics.totalSearches.toString();
+        document.getElementById('analytics-avg-results')!.textContent = analytics.averageResultCount.toFixed(1);
+        document.getElementById('analytics-avg-duration')!.textContent = `${analytics.averageSearchDuration.toFixed(2)} ms`;
+
+        // Top queries
+        const topQueriesDiv = document.getElementById('analytics-top-queries');
+        if (topQueriesDiv && analytics.topQueries.length > 0) {
+          topQueriesDiv.innerHTML = analytics.topQueries
+            .map(({ query, count }) => `
+              <div class="query-item">
+                <span class="query-text">"${query}"</span>
+                <span class="query-count">${count}x</span>
+              </div>
+            `)
+            .join('');
+        } else if (topQueriesDiv) {
+          topQueriesDiv.innerHTML = '<p style="text-align:center;color:#666;">No queries yet</p>';
+        }
+
+        // Query length distribution
+        const queryLengthDiv = document.getElementById('analytics-query-length');
+        if (queryLengthDiv) {
+          const lengths = Object.keys(analytics.queryLengthDistribution).map(Number).sort((a, b) => a - b);
+          queryLengthDiv.innerHTML = lengths
+            .map((len) => {
+              const count = analytics.queryLengthDistribution[len];
+              const percent = (count / analytics.totalSearches) * 100;
+              return `
+                <div class="length-bar">
+                  <span class="length-label">${len} chars</span>
+                  <div class="length-bar-bg">
+                    <div class="length-bar-fill" style="width: ${percent}%"></div>
+                  </div>
+                  <span class="length-count">${count}</span>
+                </div>
+              `;
+            })
+            .join('');
+        }
+
+        // Recent searches
+        const recentDiv = document.getElementById('analytics-recent-searches');
+        if (recentDiv && history.length > 0) {
+          recentDiv.innerHTML = history
+            .reverse()
+            .map((entry: any) => `
+              <div class="search-entry">
+                <div class="search-query">"${entry.query}"</div>
+                <div class="search-meta">
+                  ${entry.resultCount} results · ${entry.performance.totalDuration.toFixed(2)}ms · 
+                  ${new Date(entry.timestamp).toLocaleTimeString()}
+                </div>
+              </div>
+            `)
+            .join('');
+        } else if (recentDiv) {
+          recentDiv.innerHTML = '<p style="text-align:center;color:#666;">No recent searches</p>';
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load analytics:', err);
+    }
+
+    // Close button
+    const closeBtn = modal.querySelector('#analytics-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        modal.classList.add('hidden');
+      });
+    }
   }
 }

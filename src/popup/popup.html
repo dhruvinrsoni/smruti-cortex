@@ -373,6 +373,25 @@
             <button class="action-btn secondary" id="export-diagnostics" title="Export diagnostic data for bug reports">📋 Export Diagnostics</button>
           </div>
         </div>
+        <div class="settings-section">
+          <h3>🔍 Search Debug Mode</h3>
+          <p>Capture search queries, results, and scoring details for algorithm analysis.</p>
+          <div class="setting-options">
+            <label class="setting-option checkbox-option">
+              <input type="checkbox" id="modal-searchDebugEnabled">
+              <span class="checkbox-indicator"></span>
+              <div class="option-content">
+                <strong>Enable Search Debug Logging</strong>
+                <small>Records all searches with scoring details and performance metrics</small>
+              </div>
+            </label>
+          </div>
+          <div class="setting-options">
+            <button class="action-btn secondary" id="view-search-analytics" title="View search analytics and history">📈 View Analytics</button>
+            <button class="action-btn secondary" id="export-search-debug" title="Export search debug data as JSON">💾 Export Debug Data</button>
+            <button class="action-btn warning" id="clear-search-debug" title="Clear all debug history">🗑️ Clear Debug History</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -443,6 +462,53 @@
         <div class="perf-section">
           <div class="perf-actions">
             <button class="action-btn secondary" id="perf-refresh" title="Refresh metrics">🔄 Refresh</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search Analytics Modal -->
+  <div id="search-analytics-modal" class="settings-modal hidden">
+    <div class="settings-modal-content performance-modal-content">
+      <div class="settings-header">
+        <h2>📈 Search Analytics</h2>
+        <button id="analytics-close" class="settings-close" title="Close">×</button>
+      </div>
+      <div class="settings-content">
+        <div class="perf-section">
+          <h3>📊 Summary</h3>
+          <div class="perf-grid">
+            <div class="perf-stat">
+              <span class="perf-label">Total Searches</span>
+              <span class="perf-value" id="analytics-total">--</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Avg. Results</span>
+              <span class="perf-value" id="analytics-avg-results">--</span>
+            </div>
+            <div class="perf-stat">
+              <span class="perf-label">Avg. Duration</span>
+              <span class="perf-value" id="analytics-avg-duration">-- ms</span>
+            </div>
+          </div>
+        </div>
+        <div class="perf-section">
+          <h3>🔥 Top Queries</h3>
+          <div id="analytics-top-queries" class="top-queries-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+        <div class="perf-section">
+          <h3>📏 Query Length Distribution</h3>
+          <div id="analytics-query-length" class="query-length-chart">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+        <div class="perf-section">
+          <h3>🔍 Recent Searches</h3>
+          <div id="analytics-recent-searches" class="recent-searches-list">
+            <!-- Dynamically populated -->
           </div>
         </div>
       </div>

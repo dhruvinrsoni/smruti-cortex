@@ -3,7 +3,7 @@ import { build } from "esbuild";
 import { resolve } from "path";
 
 const cwd = resolve(".");
-const outdir = resolve(cwd, "dist");
+const outdir = process.env.OUTPUT_DIR ? resolve(process.env.OUTPUT_DIR, "dist") : resolve(cwd, "dist");
 
 const common = {
   bundle: true,

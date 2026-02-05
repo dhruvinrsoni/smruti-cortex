@@ -462,10 +462,14 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       searchPort.onDisconnect.addListener(() => {
         const lastError = chrome.runtime.lastError;
-        if (lastError) {
-          console.warn('[SmrutiCortex] Search port disconnected with error:', lastError.message);
-        } else {
-          perfLog('Search port disconnected');
+        // Only log errors if extension context is still valid
+        // bfcache navigation causes port closure - this is expected and not an error
+        if (isExtensionContextValid()) {
+          if (lastError) {
+            console.warn('[SmrutiCortex] Search port disconnected with error:', lastError.message);
+          } else {
+            perfLog('Search port disconnected');
+          }
         }
         searchPort = null;
         

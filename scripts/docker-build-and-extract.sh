@@ -28,37 +28,43 @@ docker cp "${CONTAINER_NAME}:/app/dist/." ./dist/ 2>/dev/null || \
 
 echo "✅ Build complete"
 #!/bin/sh
-# Docker build wrapper - runs build in container and extracts dist/ to host
+# Docker build wrapper with timestamped output directory
 
 set -e
 
-CONTAINER_NAME="smruticortex-build-$(date +%s)"
+# Create timestamped output directory
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+OUTPUT_DIR="./docker-output/build-${TIMESTAMP}"
+mkdir -p "$OUTPUT_DIR"
+
 echo "📦 Building with Docker..."
+echo "📁 Output directory: $OUTPUT_DIR"
 echo ""
 
-# Run build WITHOUT --rm so we can extract artifacts
-docker-compose run --name "$CONTAINER_NAME" build
+# Export env var for docker-compose to use
+export DOCKER_OUTPUT_DIR="$OUTPUT_DIR"
+
+# Run build - artifacts will be written to $OUTPUT_DIR/dist automatically
+docker-compose run --rm build
 BUILD_EXIT=$?
 
 if [ $BUILD_EXIT -eq 0 ]; then
   echo ""
-  echo "📁 Extracting dist/ from container..."
-  mkdir -p dist
   
-  # Extract dist directory
-  if docker cp "${CONTAINER_NAME}:/app/dist/." ./dist/ 2>/dev/null; then
-    echo "✅ Artifacts extracted to ./dist/"
+  # Copy from output dir to main dist/ for immediate use
+  if [ -d "$OUTPUT_DIR/dist" ]; then
+    echo "📁 Copying artifacts to ./dist/..."
+    rm -rf ./dist 2>/dev/null || true
+    cp -r "$OUTPUT_DIR/dist" ./dist
+    echo "✅ Artifacts available at:"
+    echo "   - ./dist/ (main output)"
+    echo "   - $OUTPUT_DIR/dist/ (timestamped backup)"
   else
-    echo "⚠️  Warning: Could not extract dist/ (container may not have build output)"
+    echo "⚠️  No dist/ found in output directory"
   fi
-  
-  # Cleanup container
-  echo "🧹 Cleaning up container..."
-  docker-compose rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 else
-  # Build failed, still try to extract logs
   echo "❌ Build failed with exit code $BUILD_EXIT"
-  docker-compose rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  echo "📁 Check logs in: $OUTPUT_DIR/"
   exit $BUILD_EXIT
 fi
 

@@ -22,6 +22,9 @@ lib-cov
 coverage
 *.lcov
 
+# Docker build outputs (timestamped)
+docker-output/
+
 # nyc test coverage
 .nyc_output
 
