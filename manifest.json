@@ -3,16 +3,13 @@
   "name": "SmrutiCortex",
   "short_name": "SmrutiCortex",
   "description": "Everything-like instant search for your browser history — SmrutiCortex indexes your browsing memory and retrieves any URL instantly.",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "permissions": [
     "history",
     "bookmarks",
     "storage",
-    "scripting",
-    "activeTab",
     "tabs",
-    "alarms",
-    "commands"
+    "alarms"
   ],
   "optional_host_permissions": [
     "<all_urls>"

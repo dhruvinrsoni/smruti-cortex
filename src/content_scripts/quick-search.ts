@@ -598,7 +598,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     try {
       const savedSort = localStorage.getItem('smruti-sort-by') || 'best-match';
       currentSortIndex = sortOptions.findIndex(opt => opt.value === savedSort);
-      if (currentSortIndex === -1) currentSortIndex = 0;
+      if (currentSortIndex === -1) {currentSortIndex = 0;}
     } catch {
       // Sandboxed context - use default
       currentSortIndex = 0;
@@ -1298,9 +1298,9 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     const getCurrentGroupIndex = (): number => {
       const currentFocused = getFocusedElement() as HTMLElement;
       
-      if (currentFocused === inputEl) return 0;
-      if (currentFocused === settingsBtn) return 1;
-      if (currentFocused && currentFocused.classList?.contains('result')) return 2;
+      if (currentFocused === inputEl) {return 0;}
+      if (currentFocused === settingsBtn) {return 1;}
+      if (currentFocused && currentFocused.classList?.contains('result')) {return 2;}
       
       return -1; // Unknown/not focused
     };

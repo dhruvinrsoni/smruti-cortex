@@ -184,11 +184,8 @@ You have full control to:
 - `history`: Read browser history for indexing
 - `bookmarks`: Read bookmarks for search integration
 - `storage`: Save settings and indexed data locally
-- `scripting`: Extract page metadata (optional)
-- `tabs`: Open search results
-- `activeTab`: Access current page for search
-- `alarms`: Background indexing updates
-- `commands`: Keyboard shortcuts
+- `tabs`: Query active tab and send messages to content scripts
+- `alarms`: Keep service worker alive for background indexing
 
 **8. Open Source**
 
@@ -221,11 +218,8 @@ Chrome requires explaining why each permission is needed:
 | `history` | **Required** to read and index browser history for search functionality |
 | `bookmarks` | **Required** to index bookmarks for unified search (v6.0) |
 | `storage` | **Required** to store settings and indexed data locally for fast search |
-| `scripting` | **Required** to inject inline search overlay on pages |
-| `tabs` | **Required** to open search results in current/new/background tabs |
-| `activeTab` | **Required** to access currently active tab for inline search overlay and keyboard shortcuts |
-| `alarms` | **Required** to schedule background jobs to keep search index up-to-date |
-| `commands` | **Required** to register keyboard shortcuts (Ctrl+Shift+S) |
+| `tabs` | **Required** to query active tab and send messages to content scripts for inline overlay |
+| `alarms` | **Required** to keep service worker alive and schedule background indexing updates |
 | `<all_urls>` (optional) | **Optional permission** - Users can optionally grant this to enable metadata extraction (page titles, keywords) for improved search relevance. This feature is OFF by default and must be enabled in Settings. The extension works fully without this permission. |
 
 ### 🆕 Optional Host Permissions Strategy
@@ -239,7 +233,7 @@ Chrome requires explaining why each permission is needed:
 - ✅ Faster Chrome Store approval (no "Broad Host Permissions" warning)
 
 **User Experience:**
-1. Extension installs with minimal permissions (history, bookmarks, storage, activeTab)
+1. Extension installs with minimal permissions (history, bookmarks, storage, tabs, alarms)
 2. Search works instantly with browser history data
 3. Users can enable "Enhanced Metadata" in Settings (requires granting optional permission)
 4. Once granted, extension extracts titles/keywords from visited pages for better search
@@ -446,12 +440,9 @@ The extension requires these permissions for core functionality:
 - **history:** Read browser history for indexing and search
 - **bookmarks:** Read bookmarks for unified search
 - **storage:** Save settings and indexed data locally
-- **scripting:** Inject content scripts for inline overlay and optional metadata extraction
-- **tabs:** Open search results in current/new/background tabs
-- **activeTab:** Access current page for inline search overlay
-- **alarms:** Schedule background indexing updates
-- **commands:** Register keyboard shortcuts (Ctrl+Shift+S)
-- **<all_urls>:** Extract metadata from pages user visits (local processing only)
+- **tabs:** Query active tab and send messages to content scripts for inline overlay
+- **alarms:** Keep service worker alive and schedule background indexing updates
+- **<all_urls>:** (Optional) Extract metadata from pages user visits (local processing only)
 
 #### 8. Third-Party Data Sharing
 

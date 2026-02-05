@@ -168,6 +168,27 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         const aiOnlyTokens = searchTokens.filter(t => !originalTokens.includes(t));
         const hasAiMatch = aiExpanded && aiOnlyTokens.some(t => haystack.includes(t));
 
+        // BOOKMARK STRICT MATCHING: Only show bookmarks when there's a strong match
+        // This prevents bookmark flooding when typing partial words like "github"
+        const isBookmark = !!(item as any).isBookmark;
+        let bookmarkStrictMatch = true; // Default: non-bookmarks pass through
+        
+        if (isBookmark) {
+            // For bookmarks, require at least one of:
+            // 1. Full word match (word boundary) for original query terms
+            // 2. Literal substring match for the full query (3+ chars)
+            // 3. All original tokens must match (not just some)
+            const allOriginalTokensMatch = originalTokens.every(token => haystack.includes(token));
+            const hasWordBoundaryMatch = originalTokens.some(token => {
+                // Check for word boundary match (token surrounded by non-alphanumeric or start/end)
+                const wordBoundaryRegex = new RegExp(`(^|[^a-z0-9])${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
+                return wordBoundaryRegex.test(haystack);
+            });
+            const hasStrongLiteralMatch = q.length >= 3 && hasLiteralMatch;
+            
+            bookmarkStrictMatch = allOriginalTokensMatch || hasWordBoundaryMatch || hasStrongLiteralMatch;
+        }
+
         // Calculate score using all scorers
         let score = 0;
         const scorerDetails: Array<{ name: string; score: number; weight: number }> = [];
@@ -200,10 +221,11 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         // Include items based on matching criteria
         // Default: only include items that actually match the query
         // If showNonMatchingResults is enabled, include all items with score > 0.01
+        // For bookmarks: apply stricter matching to prevent flooding
         const meetsScoreThreshold = score > 0.01;
         const shouldInclude = showNonMatchingResults 
-            ? meetsScoreThreshold 
-            : (meetsScoreThreshold && hasAnyMatch);
+            ? (meetsScoreThreshold && bookmarkStrictMatch)
+            : (meetsScoreThreshold && hasAnyMatch && bookmarkStrictMatch);
 
         if (shouldInclude) {
             results.push({ 

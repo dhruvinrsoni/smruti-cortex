@@ -88,11 +88,11 @@ export function handleCyclicTabNavigation(
   getCurrentGroupIndex: () => number,
   backward: boolean = false
 ): void {
-  if (groups.length === 0) return;
+  if (groups.length === 0) {return;}
 
   // Filter out groups that should be skipped
   const activeGroups = groups.filter(g => !g.shouldSkip || !g.shouldSkip());
-  if (activeGroups.length === 0) return;
+  if (activeGroups.length === 0) {return;}
 
   // Get current position
   let currentIndex = getCurrentGroupIndex();
