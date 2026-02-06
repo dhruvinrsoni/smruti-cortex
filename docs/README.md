@@ -13,7 +13,7 @@ site/               ← Source files (edit here)
   └── script.js     ← Interactivity & theme toggle
 
 docs/               ← Deployment target (GitHub Pages)
-  ├── privacy.html  ← CRITICAL: Never delete this file
+  ├── privacy.html  ← Auto-generated from `site/privacy.html` (preserved on deploy)
   ├── index.html    ← Auto-deployed from site/
   ├── styles.css    ← Auto-deployed from site/
   └── script.js     ← Auto-deployed from site/
@@ -64,12 +64,11 @@ Open `docs/index.html` in browser to preview.
 
 ## 🔒 Privacy Policy Protection
 
-**CRITICAL:** The file `docs/privacy.html` is required by Chrome Web Store and must NEVER be deleted.
+**CRITICAL:** The privacy policy is sourced from `site/privacy.html` and will be copied to `docs/privacy.html` during deployment. Do not remove `site/privacy.html`.
 
-All deployment scripts (automated & manual) are designed to preserve this file:
-- GitHub Actions workflow backs up before deployment
-- `build-site.mjs` excludes from cleanup
-- Verification step fails if privacy.html is missing
+Deployment scripts will:
+- Prefer existing `docs/privacy.html` backup when present, otherwise copy `site/privacy.html` into `docs/`.
+- Preserve the privacy URL at `docs/privacy.html` to remain stable for the Chrome Web Store.
 
 **Privacy URL:** https://dhruvinrsoni.github.io/smruti-cortex/privacy.html
 
