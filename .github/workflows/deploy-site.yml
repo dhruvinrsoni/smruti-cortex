@@ -27,17 +27,17 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
       
-      - name: Backup privacy.html (CRITICAL)
+      - name: Backup privacy.html (if present)
         run: |
+          # If docs/privacy.html already exists, back it up. If not, we'll rely on site/privacy.html.
           if [ -f docs/privacy.html ]; then
             cp docs/privacy.html /tmp/privacy.html.backup
             cp docs/privacy.html /tmp/privacy.html.backup2
             echo "✅ Privacy policy backed up (2 copies)"
             echo "PRIVACY_BACKUP_EXISTS=true" >> $GITHUB_ENV
           else
-            echo "❌ ERROR: No existing privacy.html found"
+            echo "⚠️ No existing docs/privacy.html found. Will use site/privacy.html if present."
             echo "PRIVACY_BACKUP_EXISTS=false" >> $GITHUB_ENV
-            exit 1
           fi
       
       - name: Clean docs directory (except privacy.html)
@@ -55,19 +55,20 @@ jobs:
           cp -r site/* docs/
           echo "✅ Copied site files to docs/"
       
-      - name: Restore privacy.html (CRITICAL - NEVER FAIL)
+      - name: Restore or ensure privacy.html (CRITICAL - NEVER FAIL)
         run: |
-          # Try primary backup
+          # Priority: existing backup -> site/privacy.html -> error
           if [ -f /tmp/privacy.html.backup ]; then
             cp /tmp/privacy.html.backup docs/privacy.html
             echo "✅ Privacy policy restored from primary backup"
-          # Try secondary backup if primary fails
           elif [ -f /tmp/privacy.html.backup2 ]; then
             cp /tmp/privacy.html.backup2 docs/privacy.html
             echo "⚠️ Privacy policy restored from secondary backup"
-          # CRITICAL FAILURE - abort deployment
+          elif [ -f site/privacy.html ]; then
+            cp site/privacy.html docs/privacy.html
+            echo "✅ Privacy policy copied from site/privacy.html"
           else
-            echo "❌ CRITICAL: Privacy policy backup failed!"
+            echo "❌ CRITICAL: No privacy policy found in backups or site/privacy.html"
             echo "🚨 Aborting deployment to prevent privacy URL breakage"
             exit 1
           fi
