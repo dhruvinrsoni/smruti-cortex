@@ -1,6 +1,12 @@
 name: Build & Release
 
 on:
+  workflow_dispatch:  # Allow manual triggering of the workflow
+    inputs:
+      reason:
+        description: 'Reason for triggering the workflow'
+        required: false
+        default: 'Manual trigger'
   push:
     branches: [main]
     tags: ['v*']
