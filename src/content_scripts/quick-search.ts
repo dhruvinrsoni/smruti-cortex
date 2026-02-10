@@ -973,6 +973,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
               if (searchPort) {
                 try {
                   searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
+                  // Check for runtime errors after async operation
+                  if (chrome.runtime.lastError) {
+                    console.warn('[SmrutiCortex] Reconnect postMessage error:', chrome.runtime.lastError.message);
+                    searchPort = null;
+                    showToast('Reconnect failed. Please reload the page.');
+                    return;
+                  }
                   showToast('Reconnected!');
                 } catch (err) {
                   console.error('[SmrutiCortex] Failed to send query after reconnect:', err);
@@ -995,6 +1002,13 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       try {
         searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
         perfLog('Search query sent via port', t0);
+        // Check for runtime errors after async operation
+        if (chrome.runtime.lastError) {
+          console.warn('[SmrutiCortex] Port message error (likely bfcache):', chrome.runtime.lastError.message);
+          searchPort = null;
+          openSearchPort();
+          return;
+        }
       } catch (err) {
         console.warn('[SmrutiCortex] Failed to send via port, trying to reconnect:', err);
         searchPort = null;
@@ -1004,6 +1018,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           try {
             searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
             perfLog('Search query sent via reconnected port', t0);
+            // Check for runtime errors after async operation
+            if (chrome.runtime.lastError) {
+              console.warn('[SmrutiCortex] Reconnected port message error:', chrome.runtime.lastError.message);
+              searchPort = null;
+            }
             return;
           } catch {}
         }
