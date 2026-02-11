@@ -95,6 +95,36 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  // Track context invalidation recovery attempts
+  let contextRecoveryAttempts = 0;
+  const MAX_CONTEXT_RECOVERY_ATTEMPTS = 3;
+  const CONTEXT_RECOVERY_DELAY = 500; // ms
+
+  // Helper: Attempt to recover from context invalidation
+  async function attemptContextRecovery(): Promise<boolean> {
+    if (contextRecoveryAttempts >= MAX_CONTEXT_RECOVERY_ATTEMPTS) {
+      return false;
+    }
+    
+    contextRecoveryAttempts++;
+    
+    // Wait before checking again (exponential backoff)
+    const delay = CONTEXT_RECOVERY_DELAY * Math.pow(2, contextRecoveryAttempts - 1);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    // Check if context is now valid
+    if (isExtensionContextValid()) {
+      contextRecoveryAttempts = 0; // Reset on success
+      // Try to reopen search port
+      if (!searchPort) {
+        openSearchPort();
+      }
+      return true;
+    }
+    
+    return false;
+  }
+
   // Helper: Sanitize query string to prevent issues with special characters or malformed URLs
   function sanitizeQuery(query: string): string {
     if (!query) {return '';}
@@ -377,6 +407,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // Fetch settings (non-blocking). This populates `cachedSettings` and adjusts debounce.
   function fetchSettings(): void {
+    if (!chrome.runtime?.id) {
+      // Extension context invalidated
+      return;
+    }
     try {
       chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
         try {
@@ -933,7 +967,35 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SEARCH =====
   function handleInput(): void {
-    if (debounceTimer) {clearTimeout(debounceTimer);}    
+    if (debounceTimer) {clearTimeout(debounceTimer);}
+    
+    // Early check: If extension context is already invalid, attempt recovery immediately
+    if (!isExtensionContextValid()) {
+      perfLog('Extension context invalid during input - attempting silent recovery');
+      attemptContextRecovery().then(recovered => {
+        if (recovered) {
+          perfLog('Context recovered successfully');
+          // Continue with search after recovery
+          const query = inputEl?.value?.trim() || '';
+          if (query.length > 0) {
+            performSearch(query);
+          }
+        } else {
+          // Show error after failed recovery attempts
+          renderErrorResults(
+            '🔄 Extension was updated. Please reload this page to continue searching.',
+            () => window.location.reload()
+          );
+        }
+      }).catch(() => {
+        renderErrorResults(
+          '🔄 Extension was updated. Please reload this page to continue searching.',
+          () => window.location.reload()
+        );
+      });
+      return;
+    }
+    
     debounceTimer = window.setTimeout(() => {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
@@ -960,40 +1022,31 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Check extension context validity first
     if (!isExtensionContextValid()) {
-      console.warn('[SmrutiCortex] Cannot search: extension context invalidated');
+      perfLog('Extension context invalid during search - attempting recovery');
       currentResults = [];
-      renderErrorResults(
-        '⚠️ Extension disconnected. The extension may have been reloaded or disabled.',
-        () => {
-          // Reconnect handler
-          if (isExtensionContextValid()) {
-            openSearchPort();
-            // Retry search after a brief delay
-            setTimeout(() => {
-              if (searchPort) {
-                try {
-                  searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
-                  // Check for runtime errors after async operation
-                  if (chrome.runtime.lastError) {
-                    console.warn('[SmrutiCortex] Reconnect postMessage error:', chrome.runtime.lastError.message);
-                    searchPort = null;
-                    showToast('Reconnect failed. Please reload the page.');
-                    return;
-                  }
-                  showToast('Reconnected!');
-                } catch (err) {
-                  console.error('[SmrutiCortex] Failed to send query after reconnect:', err);
-                  showToast('Reconnect failed. Please reload the page.');
-                }
-              } else {
-                showToast('Reconnect failed. Please reload the page.');
-              }
-            }, 300);
-          } else {
-            showToast('Extension still unavailable. Try reloading the page.');
-          }
+      
+      // Attempt silent recovery first
+      attemptContextRecovery().then(recovered => {
+        if (recovered) {
+          perfLog('Context recovered - retrying search');
+          showToast('Extension reconnected');
+          // Retry the search
+          performSearch(query);
+        } else {
+          // Show error only after recovery attempts fail
+          console.warn('[SmrutiCortex] Cannot search: extension context invalidated after recovery attempts');
+          renderErrorResults(
+            '🔄 Extension was updated. Please reload this page to continue searching.',
+            () => window.location.reload()
+          );
         }
-      );
+      }).catch(() => {
+        console.warn('[SmrutiCortex] Context recovery failed');
+        renderErrorResults(
+          '🔄 Extension was updated. Please reload this page to continue searching.',
+          () => window.location.reload()
+        );
+      });
       return;
     }
 
