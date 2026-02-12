@@ -71,7 +71,8 @@
 // INSTRUCTIONS:
 // 1. Get Chrome Web Store URL from: https://chrome.google.com/webstore/developer/dashboard
 // 2. Get Edge Add-ons URL from: https://partner.microsoft.com/dashboard
-// 3. Replace YOUR_EXTENSION_ID with actual store IDs
+// 3. Use the canonical store URL or extension ID. Example Chrome Web Store URL:
+//    https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi
 // 4. Remove alert() calls (lines 104-114)
 // 5. Uncomment window.open() calls
 ```
