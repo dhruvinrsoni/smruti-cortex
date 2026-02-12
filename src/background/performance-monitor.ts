@@ -107,7 +107,7 @@ class PerformanceTracker {
      * Get current performance metrics
      */
     getMetrics(): PerformanceMetrics {
-        const memory = (performance as any).memory;
+        const memory = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
         const now = Date.now();
         
         // Calculate search statistics
