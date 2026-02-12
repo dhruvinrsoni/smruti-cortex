@@ -216,6 +216,16 @@ async function initScreenshotStrip(){
             track.appendChild(img);
             items.push(img);
         }
+        // Replace demo placeholder images with first available screenshots
+        try{
+            const demoImgs = Array.from(document.querySelectorAll('.demo-local-img'));
+            for (let i = 0; i < demoImgs.length && i < list.length; i++){
+                const name = list[i];
+                if (typeof name !== 'string') continue;
+                demoImgs[i].src = './screenshots/' + encodeURIComponent(name).replace(/%2F/g, '/');
+                demoImgs[i].alt = `Screenshot: ${name}`;
+            }
+        }catch(e){}
         if (items.length === 0){ emptyMsg.style.display = 'block'; return; }
 
         // Duplicate items for seamless loop
@@ -255,7 +265,10 @@ async function initScreenshotStrip(){
 
     }catch(err){
         emptyMsg.style.display = 'block';
-        console.warn('[screenshot-strip] failed to load list.json', err);
+        // Silent failure when list.json is missing - avoid noisy console errors in environments without screenshots
+        if (typeof console !== 'undefined' && console.debug) {
+            console.debug('[screenshot-strip] no screenshots available or failed to load list.json');
+        }
     }
 }
 
