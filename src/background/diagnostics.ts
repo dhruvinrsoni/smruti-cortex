@@ -131,7 +131,7 @@ export function getSearchAnalytics() {
  */
 export interface IDiagnosticCollector {
     name: string;
-    collect(): Promise<Record<string, any>>;
+    collect(): Promise<Record<string, unknown>>;
 }
 
 /**
@@ -152,7 +152,7 @@ export function registerCollector(collector: IDiagnosticCollector): void {
  */
 const systemInfoCollector: IDiagnosticCollector = {
     name: 'system',
-    async collect(): Promise<Record<string, any>> {
+    async collect(): Promise<Record<string, unknown>> {
         const manifest = chrome.runtime.getManifest();
         
         return {
@@ -168,7 +168,7 @@ const systemInfoCollector: IDiagnosticCollector = {
                 languages: navigator.languages,
                 onLine: navigator.onLine,
                 hardwareConcurrency: navigator.hardwareConcurrency,
-                deviceMemory: (navigator as any).deviceMemory || 'unknown',
+                deviceMemory: (navigator as unknown as { deviceMemory?: number }).deviceMemory || 'unknown',
             },
             timestamp: new Date().toISOString(),
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -190,8 +190,8 @@ const storageCollector: IDiagnosticCollector = {
                 quota,
                 indexStats: {
                     totalItems: items.length,
-                    withMetadata: items.filter(i => i.metaDescription || (i.metaKeywords && i.metaKeywords.length > 0)).length,
-                    withBookmarks: items.filter(i => (i as any).isBookmark).length,
+                    withMetadata: items.filter(i => Boolean(i.metaDescription) || (Array.isArray(i.metaKeywords) && i.metaKeywords.length > 0)).length,
+                    withBookmarks: items.filter(i => Boolean(i.isBookmark)).length,
                     uniqueHostnames: new Set(items.map(i => i.hostname)).size,
                 },
             };
@@ -206,7 +206,7 @@ const storageCollector: IDiagnosticCollector = {
  */
 const settingsCollector: IDiagnosticCollector = {
     name: 'settings',
-    async collect(): Promise<Record<string, any>> {
+    async collect(): Promise<Record<string, unknown>> {
         try {
             await SettingsManager.init();
             const settings = SettingsManager.getSettings();
@@ -227,7 +227,7 @@ const settingsCollector: IDiagnosticCollector = {
  */
 const healthCollector: IDiagnosticCollector = {
     name: 'health',
-    async collect(): Promise<Record<string, any>> {
+    async collect(): Promise<Record<string, unknown>> {
         try {
             const health = await checkHealth();
             return health;
@@ -242,8 +242,8 @@ const healthCollector: IDiagnosticCollector = {
  */
 const performanceCollector: IDiagnosticCollector = {
     name: 'performance',
-    async collect(): Promise<Record<string, any>> {
-        const memory = (performance as any).memory;
+    async collect(): Promise<Record<string, unknown>> {
+        const memory = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
         
         return {
             timing: {
@@ -272,7 +272,7 @@ registerCollector(performanceCollector);
 export interface DiagnosticReport {
     generatedAt: string;
     version: string;
-    collectors: { [name: string]: Record<string, any> };
+    collectors: { [name: string]: Record<string, unknown> };
 }
 
 /**
