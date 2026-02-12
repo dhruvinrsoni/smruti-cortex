@@ -234,6 +234,96 @@ async function initScreenshotStrip(){
             track.appendChild(clone);
         }
 
+        // Make each original item focusable and record index for lightbox
+        items.forEach((el, idx) => {
+            el.tabIndex = 0;
+            el.dataset.index = String(idx);
+            // also set title for better a11y
+            if (!el.alt || el.alt === '') el.alt = `Screenshot ${idx+1}`;
+        });
+
+        // Lightbox wiring (minimal, accessible)
+        const lightbox = document.getElementById('lightbox');
+        const lbImg = lightbox && lightbox.querySelector('.lightbox-img');
+        const lbCaption = lightbox && lightbox.querySelector('.lightbox-caption');
+        const lbClose = lightbox && lightbox.querySelector('.lightbox-close');
+        const lbPrev = lightbox && lightbox.querySelector('[data-action="prev"]');
+        const lbNext = lightbox && lightbox.querySelector('[data-action="next"]');
+        let currentIndex = 0;
+        let lastFocused = null;
+
+        function openLightbox(index){
+            const originals = Array.from(track.querySelectorAll('.screenshot-item')).slice(0, items.length);
+            const src = originals[index] && originals[index].src;
+            const caption = originals[index] && (originals[index].alt || (`Screenshot ${index+1}`));
+            if (!lightbox || !lbImg || !src) return;
+            lastFocused = document.activeElement;
+            currentIndex = index;
+            lightbox.classList.add('open');
+            lightbox.setAttribute('aria-hidden', 'false');
+            lbImg.src = src;
+            lbImg.alt = caption || '';
+            lbCaption.textContent = caption || '';
+            lbImg.loading = 'eager';
+            lbClose.focus();
+            window.addEventListener('keydown', lightboxKeyHandler);
+        }
+
+        function closeLightbox(){
+            if (!lightbox) return;
+            lightbox.classList.remove('open');
+            lightbox.setAttribute('aria-hidden', 'true');
+            lbImg.src = '';
+            lbCaption.textContent = '';
+            window.removeEventListener('keydown', lightboxKeyHandler);
+            if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+        }
+
+        function showIndex(idx){
+            const originals = Array.from(track.querySelectorAll('.screenshot-item')).slice(0, items.length);
+            const safe = ((idx % originals.length) + originals.length) % originals.length;
+            const src = originals[safe] && originals[safe].src;
+            const caption = originals[safe] && (originals[safe].alt || (`Screenshot ${safe+1}`));
+            if (!lbImg) return;
+            lbImg.src = src;
+            lbImg.alt = caption || '';
+            lbCaption.textContent = caption || '';
+            currentIndex = safe;
+        }
+
+        function lightboxKeyHandler(e){
+            if (e.key === 'Escape') { closeLightbox(); }
+            else if (e.key === 'ArrowRight') { showIndex(currentIndex + 1); }
+            else if (e.key === 'ArrowLeft') { showIndex(currentIndex - 1); }
+        }
+
+        // Delegated click handler on track
+        track.addEventListener('click', (e) => {
+            const img = e.target.closest && e.target.closest('.screenshot-item');
+            if (!img) return;
+            const idx = Number(img.dataset.index || 0);
+            openLightbox(idx);
+        });
+
+        // Keyboard activation (Enter) for focused images
+        track.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter'){
+                const img = e.target.closest && e.target.closest('.screenshot-item');
+                if (!img) return;
+                const idx = Number(img.dataset.index || 0);
+                openLightbox(idx);
+            }
+        });
+
+        // Close / nav handlers
+        if (lbClose) lbClose.addEventListener('click', closeLightbox);
+        if (lbPrev) lbPrev.addEventListener('click', () => showIndex(currentIndex - 1));
+        if (lbNext) lbNext.addEventListener('click', () => showIndex(currentIndex + 1));
+        if (lightbox) lightbox.addEventListener('click', (e) => { if (e.target && e.target.dataset && e.target.dataset.action === 'close') closeLightbox(); });
+
+        // Image error handling in lightbox
+        if (lbImg) lbImg.addEventListener('error', () => { lbCaption.textContent = 'Failed to load image.'; });
+
         // Auto-scroll using requestAnimationFrame
         let speed = 40; // pixels per second
         let running = true;
