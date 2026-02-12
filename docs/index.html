@@ -303,5 +303,16 @@
     </footer>
 
     <script src="script.js"></script>
+    <!-- Lightbox modal for screenshots -->
+    <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="lightbox-backdrop" data-action="close"></div>
+        <div class="lightbox-content" role="document">
+            <button class="lightbox-close" aria-label="Close (Esc)" data-action="close">✕</button>
+            <button class="lightbox-nav prev" data-action="prev" aria-label="Previous (Arrow Left)">‹</button>
+            <img class="lightbox-img" alt="" />
+            <button class="lightbox-nav next" data-action="next" aria-label="Next (Arrow Right)">›</button>
+            <div class="lightbox-caption" aria-live="polite"></div>
+        </div>
+    </div>
 </body>
 </html>
