@@ -656,3 +656,35 @@ body {
         flex-direction: column;
     }
 }
+
+/* Screenshot film strip */
+.screenshot-strip {
+    margin-top: 24px;
+    overflow: hidden;
+    position: relative;
+    border-radius: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 12px 0;
+}
+.screenshot-track {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 24px;
+    will-change: scroll-position;
+}
+.screenshot-item {
+    height: 160px;
+    max-height: 24vh;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: var(--shadow-sm);
+    flex: 0 0 auto;
+}
+.screenshot-strip:hover { cursor: grab; }
+
+@media (max-width: 768px) {
+    .screenshot-item { height: 110px; }
+}

@@ -187,3 +187,76 @@ window.addEventListener('scroll', () => {
 console.log('%c SmrutiCortex ', 'background: #667eea; color: white; font-size: 20px; font-weight: bold; padding: 10px;');
 console.log('%c Privacy-first browser history search. All data stays local. ', 'color: #64748b; font-size: 14px;');
 console.log('%c GitHub: https://github.com/dhruvinrsoni/smruti-cortex ', 'color: #3b82f6; font-size: 12px;');
+// ====== Screenshot film strip ======
+async function initScreenshotStrip(){
+    const container = document.getElementById('screenshot-strip');
+    if (!container) return;
+    const track = container.querySelector('.screenshot-track');
+    const emptyMsg = container.querySelector('.screenshot-empty');
+    try{
+        const res = await fetch('./screenshots/list.json', {cache: 'no-store'});
+        if (!res.ok) throw new Error('No list');
+        const list = await res.json();
+        if (!Array.isArray(list) || list.length === 0){
+            emptyMsg.style.display = 'block';
+            return;
+        }
+        // Build images
+        const items = [];
+        for (const name of list){
+            // sanitize filename (allow only relative names without path segments)
+            if (typeof name !== 'string' || name.includes('..') || name.includes('/') ) continue;
+            const img = document.createElement('img');
+            img.className = 'screenshot-item';
+            img.loading = 'lazy';
+            img.alt = `Screenshot: ${name}`;
+            img.src = './screenshots/' + encodeURIComponent(name).replace(/%2F/g, '/');
+            // remove broken images
+            img.onerror = () => { img.remove(); };
+            track.appendChild(img);
+            items.push(img);
+        }
+        if (items.length === 0){ emptyMsg.style.display = 'block'; return; }
+
+        // Duplicate items for seamless loop
+        for (const it of items){
+            const clone = it.cloneNode(true);
+            track.appendChild(clone);
+        }
+
+        // Auto-scroll using requestAnimationFrame
+        let speed = 40; // pixels per second
+        let running = true;
+        let last = performance.now();
+
+        function step(now){
+            const dt = Math.min(100, now - last) / 1000; last = now;
+            if (running){
+                container.scrollLeft += speed * dt;
+                // reset when reached half (since we duplicated)
+                const half = track.scrollWidth / 2;
+                if (container.scrollLeft >= half) container.scrollLeft -= half;
+            }
+            requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+
+        // Pause on hover or focus
+        container.addEventListener('mouseenter', () => { running = false; });
+        container.addEventListener('mouseleave', () => { running = true; last = performance.now(); });
+        container.addEventListener('focusin', () => { running = false; });
+        container.addEventListener('focusout', () => { running = true; last = performance.now(); });
+
+        // Allow drag-to-scroll
+        let isDown = false; let startX = 0; let scrollStart = 0;
+        container.addEventListener('mousedown', (e)=>{ isDown = true; startX = e.pageX - container.offsetLeft; scrollStart = container.scrollLeft; container.style.cursor = 'grabbing'; });
+        window.addEventListener('mouseup', ()=>{ isDown = false; container.style.cursor = ''; });
+        window.addEventListener('mousemove', (e)=>{ if(!isDown) return; e.preventDefault(); const x = e.pageX - container.offsetLeft; const walk = (x - startX); container.scrollLeft = scrollStart - walk; });
+
+    }catch(err){
+        emptyMsg.style.display = 'block';
+        console.warn('[screenshot-strip] failed to load list.json', err);
+    }
+}
+
+window.addEventListener('load', () => { initScreenshotStrip(); });
