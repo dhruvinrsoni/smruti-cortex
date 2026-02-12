@@ -28,7 +28,7 @@ jobs:
         run: docker build -t smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }} .
       
       - name: Run Docker Compose build
-        run: docker-compose run --rm build
+        run: docker compose run --rm build
       
       - name: Verify dist artifacts
         run: |
