@@ -20,7 +20,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Resolve version tag
-        run: echo "SMRUTI_CORTEX_VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
+        run: |
+          # Safely write the package version into GITHUB_ENV without shell $() substitution
+          node -e "console.log('SMRUTI_CORTEX_VERSION=' + require('./package.json').version)" >> $GITHUB_ENV
 
       - name: Build Docker image
         run: docker build -t smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }} .
