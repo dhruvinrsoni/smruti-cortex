@@ -131,7 +131,7 @@ export function getSearchAnalytics() {
  */
 export interface IDiagnosticCollector {
     name: string;
-    collect(): Promise<Record<string, unknown>>;
+    collect(): Promise<unknown>;
 }
 
 /**
@@ -152,7 +152,7 @@ export function registerCollector(collector: IDiagnosticCollector): void {
  */
 const systemInfoCollector: IDiagnosticCollector = {
     name: 'system',
-    async collect(): Promise<Record<string, unknown>> {
+    async collect(): Promise<unknown> {
         const manifest = chrome.runtime.getManifest();
         
         return {
@@ -181,7 +181,7 @@ const systemInfoCollector: IDiagnosticCollector = {
  */
 const storageCollector: IDiagnosticCollector = {
     name: 'storage',
-    async collect(): Promise<Record<string, any>> {
+    async collect(): Promise<unknown> {
         try {
             const quota = await getStorageQuotaInfo();
             const items = await getAllIndexedItems();
@@ -206,7 +206,7 @@ const storageCollector: IDiagnosticCollector = {
  */
 const settingsCollector: IDiagnosticCollector = {
     name: 'settings',
-    async collect(): Promise<Record<string, unknown>> {
+    async collect(): Promise<unknown> {
         try {
             await SettingsManager.init();
             const settings = SettingsManager.getSettings();
@@ -227,7 +227,7 @@ const settingsCollector: IDiagnosticCollector = {
  */
 const healthCollector: IDiagnosticCollector = {
     name: 'health',
-    async collect(): Promise<Record<string, unknown>> {
+    async collect(): Promise<unknown> {
         try {
             const health = await checkHealth();
             return health;
@@ -242,7 +242,7 @@ const healthCollector: IDiagnosticCollector = {
  */
 const performanceCollector: IDiagnosticCollector = {
     name: 'performance',
-    async collect(): Promise<Record<string, unknown>> {
+    async collect(): Promise<unknown> {
         const memory = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
         
         return {
@@ -272,7 +272,7 @@ registerCollector(performanceCollector);
 export interface DiagnosticReport {
     generatedAt: string;
     version: string;
-    collectors: { [name: string]: Record<string, unknown> };
+    collectors: { [name: string]: unknown };
 }
 
 /**
