@@ -6,6 +6,14 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 
 ---
 
+## 🔗 Store Links
+
+- **Chrome Web Store (canonical):** https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi
+- **Edge Add-ons:** use the same package; if you have a dedicated Edge listing URL replace the link above with the Edge URL here.
+
+
+---
+
 ## 📋 Pre-Submission Checklist
 
 - [ ] Build production zip: `npm run package`

@@ -132,8 +132,8 @@ GitHub Actions handles the rest automatically.
 - **Live Site:** https://dhruvinrsoni.github.io/smruti-cortex/
 - **Privacy Policy:** https://dhruvinrsoni.github.io/smruti-cortex/privacy.html
 - **GitHub Repo:** https://github.com/dhruvinrsoni/smruti-cortex
-- **Chrome Store:** Coming soon!
-- **Edge Store:** Coming soon!
+- **Chrome Store:** https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi
+- **Edge Store:** https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi
 
 ---
 
