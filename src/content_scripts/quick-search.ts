@@ -80,7 +80,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         const focused = shadowRoot.querySelector(':focus') as Element | null;
         if (focused) { return focused; }
       }
-    } catch {
+    } catch (e) {
       // ignore
     }
     return document.activeElement;
@@ -130,8 +130,11 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (!query) {return '';}
     // Trim whitespace
     let sanitized = query.trim();
-    // Remove control characters that might cause issues
-    sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
+    // Remove control characters (non-printable ASCII and DEL)
+    sanitized = sanitized.split('').filter(ch => {
+      const code = ch.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    }).join('');
     // Limit length to prevent abuse
     if (sanitized.length > 500) {
       sanitized = sanitized.substring(0, 500);
@@ -400,7 +403,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
         }
       });
-    } catch {
+    } catch (e) {
       // Extension context may be invalid
     }
   }
@@ -418,10 +421,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           cachedSettings = settings;
           try {
             updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
-          } catch {}
+          } catch (e) { /* ignore */ }
           try {
             if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
-          } catch {}
+          } catch (e) { /* ignore */ }
           const focusDelay = typeof settings?.focusDelayMs === 'number' ? settings.focusDelayMs : undefined;
           // If focusDelayMs is defined and >= 0, use it as search debounce (parity with popup)
           if (typeof focusDelay === 'number') {
@@ -583,7 +586,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     // a closed shadow root because dataset is on the host element.
     try {
       shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus));
-    } catch {}
+    } catch (e) { /* ignore */ }
     
     // Inject styles into shadow root
     const styleEl = document.createElement('style');
@@ -869,7 +872,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
     try {
       // Apply cached settings immediately if available
       updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-    } catch {}
+    } catch (e) { /* ignore */ }
     // Then fetch latest settings asynchronously (will update badge when done)
     fetchSettings();
     
@@ -885,7 +888,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (document.activeElement && document.activeElement !== inputEl) {
         (document.activeElement as HTMLElement).blur();
       }
-    } catch {}
+    } catch (e) { /* ignore */ }
     
     // Strategy 2: Immediate synchronous focus
     inputEl.focus();
@@ -921,7 +924,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (document.activeElement && document.activeElement !== inputEl) {
           (document.activeElement as HTMLElement).blur();
         }
-      } catch {}
+      } catch (e) { /* ignore */ }
       
       inputEl.focus();
       inputEl.setSelectionRange(0, 0);
@@ -936,7 +939,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (document.activeElement && document.activeElement !== inputEl) {
               (document.activeElement as HTMLElement).blur();
             }
-          } catch {}
+          } catch (e) { /* ignore */ }
           inputEl.focus();
           inputEl.setSelectionRange(0, 0);
         }
@@ -1077,7 +1080,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
               searchPort = null;
             }
             return;
-          } catch {}
+          } catch (e) { /* ignore */ }
         }
         // Fall through to sendMessage fallback
       }
@@ -1215,7 +1218,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
           if (first) {
             selectedIndex = 0;
             updateSelection();
-            try { first.focus(); } catch {}
+            try { first.focus(); } catch (e) { /* ignore */ }
           }
         }
       } catch (e) {
@@ -1336,7 +1339,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (selectAllOnFocus && inputEl) {
               inputEl.setSelectionRange(0, inputEl.value.length);
             }
-          } catch {}
+          } catch (e) { /* ignore */ }
         }
       },
       {
@@ -1590,7 +1593,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (inputEl) {
           inputEl.focus();
           // Do not simulate typing; let native event continue. Stop propagation so page doesn't get it.
-          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch {}
+          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch (e) { /* ignore */ }
         }
       }
       return;
@@ -1641,7 +1644,7 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         const endS = inputEl.selectionEnd || 0;
         const selection = inputEl.value.substring(startS, endS);
         if (selection.length > 0) {
-          try { navigator.clipboard.writeText(selection); } catch {}
+          try { navigator.clipboard.writeText(selection); } catch (e) { /* ignore */ }
           inputEl.value = inputEl.value.substring(0, startS) + inputEl.value.substring(endS);
           inputEl.setSelectionRange(startS, startS);
         }
@@ -1748,10 +1751,10 @@ if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
         try {
           updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-        } catch {}
+        } catch (e) { /* ignore */ }
         try {
           if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
-        } catch {}
+        } catch (e) { /* ignore */ }
         const focusDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : undefined;
         if (typeof focusDelay === 'number') {
           searchDebounceMs = Math.max(0, Math.min(2000, focusDelay));
