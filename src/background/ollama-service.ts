@@ -101,10 +101,10 @@ export class OllamaService {
       logger.trace('checkAvailability', `Response received: ${response.status} ${response.statusText}`);
 
       if (response.ok) {
-        const data = await response.json();
-        const models = data.models || [];
-        const modelNames = models.map((m: any) => m.name);
-        const hasModel = models.some((m: any) => m.name === this.config.model);
+      const data = await response.json();
+      const models = Array.isArray(data.models) ? data.models as Array<{ name?: string }> : [];
+      const modelNames = models.map(m => m.name || 'unknown');
+      const hasModel = models.some(m => m.name === this.config.model);
 
         this.isAvailable = hasModel;
         this.lastCheckTime = now;

@@ -399,8 +399,8 @@ export async function performIncrementalHistoryIndexManual(sinceTimestamp: numbe
 /**
  * Get full history by querying comprehensively to access all available items
  */
-async function getFullHistory(): Promise<any[]> {
-    const allItems: any[] = [];
+async function getFullHistory(): Promise<chrome.history.HistoryItem[]> {
+    const allItems: chrome.history.HistoryItem[] = [];
     const now = Date.now();
     const oneMonthMs = 30 * 24 * 60 * 60 * 1000; // 30 days
     const twoYearsAgo = now - (2 * 365 * 24 * 60 * 60 * 1000); // Go back 2 years
@@ -426,7 +426,7 @@ async function getFullHistory(): Promise<any[]> {
             monthsBack: Math.round((now - chunkStartTime) / (1000 * 60 * 60 * 24 * 30))
         });
 
-        const chunk = await new Promise<any[]>((resolve) => {
+        const chunk = await new Promise<chrome.history.HistoryItem[]>((resolve) => {
             browserAPI.history.search({
                 text: '',
                 startTime: chunkStartTime,
@@ -458,7 +458,7 @@ async function getFullHistory(): Promise<any[]> {
     }
 
     // Remove duplicates based on URL (keep the most recent visit)
-    const uniqueItems = allItems.reduce((acc, item) => {
+    const uniqueItems = allItems.reduce((acc: chrome.history.HistoryItem[], item) => {
         const existing = acc.find(i => i.url === item.url);
         if (!existing || item.lastVisitTime > existing.lastVisitTime) {
             if (existing) {
@@ -489,8 +489,8 @@ async function getFullHistory(): Promise<any[]> {
 /**
  * Get history items since a specific timestamp
  */
-async function getHistorySince(sinceTimestamp: number): Promise<any[]> {
-    return new Promise<any[]>((resolve) => {
+async function getHistorySince(sinceTimestamp: number): Promise<chrome.history.HistoryItem[]> {
+    return new Promise<chrome.history.HistoryItem[]>((resolve) => {
         browserAPI.history.search({
             text: '',
             startTime: sinceTimestamp,
@@ -530,12 +530,7 @@ function compareVersions(version1: string, version2: string): number {
 // Called by content script metadata updates
 // indexing.ts — URL ingestion, merging, enrichment, and storage
 
-/**
- * Get bookmark folder path as an array of folder names
- */
-function getBookmarkFolderPath(node: chrome.bookmarks.BookmarkTreeNode, path: string[] = []): string[] {
-    return path;
-}
+// getBookmarkFolderPath removed — unused helper causing lint warnings
 
 /**
  * Recursively collect all bookmarks from a bookmark tree
