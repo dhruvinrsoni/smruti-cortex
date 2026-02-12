@@ -3,6 +3,18 @@
   "version": "7.0.0",
   "private": true,
   "description": "SmrutiCortex — Everything-like instant browser history search (MV3).",
+  "homepage": "https://dhruvinrsoni.github.io/smruti-cortex/",
+  "chromeStoreUrl": "https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhruvinrsoni/smruti-cortex.git"
+  },
+  "author": "dhruvinrsoni",
+  "bugs": {
+    "url": "https://github.com/dhruvinrsoni/smruti-cortex/issues"
+  },
+  "keywords": ["chrome-extension","mv3","history","search","privacy","smruti-cortex"],
+  "license": "MIT",
   "scripts": {
     "clean": "rimraf dist",
     "sync-version": "node ./scripts/sync-version.mjs",
