@@ -49,6 +49,16 @@ jobs:
             mkdir -p docs
             echo "✅ Created docs directory"
           fi
+
+      - name: Set up Node.js (for optional scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Generate screenshots index (optional)
+        run: |
+          # Generate site/screenshots/list.json if screenshots exist. Non-fatal if missing.
+          node ./scripts/generate-screenshots-index.mjs || true
       
       - name: Copy site files to docs
         run: |
