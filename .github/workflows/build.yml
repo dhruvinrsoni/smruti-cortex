@@ -1,5 +1,11 @@
 name: Build & Release
 
+# Purpose: Main build pipeline that produces production-ready extension packages.
+# Produces: smruti-cortex-extension artifact (zip, 30 days) for every build.
+#           Creates GitHub Release ONLY when a version tag (v*) is pushed.
+# Use case: Primary production build and release automation.
+# Note: Does NOT commit/push any changes back to repository.
+
 on:
   workflow_dispatch:  # Allow manual triggering of the workflow
     inputs:
@@ -57,6 +63,42 @@ jobs:
           name: smruti-cortex-extension
           path: smruti-cortex.zip
           retention-days: 30
+      
+      - name: Build Summary
+        run: |
+          echo "## 🏗️ Build & Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "**Node Version:** 20.x" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Produced Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- **smruti-cortex-extension** (30 days) - Ready-to-install zip" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Package Details" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Zip package: $(du -h smruti-cortex.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "Total files: $(unzip -l smruti-cortex.zip | tail -1 | awk '{print $2}')" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
+          echo "- Runs linter and type checking" >> $GITHUB_STEP_SUMMARY
+          echo "- Executes test suite (if available)" >> $GITHUB_STEP_SUMMARY
+          echo "- Builds production extension bundle" >> $GITHUB_STEP_SUMMARY
+          echo "- Creates installable zip package" >> $GITHUB_STEP_SUMMARY
+          echo "- Uploads artifact for download (30 days)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Does NOT commit or push changes**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "### 🚀 Release Notes" >> $GITHUB_STEP_SUMMARY
+            echo "**Tag detected:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "A GitHub Release will be created automatically." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
+            echo "Download \`smruti-cortex.zip\` from artifacts and load unpacked." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**To create a release:** Push a version tag like \`v7.0.0\`" >> $GITHUB_STEP_SUMMARY
+          fi
 
   release:
     name: Create Release

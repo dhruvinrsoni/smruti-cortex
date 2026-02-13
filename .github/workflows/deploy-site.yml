@@ -1,5 +1,12 @@
 name: Deploy Landing Page
 
+# Purpose: Copies site/ folder to docs/ for GitHub Pages hosting.
+# Produces: No artifacts - directly commits and pushes to main branch.
+# Use case: Automated site deployment when site files change.
+# ⚠️ IMPORTANT: This workflow COMMITS and PUSHES changes back to repository!
+#              Always run `git pull` before making local commits after this runs.
+# Safeguard: Preserves privacy.html to avoid breaking Chrome Web Store URL.
+
 on:
   push:
     branches:
@@ -136,7 +143,7 @@ jobs:
       
       - name: Summary
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Site Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Landing page deployed successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -145,8 +152,20 @@ jobs:
           echo "- **Privacy Policy:** https://dhruvinrsoni.github.io/smruti-cortex/privacy.html" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📁 Deployed Files" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           ls -la docs/ >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
+          echo "- Backs up existing privacy.html (2 copies)" >> $GITHUB_STEP_SUMMARY
+          echo "- Cleans docs/ directory (except privacy.html)" >> $GITHUB_STEP_SUMMARY
+          echo "- Generates screenshots index (optional, non-fatal)" >> $GITHUB_STEP_SUMMARY
+          echo "- Copies site/ files to docs/" >> $GITHUB_STEP_SUMMARY
+          echo "- Restores privacy.html with failsafe fallbacks" >> $GITHUB_STEP_SUMMARY
+          echo "- **⚠️ COMMITS and PUSHES changes to main branch**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ IMPORTANT" >> $GITHUB_STEP_SUMMARY
+          echo "This workflow pushes commits back to \`main\`." >> $GITHUB_STEP_SUMMARY
+          echo "**Always run \`git pull\` before making local commits after this runs!**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🔒 Privacy policy preserved and verified" >> $GITHUB_STEP_SUMMARY
