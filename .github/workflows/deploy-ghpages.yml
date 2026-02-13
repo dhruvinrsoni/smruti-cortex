@@ -1,0 +1,159 @@
+name: Deploy Landing Page to gh-pages
+
+# Purpose: Build and deploy `site/` to a dedicated `gh-pages` branch.
+# Produces: Commits site build to `gh-pages` (branch root) so `main` remains clean.
+# Guardrails: verifies `privacy.html`, verifies `index.html`, creates `gh-pages` if missing,
+#             includes retry logic, and aborts on unexpected conditions.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - '.github/workflows/deploy-ghpages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DEPLOY_BRANCH: gh-pages
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+      - name: Set up Node.js (for optional scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Backup existing docs/privacy.html (if present)
+        run: |
+          if [ -f docs/privacy.html ]; then
+            mkdir -p /tmp/privacy-backups
+            cp docs/privacy.html /tmp/privacy-backups/privacy.html.bak
+            cp docs/privacy.html /tmp/privacy-backups/privacy.html.bak2
+            echo "PRIVACY_BACKUP_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "PRIVACY_BACKUP_EXISTS=false" >> $GITHUB_ENV
+          fi
+
+      - name: Clean docs directory (except privacy.html)
+        run: |
+          if [ -d docs ]; then
+            find docs -mindepth 1 ! -name 'privacy.html' -delete
+            echo "✅ Cleaned docs directory"
+          else
+            mkdir -p docs
+            echo "✅ Created docs directory"
+          fi
+
+      - name: Generate screenshots index (optional)
+        run: |
+          node ./scripts/generate-screenshots-index.mjs || true
+
+      - name: Copy site files to docs
+        run: |
+          cp -r site/* docs/ || true
+
+      - name: Ensure privacy.html present (CRITICAL)
+        run: |
+          if [ -f /tmp/privacy-backups/privacy.html.bak ]; then
+            cp /tmp/privacy-backups/privacy.html.bak docs/privacy.html
+            echo "✅ Restored privacy.html from backup"
+          elif [ -f site/privacy.html ]; then
+            cp site/privacy.html docs/privacy.html
+            echo "✅ Copied privacy.html from site/"
+          else
+            echo "❌ CRITICAL: Missing privacy.html (no backup or site/privacy.html)"
+            exit 1
+          fi
+
+      - name: Verify docs contents
+        run: |
+          echo "📁 docs contents:"
+          ls -la docs || true
+          if [ ! -f docs/index.html ]; then
+            echo "❌ ERROR: docs/index.html missing"
+            exit 1
+          fi
+          if [ ! -f docs/privacy.html ]; then
+            echo "❌ ERROR: docs/privacy.html missing"
+            exit 1
+          fi
+
+      - name: Prepare temporary deploy tree
+        run: |
+          TMPDIR=$(mktemp -d)
+          echo "Using temp dir: $TMPDIR"
+          cp -r docs/* "$TMPDIR"/
+          echo "✅ Copied docs to temp dir"
+          echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
+
+      - name: Switch to deploy branch (create if missing)
+        run: |
+          set -e
+          TMPDIR=${TMPDIR:-$(mktemp -d)}
+          if git ls-remote --exit-code origin/${DEPLOY_BRANCH}; then
+            git fetch origin ${DEPLOY_BRANCH}
+            git checkout ${DEPLOY_BRANCH}
+            git rm -rf . || true
+          else
+            git checkout --orphan ${DEPLOY_BRANCH}
+            git rm -rf . || true
+          fi
+
+      - name: Populate branch with built site
+        run: |
+          rsync -a --delete "$TMPDIR"/ ./
+          # Ensure privacy.html exists at branch root
+          if [ ! -f privacy.html ]; then
+            echo "❌ privacy.html missing in deploy contents" && exit 1
+          fi
+
+      - name: Commit and push to gh-pages
+        run: |
+          if git status --porcelain | tee /tmp/git-status | grep -q .; then
+            git add --all
+            git commit -m "🚀 Deploy site to ${DEPLOY_BRANCH} [skip ci]
+
+- Built from main/site/ on $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            MAX_RETRIES=3
+            RETRY=0
+            until git push origin HEAD:${DEPLOY_BRANCH} || [ $RETRY -eq $MAX_RETRIES ]; do
+              RETRY=$((RETRY+1))
+              echo "⚠️ Push failed, retrying ($RETRY/$MAX_RETRIES)..."
+              sleep 5
+            done
+            if [ $RETRY -eq $MAX_RETRIES ]; then
+              echo "❌ Failed to push after $MAX_RETRIES attempts" && exit 1
+            fi
+            echo "✅ Pushed to ${DEPLOY_BRANCH}"
+          else
+            echo "ℹ️ No changes to deploy"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## 🚀 Site Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployed branch: ${DEPLOY_BRANCH}" >> $GITHUB_STEP_SUMMARY
+          echo "- Landing Page: https://dhruvinrsoni.github.io/smruti-cortex/" >> $GITHUB_STEP_SUMMARY
+          echo "- Privacy Policy: https://dhruvinrsoni.github.io/smruti-cortex/privacy.html" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la . | sed -n '1,200p' >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
