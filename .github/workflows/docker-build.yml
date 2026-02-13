@@ -1,5 +1,10 @@
 name: Docker Build & Verify
 
+# Purpose: Validates that extension can be built in a clean Docker environment.
+# Produces: extension-dist-docker artifact (dist/ folder) AND smruti-cortex-docker.zip (ready-to-install).
+# Use case: Ensures reproducible builds across different host environments.
+# Note: Does NOT commit/push any changes back to repository.
+
 on:
   push:
     branches: [main, develop]
@@ -28,15 +33,33 @@ jobs:
         run: docker build -t smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }} .
       
       - name: Run Docker Compose build
-        run: docker compose run --rm build
+        env:
+          # Map container /output to workspace so dist/ appears on runner
+          DOCKER_OUTPUT_DIR: .
+        run: |
+          echo "🐋 Starting Docker Compose build..."
+          echo "📍 Build context: $(pwd)"
+          echo "📦 Output will be written to: ./dist/"
+          docker compose run --rm build
       
       - name: Verify dist artifacts
         run: |
+          echo "🔍 Verifying build artifacts..."
           ls -la dist/
-          test -f dist/manifest.json || { echo "manifest.json missing"; exit 1; }
-          test -d dist/background || { echo "background bundle missing"; exit 1; }
-          test -d dist/popup || { echo "popup bundle missing"; exit 1; }
+          echo ""
+          test -f dist/manifest.json || { echo "❌ manifest.json missing"; exit 1; }
+          test -d dist/background || { echo "❌ background bundle missing"; exit 1; }
+          test -d dist/popup || { echo "❌ popup bundle missing"; exit 1; }
+          test -d dist/content_scripts || { echo "❌ content_scripts bundle missing"; exit 1; }
           echo "✅ All required artifacts present"
+      
+      - name: Package extension (zip)
+        run: |
+          echo "📦 Creating installable zip package..."
+          cd dist
+          zip -r ../smruti-cortex-docker.zip .
+          cd ..
+          echo "✅ Created: smruti-cortex-docker.zip ($(du -h smruti-cortex-docker.zip | cut -f1))"
       
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
@@ -45,13 +68,43 @@ jobs:
           path: dist/
           retention-days: 7
       
+      - name: Upload zip package
+        uses: actions/upload-artifact@v4
+        with:
+          name: smruti-cortex-docker-zip
+          path: smruti-cortex-docker.zip
+          retention-days: 7
+      
       - name: Show artifact summary
         run: |
-          echo "### Docker Build Summary 🐋" >> $GITHUB_STEP_SUMMARY
+          echo "## 🐋 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Image:** smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Produced Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "1. **extension-dist-docker** (7 days) - Unzipped dist/ folder" >> $GITHUB_STEP_SUMMARY
+          echo "2. **smruti-cortex-docker-zip** (7 days) - Ready-to-install zip" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Build Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           ls -lh dist/ >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Package Details" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Zip package: $(du -h smruti-cortex-docker.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "Total files: $(find dist -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
+          echo "- Builds Docker image with all dependencies isolated" >> $GITHUB_STEP_SUMMARY
+          echo "- Runs \`npm run build\` inside container" >> $GITHUB_STEP_SUMMARY
+          echo "- Verifies all required bundles are present" >> $GITHUB_STEP_SUMMARY
+          echo "- Creates installable zip package" >> $GITHUB_STEP_SUMMARY
+          echo "- Uploads both dist/ folder and zip for download" >> $GITHUB_STEP_SUMMARY
+          echo "- **Does NOT commit or push changes**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
+          echo "Download \`smruti-cortex-docker.zip\` and load unpacked in Chrome/Edge." >> $GITHUB_STEP_SUMMARY
