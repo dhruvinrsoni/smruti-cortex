@@ -102,25 +102,25 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     if (items.length === 0) {
         logger.warn('runSearch', `🔍 "${q}" - No index available, using browser history`);
         // Fallback to browser history search with higher limit
-        const historyItems = await new Promise<any[]>((resolve) => {
+        const historyItems = await new Promise<chrome.history.HistoryItem[]>((resolve) => {
             browserAPI.history.search({
                 text: q,
                 maxResults: 200, // Increased from 50
                 startTime: 0 // Search all history
-            }, resolve);
+            }, resolve as unknown as (results: chrome.history.HistoryItem[]) => void);
         });
         logger.info('runSearch', `📚 History fallback: ${historyItems.length} results for "${q}"`);
 
         // Convert to IndexedItem format
-        const fallbackItems: IndexedItem[] = historyItems.map(item => ({
-            url: item.url,
-            title: item.title || '',
-            hostname: (() => { try { return new URL(item.url).hostname; } catch { return ''; } })(),
+        const fallbackItems: IndexedItem[] = historyItems.map(h => ({
+            url: h.url,
+            title: h.title || '',
+            hostname: (() => { try { return new URL(h.url).hostname; } catch { return ''; } })(),
             metaDescription: '',
             metaKeywords: [],
-            visitCount: item.visitCount || 1,
-            lastVisit: item.lastVisitTime || Date.now(),
-            tokens: tokenize((item.title || '') + ' ' + item.url)
+            visitCount: h.visitCount || 1,
+            lastVisit: ((h as unknown) as chrome.history.HistoryItem).lastVisitTime || Date.now(),
+            tokens: tokenize((h.title || '') + ' ' + h.url)
         }));
         return fallbackItems;
     }
@@ -151,9 +151,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
         // Match against expanded tokens (includes AI-generated synonyms)
         // Include bookmark folders in searchable content
-        const bookmarkFolders = (item as any).bookmarkFolders?.join(' ') || '';
+        const bookmarkFolders = item.bookmarkFolders?.join(' ') || '';
         // Use bookmark title if available, otherwise use page title
-        const searchTitle = (item as any).bookmarkTitle || item.title;
+        const searchTitle = item.bookmarkTitle || item.title;
         const haystack = (searchTitle + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
         const hasTokenMatch = matchedTokens.length > 0;
@@ -170,7 +170,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
         // BOOKMARK STRICT MATCHING: Only show bookmarks when there's a strong match
         // This prevents bookmark flooding when typing partial words like "github"
-        const isBookmark = !!(item as any).isBookmark;
+        const isBookmark = !!item.isBookmark;
         let bookmarkStrictMatch = true; // Default: non-bookmarks pass through
         
         if (isBookmark) {

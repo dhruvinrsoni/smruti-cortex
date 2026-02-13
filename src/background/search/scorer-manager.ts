@@ -1,6 +1,7 @@
 // scorer-manager.ts — Collects all scorers into a single weighted scoring pipeline
 
-import { Scorer } from '../../core/scorer-types';
+import { Scorer, ScorerContext } from '../../core/scorer-types';
+import { IndexedItem } from '../schema';
 import titleScorer from './scorers/title-scorer';
 import urlScorer from './scorers/url-scorer';
 import recencyScorer from './scorers/recency-scorer';
@@ -14,9 +15,9 @@ import { SettingsManager } from '../../core/settings';
 const crossDimensionalScorer: Scorer = {
     name: 'crossDimensional',
     weight: 0.15, // Significant weight to promote diverse keyword matching
-    score: (item, query, _allItems, context) => {
+    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
         // Use bookmark title if available, otherwise use page title
-        const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
+        const title = ((item.bookmarkTitle || item.title) || '').toLowerCase();
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
@@ -93,11 +94,11 @@ const crossDimensionalScorer: Scorer = {
 const multiTokenMatchScorer: Scorer = {
     name: 'multiTokenMatch',
     weight: 0.35, // HIGH weight - this is critical for multi-word query relevance
-    score: (item, query, _allItems, context) => {
+    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
         const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
         const url = item.url.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
-        const bookmarkFolders = ((item as any).bookmarkFolders?.join(' ') || '').toLowerCase();
+        const bookmarkFolders = (item.bookmarkFolders?.join(' ') || '').toLowerCase();
         
         // Combine all searchable content
         const haystack = `${title} ${url} ${metaDescription} ${bookmarkFolders}`;
@@ -129,15 +130,15 @@ const multiTokenMatchScorer: Scorer = {
 const domainFamiliarityScorer: Scorer = {
     name: 'domainFamiliarity',
     weight: 0.05, // Small weight for subtle organic biasing
-    score: (item, query, allItems) => {
-        if (!allItems || allItems.length === 0) {return 0;}
+    score: (item: IndexedItem, _query: string, allItems?: IndexedItem[]) => {
+        if (!allItems || allItems.length === 0) { return 0; }
 
         const hostname = item.hostname;
-        if (!hostname) {return 0;}
+        if (!hostname) { return 0; }
 
         // Count how many items from this domain are in the user's history
         const domainItems = allItems.filter(otherItem => otherItem.hostname === hostname);
-        const domainVisitCount = domainItems.reduce((sum, item) => sum + (item.visitCount || 1), 0);
+        const domainVisitCount = domainItems.reduce((sum, it) => sum + (it.visitCount || 1), 0);
 
         // Small boost based on domain familiarity (logarithmic scaling)
         // This creates organic biasing - domains user visits more get slight preference
