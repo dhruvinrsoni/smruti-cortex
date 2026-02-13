@@ -13,7 +13,7 @@ const logger = Logger.forComponent('Indexing');
 /**
  * Generate embedding for an indexed item if semantic search is enabled
  */
-async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }): Promise<number[] | undefined> {
+export async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }): Promise<number[] | undefined> {
     try {
         // Check if embeddings are enabled
         const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;

@@ -1,12 +1,13 @@
-import { Scorer } from '../../../core/scorer-types';
+import { Scorer, ScorerContext } from '../../../core/scorer-types';
+import { IndexedItem } from '../../schema';
 import { tokenize } from '../tokenizer';
 
 const titleScorer: Scorer = {
     name: 'title',
     weight: 0.35, // Reduced from 0.40 to make room for cross-dimensional scorer
-    score: (item, query, _allItems, context) => {
+    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
         // Use bookmark title if available, otherwise use page title
-        const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
+        const title = ((item.bookmarkTitle || item.title) || '').toLowerCase();
         const originalTokens = tokenize(query);
         
         // Use AI-expanded tokens if available, otherwise use original

@@ -19,7 +19,7 @@
  * - Future optimization: pre-generate all item embeddings during indexing
  */
 
-import { Scorer, ScorerContext } from '../../../core/scorer-types';
+import { Scorer } from '../../../core/scorer-types';
 import { Logger } from '../../../core/logger';
 import { SettingsManager } from '../../../core/settings';
 import { getOllamaService } from '../../ollama-service';
