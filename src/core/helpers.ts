@@ -1,6 +1,6 @@
 // helpers.ts — Browser abstraction layer for Chrome, Firefox, Edge, Safari
 
-declare const browser: any;
+declare const browser: typeof chrome | undefined;
 
 /**
  * Supported browser types

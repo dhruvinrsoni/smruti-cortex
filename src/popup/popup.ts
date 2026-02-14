@@ -6,6 +6,8 @@
 import { BRAND_NAME } from '../core/constants';
 import { Logger, LogLevel, ComponentLogger } from '../core/logger';
 import { SettingsManager, DisplayMode } from '../core/settings';
+import { SearchDebugEntry } from '../background/diagnostics';
+import { IndexedItem } from '../background/schema';
 import {
   type SearchResult,
   type FocusableGroup,
@@ -40,7 +42,7 @@ async function getClearIndexedDB(): Promise<() => Promise<void>> {
   return clearIndexedDB;
 }
 
-declare const browser: any;
+declare const browser: typeof chrome | undefined;
 
 // Simple toast notification
 function showToast(message: string, isError = false) {
@@ -91,9 +93,9 @@ try {
 // Global variables for event setup
 let debounceSearch: (q: string) => void;
 let handleKeydown: (e: KeyboardEvent) => void;
-let results: any[];
+let results: SearchResult[];
 let openSettingsPage: () => void;
-let $: (id: string) => any;
+let $: (id: string) => HTMLElement | null;
 
 // Initialize essentials synchronously first - NO async operations blocking UI
 function fastInit() {
@@ -149,17 +151,6 @@ function setupEventListeners() {
 
 function initializePopup() {
   // No logging to maximize speed
-
-  type IndexedItem = {
-    url: string;
-    title: string;
-    hostname: string;
-    metaDescription?: string;
-    metaKeywords?: string[];
-    visitCount: number;
-    lastVisit: number;
-    tokens?: string[];
-  };
 
   // Fast DOM access without logging
   const $local = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -283,7 +274,7 @@ function initializePopup() {
   }
 
   // Fast message sending
-  function sendMessage(msg: any): Promise<any> {
+  function sendMessage(msg: unknown): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
         const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : (typeof browser !== 'undefined' ? browser.runtime : null);
@@ -429,16 +420,16 @@ function initializePopup() {
         const title = document.createElement('div');
         title.className = 'card-title';
         // Add bookmark indicator if item is bookmarked
-        const bookmarkIndicator = (item as any).isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
+        const bookmarkIndicator = item.isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
         title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
 
         details.appendChild(title);
 
         // Add bookmark folder path if available
-        if ((item as any).bookmarkFolders && (item as any).bookmarkFolders.length > 0) {
+        if (item.bookmarkFolders && item.bookmarkFolders.length > 0) {
           const folderPath = document.createElement('div');
           folderPath.className = 'bookmark-folder';
-          folderPath.innerHTML = '📁 ' + (item as any).bookmarkFolders.join(' › ');
+          folderPath.innerHTML = '📁 ' + item.bookmarkFolders.join(' › ');
           details.appendChild(folderPath);
         }
 
@@ -480,16 +471,16 @@ function initializePopup() {
         const title = document.createElement('div');
         title.className = 'result-title';
         // Add bookmark indicator if item is bookmarked
-        const bookmarkIndicator = (item as any).isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
+        const bookmarkIndicator = item.isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
         title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
 
         details.appendChild(title);
 
         // Add bookmark folder path if available
-        if ((item as any).bookmarkFolders && (item as any).bookmarkFolders.length > 0) {
+        if (item.bookmarkFolders && item.bookmarkFolders.length > 0) {
           const folderPath = document.createElement('div');
           folderPath.className = 'bookmark-folder';
-          folderPath.innerHTML = '📁 ' + (item as any).bookmarkFolders.join(' › ');
+          folderPath.innerHTML = '📁 ' + item.bookmarkFolders.join(' › ');
           details.appendChild(folderPath);
         }
 
@@ -1787,11 +1778,11 @@ function initializePopup() {
         if (recentDiv && history.length > 0) {
           recentDiv.innerHTML = history
             .reverse()
-            .map((entry: any) => `
+            .map((entry: SearchDebugEntry) => `
               <div class="search-entry">
                 <div class="search-query">"${entry.query}"</div>
                 <div class="search-meta">
-                  ${entry.resultCount} results · ${entry.performance.totalDuration.toFixed(2)}ms · 
+                  ${entry.resultCount} results · ${entry.duration.toFixed(2)}ms · 
                   ${new Date(entry.timestamp).toLocaleTimeString()}
                 </div>
               </div>

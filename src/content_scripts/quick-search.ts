@@ -27,6 +27,8 @@ import {
   sortResults
 } from '../shared/search-ui-base';
 
+import { type AppSettings } from '../core/settings';
+
 // Extend window interface for our extension
 declare global {
   interface Window {
@@ -73,11 +75,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let resultsEl: HTMLDivElement | null = null;
   let settingsBtn: HTMLButtonElement | null = null;
   let selectedIndex = 0;
-  let currentResults: any[] = [];
+  let currentResults: SearchResult[] = [];
   let debounceTimer: number | null = null;
   let searchPort: chrome.runtime.Port | null = null;
   let prewarmed = false;
-  let cachedSettings: any = null;
+  let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
 
   // Helper: returns the currently focused element inside our shadow root if any
@@ -1193,13 +1195,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       try {
         // Fetch settings if not cached
         if (!cachedSettings) {
-          cachedSettings = await new Promise((resolve) => {
+          cachedSettings = await new Promise<AppSettings>((resolve) => {
             try {
               chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
-                resolve(resp?.settings || {});
+                resolve(resp?.settings || {} as AppSettings);
               });
             } catch {
-              resolve({});
+              resolve({} as AppSettings);
             }
           });
         }
@@ -1807,7 +1809,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Pre-create overlay earlier for faster first show
     // Use requestIdleCallback if available, otherwise setTimeout
     if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(() => createOverlay(), { timeout: 500 });
+      (window as Window & { requestIdleCallback: (callback: () => void, options?: { timeout: number }) => void }).requestIdleCallback(() => createOverlay(), { timeout: 500 });
     } else {
       setTimeout(createOverlay, 50);
     }
