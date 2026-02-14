@@ -13,7 +13,14 @@
   "bugs": {
     "url": "https://github.com/dhruvinrsoni/smruti-cortex/issues"
   },
-  "keywords": ["chrome-extension","mv3","history","search","privacy","smruti-cortex"],
+  "keywords": [
+    "chrome-extension",
+    "mv3",
+    "history",
+    "search",
+    "privacy",
+    "smruti-cortex"
+  ],
   "license": "MIT",
   "scripts": {
     "clean": "rimraf dist",
@@ -37,7 +44,8 @@
     "docker-compose-test": "node ./scripts/docker-compose.mjs run --rm test",
     "docker-compose-lint": "node ./scripts/docker-compose.mjs run --rm lint",
     "docker-validate": "sh ./scripts/validate-docker.sh",
-    "docker-clean": "sh ./scripts/docker-clean.sh"
+    "docker-clean": "sh ./scripts/docker-clean.sh",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.188",
@@ -47,6 +55,7 @@
     "archiver": "^7.0.1",
     "esbuild": "^0.27.0",
     "eslint": "^8.57.0",
+    "husky": "^9.1.7",
     "jsdom": "^24.1.0",
     "rimraf": "^5.0.0",
     "ts-node": "^10.9.1",
