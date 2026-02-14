@@ -1737,9 +1737,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== MESSAGE LISTENER (for service worker commands) =====
   function handleMessage(
-    message: any,
+    message: any, // eslint-disable-line @typescript-eslint/no-explicit-any
     _sender: chrome.runtime.MessageSender,
-    sendResponse: (response?: any) => void
+    sendResponse: (response?: any) => void // eslint-disable-line @typescript-eslint/no-explicit-any
   ): boolean {
     if (message?.type === 'OPEN_INLINE_SEARCH') {
       const t0 = performance.now();

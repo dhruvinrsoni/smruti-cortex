@@ -274,7 +274,7 @@ function initializePopup() {
   }
 
   // Fast message sending
-  function sendMessage(msg: unknown): Promise<any> {
+  function sendMessage(msg: unknown): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
     return new Promise((resolve, reject) => {
       try {
         const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : (typeof browser !== 'undefined' ? browser.runtime : null);
@@ -282,7 +282,7 @@ function initializePopup() {
           resolve({ results: [] });
           return;
         }
-        runtime.sendMessage(msg, (resp: any) => {
+        runtime.sendMessage(msg, (resp: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           // If we got a response, resolve it (even if lastError is set due to bfcache)
           // bfcache navigation causes port closure after response is sent
           if (resp) {
@@ -916,7 +916,7 @@ function initializePopup() {
     if (!countEl || !sizeEl) {return;}
     
     try {
-      const response = await new Promise<any>((resolve) => {
+      const response = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
         chrome.runtime.sendMessage({ type: 'GET_FAVICON_CACHE_STATS' }, resolve);
       });
       
@@ -1240,7 +1240,7 @@ function initializePopup() {
         clearFaviconCacheBtn.disabled = true;
         clearFaviconCacheBtn.textContent = 'Clearing...';
         try {
-          const response = await new Promise<any>((resolve) => {
+          const response = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
             chrome.runtime.sendMessage({ type: 'CLEAR_FAVICON_CACHE' }, resolve);
           });
           if (response?.status === 'OK') {

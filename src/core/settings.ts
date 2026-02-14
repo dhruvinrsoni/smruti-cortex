@@ -47,8 +47,8 @@ export interface AppSettings {
  */
 interface SettingSchema<T> {
     default: T;
-    validate?: (value: any) => boolean;
-    transform?: (value: any) => T;
+    validate?: (value: any) => boolean; // eslint-disable-line @typescript-eslint/no-explicit-any
+    transform?: (value: any) => T; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /**
@@ -108,7 +108,7 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     },
     sensitiveUrlBlacklist: {
         default: [],
-        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'),
+        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'), // eslint-disable-line @typescript-eslint/no-explicit-any
     },
     
     // Bookmarks indexing - default true = index bookmarks
