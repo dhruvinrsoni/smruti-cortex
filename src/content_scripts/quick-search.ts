@@ -73,11 +73,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let resultsEl: HTMLDivElement | null = null;
   let settingsBtn: HTMLButtonElement | null = null;
   let selectedIndex = 0;
-  let currentResults: any[] = [];
+  let currentResults: unknown[] = [];
   let debounceTimer: number | null = null;
   let searchPort: chrome.runtime.Port | null = null;
   let prewarmed = false;
-  let cachedSettings: any = null;
+  let cachedSettings: { [key: string]: unknown } | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
 
   // Helper: returns the currently focused element inside our shadow root if any
@@ -1735,9 +1735,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== MESSAGE LISTENER (for service worker commands) =====
   function handleMessage(
-    message: any,
+    message: { type?: string; logLevel?: number },
     _sender: chrome.runtime.MessageSender,
-    sendResponse: (response?: any) => void
+    sendResponse: (response?: { success: boolean; time?: number }) => void
   ): boolean {
     if (message?.type === 'OPEN_INLINE_SEARCH') {
       const t0 = performance.now();
@@ -1807,7 +1807,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Pre-create overlay earlier for faster first show
     // Use requestIdleCallback if available, otherwise setTimeout
     if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(() => createOverlay(), { timeout: 500 });
+      window.requestIdleCallback(() => createOverlay(), { timeout: 500 });
     } else {
       setTimeout(createOverlay, 50);
     }

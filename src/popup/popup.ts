@@ -6,6 +6,7 @@
 import { BRAND_NAME } from '../core/constants';
 import { Logger, LogLevel, ComponentLogger } from '../core/logger';
 import { SettingsManager, DisplayMode } from '../core/settings';
+import { SearchDebugEntry } from '../background/diagnostics';
 import {
   type SearchResult,
   type FocusableGroup,
@@ -40,7 +41,7 @@ async function getClearIndexedDB(): Promise<() => Promise<void>> {
   return clearIndexedDB;
 }
 
-declare const browser: any;
+declare const browser: typeof chrome | undefined;
 
 // Simple toast notification
 function showToast(message: string, isError = false) {
@@ -91,9 +92,9 @@ try {
 // Global variables for event setup
 let debounceSearch: (q: string) => void;
 let handleKeydown: (e: KeyboardEvent) => void;
-let results: any[];
+let results: SearchResult[];
 let openSettingsPage: () => void;
-let $: (id: string) => any;
+let $: (id: string) => HTMLElement | null;
 
 // Initialize essentials synchronously first - NO async operations blocking UI
 function fastInit() {
@@ -283,7 +284,7 @@ function initializePopup() {
   }
 
   // Fast message sending
-  function sendMessage(msg: any): Promise<any> {
+  function sendMessage(msg: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       try {
         const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : (typeof browser !== 'undefined' ? browser.runtime : null);
@@ -291,7 +292,7 @@ function initializePopup() {
           resolve({ results: [] });
           return;
         }
-        runtime.sendMessage(msg, (resp: any) => {
+        runtime.sendMessage(msg, (resp: unknown) => {
           // If we got a response, resolve it (even if lastError is set due to bfcache)
           // bfcache navigation causes port closure after response is sent
           if (resp) {
@@ -1787,7 +1788,7 @@ function initializePopup() {
         if (recentDiv && history.length > 0) {
           recentDiv.innerHTML = history
             .reverse()
-            .map((entry: any) => `
+            .map((entry: SearchDebugEntry) => `
               <div class="search-entry">
                 <div class="search-query">"${entry.query}"</div>
                 <div class="search-meta">
