@@ -68,7 +68,7 @@ function registerCommandsListenerEarly() {
           } else {
             // Special page (chrome://, edge://, about:, extension page) - use popup
             logger.info('onCommand', `Special page detected (${tab?.url?.slice(0, 30)}...), using popup`);
-            await (browserAPI.action as any).openPopup();
+            await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
             logger.info('onCommand', `✅ Popup opened in ${(performance.now() - t0).toFixed(1)}ms`);
           }
         } catch (e) {
@@ -76,7 +76,7 @@ function registerCommandsListenerEarly() {
           const errorMsg = (e as Error).message || 'Unknown error';
           logger.info('onCommand', `Inline failed (${errorMsg}), falling back to popup`);
           try {
-            await (browserAPI.action as any).openPopup();
+            await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
             logger.info('onCommand', `✅ Popup opened (fallback) in ${(performance.now() - t0).toFixed(1)}ms`);
           } catch {
             // Ignore - best effort
