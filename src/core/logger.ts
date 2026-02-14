@@ -24,7 +24,7 @@ export interface LogEntry {
     levelName: string;
     context: LogContext;
     message: string;
-    data?: unknown;
+    data?: any;
     error?: Error;
 }
 
@@ -150,7 +150,7 @@ export class Logger {
     /**
      * Create and log an entry
      */
-    private static log(level: LogLevel, context: LogContext, message: string, data?: unknown, error?: Error): void {
+    private static log(level: LogLevel, context: LogContext, message: string, data?: any, error?: Error): void {
         if (!this.shouldLog(level)) {return;}
 
         const entry: LogEntry = {
@@ -195,7 +195,7 @@ export class Logger {
      * Log ERROR level message
      * Pattern: timestamp [ERROR] [className.methodName] - message | data={} | error=message
      */
-    static error(...args: unknown[]): void {
+    static error(...args: any[]): void {
         if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
             // New pattern: error(className, methodName, message, data?, error?)
             this.log(LogLevel.ERROR, { className: args[0], methodName: args[1] }, args[2], args[3], args[4]);
@@ -209,7 +209,7 @@ export class Logger {
      * Log WARN level message
      * Pattern: timestamp [WARN] [className.methodName] - message | data={}
      */
-    static warn(...args: unknown[]): void {
+    static warn(...args: any[]): void {
         if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
             // New pattern: warn(className, methodName, message, data?)
             this.log(LogLevel.WARN, { className: args[0], methodName: args[1] }, args[2], args[3]);
@@ -223,7 +223,7 @@ export class Logger {
      * Log INFO level message
      * Pattern: timestamp [INFO] [className.methodName] - message | data={}
      */
-    static info(...args: unknown[]): void {
+    static info(...args: any[]): void {
         if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
             // New pattern: info(className, methodName, message, data?)
             this.log(LogLevel.INFO, { className: args[0], methodName: args[1] }, args[2], args[3]);
@@ -237,7 +237,7 @@ export class Logger {
      * Log DEBUG level message
      * Pattern: timestamp [DEBUG] [className.methodName] - message | data={}
      */
-    static debug(...args: unknown[]): void {
+    static debug(...args: any[]): void {
         if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
             // New pattern: debug(className, methodName, message, data?)
             this.log(LogLevel.DEBUG, { className: args[0], methodName: args[1] }, args[2], args[3]);
@@ -251,7 +251,7 @@ export class Logger {
      * Log TRACE level message
      * Pattern: timestamp [TRACE] [className.methodName] - message | data={}
      */
-    static trace(...args: unknown[]): void {
+    static trace(...args: any[]): void {
         if (args.length >= 3 && typeof args[0] === 'string' && typeof args[1] === 'string') {
             // New pattern: trace(className, methodName, message, data?)
             this.log(LogLevel.TRACE, { className: args[0], methodName: args[1] }, args[2], args[3]);
@@ -306,23 +306,23 @@ export class Logger {
 export class ComponentLogger {
     constructor(private className: string) {}
 
-    error(methodName: string, message: string, data?: unknown, error?: Error): void {
+    error(methodName: string, message: string, data?: any, error?: Error): void {
         Logger.error(this.className, methodName, message, data, error);
     }
 
-    warn(methodName: string, message: string, data?: unknown): void {
+    warn(methodName: string, message: string, data?: any): void {
         Logger.warn(this.className, methodName, message, data);
     }
 
-    info(methodName: string, message: string, data?: unknown): void {
+    info(methodName: string, message: string, data?: any): void {
         Logger.info(this.className, methodName, message, data);
     }
 
-    debug(methodName: string, message: string, data?: unknown): void {
+    debug(methodName: string, message: string, data?: any): void {
         Logger.debug(this.className, methodName, message, data);
     }
 
-    trace(methodName: string, message: string, data?: unknown): void {
+    trace(methodName: string, message: string, data?: any): void {
         Logger.trace(this.className, methodName, message, data);
     }
 }

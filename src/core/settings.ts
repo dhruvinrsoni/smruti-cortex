@@ -47,8 +47,8 @@ export interface AppSettings {
  */
 interface SettingSchema<T> {
     default: T;
-    validate?: (value: unknown) => boolean;
-    transform?: (value: unknown) => T;
+    validate?: (value: any) => boolean;
+    transform?: (value: any) => T;
 }
 
 /**
@@ -108,7 +108,7 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     },
     sensitiveUrlBlacklist: {
         default: [],
-        validate: (val) => Array.isArray(val) && val.every((v: unknown) => typeof v === 'string'),
+        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'),
     },
     
     // Bookmarks indexing - default true = index bookmarks
@@ -159,7 +159,7 @@ export class SettingsManager {
      * Get default settings from schema (computed once)
      */
     private static getDefaults(): AppSettings {
-        const defaults: Partial<AppSettings> = {};
+        const defaults: any = {};
         for (const [key, schema] of Object.entries(SETTINGS_SCHEMA)) {
             defaults[key] = schema.default;
         }
@@ -388,9 +388,9 @@ export class SettingsManager {
      * ✅ AUTOMATIC: All settings validated based on SETTINGS_SCHEMA
      * ✅ SCALABLE: Adding new settings = add to schema only
      */
-    private static validateSettings(settings: unknown): AppSettings | null {
+    private static validateSettings(settings: any): AppSettings | null {
         try {
-            const validated: Partial<AppSettings> = {};
+            const validated: any = {};
 
             this.logger.debug('validateSettings', '🔍 Validating settings object');
 

@@ -469,13 +469,13 @@ export async function copyHtmlLinkToClipboard(result: SearchResult): Promise<voi
 /**
  * Shared utility: Debounce function
  */
-export function debounce<T extends (...args: unknown[]) => unknown>(
+export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: number | null = null;
   
-  return function(this: unknown, ...args: Parameters<T>): void {
+  return function(this: any, ...args: Parameters<T>): void {
     const later = () => {
       timeout = null;
       func.apply(this, args);
