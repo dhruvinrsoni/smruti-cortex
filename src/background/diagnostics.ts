@@ -10,7 +10,7 @@ const logger = Logger.forComponent('Diagnostics');
 /**
  * Search debug history for tracking queries and results
  */
-interface SearchDebugEntry {
+export interface SearchDebugEntry {
     timestamp: number;
     query: string;
     resultCount: number;

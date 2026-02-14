@@ -159,7 +159,7 @@ export class SettingsManager {
      * Get default settings from schema (computed once)
      */
     private static getDefaults(): AppSettings {
-        const defaults: any = {};
+        const defaults: Partial<AppSettings> = {};
         for (const [key, schema] of Object.entries(SETTINGS_SCHEMA)) {
             defaults[key] = schema.default;
         }
@@ -388,9 +388,9 @@ export class SettingsManager {
      * ✅ AUTOMATIC: All settings validated based on SETTINGS_SCHEMA
      * ✅ SCALABLE: Adding new settings = add to schema only
      */
-    private static validateSettings(settings: any): AppSettings | null {
+    private static validateSettings(settings: unknown): AppSettings | null {
         try {
-            const validated: any = {};
+            const validated: Partial<AppSettings> = {};
 
             this.logger.debug('validateSettings', '🔍 Validating settings object');
 

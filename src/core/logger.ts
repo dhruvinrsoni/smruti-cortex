@@ -24,7 +24,7 @@ export interface LogEntry {
     levelName: string;
     context: LogContext;
     message: string;
-    data?: any;
+    data?: unknown;
     error?: Error;
 }
 
@@ -150,7 +150,7 @@ export class Logger {
     /**
      * Create and log an entry
      */
-    private static log(level: LogLevel, context: LogContext, message: string, data?: any, error?: Error): void {
+    private static log(level: LogLevel, context: LogContext, message: string, data?: unknown, error?: Error): void {
         if (!this.shouldLog(level)) {return;}
 
         const entry: LogEntry = {

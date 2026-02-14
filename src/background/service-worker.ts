@@ -21,7 +21,7 @@ const logger = Logger.forComponent('ServiceWorker');
 let commandsListenerRegistered = false;
 
 // Helper: Send message to content script with timeout
-function sendMessageWithTimeout<T = any>(tabId: number, message: unknown, timeoutMs: number = 500): Promise<T> {
+function sendMessageWithTimeout<T = unknown>(tabId: number, message: unknown, timeoutMs: number = 500): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('Content script response timeout'));
@@ -68,7 +68,7 @@ function registerCommandsListenerEarly() {
           } else {
             // Special page (chrome://, edge://, about:, extension page) - use popup
             logger.info('onCommand', `Special page detected (${tab?.url?.slice(0, 30)}...), using popup`);
-            await browserAPI.action.openPopup();
+            await (browserAPI.action as any).openPopup();
             logger.info('onCommand', `✅ Popup opened in ${(performance.now() - t0).toFixed(1)}ms`);
           }
         } catch (e) {
@@ -76,7 +76,7 @@ function registerCommandsListenerEarly() {
           const errorMsg = (e as Error).message || 'Unknown error';
           logger.info('onCommand', `Inline failed (${errorMsg}), falling back to popup`);
           try {
-            await browserAPI.action.openPopup();
+            await (browserAPI.action as any).openPopup();
             logger.info('onCommand', `✅ Popup opened (fallback) in ${(performance.now() - t0).toFixed(1)}ms`);
           } catch {
             // Ignore - best effort
