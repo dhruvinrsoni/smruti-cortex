@@ -1,6 +1,7 @@
 // helpers.ts — Browser abstraction layer for Chrome, Firefox, Edge, Safari
 
-declare const browser: any;
+// Browser extension API (works in both Chrome and Firefox)
+declare const browser: typeof chrome | undefined;
 
 /**
  * Supported browser types
@@ -73,10 +74,10 @@ export function getBrowserCompatibility(): {
 
 // Promisified wrappers for async APIs
 // eslint-disable-next-line @typescript-eslint/ban-types
-export function promisify<T>(apiCall: Function, ...args: any[]): Promise<T> {
+export function promisify<T>(apiCall: Function, ...args: unknown[]): Promise<T> {
     return new Promise((resolve, reject) => {
         try {
-            apiCall(...args, (result: any) => {
+            apiCall(...args, (result: T) => {
                 const err = browserAPI.runtime.lastError;
                 if (err) {reject(err);}
                 else {resolve(result);}

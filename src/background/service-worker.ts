@@ -21,7 +21,7 @@ const logger = Logger.forComponent('ServiceWorker');
 let commandsListenerRegistered = false;
 
 // Helper: Send message to content script with timeout
-function sendMessageWithTimeout<T = any>(tabId: number, message: unknown, timeoutMs: number = 500): Promise<T> {
+function sendMessageWithTimeout<T = unknown>(tabId: number, message: unknown, timeoutMs: number = 500): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('Content script response timeout'));
