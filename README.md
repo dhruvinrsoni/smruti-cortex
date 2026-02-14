@@ -120,6 +120,10 @@ npm run build:prod   # Production (minified)
 npm run lint         # Check code
 npm run test         # Run tests
 
+# Pre-commit hooks (automatic)
+# Husky automatically runs builds before each commit
+# If builds fail, you'll be prompted to continue or abort
+
 # Package
 npm run package      # Create store-ready zip
 
@@ -237,7 +241,9 @@ npm run build       # Verify build
 1. Fork repo
 2. Create feature branch
 3. Make changes
-4. Run `npm run lint && npm run test`
+4. **Pre-commit hooks automatically run `npm run build` and `npm run build:prod`**
+   - If builds pass: commit proceeds
+   - If builds fail: you'll be prompted to continue or abort
 5. Submit PR
 
 **Keep it minimal.** No unnecessary code.
