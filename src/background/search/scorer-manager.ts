@@ -94,8 +94,8 @@ const crossDimensionalScorer: Scorer = {
 const multiTokenMatchScorer: Scorer = {
     name: 'multiTokenMatch',
     weight: 0.35, // HIGH weight - this is critical for multi-word query relevance
-    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
-        const title = ((item as any).bookmarkTitle || item.title).toLowerCase();
+    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], _context?: ScorerContext) => {
+        const title = (item.bookmarkTitle || item.title).toLowerCase();
         const url = item.url.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
         const bookmarkFolders = (item.bookmarkFolders?.join(' ') || '').toLowerCase();
