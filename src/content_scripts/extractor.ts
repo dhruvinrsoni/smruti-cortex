@@ -6,7 +6,8 @@
 /* eslint-disable no-inner-declarations */
 // ^ Functions intentionally nested inside conditional blocks to guard against double-injection
 
-declare const browser: any;
+// Browser extension API (works in both Chrome and Firefox)
+declare const browser: typeof chrome | undefined;
 
 // Check if URL should skip extraction (sensitive sites)
 function isSensitiveUrl(url: string): boolean {
@@ -50,7 +51,7 @@ function isSensitiveUrl(url: string): boolean {
 }
 
 // Only run in top-level frames
-if ((window as any).top !== window) {
+if (window.top !== window) {
   // skip if inside iframe
   // console.log('[SmrutiCortex] extractor: iframe - skipping');
 } else {
@@ -69,7 +70,7 @@ if ((window as any).top !== window) {
       if (runtime && runtime.sendMessage) {
         try {
           // Request settings to check user blacklist
-          const response = await new Promise<any>((resolve) => {
+          const response = await new Promise<{ settings?: { sensitiveUrlBlacklist?: string[] } } | undefined>((resolve) => {
             runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
           });
           

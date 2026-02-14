@@ -27,9 +27,16 @@ import {
   sortResults
 } from '../shared/search-ui-base';
 
+// Extend window interface for our extension
+declare global {
+  interface Window {
+    __SMRUTI_QUICK_SEARCH_LOADED__?: boolean;
+  }
+}
+
 // Prevent double-injection
-if (!(window as any).__SMRUTI_QUICK_SEARCH_LOADED__) {
-  (window as any).__SMRUTI_QUICK_SEARCH_LOADED__ = true;
+if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
+  window.__SMRUTI_QUICK_SEARCH_LOADED__ = true;
 
   // ===== CONFIGURATION =====
   const OVERLAY_ID = 'smruti-cortex-overlay';

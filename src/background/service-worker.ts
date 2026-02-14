@@ -1,13 +1,13 @@
 // service-worker.ts — Core brain of SmrutiCortex
 
-import { openDatabase, getStorageQuotaInfo, setForceRebuildFlag, getForceRebuildFlag, clearIndexedDB } from './database';
+import { openDatabase, getStorageQuotaInfo, setForceRebuildFlag, getForceRebuildFlag } from './database';
 import { ingestHistory, performFullRebuild } from './indexing';
 import { runSearch } from './search/search-engine';
 import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
 import { Logger, LogLevel } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring, ensureReady } from './resilience';
+import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring } from './resilience';
 
 // Logger will be initialized below - don't log before that
 
@@ -21,21 +21,20 @@ const logger = Logger.forComponent('ServiceWorker');
 let commandsListenerRegistered = false;
 
 // Helper: Send message to content script with timeout
-function sendMessageWithTimeout(tabId: number, message: any, timeoutMs: number = 500): Promise<any> {
+function sendMessageWithTimeout<T = any>(tabId: number, message: unknown, timeoutMs: number = 500): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('Content script response timeout'));
     }, timeoutMs);
     
-    browserAPI.tabs.sendMessage(tabId, message)
-      .then((response) => {
-        clearTimeout(timer);
+    browserAPI.tabs.sendMessage(tabId, message, (response: T) => {
+      clearTimeout(timer);
+      if (browserAPI.runtime.lastError) {
+        reject(new Error(browserAPI.runtime.lastError.message));
+      } else {
         resolve(response);
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
+      }
+    });
   });
 }
 
@@ -54,7 +53,7 @@ function registerCommandsListenerEarly() {
             try {
               // Try to send message to existing content script (auto-injected via manifest)
               // Use timeout to avoid hanging if content script is unresponsive
-              const response = await sendMessageWithTimeout(tab.id, { type: 'OPEN_INLINE_SEARCH' }, 300);
+              const response = await sendMessageWithTimeout<{ success?: boolean }>(tab.id, { type: 'OPEN_INLINE_SEARCH' }, 300);
               if (response?.success) {
                 logger.info('onCommand', `✅ Inline overlay opened in ${(performance.now() - t0).toFixed(1)}ms`);
                 return; // Success - don't continue
