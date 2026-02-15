@@ -41,6 +41,19 @@ export function setupMessaging() {
                         break;
                     }
 
+                    case 'GET_RECENT_HISTORY': {
+                        Logger.debug('Handling GET_RECENT_HISTORY, limit:', msg.limit || 50);
+                        const { getRecentIndexedItems } = await import('./database');
+                        const recentItems = await getRecentIndexedItems(msg.limit || 50);
+                        Logger.debug('GET_RECENT_HISTORY completed, items count:', recentItems.length);
+                        try {
+                            sendResponse({ results: recentItems });
+                        } catch (err) {
+                            Logger.trace('Failed to send response (port may be closed)');
+                        }
+                        break;
+                    }
+
                     case 'REBUILD_INDEX':
                         Logger.info('Handling REBUILD_INDEX - starting history ingestion');
                         await ingestHistory();

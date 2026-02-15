@@ -166,6 +166,33 @@ export async function getIndexedItemsPage(offset = 0, limit = 100): Promise<{ it
     return { items, total };
 }
 
+// Get recent items sorted by lastVisit (descending)
+export async function getRecentIndexedItems(limit = 50): Promise<IndexedItem[]> {
+    const db = dbInstance || await openDatabase();
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readonly');
+        const store = txn.objectStore(STORE_NAME);
+        const index = store.index('lastVisit');
+        
+        // Open cursor in descending order (most recent first)
+        const request = index.openCursor(null, 'prev');
+        const results: IndexedItem[] = [];
+        
+        request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            
+            if (cursor && results.length < limit) {
+                results.push(cursor.value as IndexedItem);
+                cursor.continue();
+            } else {
+                resolve(results);
+            }
+        };
+        
+        request.onerror = () => reject(request.error);
+    });
+}
+
 // database.ts — Hybrid storage layer with auto-detection for IndexedDB
 // [existing imports and code above remain the same]
 
