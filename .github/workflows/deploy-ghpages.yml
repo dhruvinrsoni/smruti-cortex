@@ -4,6 +4,7 @@ name: Deploy Landing Page to gh-pages
 # Produces: Commits site build to `gh-pages` (branch root) so `main` remains clean.
 # Guardrails: verifies `privacy.html`, verifies `index.html`, creates `gh-pages` if missing,
 #             includes retry logic, and aborts on unexpected conditions.
+# Node Version: Uses Node.js 22.x (matches local development environment).
 
 on:
   push:
@@ -36,10 +37,11 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-      - name: Set up Node.js (for optional scripts)
+      - name: Set up Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
+          cache: 'npm'
 
       - name: Backup existing docs/privacy.html (if present)
         run: |
@@ -131,7 +133,7 @@ jobs:
             git add --all
             git commit -m "🚀 Deploy site to ${DEPLOY_BRANCH} [skip ci]
 
-- Built from main/site/ on $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          - Built from main/site/ on $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             MAX_RETRIES=3
             RETRY=0
             until git push origin HEAD:${DEPLOY_BRANCH} || [ $RETRY -eq $MAX_RETRIES ]; do
