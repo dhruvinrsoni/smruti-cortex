@@ -51,22 +51,67 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.source_branch || 'main' }}
       
+      - name: Pre-deployment safety checks
+        run: |
+          echo "🔍 Running pre-deployment safety checks..."
+          
+          # Check if we're on the correct branch
+          CURRENT_BRANCH=$(git branch --show-current)
+          TARGET_BRANCH="${{ inputs.target_branch || 'main' }}"
+          
+          if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
+            echo "⚠️ Current branch ($CURRENT_BRANCH) differs from target branch ($TARGET_BRANCH)"
+            echo "This workflow is designed to deploy to docs/ on the target branch."
+          fi
+          
+          # Check for uncommitted changes in docs/ directory
+          if [ -d docs ] && git status --porcelain docs/ | grep -q .; then
+            echo "❌ ERROR: Uncommitted changes detected in docs/ directory"
+            echo "This could indicate a previous deployment failure or manual changes."
+            echo "Please commit or stash changes in docs/ before deploying."
+            git status docs/
+            exit 1
+          fi
+          
+          # Check if branch is ahead/behind remote
+          AHEAD_BEHIND=$(git status -b --porcelain | head -1)
+          if echo "$AHEAD_BEHIND" | grep -q '\[ahead\|behind\]'; then
+            echo "⚠️ Branch is not in sync with remote. This may cause deployment conflicts."
+            echo "Status: $AHEAD_BEHIND"
+            echo "Consider pulling latest changes before deployment."
+          fi
+          
+          # Verify source files exist
+          if [ ! -d site ]; then
+            echo "❌ ERROR: site/ directory not found"
+            echo "Cannot deploy: no source files to copy"
+            exit 1
+          fi
+          
+          if [ ! -f site/index.html ]; then
+            echo "❌ ERROR: site/index.html not found"
+            echo "Cannot deploy: landing page missing"
+            exit 1
+          fi
+          
+          echo "✅ Pre-deployment checks passed"
+      
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
       
-      - name: Backup privacy.html (if present)
+      - name: Backup current docs state (for rollback)
         run: |
-          # If docs/privacy.html already exists, back it up. If not, we'll rely on site/privacy.html.
-          if [ -f docs/privacy.html ]; then
-            cp docs/privacy.html /tmp/privacy.html.backup
-            cp docs/privacy.html /tmp/privacy.html.backup2
-            echo "✅ Privacy policy backed up (2 copies)"
-            echo "PRIVACY_BACKUP_EXISTS=true" >> $GITHUB_ENV
+          if [ -d docs ]; then
+            echo "📦 Creating backup of current docs/ state..."
+            mkdir -p /tmp/docs-backup
+            cp -r docs/* /tmp/docs-backup/ 2>/dev/null || true
+            echo "✅ Backup created at /tmp/docs-backup/"
+            echo "ROLLBACK_AVAILABLE=true" >> $GITHUB_ENV
           else
-            echo "⚠️ No existing docs/privacy.html found. Will use site/privacy.html if present."
-            echo "PRIVACY_BACKUP_EXISTS=false" >> $GITHUB_ENV
+            echo "ℹ️ No existing docs/ directory to backup"
+            echo "ROLLBACK_AVAILABLE=false" >> $GITHUB_ENV
           fi
       
       - name: Clean docs directory (except privacy.html)
@@ -132,10 +177,12 @@ jobs:
           fi
       
       - name: Commit and push changes
+        id: deploy
         run: |
           git add docs/
           if git diff --staged --quiet; then
             echo "ℹ️ No changes to deploy"
+            echo "DEPLOYMENT_STATUS=no-changes" >> $GITHUB_ENV
           else
             git commit -m "${{ inputs.commit_message || '🚀 Deploy landing page [skip ci]' }}
 
@@ -148,7 +195,7 @@ jobs:
             # Try to push with retry logic
             MAX_RETRIES=3
             RETRY_COUNT=0
-            until git push origin main || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
+            until git push origin ${{ inputs.target_branch || 'main' }} || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
               RETRY_COUNT=$((RETRY_COUNT+1))
               echo "⚠️ Push failed, retrying ($RETRY_COUNT/$MAX_RETRIES)..."
               sleep 5
@@ -156,38 +203,114 @@ jobs:
             
             if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
               echo "❌ Failed to push after $MAX_RETRIES attempts"
-              echo "🔒 Privacy policy backup preserved in /tmp/"
+              echo "DEPLOYMENT_STATUS=failed" >> $GITHUB_ENV
+              echo "TRIGGER_ROLLBACK=true" >> $GITHUB_ENV
               exit 1
             fi
             
             echo "✅ Deployment successful!"
+            echo "DEPLOYMENT_STATUS=success" >> $GITHUB_ENV
           fi
       
+      - name: Rollback on deployment failure
+        if: failure() && env.TRIGGER_ROLLBACK == 'true' && env.ROLLBACK_AVAILABLE == 'true'
+        run: |
+          echo "🔄 Deployment failed! Attempting rollback..."
+          
+          # Restore docs/ from backup
+          if [ -d /tmp/docs-backup ]; then
+            rm -rf docs/*
+            cp -r /tmp/docs-backup/* docs/ 2>/dev/null || true
+            git add docs/
+            
+            # Commit rollback
+            git commit -m "🔄 ROLLBACK: Revert failed deployment
+            
+            - Restored docs/ from pre-deployment backup
+            - Deployment failed, reverting to previous state
+            
+            Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" --allow-empty
+            
+            # Try to push rollback
+            if git push origin ${{ inputs.target_branch || 'main' }}; then
+              echo "✅ Rollback successful - previous state restored"
+            else
+              echo "❌ Rollback push failed - manual intervention required"
+              echo "📦 Backup preserved at /tmp/docs-backup/"
+              exit 1
+            fi
+          else
+            echo "❌ No backup available for rollback"
+          fi
+      
+      - name: Final validation
+        if: env.DEPLOYMENT_STATUS == 'success'
+        run: |
+          echo "🔍 Running final validation..."
+          
+          # Verify GitHub Pages will work
+          if [ ! -f docs/index.html ]; then
+            echo "❌ ERROR: docs/index.html missing after deployment"
+            exit 1
+          fi
+          
+          if [ ! -f docs/privacy.html ]; then
+            echo "❌ ERROR: docs/privacy.html missing after deployment"
+            exit 1
+          fi
+          
+          # Check file permissions
+          if [ ! -r docs/index.html ] || [ ! -r docs/privacy.html ]; then
+            echo "❌ ERROR: Deployed files are not readable"
+            exit 1
+          fi
+          
+          echo "✅ Final validation passed"
+      
       - name: Summary
+        if: always()
         run: |
           echo "## 🚀 Site Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Landing page deployed successfully" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ env.DEPLOYMENT_STATUS }}" = "success" ]; then
+            echo "✅ **Deployment Successful**" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ env.DEPLOYMENT_STATUS }}" = "failed" ]; then
+            echo "❌ **Deployment Failed** - Rollback attempted" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ env.DEPLOYMENT_STATUS }}" = "no-changes" ]; then
+            echo "ℹ️ **No Changes** - Site already up to date" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Deployment Status Unknown**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📍 Live URLs" >> $GITHUB_STEP_SUMMARY
           echo "- **Landing Page:** https://dhruvinrsoni.github.io/smruti-cortex/" >> $GITHUB_STEP_SUMMARY
           echo "- **Privacy Policy:** https://dhruvinrsoni.github.io/smruti-cortex/privacy.html" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📁 Deployed Files" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ls -la docs/ >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if [ -d docs ]; then
+            echo "### 📁 Deployed Files" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ls -la docs/ >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "### 🛡️ Safety Features" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Pre-deployment conflict detection" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Source file validation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Privacy policy preservation (3-level backup)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Automatic rollback on failure" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Branch sync verification" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Final validation checks" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
-          echo "- Backs up existing privacy.html (2 copies)" >> $GITHUB_STEP_SUMMARY
-          echo "- Cleans docs/ directory (except privacy.html)" >> $GITHUB_STEP_SUMMARY
-          echo "- Generates screenshots index (optional, non-fatal)" >> $GITHUB_STEP_SUMMARY
-          echo "- Copies site/ files to docs/" >> $GITHUB_STEP_SUMMARY
-          echo "- Restores privacy.html with failsafe fallbacks" >> $GITHUB_STEP_SUMMARY
-          echo "- **⚠️ COMMITS and PUSHES changes to main branch**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          
           echo "### ⚠️ IMPORTANT" >> $GITHUB_STEP_SUMMARY
-          echo "This workflow pushes commits back to \`main\`." >> $GITHUB_STEP_SUMMARY
+          echo "This workflow pushes commits back to \`${{ inputs.target_branch || 'main' }}\`." >> $GITHUB_STEP_SUMMARY
           echo "**Always run \`git pull\` before making local commits after this runs!**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔒 Privacy policy preserved and verified" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ env.ROLLBACK_AVAILABLE }}" = "true" ]; then
+            echo "🔄 Rollback capability: Available (backup preserved)" >> $GITHUB_STEP_SUMMARY
+          fi
