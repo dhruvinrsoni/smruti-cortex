@@ -252,6 +252,9 @@ function initializePopup() {
   // Pre-render empty state immediately
   renderResults();
   
+  // Load recent history on popup open (show default results)
+  loadRecentHistory();
+  
   // Sort dropdown event handler (must be after resultsLocal is declared)
   const sortBySelect = $local('sort-by') as HTMLSelectElement;
   if (sortBySelect) {
@@ -326,13 +329,41 @@ function initializePopup() {
   // Assign global
   debounceSearch = debounceSearchLocal;
 
+  // Load recent history (shown by default when popup opens)
+  async function loadRecentHistory() {
+    const isServiceWorkerReady = await checkServiceWorkerStatus();
+    if (!isServiceWorkerReady) {
+      resultsLocal = [];
+      activeIndex = -1;
+      renderResults();
+      resultCountNode.textContent = 'Initializing...';
+      return;
+    }
+
+    try {
+      const defaultResultCount = SettingsManager.getSetting('defaultResultCount') || 50;
+      const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
+      resultsLocal = (resp && resp.results) ? resp.results : [];
+      
+      // Apply current sort setting
+      const sortBy = SettingsManager.getSetting('sortBy') || 'recent';
+      sortResults(resultsLocal, sortBy);
+      
+      activeIndex = resultsLocal.length ? 0 : -1;
+      renderResults();
+    } catch (error) {
+      resultsLocal = [];
+      activeIndex = -1;
+      renderResults();
+    }
+  }
+
   // Fast search
   async function doSearch(q: string) {
     currentQuery = q;
     if (!q || q.trim() === '') {
-      resultsLocal = [];
-      activeIndex = -1;
-      renderResults();
+      // Show recent history when query is cleared
+      loadRecentHistory();
       return;
     }
 
