@@ -11,6 +11,21 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to build from (default: main)'
+        required: false
+        default: 'main'
+        type: string
+      docker_tag:
+        description: 'Custom Docker tag (default: auto-generated from package.json)'
+        required: false
+        type: string
+      skip_tests:
+        description: 'Skip running tests in Docker'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   docker-build:
@@ -20,14 +35,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch || 'main' }}
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
       - name: Resolve version tag
         run: |
-          # Safely write the package version into GITHUB_ENV without shell $() substitution
-          node -e "console.log('SMRUTI_CORTEX_VERSION=' + require('./package.json').version)" >> $GITHUB_ENV
+          # Use custom tag if provided, otherwise use package version
+          if [ -n "${{ inputs.docker_tag }}" ]; then
+            echo "SMRUTI_CORTEX_VERSION=${{ inputs.docker_tag }}" >> $GITHUB_ENV
+          else
+            node -e "console.log('SMRUTI_CORTEX_VERSION=' + require('./package.json').version)" >> $GITHUB_ENV
+          fi
 
       - name: Build Docker image
         run: docker build -t smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }} .

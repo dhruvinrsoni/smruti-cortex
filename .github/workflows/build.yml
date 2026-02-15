@@ -13,6 +13,34 @@ on:
         description: 'Reason for triggering the workflow'
         required: false
         default: 'Manual trigger'
+      target_branch:
+        description: 'Branch to build from (default: main)'
+        required: false
+        default: 'main'
+        type: string
+      node_version:
+        description: 'Node.js version to use (default: 22)'
+        required: false
+        default: '22'
+        type: string
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - development
+      create_release:
+        description: 'Create GitHub release (only works with version tags)'
+        required: false
+        default: false
+        type: boolean
+      run_tests:
+        description: 'Run test suite before building'
+        required: false
+        default: true
+        type: boolean
   push:
     branches: [main]
     tags: ['v*']
@@ -27,11 +55,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch || 'main' }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js ${{ inputs.node_version || '22' }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ inputs.node_version || '22' }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -40,6 +70,13 @@ jobs:
       - name: Run linter
         run: npm run lint
         continue-on-error: true  # Don't fail build on lint warnings initially
+
+      - name: Run tests
+        if: ${{ inputs.run_tests != 'false' }}
+        run: npm test
+
+      - name: Build extension (${{ inputs.build_type || 'production' }})
+        run: npm run build${{ inputs.build_type == 'development' && ':dev' || ':prod' }}
 
       - name: Type check
         run: npm run tsc
