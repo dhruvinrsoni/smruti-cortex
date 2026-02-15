@@ -2,7 +2,7 @@
  * Unit tests for search-ui-base.ts shared utilities
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import {
   truncateUrl,
   escapeRegex,

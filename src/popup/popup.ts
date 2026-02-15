@@ -119,7 +119,7 @@ function setupEventListeners() {
   const input = $('search-input') as HTMLInputElement;
   const resultsNode = $('results') as HTMLUListElement;
   const resultCountNode = $('result-count') as HTMLDivElement; // eslint-disable-line @typescript-eslint/no-unused-vars
-  const settingsButton = $('settings-button') as HTMLButtonElement; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const settingsButton = $('settings-button') as HTMLButtonElement;
   const sortBySelect = $('sort-by') as HTMLSelectElement; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Make results container focusable for keyboard navigation
@@ -162,7 +162,7 @@ function initializePopup() {
   const input = $local('search-input') as HTMLInputElement;
   const resultsNode = $local('results') as HTMLUListElement;
   const resultCountNode = $local('result-count') as HTMLDivElement;
-  const settingsButton = $local('settings-button') as HTMLButtonElement;
+  const settingsButton = $local('settings-button') as HTMLButtonElement; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   let resultsLocal: IndexedItem[] = [];
   let activeIndex = -1;
@@ -1733,9 +1733,9 @@ function initializePopup() {
         const { analytics, history } = response;
 
         // Update summary stats
-        document.getElementById('analytics-total')!.textContent = analytics.totalSearches.toString();
-        document.getElementById('analytics-avg-results')!.textContent = analytics.averageResultCount.toFixed(1);
-        document.getElementById('analytics-avg-duration')!.textContent = `${analytics.averageSearchDuration.toFixed(2)} ms`;
+        document.getElementById('analytics-total')!.textContent = analytics.totalSearches.toString(); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        document.getElementById('analytics-avg-results')!.textContent = analytics.averageResultCount.toFixed(1); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        document.getElementById('analytics-avg-duration')!.textContent = `${analytics.averageSearchDuration.toFixed(2)} ms`; // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
         // Top queries
         const topQueriesDiv = document.getElementById('analytics-top-queries');
