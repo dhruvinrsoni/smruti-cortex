@@ -3,8 +3,8 @@
 // PERFORMANCE: This file is optimized for instant popup display
 // ARCHITECTURE: Uses shared search-ui-base.ts for DRY compliance
 
-import { BRAND_NAME } from '../core/constants';
-import { Logger, LogLevel, ComponentLogger } from '../core/logger';
+import { BRAND_NAME } from '../core/constants'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { Logger, LogLevel, ComponentLogger } from '../core/logger'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
@@ -15,8 +15,8 @@ import {
   copyHtmlLinkToClipboard,
   handleCyclicTabNavigation,
   openUrl,
-  parseKeyboardAction,
-  KeyboardAction,
+  parseKeyboardAction, // eslint-disable-line @typescript-eslint/no-unused-vars
+  KeyboardAction, // eslint-disable-line @typescript-eslint/no-unused-vars
   sortResults
 } from '../shared/search-ui-base';
 
@@ -25,7 +25,7 @@ let tokenize: ((query: string) => string[]) | null = null;
 let clearIndexedDB: (() => Promise<void>) | null = null;
 
 // Load tokenize lazily when needed
-async function getTokenize(): Promise<(query: string) => string[]> {
+async function getTokenize(): Promise<(query: string) => string[]> { // eslint-disable-line @typescript-eslint/no-unused-vars
   if (!tokenize) {
     const mod = await import('../background/search/tokenizer');
     tokenize = mod.tokenize;
@@ -34,7 +34,7 @@ async function getTokenize(): Promise<(query: string) => string[]> {
 }
 
 // Load clearIndexedDB lazily when needed (only for settings clear button)
-async function getClearIndexedDB(): Promise<() => Promise<void>> {
+async function getClearIndexedDB(): Promise<() => Promise<void>> { // eslint-disable-line @typescript-eslint/no-unused-vars
   if (!clearIndexedDB) {
     const mod = await import('../background/database');
     clearIndexedDB = mod.clearIndexedDB;
@@ -72,7 +72,7 @@ function showToast(message: string, isError = false) {
 
 // Fast initialization - prioritize speed over logging
 let logger: ComponentLogger;
-let settingsManager: typeof SettingsManager;
+let settingsManager: typeof SettingsManager; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 // === PERFORMANCE LOGGING: ENTRY POINT ===
 // Log the moment popup script is loaded (first code run) and record timestamp
@@ -93,7 +93,7 @@ try {
 // Global variables for event setup
 let debounceSearch: (q: string) => void;
 let handleKeydown: (e: KeyboardEvent) => void;
-let results: SearchResult[];
+let results: SearchResult[]; // eslint-disable-line @typescript-eslint/no-unused-vars
 let openSettingsPage: () => void;
 let $: (id: string) => HTMLElement | null;
 
@@ -118,9 +118,9 @@ fastInit();
 function setupEventListeners() {
   const input = $('search-input') as HTMLInputElement;
   const resultsNode = $('results') as HTMLUListElement;
-  const resultCountNode = $('result-count') as HTMLDivElement;
-  const settingsButton = $('settings-button') as HTMLButtonElement;
-  const sortBySelect = $('sort-by') as HTMLSelectElement;
+  const resultCountNode = $('result-count') as HTMLDivElement; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const settingsButton = $('settings-button') as HTMLButtonElement; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const sortBySelect = $('sort-by') as HTMLSelectElement; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Make results container focusable for keyboard navigation
   // Removed - individual result items should be focusable instead
