@@ -371,6 +371,34 @@ export class OllamaService {
       changed: config
     });
   }
+
+  /**
+   * Warm up the model by generating a dummy embedding
+   * This preloads the model into memory to reduce first-request latency
+   */
+  async warmup(): Promise<boolean> {
+    logger.info('warmup', '🔥 Warming up Ollama model...');
+    
+    try {
+      const startTime = performance.now();
+      
+      // Generate a test embedding for a simple phrase
+      const result = await this.generateEmbedding('test');
+      
+      if (result.success) {
+        const warmupTime = performance.now() - startTime;
+        logger.info('warmup', `✅ Model warmed up successfully in ${warmupTime.toFixed(0)}ms`);
+        this.isAvailable = true;
+        return true;
+      } else {
+        logger.warn('warmup', '⚠️ Warmup failed - model may not be available');
+        return false;
+      }
+    } catch (error) {
+      logger.warn('warmup', '⚠️ Warmup error (non-critical):', error);
+      return false;
+    }
+  }
 }
 
 // Singleton instance

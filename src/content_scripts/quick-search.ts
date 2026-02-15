@@ -1393,36 +1393,41 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     handleCyclicTabNavigation(focusGroups, getCurrentGroupIndex, backward);
   }
   function handleKeydown(e: KeyboardEvent): void {
-    // Stop propagation FIRST to prevent page from seeing any keystrokes in our overlay
-    e.stopPropagation();
-    
     // Check if input is focused - if so, only intercept specific navigation keys
     const focused = getFocusedElement() as HTMLElement | null;
     const isInputFocused = focused === inputEl;
     
     if (isInputFocused) {
-      // In input: only handle Escape, ArrowDown, Tab, Shift+Tab - allow everything else
+      // In input: only handle Escape, ArrowDown, Tab, Shift+Tab
+      // Allow ALL other keys (including Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+Z, Ctrl+Backspace, etc.) to work normally
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         hideOverlay();
         return;
       }
       if (e.key === 'ArrowDown' && currentResults.length > 0) {
         e.preventDefault();
+        e.stopPropagation();
         selectedIndex = 0;
         updateSelection();
         return;
       }
       if (e.key === 'Tab') {
         e.preventDefault();
+        e.stopPropagation();
         handleTabNavigation(e.shiftKey);
         return;
       }
-      // All other keys (including Ctrl+Backspace, Ctrl+Z, Ctrl+V, etc.) work normally
+      // All other keys (including Ctrl+A, Ctrl+Backspace, Ctrl+Z, Ctrl+V, text editing, etc.) work normally
+      // DO NOT stopPropagation here - let browser handle text editing shortcuts
       return;
     }
     
-    // Not in input - parse action and handle result navigation
+    // Not in input - stop propagation for result navigation
+    e.stopPropagation();
+    
+    // Parse action and handle result navigation
     const action = parseKeyboardAction(e);
     if (!action) {return;}
     
@@ -1777,6 +1782,51 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     return false; // Not handled
   }
 
+  // ===== CLEANUP =====
+  function cleanup(): void {
+    perfLog('Cleaning up quick-search resources');
+    
+    // Disconnect search port
+    if (searchPort) {
+      try {
+        searchPort.disconnect();
+        searchPort = null;
+      } catch (e) {
+        // Ignore - port may already be disconnected
+      }
+    }
+    
+    // Clear any pending timers
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    
+    // Remove shadow DOM
+    if (shadowHost && shadowHost.parentNode) {
+      shadowHost.parentNode.removeChild(shadowHost);
+      shadowHost = null;
+      shadowRoot = null;
+      overlayEl = null;
+      inputEl = null;
+      resultsEl = null;
+      settingsBtn = null;
+    }
+    
+    // Remove event listeners
+    try {
+      document.removeEventListener('keydown', handleGlobalKeydown, true);
+      document.removeEventListener('keydown', prewarmServiceWorker, true);
+      if (chrome?.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(handleMessage);
+      }
+    } catch (e) {
+      // Ignore - listeners may already be removed
+    }
+    
+    perfLog('Cleanup complete');
+  }
+  
   // ===== INITIALIZATION =====
   function init(): void {
     const t0 = performance.now();
@@ -1805,6 +1855,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (chrome?.runtime?.onMessage && chrome.runtime.id) {
       chrome.runtime.onMessage.addListener(handleMessage);
     }
+    
+    // Cleanup on page unload/navigation
+    window.addEventListener('beforeunload', cleanup, { once: true, passive: true });
+    window.addEventListener('pagehide', cleanup, { once: true, passive: true });
     
     // Pre-create overlay earlier for faster first show
     // Use requestIdleCallback if available, otherwise setTimeout

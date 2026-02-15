@@ -12,9 +12,9 @@
  * === PRIVACY ===
  * All processing is LOCAL via Ollama. No external API calls.
  * 
- * === NO CACHE ===
- * Cache removed intentionally. Since Ollama is local, there's no API cost concern.
- * This simplifies the code and avoids cache invalidation issues when toggling AI.
+ * === CACHE ===
+ * LRU cache with 5-minute TTL - even though Ollama is local, LLM calls take time.
+ * Cache reduces repeated expansions for same queries, improving responsiveness.
  */
 
 import { Logger } from '../core/logger';
@@ -29,6 +29,43 @@ const logger = Logger.forComponent(COMPONENT);
 interface KeywordExpansionResponse {
   original: string[];
   expanded: string[];
+}
+
+/**
+ * AI expansion cache with TTL
+ */
+interface CacheEntry {
+  keywords: string[];
+  timestamp: number;
+}
+
+const aiCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 50;
+
+function getCachedExpansion(query: string): string[] | null {
+  const entry = aiCache.get(query);
+  if (!entry) {return null;}
+  
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    aiCache.delete(query);
+    return null;
+  }
+  
+  return entry.keywords;
+}
+
+function cacheExpansion(query: string, keywords: string[]): void {
+  // Evict oldest if cache is full
+  if (aiCache.size >= MAX_CACHE_SIZE && !aiCache.has(query)) {
+    const oldestKey = aiCache.keys().next().value;
+    aiCache.delete(oldestKey);
+  }
+  
+  aiCache.set(query, {
+    keywords,
+    timestamp: Date.now()
+  });
 }
 
 /**
@@ -55,7 +92,14 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
 
-  // AI is enabled - call LLM for expansion (no cache - local is free)
+  // Check cache first
+  const cached = getCachedExpansion(normalizedQuery);
+  if (cached) {
+    logger.debug('expandQueryKeywords', `⚡ AI cache hit for: "${normalizedQuery}"`);
+    return cached;
+  }
+
+  // AI is enabled - call LLM for expansion
   const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
   const model = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
   const timeout = SettingsManager.getSetting('ollamaTimeout') || 30000;
@@ -71,6 +115,9 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
 
   try {
     const expandedKeywords = await callOllamaForKeywords(endpoint, generationModel, normalizedQuery, timeout);
+    
+    // Cache the result
+    cacheExpansion(normalizedQuery, expandedKeywords);
     
     logger.info('expandQueryKeywords', `✅ Expanded "${normalizedQuery}" → ${expandedKeywords.length} keywords`, {
       sample: expandedKeywords.slice(0, 10)

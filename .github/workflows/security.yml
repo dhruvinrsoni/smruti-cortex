@@ -1,0 +1,222 @@
+name: Security Scan
+
+# Purpose: Automated security vulnerability scanning for dependencies and code.
+# Produces: Security reports in workflow summary (no artifacts, no tokens required).
+# Use case: Detect security vulnerabilities early in development.
+# Note: Uses npm audit and basic checks - no external services or tokens needed.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Mondays
+  workflow_dispatch:
+    inputs:
+      audit_level:
+        description: 'Minimum severity level to report'
+        required: false
+        default: 'moderate'
+        type: choice
+        options:
+          - critical
+          - high
+          - moderate
+          - low
+
+jobs:
+  security:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Dependency Audit
+        id: audit
+        run: |
+          echo "## 🔒 Security Audit Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### NPM Dependency Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Run npm audit and capture output
+          set +e  # Don't fail on audit findings
+          npm audit --json > audit.json 2>&1
+          AUDIT_EXIT_CODE=$?
+          set -e
+          
+          # Parse audit results
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' audit.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit.json)
+          MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' audit.json)
+          LOW=$(jq '.metadata.vulnerabilities.low // 0' audit.json)
+          INFO=$(jq '.metadata.vulnerabilities.info // 0' audit.json)
+          TOTAL=$(jq '.metadata.vulnerabilities.total // 0' audit.json)
+          
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "| 🔴 Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| ✅ Critical | 0 |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "$HIGH" -gt 0 ]; then
+            echo "| 🟠 High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| ✅ High | 0 |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "$MODERATE" -gt 0 ]; then
+            echo "| 🟡 Moderate | $MODERATE |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| ✅ Moderate | 0 |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "| 🔵 Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚪ Info | $INFO |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Vulnerabilities:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Show detailed vulnerabilities if any critical/high
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "### ⚠️ High Priority Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            npm audit --audit-level=high 2>&1 || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Set exit code based on findings
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "SECURITY_STATUS=critical" >> $GITHUB_ENV
+            exit 1
+          elif [ "$HIGH" -gt 0 ]; then
+            echo "SECURITY_STATUS=high" >> $GITHUB_ENV
+            echo "::warning::High severity vulnerabilities found"
+          else
+            echo "SECURITY_STATUS=ok" >> $GITHUB_ENV
+          fi
+        continue-on-error: true
+      
+      - name: Check for Hardcoded Secrets
+        run: |
+          echo "### 🔐 Secret Detection" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Basic regex patterns for common secrets
+          RESULTS=$(grep -r -i -E "(password|secret|api[_-]?key|token|credential)" src/ --include="*.ts" --include="*.js" | grep -v "PASSWORD" | grep -v "SECRET" | grep -v "// " | grep -v "getSettings" || true)
+          
+          if [ -z "$RESULTS" ]; then
+            echo "✅ No hardcoded secrets detected" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Potential secrets found in code:**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$RESULTS" | head -20 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** These may be false positives. Review manually." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Check Manifest Permissions
+        run: |
+          echo "### 🔧 Manifest Permission Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Extract permissions from manifest
+          PERMISSIONS=$(jq -r '.permissions[]' manifest.json 2>/dev/null || echo "")
+          
+          echo "**Declared Permissions:**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -z "$PERMISSIONS" ]; then
+            echo "- None" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "$PERMISSIONS" | while read perm; do
+              echo "- \`$perm\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for sensitive permissions
+          SENSITIVE_PERMS=$(echo "$PERMISSIONS" | grep -E "(tabs|cookies|webRequest|proxy|management)" || true)
+          if [ -n "$SENSITIVE_PERMS" ]; then
+            echo "⚠️ **Sensitive permissions detected:**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "$SENSITIVE_PERMS" | while read perm; do
+              echo "- \`$perm\` - Review if necessary" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "✅ No overly sensitive permissions detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Dependency License Check
+        run: |
+          echo "### 📜 License Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          npm install -g license-checker 2>/dev/null || true
+          
+          if command -v license-checker &> /dev/null; then
+            license-checker --summary --json > licenses.json 2>/dev/null || true
+            
+            # Count licenses
+            LICENSE_COUNT=$(jq 'length' licenses.json 2>/dev/null || echo "0")
+            echo "**Total Dependencies:** $LICENSE_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Check for copyleft licenses
+            COPYLEFT=$(jq -r 'to_entries[] | select(.value.licenses | tostring | test("GPL|AGPL"; "i")) | .key' licenses.json 2>/dev/null || true)
+            
+            if [ -n "$COPYLEFT" ]; then
+              echo "⚠️ **Copyleft licenses found:**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "$COPYLEFT" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ No copyleft licenses detected" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "⚠️ License checker not available" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Security Summary
+        if: always()
+        run: |
+          echo "### 📊 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$SECURITY_STATUS" = "critical" ]; then
+            echo "❌ **CRITICAL**: Critical vulnerabilities found - immediate action required" >> $GITHUB_STEP_SUMMARY
+          elif [ "$SECURITY_STATUS" = "high" ]; then
+            echo "⚠️ **WARNING**: High severity vulnerabilities detected - review recommended" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **PASS**: No critical security issues detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scans performed:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Dependency vulnerability audit" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Hardcoded secret detection" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Manifest permission review" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ License compliance check" >> $GITHUB_STEP_SUMMARY
