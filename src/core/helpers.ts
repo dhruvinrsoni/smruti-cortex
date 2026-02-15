@@ -76,7 +76,7 @@ export function getBrowserCompatibility(): {
 export function promisify<T>(apiCall: Function, ...args: any[]): Promise<T> { // eslint-disable-line @typescript-eslint/no-explicit-any
     return new Promise((resolve, reject) => {
         try {
-            apiCall(...args, (result: any) => {
+            apiCall(...args, (result: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                 const err = browserAPI.runtime.lastError;
                 if (err) {reject(err);}
                 else {resolve(result);}
