@@ -435,7 +435,7 @@ export function renderResults(
     // Click handler
     if (options.onResultClick) {
       div.addEventListener('click', (e: MouseEvent) => {
-        options.onResultClick!(index, result, e.ctrlKey || e.metaKey);
+        options.onResultClick!(index, result, e.ctrlKey || e.metaKey); // eslint-disable-line @typescript-eslint/no-non-null-assertion
       });
     }
 
