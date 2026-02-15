@@ -13,6 +13,7 @@ import { applyDiversityFilter, ScoredItem } from './diversity-filter';
 import { performanceTracker } from '../performance-monitor';
 import { getExpandedTerms } from './query-expansion';
 import { recordSearchDebug } from '../diagnostics';
+import { getSearchCache } from './search-cache';
 
 export async function runSearch(query: string): Promise<IndexedItem[]> {
     const searchStartTime = performance.now();
@@ -23,6 +24,15 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     if (!q) {
         logger.trace('runSearch', 'Query is empty, returning empty array');
         return [];
+    }
+
+    // Check cache first for instant results
+    const searchCache = getSearchCache();
+    const cachedResults = searchCache.get(q);
+    if (cachedResults) {
+        const cacheTime = performance.now() - searchStartTime;
+        logger.info('runSearch', `⚡ Cache hit! Returning ${cachedResults.length} results in ${cacheTime.toFixed(2)}ms`);
+        return cachedResults;
     }
 
     // Original tokens from query
@@ -297,6 +307,9 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     } else {
         logger.info('runSearch', `🔍 "${q}" → ${finalResults.length} results (${results.length} matches, ${items.length} indexed)`);
     }
+
+    // Store results in cache for future queries
+    searchCache.set(q, finalResults);
 
     return finalResults;
 }

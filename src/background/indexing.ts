@@ -46,6 +46,53 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
 }
 
 /**
+ * Generate embeddings for multiple items in batches (more efficient)
+ * Processes items in parallel batches to avoid overwhelming the LLM
+ */
+export async function generateBatchEmbeddings(
+    items: Array<{ title: string; metaDescription?: string; url: string }>,
+    batchSize = 10
+): Promise<Array<number[] | undefined>> {
+    try {
+        // Check if embeddings are enabled
+        const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+        if (!embeddingsEnabled) {
+            return items.map(() => undefined);
+        }
+
+        logger.info('generateBatchEmbeddings', `🧠 Generating embeddings for ${items.length} items in batches of ${batchSize}`);
+        
+        const results: Array<number[] | undefined> = [];
+        const batches = [];
+        
+        // Split into batches
+        for (let i = 0; i < items.length; i += batchSize) {
+            batches.push(items.slice(i, i + batchSize));
+        }
+        
+        // Process each batch in parallel
+        for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            logger.debug('generateBatchEmbeddings', `Processing batch ${i + 1}/${batches.length} (${batch.length} items)`);
+            
+            const batchResults = await Promise.all(
+                batch.map(item => generateItemEmbedding(item))
+            );
+            
+            results.push(...batchResults);
+        }
+        
+        const successCount = results.filter(r => r !== undefined).length;
+        logger.info('generateBatchEmbeddings', `✅ Batch embedding complete: ${successCount}/${items.length} successful`);
+        
+        return results;
+    } catch (error) {
+        logger.error('generateBatchEmbeddings', '❌ Batch embedding failed:', error);
+        return items.map(() => undefined);
+    }
+}
+
+/**
  * Force a full rebuild of the index (used after CLEAR_ALL_DATA or manual rebuild)
  */
 export async function performFullRebuild(): Promise<void> {

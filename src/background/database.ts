@@ -72,6 +72,100 @@ export async function getAllIndexedItems(): Promise<IndexedItem[]> {
     });
 }
 
+// ------------------------------
+// Cursor-based pagination for large datasets
+// ------------------------------
+export async function getIndexedItemsBatches(batchSize = 1000): Promise<IndexedItem[][]> {
+    const db = dbInstance || await openDatabase();
+    const txn = db.transaction(STORE_NAME, 'readonly');
+    const store = txn.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    const batches: IndexedItem[][] = [];
+    let batch: IndexedItem[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+        request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+
+            if (cursor) {
+                batch.push(cursor.value as IndexedItem);
+
+                if (batch.length >= batchSize) {
+                    batches.push(batch);
+                    batch = [];
+                }
+
+                cursor.continue();
+            } else {
+                if (batch.length > 0) {
+                    batches.push(batch);
+                }
+                resolve();
+            }
+        };
+
+        request.onerror = () => reject(request.error);
+    });
+
+    return batches;
+}
+
+// Get paginated results (offset-based)
+export async function getIndexedItemsPage(offset = 0, limit = 100): Promise<{ items: IndexedItem[]; total: number }> {
+    const db = dbInstance || await openDatabase();
+    
+    // Get total count
+    const total = await new Promise<number>((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readonly');
+        const store = txn.objectStore(STORE_NAME);
+        const req = store.count();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+    
+    // Get paginated items
+    const items = await new Promise<IndexedItem[]>((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readonly');
+        const store = txn.objectStore(STORE_NAME);
+        
+        // Use cursor to skip offset items
+        const cursorReq = store.openCursor();
+        const results: IndexedItem[] = [];
+        let skipped = 0;
+        let collected = 0;
+        
+        cursorReq.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            
+            if (cursor) {
+                // Skip offset items
+                if (skipped < offset) {
+                    skipped++;
+                    cursor.continue();
+                    return;
+                }
+                
+                // Collect items until limit
+                if (collected < limit) {
+                    results.push(cursor.value as IndexedItem);
+                    collected++;
+                    cursor.continue();
+                } else {
+                    resolve(results);
+                }
+            } else {
+                // Reached end
+                resolve(results);
+            }
+        };
+        
+        cursorReq.onerror = () => reject(cursorReq.error);
+    });
+    
+    return { items, total };
+}
+
 // database.ts — Hybrid storage layer with auto-detection for IndexedDB
 // [existing imports and code above remain the same]
 

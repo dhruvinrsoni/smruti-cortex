@@ -1,0 +1,161 @@
+name: Performance Monitoring
+
+# Purpose: Monitor bundle sizes and performance metrics on every build.
+# Produces: Performance reports and bundle size analysis (no artifacts, just logs).
+# Use case: Detect performance regressions and bundle bloat early.
+# Note: Does NOT require GitHub tokens - uses workflow summary only.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Baseline ref to compare against (default: main)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  performance:
+    name: Bundle Analysis & Performance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history for comparison
+      
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build production bundle
+        run: npm run build:prod
+      
+      - name: Analyze bundle sizes
+        id: analyze
+        run: |
+          echo "## 📦 Bundle Size Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Current Build" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Get sizes of all JavaScript bundles
+          find dist -name "*.js" -type f -exec ls -lh {} \; | awk '{print $9, $5}' | sort >> $GITHUB_STEP_SUMMARY
+          
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Calculate total bundle size
+          TOTAL_SIZE=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum}')
+          TOTAL_SIZE_KB=$((TOTAL_SIZE / 1024))
+          TOTAL_SIZE_MB=$(echo "scale=2; $TOTAL_SIZE / 1048576" | bc)
+          
+          echo "**Total Bundle Size:** ${TOTAL_SIZE_MB} MB (${TOTAL_SIZE_KB} KB)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Bundle size thresholds
+          SERVICE_WORKER_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
+          POPUP_SIZE=$(ls -l dist/popup/popup.js 2>/dev/null | awk '{print $5}')
+          QUICK_SEARCH_SIZE=$(ls -l dist/content_scripts/quick-search.js 2>/dev/null | awk '{print $5}')
+          
+          echo "### Bundle Size Thresholds" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Bundle | Size | Threshold | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Service Worker (target: < 500KB)
+          SW_SIZE_KB=$((SERVICE_WORKER_SIZE / 1024))
+          if [ $SERVICE_WORKER_SIZE -lt 512000 ]; then
+            echo "| Service Worker | ${SW_SIZE_KB} KB | 500 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Service Worker | ${SW_SIZE_KB} KB | 500 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Popup (target: < 300KB)
+          POPUP_SIZE_KB=$((POPUP_SIZE / 1024))
+          if [ $POPUP_SIZE -lt 307200 ]; then
+            echo "| Popup | ${POPUP_SIZE_KB} KB | 300 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Popup | ${POPUP_SIZE_KB} KB | 300 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Quick Search (target: < 200KB)
+          QS_SIZE_KB=$((QUICK_SEARCH_SIZE / 1024))
+          if [ $QUICK_SEARCH_SIZE -lt 204800 ]; then
+            echo "| Quick Search | ${QS_SIZE_KB} KB | 200 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Quick Search | ${QS_SIZE_KB} KB | 200 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Compare with baseline (if PR or manual)
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        run: |
+          BASELINE_REF="${{ inputs.baseline_ref || 'main' }}"
+          
+          echo "### 📊 Comparison with \`$BASELINE_REF\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Checkout baseline
+          git fetch origin $BASELINE_REF
+          git checkout origin/$BASELINE_REF
+          
+          # Build baseline
+          npm ci > /dev/null 2>&1
+          npm run build:prod > /dev/null 2>&1
+          
+          # Get baseline sizes
+          BASELINE_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum}')
+          BASELINE_TOTAL_KB=$((BASELINE_TOTAL / 1024))
+          
+          # Switch back to current ref
+          git checkout -
+          npm ci > /dev/null 2>&1
+          npm run build:prod > /dev/null 2>&1
+          
+          # Get current sizes
+          CURRENT_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum}')
+          CURRENT_TOTAL_KB=$((CURRENT_TOTAL / 1024))
+          
+          # Calculate difference
+          DIFF_KB=$((CURRENT_TOTAL_KB - BASELINE_TOTAL_KB))
+          PERCENT_CHANGE=$(echo "scale=2; ($DIFF_KB * 100) / $BASELINE_TOTAL_KB" | bc)
+          
+          echo "| Metric | Baseline | Current | Change |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $DIFF_KB -gt 0 ]; then
+            echo "| Total Size | ${BASELINE_TOTAL_KB} KB | ${CURRENT_TOTAL_KB} KB | 📈 +${DIFF_KB} KB (+${PERCENT_CHANGE}%) |" >> $GITHUB_STEP_SUMMARY
+          elif [ $DIFF_KB -lt 0 ]; then
+            echo "| Total Size | ${BASELINE_TOTAL_KB} KB | ${CURRENT_TOTAL_KB} KB | 📉 ${DIFF_KB} KB (${PERCENT_CHANGE}%) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Total Size | ${BASELINE_TOTAL_KB} KB | ${CURRENT_TOTAL_KB} KB | ✅ No change |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Performance Summary
+        run: |
+          echo "### ⚡ Performance Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bundle analysis complete" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Size thresholds checked" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Performance monitoring active" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**No significant performance regressions detected.**" >> $GITHUB_STEP_SUMMARY

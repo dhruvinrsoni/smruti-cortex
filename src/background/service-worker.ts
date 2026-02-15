@@ -565,6 +565,23 @@ async function init() {
             // Start health monitoring for self-healing
             startHealthMonitoring();
 
+            // Warm up AI models in background if enabled (non-blocking)
+            SettingsManager.init().then(async () => {
+                const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled');
+                const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled');
+                
+                if (ollamaEnabled || embeddingsEnabled) {
+                    logger.info('init', '🔥 Warming up AI models in background...');
+                    try {
+                        const { getOllamaService } = await import('./ollama-service');
+                        const ollamaService = getOllamaService();
+                        await ollamaService.warmup();
+                    } catch (error) {
+                        logger.debug('init', '⚠️ Model warmup failed (non-critical):', error);
+                    }
+                }
+            }).catch(() => {/* ignore */});
+
             // Command listener is already registered at module load level for ultra-fast response
             // Command listener is already registered at module load level for ultra-fast response
             // Just ensure it's registered if not already
