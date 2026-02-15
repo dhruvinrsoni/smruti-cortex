@@ -16,6 +16,21 @@ on:
         description: 'Reason for manual CI run'
         required: false
         default: 'Manual quality check'
+      node_version:
+        description: 'Node.js version to use (default: 22)'
+        required: false
+        default: '22'
+        type: string
+      run_tests:
+        description: 'Run test suite'
+        required: false
+        default: true
+        type: boolean
+      run_lint:
+        description: 'Run linting checks'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   lint-test-build:
@@ -26,19 +41,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Node.js 22.x
+      - name: Setup Node.js ${{ inputs.node_version || '22' }}
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: ${{ inputs.node_version || '22' }}
           cache: 'npm'
       
       - name: Install dependencies
         run: npm ci
       
       - name: Run linter
+        if: ${{ inputs.run_lint != 'false' }}
         run: npm run lint:release
       
       - name: Run tests with coverage
+        if: ${{ inputs.run_tests != 'false' }}
         run: npm run test:coverage
       
       - name: Upload coverage reports
