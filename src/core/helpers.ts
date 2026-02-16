@@ -47,7 +47,18 @@ export const browserAPI = (() => {
         // Firefox, Safari (WebExtension polyfill)
         return browser;
     }
-    throw new Error('No supported browser API found.');
+    // Fallback proxy for test/non-extension environments
+    const handler = {
+        get(_target: any, prop: string) { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const real = (globalThis as any).chrome ?? (globalThis as any).browser; // eslint-disable-line @typescript-eslint/no-explicit-any
+            if (real && prop in real) {
+                return real[prop];
+            }
+            // Return no-op function for missing APIs
+            return (..._args: any[]) => undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+        }
+    };
+    return new Proxy({}, handler) as typeof chrome;
 })();
 
 /**

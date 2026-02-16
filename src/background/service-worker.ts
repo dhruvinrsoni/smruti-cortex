@@ -55,7 +55,7 @@ function registerCommandsListenerEarly() {
               // Use timeout to avoid hanging if content script is unresponsive
               const response = await sendMessageWithTimeout<{ success?: boolean }>(tab.id, { type: 'OPEN_INLINE_SEARCH' }, 300);
               if (response?.success) {
-                logger.info('onCommand', `✅ Inline overlay opened in ${(performance.now() - t0).toFixed(1)}ms`);
+                logger.debug('onCommand', `✅ Inline overlay opened in ${(performance.now() - t0).toFixed(1)}ms`);
                 return; // Success - don't continue
               }
               // Response received but not successful - fall through to popup
@@ -311,6 +311,20 @@ setupPortBasedMessaging();
                 const results = await runSearch(msg.query);
                 logger.debug('onMessage', 'Search completed, results:', results.length);
                 sendResponse({ results });
+                break;
+              }
+
+              case 'GET_RECENT_HISTORY': {
+                logger.debug('onMessage', `GET_RECENT_HISTORY requested with limit: ${msg.limit || 50}`);
+                try {
+                  const { getRecentIndexedItems } = await import('./database');
+                  const recentItems = await getRecentIndexedItems(msg.limit || 50);
+                  logger.debug('onMessage', `GET_RECENT_HISTORY completed, items: ${recentItems.length}`);
+                  sendResponse({ results: recentItems });
+                } catch (error) {
+                  logger.error('onMessage', 'GET_RECENT_HISTORY failed:', error);
+                  sendResponse({ results: [] });
+                }
                 break;
               }
 
