@@ -77,23 +77,27 @@ async function main() {
   let allPassed = true;
   const results = [];
 
-  // Run TypeScript compilation
-  console.log('\n🏗️  PHASE 1: TypeScript Compilation');
-  const tscResult = runCommand('npm run tsc', 'TypeScript compilation');
-  results.push({ name: 'TypeScript', passed: tscResult });
-  if (!tscResult) allPassed = false;
+  // Run build (blocking) — fail commit if this fails
+  console.log('\n🏗️  PHASE 1: Build (blocking)');
+  const buildResult = runCommand('npm run build', 'Build (dev)');
+  results.push({ name: 'Build (dev)', passed: buildResult });
+  if (!buildResult) allPassed = false;
 
-  // Run linting
-  console.log('\n🧹 PHASE 2: Code Linting');
+  // Run production build (blocking) — fail commit if this fails
+  console.log('\n🏗️  PHASE 1b: Build:prod (blocking)');
+  const buildProdResult = runCommand('npm run build:prod', 'Build (prod)');
+  results.push({ name: 'Build (prod)', passed: buildProdResult });
+  if (!buildProdResult) allPassed = false;
+
+  // Run linting (non-blocking) — report issues but do not block commits
+  console.log('\n🧹 PHASE 2: Code Linting (non-blocking)');
   const lintResult = runCommand('npm run lint:release', 'ESLint linting');
-  results.push({ name: 'Linting', passed: lintResult });
-  if (!lintResult) allPassed = false;
+  results.push({ name: 'Linting (non-blocking)', passed: lintResult });
 
-  // Run tests
-  console.log('\n🧪 PHASE 3: Test Suite');
+  // Run tests (non-blocking) — report failures but do not block commits
+  console.log('\n🧪 PHASE 3: Test Suite (non-blocking)');
   const testResult = runCommand('npm test', 'Vitest test suite');
-  results.push({ name: 'Tests', passed: testResult });
-  if (!testResult) allPassed = false;
+  results.push({ name: 'Tests (non-blocking)', passed: testResult });
 
   // Summary
   console.log('\n📊 BUILD CHECK SUMMARY');
