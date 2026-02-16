@@ -21,7 +21,7 @@
     "privacy",
     "smruti-cortex"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "clean": "rimraf dist",
     "sync-version": "node ./scripts/sync-version.mjs",
