@@ -76,11 +76,18 @@ jobs:
       
       - name: Package extension (zip)
         run: |
-          echo "📦 Creating installable zip package..."
-          cd dist
-          zip -r ../smruti-cortex-docker.zip .
-          cd ..
-          echo "✅ Created: smruti-cortex-docker.zip ($(du -h smruti-cortex-docker.zip | cut -f1))"
+          echo "📦 Creating installable zip package via centralized packager..."
+          # Use package script to create release zip
+          npm run package
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          RELEASE_ZIP=$(ls -t release/*.zip 2>/dev/null | head -n1 || true)
+          if [ -z "$RELEASE_ZIP" ]; then
+            echo "Error: no release zip found in release/" >&2
+            exit 1
+          fi
+          DOCKER_ZIP=smruti-cortex-v${VERSION}-docker.zip
+          cp "$RELEASE_ZIP" "$DOCKER_ZIP"
+          echo "✅ Created: $DOCKER_ZIP ($(du -h $DOCKER_ZIP | cut -f1))"
       
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
@@ -93,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smruti-cortex-docker-zip
-          path: smruti-cortex-docker.zip
+          path: smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip
           retention-days: 7
       
       - name: Show artifact summary
@@ -106,7 +113,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Produced Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "1. **extension-dist-docker** (7 days) - Unzipped dist/ folder" >> $GITHUB_STEP_SUMMARY
-          echo "2. **smruti-cortex-docker-zip** (7 days) - Ready-to-install zip" >> $GITHUB_STEP_SUMMARY
+          echo "2. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip** (7 days) - Ready-to-install zip" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📁 Build Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -115,7 +122,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📊 Package Details" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Zip package: $(du -h smruti-cortex-docker.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "Zip package: $(du -h smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
           echo "Total files: $(find dist -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -128,4 +135,4 @@ jobs:
           echo "- **Does NOT commit or push changes**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
-          echo "Download \`smruti-cortex-docker.zip\` and load unpacked in Chrome/Edge." >> $GITHUB_STEP_SUMMARY
+          echo "Download \`smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip\` and load unpacked in Chrome/Edge." >> $GITHUB_STEP_SUMMARY
