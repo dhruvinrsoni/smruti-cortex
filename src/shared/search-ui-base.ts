@@ -404,10 +404,11 @@ export function renderResults(
     if (result.isBookmark) {
       const bookmarkIcon = document.createElement('span');
       bookmarkIcon.className = 'bookmark-indicator';
-      bookmarkIcon.textContent = '⭐';
+      bookmarkIcon.textContent = '★';
       bookmarkIcon.title = 'Bookmarked';
       bookmarkIcon.style.marginRight = '6px';
       bookmarkIcon.style.color = '#fbbf24';
+      bookmarkIcon.style.fontSize = '14px';
       titleDiv.appendChild(bookmarkIcon);
     }
     

@@ -889,7 +889,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.value = '';
     currentResults = [];
     selectedIndex = 0;
-    renderResults([]);
+    
+    // Load recent history as smart default (instead of empty state)
+    loadRecentHistory();
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
     // Strategy 1: Blur active element (likely the omnibox with selected text)
@@ -1011,12 +1013,66 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     debounceTimer = window.setTimeout(() => {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
-        currentResults = [];
-        renderResults([]);
+        // Load recent history when query is cleared
+        loadRecentHistory();
         return;
       }
       performSearch(query);
     }, searchDebounceMs);
+  }
+
+  // Load recent history (smart default results when query is empty)
+  async function loadRecentHistory(): Promise<void> {
+    const t0 = performance.now();
+    perfLog('loadRecentHistory called');
+
+    // Check extension context validity
+    if (!isExtensionContextValid()) {
+      perfLog('Extension context invalid - showing error');
+      currentResults = [];
+      renderErrorResults(
+        '🔄 Extension was updated. Please reload this page to continue.',
+        () => window.location.reload()
+      );
+      return;
+    }
+
+    try {
+      // Get default result count from cached settings (or use 50 as fallback)
+      const defaultResultCount = cachedSettings?.defaultResultCount || 50;
+      
+      // Request recent history from service worker
+      const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
+          (resp) => {
+            if (chrome.runtime.lastError) {
+              perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
+              resolve({ results: [] });
+            } else {
+              resolve(resp || { results: [] });
+            }
+          }
+        );
+      });
+
+      let recentItems: SearchResult[] = response.results || [];
+      
+      // Apply current sort setting (if available from cached settings)
+      const sortBy = cachedSettings?.sortBy || 'most-recent';
+      recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      
+      currentResults = recentItems;
+      selectedIndex = recentItems.length > 0 ? 0 : -1;
+      renderResults(recentItems);
+      
+      perfLog('loadRecentHistory completed', t0);
+      perfLog(`Loaded ${recentItems.length} recent items`);
+    } catch (error) {
+      perfLog('loadRecentHistory error: ' + (error as Error).message);
+      currentResults = [];
+      renderResults([]);
+    }
   }
 
   function performSearch(query: string): void {
@@ -1026,9 +1082,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Sanitize query to prevent issues with special characters
     const sanitizedQuery = sanitizeQuery(query);
     if (!sanitizedQuery) {
-      // Empty query after sanitization - show empty state
-      currentResults = [];
-      renderResults([]);
+      // Empty query after sanitization - load recent history (smart default results)
+      loadRecentHistory();
       return;
     }
 
@@ -1748,6 +1803,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   ): boolean {
     if (message?.type === 'OPEN_INLINE_SEARCH') {
       const t0 = performance.now();
+      console.log('SmrutiCortex: OPEN_INLINE_SEARCH message received');
       showOverlay(); // showOverlay now handles all focus attempts
       perfLog('Overlay shown via message', t0);
       sendResponse({ success: true, time: performance.now() - t0 });
@@ -1831,6 +1887,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function init(): void {
     const t0 = performance.now();
     
+    console.log('SmrutiCortex: Quick-search initializing');
+    
     // Fetch log level from settings first (async, non-blocking)
     fetchLogLevel();
     
@@ -1852,8 +1910,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }, { passive: true });
 
     // Message listener from service worker
-    if (chrome?.runtime?.onMessage && chrome.runtime.id) {
-      chrome.runtime.onMessage.addListener(handleMessage);
+    if (chrome?.runtime?.onMessage) {
+      try {
+        chrome.runtime.onMessage.addListener(handleMessage);
+        perfLog('Message listener registered');
+      } catch (err) {
+        console.error('SmrutiCortex: Failed to register message listener', err);
+      }
+    } else {
+      console.warn('SmrutiCortex: chrome.runtime.onMessage not available');
     }
     
     // Cleanup on page unload/navigation
