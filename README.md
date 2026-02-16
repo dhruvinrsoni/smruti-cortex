@@ -3,7 +3,7 @@
 **Ultra-fast browser history search. Find any page instantly.**
 
 [![Build](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)
 
@@ -252,7 +252,7 @@ npm run build       # Verify build
 
 ## 📄 License
 
-MIT — See [LICENSE](LICENSE)
+Apache-2.0 — See [LICENSE](LICENSE)
 
 ---
 
