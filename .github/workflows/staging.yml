@@ -119,9 +119,29 @@ jobs:
       - name: Package staging extension
         run: |
           npm run package
-          mv dist/smruti-cortex.zip dist/smruti-cortex-staging.zip
-          
-          SIZE=$(ls -lh dist/smruti-cortex-staging.zip | awk '{print $5}')
+          # Packaging script now places the ZIP in `release/` with versioned name.
+          # Copy the created release zip into `dist/` as the expected staging artifact.
+          mkdir -p dist
+          # Derive version from package.json so staging artifacts include version info
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          RELEASE_ZIP=$(ls -t release/*.zip 2>/dev/null | head -n1 || true)
+          ARTIFACT_NAME=smruti-cortex-v${VERSION}-staging.zip
+          if [ -z "$RELEASE_ZIP" ]; then
+            echo "No release zip found in release/; looking for dist/smruti-cortex.zip as fallback"
+            if [ -f dist/smruti-cortex.zip ]; then
+              cp dist/smruti-cortex.zip dist/$ARTIFACT_NAME
+            else
+              echo "Error: no package zip found to upload" >&2
+              exit 1
+            fi
+          else
+            cp "$RELEASE_ZIP" dist/$ARTIFACT_NAME
+          fi
+
+          # Export artifact name for subsequent steps
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+
+          SIZE=$(ls -lh dist/$ARTIFACT_NAME | awk '{print $5}')
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package size:** $SIZE" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -130,7 +150,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smruti-cortex-staging
-          path: dist/smruti-cortex-staging.zip
+          path: dist/${{ env.ARTIFACT_NAME }}
           retention-days: 14
           compression-level: 0  # Already compressed
       
@@ -140,11 +160,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** ✅ Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** \`develop\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifact:** \`smruti-cortex-staging\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifact:** \`$ARTIFACT_NAME\`" >> $GITHUB_STEP_SUMMARY
           echo "**Retention:** 14 days" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📥 How to Test" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the \`smruti-cortex-staging\` artifact from this workflow" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the \`$ARTIFACT_NAME\` artifact from this workflow" >> $GITHUB_STEP_SUMMARY
           echo "2. Extract the ZIP file" >> $GITHUB_STEP_SUMMARY
           echo "3. Open Chrome and navigate to \`chrome://extensions\`" >> $GITHUB_STEP_SUMMARY
           echo "4. Enable \"Developer mode\"" >> $GITHUB_STEP_SUMMARY

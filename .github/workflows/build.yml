@@ -90,15 +90,23 @@ jobs:
 
       - name: Package extension
         run: |
-          cd dist
-          zip -r ../smruti-cortex.zip .
-          cd ..
+          # Use centralized packaging script which creates a versioned zip in release/
+          npm run package
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          PACKAGE_ZIP=$(ls -t release/*.zip 2>/dev/null | head -n1 || true)
+          if [ -z "$PACKAGE_ZIP" ]; then
+            echo "Error: no package zip found in release/" >&2
+            exit 1
+          fi
+          ARTIFACT_NAME=smruti-cortex-v${VERSION}.zip
+          cp "$PACKAGE_ZIP" "./${ARTIFACT_NAME}"
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: smruti-cortex-extension
-          path: smruti-cortex.zip
+          path: ${{ env.ARTIFACT_NAME }}
           retention-days: 30
       
       - name: Build Summary
@@ -114,8 +122,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📊 Package Details" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Zip package: $(du -h smruti-cortex.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
-          echo "Total files: $(unzip -l smruti-cortex.zip | tail -1 | awk '{print $2}')" >> $GITHUB_STEP_SUMMARY
+          echo "Zip package: $(du -h ${{ env.ARTIFACT_NAME }} | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "Total files: $(unzip -l ${{ env.ARTIFACT_NAME }} | tail -1 | awk '{print $2}')" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
@@ -132,7 +140,7 @@ jobs:
             echo "A GitHub Release will be created automatically." >> $GITHUB_STEP_SUMMARY
           else
             echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
-            echo "Download \`smruti-cortex.zip\` from artifacts and load unpacked." >> $GITHUB_STEP_SUMMARY
+            echo "Download \`${{ env.ARTIFACT_NAME }}\` from artifacts and load unpacked." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**To create a release:** Push a version tag like \`v7.0.0\`" >> $GITHUB_STEP_SUMMARY
           fi
