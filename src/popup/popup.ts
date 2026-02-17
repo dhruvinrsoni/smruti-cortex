@@ -437,7 +437,7 @@ function initializePopup() {
         fav.className = 'card-favicon';
         try {
           if (loadFavicons) {
-            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
+            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=32`;
           } else {
             fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
           }
@@ -488,7 +488,7 @@ function initializePopup() {
         fav.className = 'favicon';
         try {
           if (loadFavicons) {
-            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=64`;
+            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`;
           } else {
             fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
           }
