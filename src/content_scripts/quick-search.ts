@@ -342,6 +342,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* Favicon sizing: list and card parity with popup */
+    .results .favicon { width: 16px; height: 16px; border-radius: 3px; background:#24333f; flex-shrink:0; margin-right:8px; }
+    .results .card-favicon { width: 32px; height: 32px; border-radius: 6px; background:#24333f; display:block; margin-bottom:4px; }
+    /* Bookmark indicator and folder styles shared with popup */
+    .bookmark-indicator { color: var(--accent-color); font-size: 16px; font-weight: 600; margin-right: 6px; vertical-align: middle; }
+    .bookmark-folder { font-size: 0.85em; color: #6b7280; margin-left: 8px; }
     .highlight {
       background: var(--highlight-bg);
       color: var(--highlight-text);

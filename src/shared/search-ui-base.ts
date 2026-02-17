@@ -406,9 +406,6 @@ export function renderResults(
       bookmarkIcon.className = 'bookmark-indicator';
       bookmarkIcon.textContent = '★';
       bookmarkIcon.title = 'Bookmarked';
-      bookmarkIcon.style.marginRight = '6px';
-      bookmarkIcon.style.color = '#fbbf24';
-      bookmarkIcon.style.fontSize = '14px';
       titleDiv.appendChild(bookmarkIcon);
     }
     
@@ -425,9 +422,6 @@ export function renderResults(
       const folderSpan = document.createElement('span');
       folderSpan.className = 'bookmark-folder';
       folderSpan.textContent = ` 📁 ${result.bookmarkFolders.join(' › ')}`;
-      folderSpan.style.color = '#6b7280';
-      folderSpan.style.fontSize = '0.85em';
-      folderSpan.style.marginLeft = '8px';
       urlDiv.appendChild(folderSpan);
     }
     
