@@ -1,3 +1,45 @@
+SmrutiCortex v2.1.0 — Release notes
+===================================
+
+Release tag: v2.1.0
+
+Overview
+--------
+- UX overhaul: tabbed settings modal, favicon/bookmark visual refinements, license update.
+- Primary goals: reduce settings-page cognitive load, consistent visuals, future-proof configuration UI.
+
+Highlights
+----------
+- **Tabbed Settings Modal** — Settings reorganized into 6 themed tabs (General, Search, AI, Privacy, Data, Advanced). Replaces the single long-scroll layout. Tabs persist across open/close within a session.
+  - *General*: Display mode, match highlighting, result focus delay, select-all-on-focus.
+  - *Search*: Result diversity, bookmarks indexing.
+  - *AI*: Ollama integration, semantic search / embeddings.
+  - *Privacy*: Favicon loading, favicon cache, sensitive URL blacklist.
+  - *Data*: Storage status, manual indexing, rebuild / reset / clear, bookmark extension.
+  - *Advanced*: Log level, diagnostics & performance monitor, search debug mode.
+- **Future-proof tab architecture** — Adding a new tab requires only a `<button>` in `.settings-tabs` and `data-tab` on the section. No JS changes needed for new tabs.
+- **Favicon sizing fix** — Popup requests favicons at native display size (16 px list / 32 px cards) instead of oversized 64 px.
+- **Bookmark indicator cleanup** — Inline styles moved to CSS classes; shared renderer no longer injects hardcoded colors/sizes.
+- **Overlay bookmark/favicon CSS** — Overlay (content script) now has matching `.favicon`, `.bookmark-indicator`, `.bookmark-folder` rules for visual parity with the popup.
+- **License** — Changed from MIT to Apache-2.0. CONTRIBUTING.md added.
+
+Bug Fixes & Improvements
+------------------------
+- Bookmark star icon uses CSS class instead of inline style (DRY, theme-aware).
+- Favicon `sz` parameter matches rendered size for crisper icons.
+- Overlay styles include favicon and bookmark rules previously missing.
+
+Breaking Changes
+----------------
+- None for end-users. Internal CSS class expectations changed for `.bookmark-indicator` and `.bookmark-folder`.
+
+Migration Notes
+---------------
+- No migration steps required.
+
+Previous release
+----------------
+
 SmrutiCortex v2.0.0 — Release notes
 ===================================
 

@@ -772,6 +772,33 @@ function initializePopup() {
     }
   }
 
+  // Track active settings tab (persists across modal open/close within session)
+  let activeSettingsTab = 'general';
+
+  // Switch settings tab — show only sections matching the given tab name
+  function switchSettingsTab(tabName: string) {
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
+    activeSettingsTab = tabName;
+
+    // Update tab buttons
+    modal.querySelectorAll('.settings-tab').forEach(btn => {
+      const isActive = (btn as HTMLElement).dataset.tab === tabName;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', String(isActive));
+    });
+
+    // Show/hide sections based on active tab
+    modal.querySelectorAll('.settings-section[data-tab]').forEach(section => {
+      (section as HTMLElement).style.display =
+        (section as HTMLElement).dataset.tab === tabName ? '' : 'none';
+    });
+
+    // Scroll content to top when switching tabs
+    const content = modal.querySelector('.settings-content');
+    if (content) content.scrollTop = 0;
+  }
+
   // Show settings modal overlay (doesn't replace app content)
   function openSettingsPageLocal() {
     const modal = document.getElementById('settings-modal');
@@ -888,6 +915,9 @@ function initializePopup() {
 
     // Initialize bookmark button in settings modal
     initializeBookmarkButton();
+
+    // Activate the remembered (or default) settings tab
+    switchSettingsTab(activeSettingsTab);
   }
 
   // Initialize bookmark button in settings modal
@@ -1070,6 +1100,14 @@ function initializePopup() {
         e.stopPropagation();
         closeSettingsModal();
       }
+    });
+
+    // Tab switching
+    modal.querySelectorAll('.settings-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.tab;
+        if (tab) switchSettingsTab(tab);
+      });
     });
 
     // Display mode changes
