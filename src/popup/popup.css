@@ -297,6 +297,54 @@ html,body { margin:0; padding:0; width:800px; height:400px; color:var(--text); b
   color: var(--text);
 }
 
+/* Settings Tabs */
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  background: var(--card);
+  padding: 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-tab {
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.2s ease, border-color 0.2s ease;
+  font-family: inherit;
+  outline: none;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.settings-tab:focus-visible {
+  color: var(--text);
+  border-bottom-color: var(--muted);
+}
+
+.settings-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
 .settings-content {
   flex: 1;
   padding: 12px; /* Reduced from 16px */

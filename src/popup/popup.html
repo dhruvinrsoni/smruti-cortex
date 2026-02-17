@@ -82,8 +82,16 @@
         <h2>Settings</h2>
         <button id="settings-close" class="settings-close" title="Close">×</button>
       </div>
+      <div class="settings-tabs" role="tablist">
+        <button class="settings-tab active" data-tab="general" role="tab" aria-selected="true">⚙️ General</button>
+        <button class="settings-tab" data-tab="search" role="tab" aria-selected="false">🔍 Search</button>
+        <button class="settings-tab" data-tab="ai" role="tab" aria-selected="false">🤖 AI</button>
+        <button class="settings-tab" data-tab="privacy" role="tab" aria-selected="false">🔒 Privacy</button>
+        <button class="settings-tab" data-tab="data" role="tab" aria-selected="false">💾 Data</button>
+        <button class="settings-tab" data-tab="advanced" role="tab" aria-selected="false">🛠️ Advanced</button>
+      </div>
       <div class="settings-content">
-        <div class="settings-section">
+        <div class="settings-section" data-tab="general">
           <h3>Display Mode</h3>
           <p>Choose how search results are displayed.</p>
           <div class="setting-options">
@@ -105,7 +113,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="search">
           <h3>Search Result Diversity</h3>
           <p>Control how duplicate URLs are handled in search results.</p>
           <div class="setting-options">
@@ -127,7 +135,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="advanced">
           <h3>Log Level</h3>
           <p>Control extension logging verbosity.</p>
           <div class="setting-options">
@@ -165,7 +173,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="general">
           <h3>Match Highlighting</h3>
           <p>Highlight matching parts in search results.</p>
           <div class="setting-options">
@@ -179,7 +187,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="ai">
           <h3>AI Integration (Local Ollama)</h3>
           <p>Enable semantic search using local AI embeddings.<br>
           <b>Requires:</b> Ollama running locally with embedding model.</p>
@@ -229,7 +237,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="ai">
           <h3>Semantic Search (AI Embeddings)</h3>
           <p>Find pages by meaning, not just keywords. Uses local AI to understand content.<br>
           <b>Requires:</b> Ollama + embedding model. <b>Storage:</b> ~4KB per page. <b>Privacy:</b> 100% local.</p>
@@ -257,7 +265,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="general">
           <h3>Result Focus Delay</h3>
           <p>Control how quickly focus shifts to results after typing.<br>
           <b>0 ms</b> disables auto-focus. <b>100-2000 ms</b> is recommended for natural UX.</p>
@@ -280,7 +288,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="privacy">
           <h3>Privacy</h3>
           <p>Control external connections and sensitive site handling.</p>
           <div class="setting-options">
@@ -311,7 +319,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="search">
           <h3>Bookmarks</h3>
           <p>Include your bookmarks in search results.</p>
           <div class="setting-options">
@@ -325,7 +333,7 @@
             </label>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="data">
           <h3>Data Management</h3>
           <p>Manage your indexed history and extension data.</p>
           <div class="storage-status" id="storage-status">
@@ -365,7 +373,7 @@
             </button>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="advanced">
           <h3>Diagnostics & Performance</h3>
           <p>Monitor extension performance and export diagnostics for troubleshooting.</p>
           <div class="setting-options">
@@ -373,7 +381,7 @@
             <button class="action-btn secondary" id="export-diagnostics" title="Export diagnostic data for bug reports">📋 Export Diagnostics</button>
           </div>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" data-tab="advanced">
           <h3>🔍 Search Debug Mode</h3>
           <p>Capture search queries, results, and scoring details for algorithm analysis.</p>
           <div class="setting-options">

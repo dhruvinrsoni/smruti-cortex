@@ -72,6 +72,7 @@ SmrutiCortex has **two distinct user interfaces**:
 - **Settings/constants:** Centralized in `src/core/settings.ts` and `constants.ts`
 - **Debug logging:** Use `logger.ts`; toggle via popup UI
 - **Popup UI:** Keep UI logic in `popup.ts`, styles in `popup.css`, and structure in `popup.html`
+- **Tabbed settings:** Settings modal uses `data-tab` attributes on `.settings-section` divs. Tab bar buttons match via `data-tab`. To add a new setting to an existing tab, add `data-tab="tabname"` to the section. To create a new tab, add a `<button class="settings-tab" data-tab="newtab">` in `.settings-tabs` and tag sections with `data-tab="newtab"`.
 
 ## Integration Points
 - **Browser APIs:** IndexedDB, chrome.history, chrome.runtime messaging
