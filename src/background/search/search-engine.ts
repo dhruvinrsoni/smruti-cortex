@@ -1,9 +1,16 @@
-// search-engine.ts — SmrutiCortex Search Brain
+// search-engine.ts — SmrutiCortex Deep Search™ Engine
 
 import { getAllIndexedItems } from '../database';
 import { getAllScorers } from './scorer-manager';
 import { IndexedItem } from '../schema';
-import { tokenize, countExactKeywordMatches } from './tokenizer';
+import {
+    tokenize,
+    classifyTokenMatches,
+    graduatedMatchScore,
+    countConsecutiveMatches,
+    MatchType,
+    MATCH_WEIGHTS,
+} from './tokenizer';
 import { browserAPI } from '../../core/helpers';
 import { Logger } from '../../core/logger';
 import { SettingsManager } from '../../core/settings';
@@ -209,23 +216,51 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
         }
 
+        // ─── Deep Search Post-Score Boosters ────────────────────────────
         // Boost score for literal substring matches (exact query found)
         if (hasLiteralMatch && score > 0) {
             score *= 1.5; // 50% boost for exact literal matches
         }
 
-        // Boost score for all original tokens matching as exact keywords (word-boundary)
-        // This is the strongest signal: every query word appears as a whole word
-        // e.g., "rar my all" where each token is a distinct word in the title
+        // Graduated match quality boost for original tokens against title
+        // Replaces the old binary exact-keyword multiplier with Deep Search classification
         if (score > 0 && originalTokens.length > 0) {
             const titleText = ((item.bookmarkTitle || item.title) || '').toLowerCase();
-            const titleExactMatches = countExactKeywordMatches(originalTokens, titleText);
-            if (titleExactMatches === originalTokens.length) {
-                // All query tokens are exact keyword matches in the title — strong boost
-                score *= 1.4; // 40% boost for full exact-keyword title match
-            } else if (titleExactMatches > 0) {
-                // Partial exact keyword matches in title — moderate boost
-                score *= 1.0 + (titleExactMatches / originalTokens.length) * 0.2;
+            const titleMatchTypes = classifyTokenMatches(originalTokens, titleText);
+
+            const exactCount = titleMatchTypes.filter(t => t === MatchType.EXACT).length;
+            const prefixCount = titleMatchTypes.filter(t => t === MatchType.PREFIX).length;
+            const substringCount = titleMatchTypes.filter(t => t === MatchType.SUBSTRING).length;
+            const matchedCount = exactCount + prefixCount + substringCount;
+
+            if (matchedCount === originalTokens.length) {
+                // All tokens matched in title — graduated boost based on quality
+                if (exactCount === originalTokens.length) {
+                    score *= 1.45; // All exact keywords — strongest boost
+                } else if (exactCount > 0) {
+                    // Mixed quality: proportional boost
+                    // e.g., 2 exact + 1 prefix out of 3 → (2×1.0 + 1×0.75) / 3 = 0.917
+                    const qualityRatio = titleMatchTypes.reduce((s, t) => s + MATCH_WEIGHTS[t], 0) / originalTokens.length;
+                    score *= 1.0 + qualityRatio * 0.40; // Up to 1.40× for near-perfect
+                } else if (prefixCount > 0) {
+                    // All prefix or prefix+substring mix
+                    const qualityRatio = titleMatchTypes.reduce((s, t) => s + MATCH_WEIGHTS[t], 0) / originalTokens.length;
+                    score *= 1.0 + qualityRatio * 0.25; // Moderate boost
+                } else {
+                    // All substring matches — small boost (still all matched)
+                    score *= 1.10;
+                }
+            } else if (matchedCount > 0) {
+                // Partial coverage with graduated scoring
+                const graduatedScore = graduatedMatchScore(originalTokens, titleText);
+                score *= 1.0 + graduatedScore * 0.15;
+            }
+
+            // Consecutive token bonus on the title
+            const consecutivePairs = countConsecutiveMatches(originalTokens, titleText);
+            if (consecutivePairs > 0) {
+                const maxPairs = Math.max(1, originalTokens.length - 1);
+                score *= 1.0 + (consecutivePairs / maxPairs) * 0.10;
             }
         }
 

@@ -1,4 +1,5 @@
-// scorer-manager.ts — Collects all scorers into a single weighted scoring pipeline
+// scorer-manager.ts — Deep Search scoring pipeline
+// Collects all scorers into a single weighted scoring pipeline with graduated match classification
 
 import { Scorer, ScorerContext } from '../../core/scorer-types';
 import { IndexedItem } from '../schema';
@@ -8,129 +9,148 @@ import recencyScorer from './scorers/recency-scorer';
 import visitCountScorer from './scorers/visitcount-scorer';
 import metaScorer from './scorers/meta-scorer';
 import embeddingScorer from './scorers/embedding-scorer';
-import { tokenize, countExactKeywordMatches } from './tokenizer';
+import {
+    tokenize,
+    countExactKeywordMatches,
+    classifyTokenMatches,
+    graduatedMatchScore,
+    countConsecutiveMatches,
+    MatchType,
+    MATCH_WEIGHTS,
+} from './tokenizer';
 import { SettingsManager } from '../../core/settings';
 
-// Cross-dimensional scorer - rewards results matching different keywords in different dimensions
+// ─── Cross-Dimensional Scorer ───────────────────────────────────────────────
+// Rewards results matching different keywords across different fields
+// Uses graduated match classification for each dimension
 const crossDimensionalScorer: Scorer = {
     name: 'crossDimensional',
-    weight: 0.15, // Significant weight to promote diverse keyword matching
+    weight: 0.15,
     score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
-        // Use bookmark title if available, otherwise use page title
         const title = ((item.bookmarkTitle || item.title) || '').toLowerCase();
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
         const originalTokens = tokenize(query);
-
-        // Use AI-expanded tokens if available
         const searchTokens = context?.expandedTokens || originalTokens;
 
-        if (searchTokens.length < 2) { return 0; } // Need at least 2 tokens for cross-dimensional matching
+        if (searchTokens.length < 2) return 0;
 
-        // Define dimensions
-        const dimensions = {
+        // Define dimensions with graduated matching
+        const dimensions: Record<string, { content: string; weight: number }> = {
             title: { content: title, weight: 1.0 },
             url: { content: url, weight: 0.8 },
             hostname: { content: hostname, weight: 0.6 },
-            meta: { content: metaDescription, weight: 0.4 }
+            meta: { content: metaDescription, weight: 0.4 },
         };
 
-        // Track which tokens matched in which dimensions
-        const tokenDimensionMatches: Record<string, Set<string>> = {};
+        // Track best match type per token per dimension
+        const tokenBestMatch: Record<string, { bestType: MatchType; dimensions: Set<string> }> = {};
 
-        // For each token, find which dimensions it matches in
         for (const token of searchTokens) {
-            tokenDimensionMatches[token] = new Set();
+            let bestType = MatchType.NONE;
+            const matchedDims = new Set<string>();
 
             for (const [dimName, dimData] of Object.entries(dimensions)) {
-                if (dimData.content.includes(token)) {
-                    tokenDimensionMatches[token].add(dimName);
+                const matchTypes = classifyTokenMatches([token], dimData.content);
+                if (matchTypes[0] !== MatchType.NONE) {
+                    matchedDims.add(dimName);
+                    bestType = Math.max(bestType, matchTypes[0]) as MatchType;
                 }
             }
+
+            tokenBestMatch[token] = { bestType, dimensions: matchedDims };
         }
 
         // Calculate cross-dimensional coverage
         let totalScore = 0;
-        const matchedTokens = searchTokens.filter(token => tokenDimensionMatches[token].size > 0);
+        const matchedTokens = searchTokens.filter(t => tokenBestMatch[t].bestType !== MatchType.NONE);
 
-        if (matchedTokens.length < 2) { return 0; } // Need at least 2 tokens to match
+        if (matchedTokens.length < 2) return 0;
 
-        // Bonus for each token matching in different dimensions
+        // Graduated bonus per token: weight by match quality × dimension count
         for (const token of matchedTokens) {
-            const dimensionCount = tokenDimensionMatches[token].size;
-            const dimensionBonus = dimensionCount * 0.1; // 0.1 per dimension matched
+            const { bestType, dimensions: dims } = tokenBestMatch[token];
+            const qualityWeight = MATCH_WEIGHTS[bestType];
+            const dimensionBonus = dims.size * 0.1 * qualityWeight;
             totalScore += dimensionBonus;
         }
 
-        // Major bonus: different tokens in different dimensions
-        // This is the key insight - reward when "github" matches URL and "issues" matches title
+        // Major bonus: different tokens covering different dimensions
         const dimensionCoverage = new Set<string>();
         for (const token of matchedTokens) {
-            for (const dim of tokenDimensionMatches[token]) {
+            for (const dim of tokenBestMatch[token].dimensions) {
                 dimensionCoverage.add(dim);
             }
         }
+        const uniqueDimensions = dimensionCoverage.size;
+        const dimensionCoverageBonus = uniqueDimensions > 1 ? (uniqueDimensions - 1) * 0.2 : 0;
 
-        // Bonus for covering multiple dimensions with different tokens
-        const uniqueDimensionsCovered = dimensionCoverage.size;
-        const dimensionCoverageBonus = uniqueDimensionsCovered > 1 ? (uniqueDimensionsCovered - 1) * 0.2 : 0;
-
-        // Bonus for original tokens (not AI-expanded) being cross-dimensional
-        const originalTokenMatches = originalTokens.filter(token =>
-            tokenDimensionMatches[token] && tokenDimensionMatches[token].size > 0
+        // Original token cross-dimensional bonus
+        const originalMatched = originalTokens.filter(
+            t => tokenBestMatch[t] && tokenBestMatch[t].bestType !== MatchType.NONE
         );
-        const originalCrossDimBonus = originalTokenMatches.length > 1 ? 0.15 : 0;
+        const originalCrossDimBonus = originalMatched.length > 1 ? 0.15 : 0;
 
         totalScore += dimensionCoverageBonus + originalCrossDimBonus;
 
-        // Normalize to [0, 1] range
         return Math.min(1.0, totalScore);
     },
 };
 
-// Multi-token match scorer - CRITICAL: heavily rewards results matching multiple query tokens
-// This ensures "zaar-api commits" prioritizes results with BOTH words over just one
+// ─── Multi-Token Match Scorer ───────────────────────────────────────────────
+// CRITICAL: heavily rewards results matching multiple query tokens
+// Now uses graduated match classification + consecutive token bonus
 const multiTokenMatchScorer: Scorer = {
     name: 'multiTokenMatch',
-    weight: 0.35, // HIGH weight - this is critical for multi-word query relevance
+    weight: 0.35,
     score: (item: IndexedItem, query: string, _allItems: IndexedItem[], _context?: ScorerContext) => {
         const title = (item.bookmarkTitle || item.title).toLowerCase();
         const url = item.url.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
         const bookmarkFolders = (item.bookmarkFolders?.join(' ') || '').toLowerCase();
-        
-        // Combine all searchable content
         const haystack = `${title} ${url} ${metaDescription} ${bookmarkFolders}`;
-        
-        // Get original query tokens (not AI-expanded)
-        const originalTokens = tokenize(query);
-        
-        if (originalTokens.length < 2) { return 0; } // Only applies to multi-word queries
-        
-        // Count how many original tokens match
-        const matchedCount = originalTokens.filter(token => haystack.includes(token)).length;
-        
-        // Calculate match ratio
-        const matchRatio = matchedCount / originalTokens.length;
-        
-        // Exponential reward for matching more tokens
-        // 1 token = 0.0 (baseline)
-        // 2/2 tokens = 1.0 (perfect match)
-        // 3/3 tokens = 1.0 (perfect match)
-        // 2/3 tokens = 0.67^2 = 0.44 (partial match)
-        // This heavily prioritizes results matching ALL query terms
-        let score = matchRatio > 0 ? Math.pow(matchRatio, 1.5) : 0;
 
-        // Exact keyword match boost: reward tokens that match at word boundaries
-        // e.g., "rar" in "RAR-My-All" > "rar" in "library"
-        const exactMatches = countExactKeywordMatches(originalTokens, haystack);
-        if (exactMatches > 0 && matchedCount === originalTokens.length) {
-            const exactRatio = exactMatches / originalTokens.length;
-            // All tokens exact = +0.25 bonus; partial exact = proportional
-            score = Math.min(1.0, score + exactRatio * 0.25);
+        const originalTokens = tokenize(query);
+        if (originalTokens.length < 2) return 0;
+
+        // ─── Graduated match score across all content ───────────────
+        const graduated = graduatedMatchScore(originalTokens, haystack);
+
+        // Exponential reward for coverage — matching more tokens = disproportionately better
+        // graduated is already 0..1 based on match quality
+        let score = graduated > 0 ? Math.pow(graduated, 1.3) : 0;
+
+        // ─── Match quality breakdown ────────────────────────────────
+        const matchTypes = classifyTokenMatches(originalTokens, haystack);
+        const exactCount = matchTypes.filter(t => t === MatchType.EXACT).length;
+        const prefixCount = matchTypes.filter(t => t === MatchType.PREFIX).length;
+        const substringCount = matchTypes.filter(t => t === MatchType.SUBSTRING).length;
+        const matchedCount = exactCount + prefixCount + substringCount;
+
+        // ─── Composition bonus: reward high-quality match distributions ─
+        if (matchedCount === originalTokens.length) {
+            // All tokens matched — bonus based on quality distribution
+            const exactRatio = exactCount / originalTokens.length;
+            const prefixRatio = prefixCount / originalTokens.length;
+
+            if (exactRatio === 1) {
+                score = Math.min(1.0, score + 0.30); // All exact = strongest
+            } else if (exactCount > 0) {
+                // Mixed exact + prefix/substring — proportional bonus
+                score = Math.min(1.0, score + exactRatio * 0.20 + prefixRatio * 0.08);
+            } else if (prefixCount > 0) {
+                score = Math.min(1.0, score + prefixRatio * 0.10);
+            }
         }
-        
+
+        // ─── Consecutive token bonus (phrase matching) ──────────────
+        const consecutivePairs = countConsecutiveMatches(originalTokens, haystack);
+        if (consecutivePairs > 0) {
+            const maxPairs = originalTokens.length - 1;
+            score = Math.min(1.0, score + (consecutivePairs / maxPairs) * 0.12);
+        }
+
         return score;
     },
 };
