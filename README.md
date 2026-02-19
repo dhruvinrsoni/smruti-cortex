@@ -40,7 +40,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 |---------|-------------|
 | ⚡ **Instant Search** | Results < 50ms as you type |
 | ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
-| 🎯 **Smart Ranking** | Recency + frequency + literal substring scoring |
+| 🎯 **Deep Search™** | Graduated multi-parameter ranking (exact > prefix > substring) |
 | 🎯 **Strict Matching** | Only show results containing your search terms (default) |
 | 🎲 **Diverse Results** | Filters duplicate URLs for variety (default ON) |
 | ⭐ **Bookmark Search** | Index and search bookmarks with ★ indicator |
@@ -97,15 +97,17 @@ npm run build
 **Quick Access:**
 - Type `sc ` in address bar + query
 
-**Search Quality Controls:**
+**Search Quality Controls (Deep Search™):**
+- **Graduated Match Classification**: Exact keyword > prefix > substring matching (not binary)
+  - `rar my iss` finds "[RAR-My-All] Issue Navigator" because "rar" and "my" are exact, "iss" is a prefix of "Issue"
+- **9-Scorer Pipeline**: Title, URL, recency, frequency, cross-dimensional, meta, domain familiarity, multi-token, AI embedding
 - **Strict Matching** (default ON): Only shows results containing your search terms
   - Toggle OFF: Settings → "Show non-matching results"
-  - Ensures relevant results, no random suggestions
 - **Diverse Results** (default ON): Filters duplicate URLs with different query parameters
   - Toggle OFF: Settings → "Show duplicate URLs"
-  - Example: Notion page with `?pvs=12` vs `?pvs=25` shows only once
 - **Literal Substring Boost**: Results with exact query string get 50% score boost
-  - Ensures URLs containing your search term rank higher
+- **Phrase Matching**: Consecutive token detection rewards query terms appearing together
+- See [Deep Search Algorithm docs](docs/DEEP_SEARCH_ALGORITHM.md) for full details
 
 ---
 

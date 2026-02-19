@@ -1,3 +1,44 @@
+SmrutiCortex v2.2.0 — Release notes
+===================================
+
+Release tag: v2.2.0
+
+Overview
+--------
+- **Deep Search™ algorithm** — Complete overhaul of the search ranking engine with graduated match classification, replacing binary substring matching with a 4-tier quality system.
+- Primary goals: dramatically better ranking for partial and multi-word queries, production-grade search quality.
+
+Highlights
+----------
+- **Graduated Match Classification** — Every query token is classified as EXACT (word boundary: 1.0), PREFIX (start of word: 0.75), SUBSTRING (mid-word: 0.4), or NONE (0.0). This replaces the binary `includes()` matching used by all scorers.
+  - *Example*: `rar my iss` → "rar" EXACT (1.0), "my" EXACT (1.0), "iss" PREFIX of "Issue" (0.75) → graduated score 0.917
+- **Enhanced Title Scorer** — 6-signal scoring: graduated quality, position bonus (earlier in title = better), consecutive token bonus (phrase matching), composition analysis (all-exact vs mixed vs substring), starts-with bonus.
+- **Enhanced Multi-Token Scorer** — Graduated coverage with exponential reward, match quality composition bonus, and consecutive token bonus.
+- **Enhanced URL & Meta Scorers** — All scorers now use `graduatedMatchScore()` instead of binary `includes()`.
+- **Enhanced Cross-Dimensional Scorer** — Match quality weights applied per dimension.
+- **Graduated Post-Score Boosters** — Title quality multiplier now ranges from ×1.10 (all substring) through ×1.45 (all exact), with proportional values for mixed matches. Consecutive token bonus applied.
+- **Position-aware Scoring** — Tokens matching earlier in the title score higher.
+- **Phrase Matching** — Consecutive token detection rewards query terms appearing together in the text.
+- **New Tokenizer Utilities** — `classifyMatch()`, `classifyTokenMatches()`, `graduatedMatchScore()`, `matchPosition()`, `countConsecutiveMatches()` — exported for all scorers and future extensions.
+- **Deep Search™ Documentation** — Comprehensive algorithm documentation at `docs/DEEP_SEARCH_ALGORITHM.md` with collapsible sections, formulas, examples, and future roadmap.
+- **Branding** — "Deep Search™" added to popup subtitle, README feature table, and Chrome Web Store listing.
+
+Bug Fixes & Improvements
+------------------------
+- Backward-compatible legacy API: `isExactKeywordMatch()` and `countExactKeywordMatches()` still work, now implemented via `classifyMatch()`.
+- Match classification uses regex-based word-boundary detection (handles hyphens, brackets, dots).
+
+Breaking Changes
+----------------
+- None for end-users. Internal scorer APIs now use `MatchType` enum and graduated scoring functions.
+
+Migration Notes
+---------------
+- No migration steps required.
+
+Previous release
+----------------
+
 SmrutiCortex v2.1.0 — Release notes
 ===================================
 
