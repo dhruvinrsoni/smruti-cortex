@@ -1,6 +1,6 @@
 import { Scorer, ScorerContext } from '../../../core/scorer-types';
 import { IndexedItem } from '../../schema';
-import { tokenize } from '../tokenizer';
+import { tokenize, countExactKeywordMatches } from '../tokenizer';
 
 const titleScorer: Scorer = {
     name: 'title',
@@ -34,7 +34,17 @@ const titleScorer: Scorer = {
         // Boost for matching original (non-expanded) tokens
         const originalMatchBonus = originalMatches > 0 ? 0.15 : 0;
 
-        return Math.min(1.0, matchRatio + startsWithBonus + multiTokenBonus + originalMatchBonus);
+        // --- Exact keyword match boost (word-boundary matching) ---
+        // "rar" matching as a whole word in "RAR-My-All" is stronger than
+        // "rar" as a substring inside "library"
+        const exactKeywordMatches = countExactKeywordMatches(originalTokens, title);
+        const exactKeywordRatio = originalTokens.length > 0 ? exactKeywordMatches / originalTokens.length : 0;
+        // Per-token exact match bonus: +0.1 per exact keyword
+        const exactKeywordBonus = exactKeywordMatches * 0.1;
+        // All-keywords-exact bonus: +0.2 when every token is an exact keyword match
+        const allExactBonus = (originalTokens.length > 0 && exactKeywordRatio === 1) ? 0.2 : 0;
+
+        return Math.min(1.0, matchRatio + startsWithBonus + multiTokenBonus + originalMatchBonus + exactKeywordBonus + allExactBonus);
     },
 };
 

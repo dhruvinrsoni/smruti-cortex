@@ -8,7 +8,7 @@ import recencyScorer from './scorers/recency-scorer';
 import visitCountScorer from './scorers/visitcount-scorer';
 import metaScorer from './scorers/meta-scorer';
 import embeddingScorer from './scorers/embedding-scorer';
-import { tokenize } from './tokenizer';
+import { tokenize, countExactKeywordMatches } from './tokenizer';
 import { SettingsManager } from '../../core/settings';
 
 // Cross-dimensional scorer - rewards results matching different keywords in different dimensions
@@ -120,7 +120,16 @@ const multiTokenMatchScorer: Scorer = {
         // 3/3 tokens = 1.0 (perfect match)
         // 2/3 tokens = 0.67^2 = 0.44 (partial match)
         // This heavily prioritizes results matching ALL query terms
-        const score = matchRatio > 0 ? Math.pow(matchRatio, 1.5) : 0;
+        let score = matchRatio > 0 ? Math.pow(matchRatio, 1.5) : 0;
+
+        // Exact keyword match boost: reward tokens that match at word boundaries
+        // e.g., "rar" in "RAR-My-All" > "rar" in "library"
+        const exactMatches = countExactKeywordMatches(originalTokens, haystack);
+        if (exactMatches > 0 && matchedCount === originalTokens.length) {
+            const exactRatio = exactMatches / originalTokens.length;
+            // All tokens exact = +0.25 bonus; partial exact = proportional
+            score = Math.min(1.0, score + exactRatio * 0.25);
+        }
         
         return score;
     },

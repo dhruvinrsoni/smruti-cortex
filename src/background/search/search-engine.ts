@@ -3,7 +3,7 @@
 import { getAllIndexedItems } from '../database';
 import { getAllScorers } from './scorer-manager';
 import { IndexedItem } from '../schema';
-import { tokenize } from './tokenizer';
+import { tokenize, countExactKeywordMatches } from './tokenizer';
 import { browserAPI } from '../../core/helpers';
 import { Logger } from '../../core/logger';
 import { SettingsManager } from '../../core/settings';
@@ -212,6 +212,21 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         // Boost score for literal substring matches (exact query found)
         if (hasLiteralMatch && score > 0) {
             score *= 1.5; // 50% boost for exact literal matches
+        }
+
+        // Boost score for all original tokens matching as exact keywords (word-boundary)
+        // This is the strongest signal: every query word appears as a whole word
+        // e.g., "rar my all" where each token is a distinct word in the title
+        if (score > 0 && originalTokens.length > 0) {
+            const titleText = ((item.bookmarkTitle || item.title) || '').toLowerCase();
+            const titleExactMatches = countExactKeywordMatches(originalTokens, titleText);
+            if (titleExactMatches === originalTokens.length) {
+                // All query tokens are exact keyword matches in the title — strong boost
+                score *= 1.4; // 40% boost for full exact-keyword title match
+            } else if (titleExactMatches > 0) {
+                // Partial exact keyword matches in title — moderate boost
+                score *= 1.0 + (titleExactMatches / originalTokens.length) * 0.2;
+            }
         }
 
         // Boost score for AI-expanded keyword matches
