@@ -174,6 +174,43 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         const haystack = (searchTitle + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
         const hasTokenMatch = matchedTokens.length > 0;
+
+        const titleText = ((item.bookmarkTitle || item.title) || '').toLowerCase();
+        const urlText = (item.url || '').toLowerCase();
+        const titleUrlText = `${titleText} ${urlText}`;
+
+        const titleUrlMatchTypes = originalTokens.length > 0
+            ? classifyTokenMatches(originalTokens, titleUrlText)
+            : [];
+        const titleUrlMatchedCount = titleUrlMatchTypes.filter(t => t !== MatchType.NONE).length;
+        const titleUrlCoverage = originalTokens.length > 0 ? titleUrlMatchedCount / originalTokens.length : 0;
+        const titleUrlQuality = originalTokens.length > 0
+            ? titleUrlMatchTypes.reduce((s, t) => s + MATCH_WEIGHTS[t], 0) / originalTokens.length
+            : 0;
+
+        // Split-field signal: one token in title and another token in URL (user intent across fields)
+        let hasTitleToken = false;
+        let hasUrlToken = false;
+        for (const token of originalTokens) {
+            if (classifyTokenMatches([token], titleText)[0] !== MatchType.NONE) {
+                hasTitleToken = true;
+            }
+            if (classifyTokenMatches([token], urlText)[0] !== MatchType.NONE) {
+                hasUrlToken = true;
+            }
+        }
+        const splitFieldCoverage = hasTitleToken && hasUrlToken ? 1 : 0;
+
+        // Intent bucket for deterministic ranking precedence
+        // Multi-token queries should prioritize explicit coverage in title+url.
+        let intentPriority = 0;
+        if (originalTokens.length >= 2) {
+            if (titleUrlCoverage === 1) {
+                intentPriority = splitFieldCoverage ? 3 : 2;
+            } else if (titleUrlCoverage >= 0.75) {
+                intentPriority = 1;
+            }
+        }
         
         // Also check for literal substring match (the raw query in the content)
         const hasLiteralMatch = haystack.includes(q);
@@ -225,7 +262,6 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         // Graduated match quality boost for original tokens against title
         // Replaces the old binary exact-keyword multiplier with Deep Search classification
         if (score > 0 && originalTokens.length > 0) {
-            const titleText = ((item.bookmarkTitle || item.title) || '').toLowerCase();
             const titleMatchTypes = classifyTokenMatches(originalTokens, titleText);
 
             const exactCount = titleMatchTypes.filter(t => t === MatchType.EXACT).length;
@@ -262,6 +298,44 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 const maxPairs = Math.max(1, originalTokens.length - 1);
                 score *= 1.0 + (consecutivePairs / maxPairs) * 0.10;
             }
+
+            // Combined title+URL boost:
+            // Ensures queries with token split across title and URL (e.g., "zaar-api" in URL, "console" in title)
+            // receive strong ranking preference.
+            if (titleUrlMatchedCount === originalTokens.length) {
+                const combinedQualityRatio = titleUrlMatchTypes.reduce((s, t) => s + MATCH_WEIGHTS[t], 0) / originalTokens.length;
+                score *= 1.0 + combinedQualityRatio * 0.20;
+
+                // Extra bonus when coverage is genuinely split across fields (not only title or only URL)
+                let hasTitleOnlyToken = false;
+                let hasUrlOnlyToken = false;
+
+                for (const token of originalTokens) {
+                    const inTitle = classifyTokenMatches([token], titleText)[0] !== MatchType.NONE;
+                    const inUrl = classifyTokenMatches([token], urlText)[0] !== MatchType.NONE;
+
+                    if (inTitle && !inUrl) {
+                        hasTitleOnlyToken = true;
+                    }
+                    if (inUrl && !inTitle) {
+                        hasUrlOnlyToken = true;
+                    }
+                }
+
+                if (hasTitleOnlyToken && hasUrlOnlyToken) {
+                    score *= 1.20;
+                }
+            }
+
+            // Strong intent multiplier for explicit multi-token title+url coverage.
+            // Ensures user-specified keywords dominate over recency/frequency noise.
+            if (originalTokens.length >= 2) {
+                if (titleUrlCoverage === 1) {
+                    score *= splitFieldCoverage ? 1.60 : 1.40;
+                } else if (titleUrlCoverage >= 0.75) {
+                    score *= 1.15;
+                }
+            }
         }
 
         // Boost score for AI-expanded keyword matches
@@ -292,7 +366,11 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 item, 
                 finalScore: score,
                 keywordMatch: hasAnyMatch,
-                aiMatch: hasAiMatch
+                aiMatch: hasAiMatch,
+                intentPriority,
+                titleUrlCoverage,
+                titleUrlQuality,
+                splitFieldCoverage,
             });
         }
     }
@@ -309,8 +387,23 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         total: results.length
     });
 
-    // Sort by score (highest first)
-    results.sort((a, b) => b.finalScore - a.finalScore);
+    // Sort by user intent first, then by score.
+    // This ensures deliberate multi-token title+url matches rank above incidental high-recency matches.
+    results.sort((a, b) => {
+        const intentDelta = (b.intentPriority || 0) - (a.intentPriority || 0);
+        if (intentDelta !== 0) { return intentDelta; }
+
+        const coverageDelta = (b.titleUrlCoverage || 0) - (a.titleUrlCoverage || 0);
+        if (coverageDelta !== 0) { return coverageDelta; }
+
+        const splitDelta = (b.splitFieldCoverage || 0) - (a.splitFieldCoverage || 0);
+        if (splitDelta !== 0) { return splitDelta; }
+
+        const qualityDelta = (b.titleUrlQuality || 0) - (a.titleUrlQuality || 0);
+        if (qualityDelta !== 0) { return qualityDelta; }
+
+        return b.finalScore - a.finalScore;
+    });
 
     // Apply diversity filter to remove duplicate URLs (same page, different query params)
     const showDuplicateUrls = SettingsManager.getSetting('showDuplicateUrls') || false;
