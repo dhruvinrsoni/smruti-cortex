@@ -46,6 +46,10 @@ export interface ScoredItem {
     finalScore: number;
     keywordMatch?: boolean;
     aiMatch?: boolean;
+    intentPriority?: number;
+    titleUrlCoverage?: number;
+    titleUrlQuality?: number;
+    splitFieldCoverage?: number;
 }
 
 /**
