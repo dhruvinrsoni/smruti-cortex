@@ -12,6 +12,12 @@ Highlights
 ----------
 - **Graduated Match Classification** — Every query token is classified as EXACT (word boundary: 1.0), PREFIX (start of word: 0.75), SUBSTRING (mid-word: 0.4), or NONE (0.0). This replaces the binary `includes()` matching used by all scorers.
   - *Example*: `rar my iss` → "rar" EXACT (1.0), "my" EXACT (1.0), "iss" PREFIX of "Issue" (0.75) → graduated score 0.917
+- **Intent-Priority Ranking** — Multi-token queries (2+ keywords) now sort by deliberate user intent (combined title+URL coverage) before score. Ensures explicit keyword queries rank above incidental recency/frequency matches.
+  - *Tier 3*: All tokens in title+URL, split across fields (e.g., `zaar-api` in URL + `console` in title)
+  - *Tier 2*: All tokens in title+URL, same field
+  - *Tier 1*: ≥75% tokens in title+URL
+  - *Tier 0*: Partial coverage (score-driven)
+- **Combined Title+URL Boost** — Post-score multipliers for multi-token queries with full title+URL coverage: ×1.60 (split-field), ×1.40 (same-field), ×1.15 (≥75% coverage).
 - **Enhanced Title Scorer** — 6-signal scoring: graduated quality, position bonus (earlier in title = better), consecutive token bonus (phrase matching), composition analysis (all-exact vs mixed vs substring), starts-with bonus.
 - **Enhanced Multi-Token Scorer** — Graduated coverage with exponential reward, match quality composition bonus, and consecutive token bonus.
 - **Enhanced URL & Meta Scorers** — All scorers now use `graduatedMatchScore()` instead of binary `includes()`.

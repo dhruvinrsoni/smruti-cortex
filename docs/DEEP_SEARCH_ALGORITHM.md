@@ -85,11 +85,27 @@ Where $w$ is the match weight function mapping MatchType → [0, 1].
 Query → Tokenize → Synonym Expand → [AI Expand] →
   For each IndexedItem:
     1. Pre-filter: haystack includes() gate (inclusive)
-    2. Score: Run all 9 scorers with graduated classification
-    3. Post-boost: Literal match (×1.5), graduated title quality, consecutive tokens
-    4. Filter: Score threshold + strict matching + bookmark gate
-  → Sort by score → Diversity filter → Domain cap → Top 100
+    2. Compute intent signals: title+url coverage, split-field detection
+    3. Score: Run all 9 scorers with graduated classification
+    4. Post-boost: Literal match (×1.5), graduated title quality, consecutive tokens, 
+                   combined title+url boost (×1.40-1.60 for full coverage)
+    5. Filter: Score threshold + strict matching + bookmark gate
+  → Sort by intent priority → coverage → quality → score
+  → Diversity filter → Domain cap → Top 100
 ```
+
+### 2.3 Intent-Priority Ranking
+
+For multi-token queries (2+ keywords), results are sorted by **intent priority** before score:
+
+| Priority Tier | Condition | Example |
+|---------------|-----------|---------|
+| **Tier 3** | All tokens in title+URL, split across fields | `zaar-api` in URL + `console` in title |
+| **Tier 2** | All tokens in title+URL, same field | `rar my all` all in title |
+| **Tier 1** | ≥75% tokens in title+URL | 2 of 3 tokens matched |
+| **Tier 0** | < 75% coverage | Partial matches, recency-driven results |
+
+**Rationale**: User-specified multi-keyword queries are deliberate intent signals. A search for `zaar-api console` means the user wants a page with BOTH keywords, not just high-recency GitHub pages that happen to score well on frequency.
 
 </details>
 
@@ -179,13 +195,25 @@ Replaces the old binary "all exact = ×1.4" with graduated quality:
 
 Where $\text{quality} = \frac{\sum w(\text{matchType}_i)}{n}$
 
-### 5.3 Consecutive Token Boost
+### 5.3 Combined Title+URL Intent Boost
+
+For multi-token queries (2+ keywords), applies graduated boosting based on combined `title + url` coverage:
+
+| Coverage | Split Field? | Multiplier | Example |
+|----------|-------------|-----------|---------|
+| 100% | Yes | ×1.60 | `zaar-api` in URL + `console` in title |
+| 100% | No | ×1.40 | `rar my all` all in title |
+| ≥75% | — | ×1.15 | 2 of 3 tokens matched |
+
+**Split Field Detection**: When at least one token appears only in the title and another only in the URL, the query is treated as cross-field intent (strongest boost).
+
+### 5.4 Consecutive Token Boost
 
 When query tokens appear consecutively in the title:
 
 $$\text{score} \times (1.0 + \frac{\text{consecutivePairs}}{\text{maxPairs}} \times 0.10)$$
 
-### 5.4 AI Match Boost
+### 5.5 AI Match Boost
 
 When match comes from AI-expanded keywords:
 
@@ -271,9 +299,15 @@ vs "rar" in "library" → SUBSTRING (0.4) — much lower!
 
 | Query | Result | Before | After Deep Search |
 |-------|--------|--------|-------------------|
-| `rar my iss` | [RAR-My-All] Issue Navigator | Rank ~3-5 | Rank 1 |
-| `rar my all` | [RAR-My-All] Issue Navigator | Rank ~3-5 | Rank 1 |
-| `github pull` | GitHub Pull Requests | Mixed with "hubspot" | Properly ranked |
+| `rar my iss` | [RAR-My-All] Issue Navigator | Rank ~3-5 | Rank 1 (intent tier 2) |
+| `rar my all` | [RAR-My-All] Issue Navigator | Rank ~3-5 | Rank 1 (intent tier 2) |
+| `zaar-api console` | console.cloud.google.com/…/zaar-api | Rank ~3-5 | Rank 1 (intent tier 3, split-field) |
+| `github pull` | GitHub Pull Requests | Mixed with "hubspot" | Properly ranked (intent tier 2) |
+
+**Key Wins**:
+- Multi-token queries with deliberate intent now dominate over recency/frequency noise
+- Split-field coverage (e.g., one keyword in URL, another in title) gets maximum priority
+- Graduated matching still gives partial credit for prefix/substring matches
 
 </details>
 
