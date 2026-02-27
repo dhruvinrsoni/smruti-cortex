@@ -132,28 +132,35 @@ function setupPortBasedMessaging() {
     if (port.name === 'quick-search') {
       logger.debug('onConnect', 'Quick-search port connected');
       
+      let portDisconnected = false;
+
       port.onMessage.addListener(async (msg) => {
         if (msg.type === 'SEARCH_QUERY') {
           const t0 = performance.now();
           logger.debug('portMessage', `Quick-search query: "${msg.query}"`);
-          
+
           if (!initialized) {
-            port.postMessage({ error: 'Service worker not ready' });
+            try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
             return;
           }
-          
+
           try {
             const results = await runSearch(msg.query);
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
-            port.postMessage({ results });
+            if (!portDisconnected) {
+              try { port.postMessage({ results }); } catch { /* port closed during async search */ }
+            }
           } catch (error) {
             logger.error('portMessage', 'Search error:', error);
-            port.postMessage({ error: (error as Error).message });
+            if (!portDisconnected) {
+              try { port.postMessage({ error: (error as Error).message }); } catch { /* port closed */ }
+            }
           }
         }
       });
       
       port.onDisconnect.addListener(() => {
+        portDisconnected = true;
         logger.debug('onDisconnect', 'Quick-search port disconnected');
       });
     }
@@ -296,6 +303,12 @@ setupPortBasedMessaging();
             } catch (error) {
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }
+            break;
+          }
+          case 'GET_SETTINGS': {
+            // Settings are available immediately after SettingsManager.init() (before full init)
+            const settings = SettingsManager.getSettings();
+            sendResponse({ status: 'OK', settings });
             break;
           }
           default:
@@ -483,12 +496,7 @@ setupPortBasedMessaging();
                 break;
               }
 
-              case 'GET_SETTINGS': {
-                // Return current settings for extractor to check blacklist
-                const settings = SettingsManager.getSettings();
-                sendResponse({ status: 'OK', settings });
-                break;
-              }
+              // GET_SETTINGS is handled in outer switch (before initialized check)
 
               default:
                 logger.warn('onMessage', 'Unknown message type received:', msg.type);
@@ -498,7 +506,7 @@ setupPortBasedMessaging();
         logger.trace('onMessage', 'Message processing completed');
       } catch (error) {
         logger.error('onMessage', 'Error processing message:', error);
-        sendResponse({ error: error.message });
+        sendResponse({ error: (error as Error).message });
       }
     })();
     logger.trace('onMessage', 'Returning true for async response');
