@@ -202,7 +202,7 @@ function initializePopup() {
   function focusInputWithSelectBehavior() {
     if (!input) {return;}
     input.focus();
-    const selectAll = SettingsManager.getSetting('selectAllOnFocus') ?? true;
+    const selectAll = SettingsManager.getSetting('selectAllOnFocus') ?? false;
     if (selectAll) {
       input.select();
     } else {
@@ -822,7 +822,7 @@ function initializePopup() {
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const currentLogLevel = SettingsManager.getSetting('logLevel') || 2;
     const currentHighlight = SettingsManager.getSetting('highlightMatches') ?? true;
-    const currentFocusDelay = SettingsManager.getSetting('focusDelayMs') ?? 300;
+    const currentFocusDelay = SettingsManager.getSetting('focusDelayMs') ?? 450;
 
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
@@ -847,7 +847,7 @@ function initializePopup() {
 
     const selectAllOnFocusInput = modal.querySelector('#modal-selectAllOnFocus') as HTMLInputElement;
     if (selectAllOnFocusInput) {
-      selectAllOnFocusInput.checked = SettingsManager.getSetting('selectAllOnFocus') ?? true;
+      selectAllOnFocusInput.checked = SettingsManager.getSetting('selectAllOnFocus') ?? false;
     }
 
     // Ollama settings
@@ -1383,13 +1383,15 @@ function initializePopup() {
       });
     }
 
-    // Reset button
+    // Reset button — settings only, keep browsing index
     const resetBtn = modal.querySelector('#modal-reset') as HTMLButtonElement;
     if (resetBtn) {
       resetBtn.addEventListener('click', async () => {
-        if (confirm('Reset all settings to defaults?')) {
+        if (confirm('Reset settings to defaults?\n\nThis will:\n• Reset all settings to defaults\n• Clear favicon cache\n• Clear search debug history\n\nYour browsing history index will NOT be affected.')) {
           await SettingsManager.resetToDefaults();
           await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
+          sendMessage({ type: 'CLEAR_FAVICON_CACHE' }).catch(() => {});
+          sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }).catch(() => {});
           closeSettingsModal();
           renderResults();
           showToast('Settings reset to defaults');
@@ -1479,7 +1481,7 @@ function initializePopup() {
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('Clear ALL data and rebuild index?\n\nThis will:\n• Delete your browsing history index\n• Immediately rebuild from browser history\n• Reset all settings to defaults\n\nThis operation takes a few seconds.')) {
+        if (!confirm('Clear index and rebuild?\n\nThis will:\n• Delete your browsing history index\n• Immediately rebuild from browser history\n\nSettings will NOT be changed. This takes a few seconds.')) {
           return;
         }
         
@@ -1507,6 +1509,50 @@ function initializePopup() {
         } finally {
           clearBtn.disabled = false;
           clearBtn.textContent = '🗑️ Clear & Rebuild';
+        }
+      });
+    }
+
+    // Factory Reset — clears index + resets settings + clears all caches + rebuilds
+    const factoryResetBtn = modal.querySelector('#modal-factory-reset') as HTMLButtonElement;
+    if (factoryResetBtn) {
+      factoryResetBtn.addEventListener('click', async () => {
+        if (!confirm('Factory reset the extension?\n\nThis will:\n• Reset ALL settings to defaults\n• Clear ALL indexed data and caches\n• Rebuild the index from your browser history\n\nThis is a complete fresh start. It takes a few seconds.')) {
+          return;
+        }
+
+        factoryResetBtn.disabled = true;
+        factoryResetBtn.textContent = '⏳ Resetting...';
+        showToast('⚙️ Factory resetting...');
+
+        try {
+          // Reset settings first
+          await SettingsManager.resetToDefaults();
+          await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
+          // Clear caches in parallel
+          await Promise.allSettled([
+            sendMessage({ type: 'CLEAR_FAVICON_CACHE' }),
+            sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }),
+          ]);
+          // Clear all data and rebuild
+          const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+          if (resp && resp.status === 'OK') {
+            const itemCount = resp.itemCount || 0;
+            showToast(`✅ Factory reset complete! ${itemCount} items indexed.`);
+            await fetchStorageQuotaInfo();
+            resultsLocal = [];
+            activeIndex = -1;
+            renderResults();
+            closeSettingsModal();
+          } else {
+            showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), true);
+          }
+        } catch (error) {
+          showToast('❌ Factory reset failed', true);
+          console.error('Factory reset error:', error);
+        } finally {
+          factoryResetBtn.disabled = false;
+          factoryResetBtn.textContent = '⚠️ Factory Reset';
         }
       });
     }

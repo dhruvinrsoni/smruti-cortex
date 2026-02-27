@@ -71,7 +71,7 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'boolean',
     },
     focusDelayMs: {
-        default: 300,
+        default: 450,
         validate: (val) => typeof val === 'number' && val >= 0 && val <= 2000,
     },
     
@@ -142,9 +142,9 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'number' && val > 0 && val <= 200,
     },
     
-    // Focus behavior - default true = select all text when Tab focuses input
+    // Focus behavior - default false = cursor goes to end when Tab focuses input
     selectAllOnFocus: {
-        default: true,
+        default: false,
         validate: (val) => typeof val === 'boolean',
     },
     
