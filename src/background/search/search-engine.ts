@@ -22,7 +22,17 @@ import { getExpandedTerms } from './query-expansion';
 import { recordSearchDebug } from '../diagnostics';
 import { getSearchCache } from './search-cache';
 
+// === SEARCH CANCELLATION ===
+// Allows cancelling a previous search when a new one starts
+let activeSearchAbort: AbortController | null = null;
+
 export async function runSearch(query: string): Promise<IndexedItem[]> {
+    // Cancel any in-flight search (prevents concurrent embedding generation storms)
+    if (activeSearchAbort) {
+        activeSearchAbort.abort();
+    }
+    activeSearchAbort = new AbortController();
+    const searchAbort = activeSearchAbort;
     const searchStartTime = performance.now();
     const logger = Logger.forComponent('SearchEngine');
     logger.trace('runSearch', 'Search called with query:', query);
@@ -56,7 +66,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     await SettingsManager.init();
     
     // Check if AI keyword expansion is enabled
-    const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') || false;
+    const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
     
     // AI-expanded tokens (includes synonyms, related terms)
     // This is ONE LLM call, not 600+ embeddings!
@@ -86,23 +96,33 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     logger.trace('runSearch', 'Loaded scorers:', scorers.length);
 
     // Check if semantic search is enabled
-    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     let queryEmbedding: number[] | undefined;
 
     // Generate query embedding for semantic search if enabled
     if (embeddingsEnabled) {
-        logger.info('runSearch', '🧠 Semantic search ACTIVE - generating query embedding');
-        try {
-            const ollamaService = await import('../ollama-service');
-            const embeddingResult = await ollamaService.getOllamaService().generateEmbedding(q);
-            if (embeddingResult.success && embeddingResult.embedding.length > 0) {
-                queryEmbedding = embeddingResult.embedding;
-                logger.info('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
-            } else {
-                logger.warn('runSearch', '⚠️ Query embedding generation failed');
+        // Check abort and circuit breaker BEFORE expensive Ollama calls
+        if (searchAbort.signal.aborted) { return []; }
+
+        const ollamaModule = await import('../ollama-service');
+        if (ollamaModule.isCircuitBreakerOpen()) {
+            logger.warn('runSearch', '🔴 Circuit breaker open — skipping semantic search');
+        } else {
+            logger.info('runSearch', '🧠 Semantic search ACTIVE - generating query embedding');
+            try {
+                // Use EMBEDDING model (not generation model) with user's settings
+                const embConfig = await ollamaModule.getOllamaConfigFromSettings(true);
+                const ollamaService = ollamaModule.getOllamaService(embConfig);
+                const embeddingResult = await ollamaService.generateEmbedding(q, searchAbort.signal);
+                if (embeddingResult.success && embeddingResult.embedding.length > 0) {
+                    queryEmbedding = embeddingResult.embedding;
+                    logger.info('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
+                } else {
+                    logger.warn('runSearch', `⚠️ Query embedding generation failed: ${embeddingResult.error || 'empty'}`);
+                }
+            } catch (error) {
+                logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', { error });
             }
-        } catch (error) {
-            logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', { error });
         }
     }
 
@@ -146,20 +166,41 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     const results: ScoredItem[] = [];
 
     // Check if strict matching is enabled (default: true = only show matching results)
-    const showNonMatchingResults = SettingsManager.getSetting('showNonMatchingResults') || false;
+    const showNonMatchingResults = SettingsManager.getSetting('showNonMatchingResults') ?? false;
+
+    // === EMBEDDING GENERATION GUARDRAILS ===
+    // These caps prevent the catastrophic memory leak that caused 14GB RAM usage.
+    // Without caps, every search generates embeddings for ALL ~10k+ items.
+    const MAX_EMBEDDINGS_PER_SEARCH = 10;  // Only generate for top 10 unembedded items per search
+    const EMBEDDING_TIME_BUDGET_MS = 5000; // Max 5 seconds total for embedding generation
+    let embeddingsGenerated = 0;
+    let embeddingTimeSpent = 0;
 
     // Process items for scoring
     for (const item of items) {
-        // On-demand embedding generation for semantic search
-        if (embeddingsEnabled && !item.embedding) {
+        // Check abort before each item (search may have been cancelled)
+        if (searchAbort.signal.aborted) { return []; }
+
+        // On-demand embedding generation for semantic search — HEAVILY GUARDED
+        if (embeddingsEnabled && !item.embedding
+            && embeddingsGenerated < MAX_EMBEDDINGS_PER_SEARCH
+            && embeddingTimeSpent < EMBEDDING_TIME_BUDGET_MS) {
             try {
-                const ollamaService = await import('../ollama-service');
-                const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
-                const embeddingResult = await ollamaService.getOllamaService().generateEmbedding(text);
-                if (embeddingResult.success && embeddingResult.embedding.length > 0) {
-                    item.embedding = embeddingResult.embedding;
-                    // Save back to DB for future searches
-                    await import('../database').then(db => db.saveIndexedItem(item));
+                const ollamaModule = await import('../ollama-service');
+                if (!ollamaModule.isCircuitBreakerOpen() && ollamaModule.checkMemoryPressure().ok) {
+                    const embStart = performance.now();
+                    const embConfig = await ollamaModule.getOllamaConfigFromSettings(true);
+                    const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
+                    const embeddingResult = await ollamaModule.getOllamaService(embConfig)
+                        .generateEmbedding(text, searchAbort.signal);
+                    embeddingTimeSpent += performance.now() - embStart;
+
+                    if (embeddingResult.success && embeddingResult.embedding.length > 0) {
+                        item.embedding = embeddingResult.embedding;
+                        embeddingsGenerated++;
+                        // Save back to DB for future searches
+                        await import('../database').then(db => db.saveIndexedItem(item));
+                    }
                 }
             } catch (error) {
                 // Ignore embedding errors - will use keyword matching
@@ -406,7 +447,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     });
 
     // Apply diversity filter to remove duplicate URLs (same page, different query params)
-    const showDuplicateUrls = SettingsManager.getSetting('showDuplicateUrls') || false;
+    const showDuplicateUrls = SettingsManager.getSetting('showDuplicateUrls') ?? false;
     const enableDiversity = !showDuplicateUrls; // Diversity ON = filter duplicates
     const diverseResults = applyDiversityFilter(results, enableDiversity);
 
@@ -433,7 +474,24 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     });
 
     const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
-    
+
+    // === MEMORY CLEANUP: Release embedding arrays from items ===
+    // Embeddings are persisted to IndexedDB during generation. We don't need them in memory
+    // after scoring is complete. This prevents the items array from hogging memory.
+    if (embeddingsEnabled) {
+        for (const item of items) {
+            item.embedding = undefined;
+        }
+        if (embeddingsGenerated > 0) {
+            logger.info('runSearch', `🧠 Embedding generation stats: ${embeddingsGenerated}/${MAX_EMBEDDINGS_PER_SEARCH} cap, ${embeddingTimeSpent.toFixed(0)}ms/${EMBEDDING_TIME_BUDGET_MS}ms budget`);
+        }
+    }
+
+    // Clear abort reference since this search is done
+    if (activeSearchAbort === searchAbort) {
+        activeSearchAbort = null;
+    }
+
     // Record search performance
     const searchDuration = performance.now() - searchStartTime;
     performanceTracker.recordSearch(searchDuration);

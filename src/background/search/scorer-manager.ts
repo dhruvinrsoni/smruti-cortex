@@ -179,7 +179,7 @@ const domainFamiliarityScorer: Scorer = {
 
 export function getAllScorers(): Scorer[] {
     // Check if embeddings are enabled for semantic search
-    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
 
     // Create dynamic embedding scorer with appropriate weight
     const dynamicEmbeddingScorer = {
