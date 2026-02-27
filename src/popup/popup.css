@@ -457,10 +457,13 @@ html,body { margin:0; padding:0; width:800px; height:400px; min-height:0; color:
   font-size: 12px; /* Reduced from 13px */
 }
 
-input[type="radio"] {
+input[type="radio"],
+input[type="checkbox"] {
   position: absolute;
   opacity: 0;
-  pointer-events: none;
+  width: 0;
+  height: 0;
+  /* NOTE: Do NOT use pointer-events:none here — it breaks label click propagation in Chromium */
 }
 
 .setting-actions {
