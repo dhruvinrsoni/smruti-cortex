@@ -133,7 +133,17 @@ function setupEventListeners() {
   // Note: Sort dropdown handler is initialized in initializePopup() where resultsLocal is in scope
 
   if (resultsNode) {
-    // Removed - individual result items handle keyboard navigation
+    // Redirect vertical wheel scroll to horizontal in card view
+    resultsNode.addEventListener('wheel', (e) => {
+      const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+      if (displayMode === DisplayMode.CARDS && !e.shiftKey) {
+        const delta = e.deltaY || e.deltaX;
+        if (delta !== 0) {
+          e.preventDefault();
+          resultsNode.scrollLeft += delta;
+        }
+      }
+    }, { passive: false });
   }
 
   if (settingsButton) {
