@@ -16,14 +16,21 @@ const logger = Logger.forComponent('Indexing');
 export async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }): Promise<number[] | undefined> {
     try {
         // Check if embeddings are enabled
-        const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+        const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
         if (!embeddingsEnabled) {
             return undefined; // Skip embedding generation
         }
 
         // Lazy import to avoid circular dependencies
-        const { getOllamaService } = await import('./ollama-service');
-        const ollamaService = getOllamaService();
+        const { getOllamaService, getOllamaConfigFromSettings, isCircuitBreakerOpen, checkMemoryPressure } = await import('./ollama-service');
+
+        // GUARDRAILS: check circuit breaker and memory before generating
+        if (isCircuitBreakerOpen()) { return undefined; }
+        if (!checkMemoryPressure().ok) { return undefined; }
+
+        // Use correct embedding model from user settings
+        const config = await getOllamaConfigFromSettings(true);
+        const ollamaService = getOllamaService(config);
 
         // Create text for embedding (title + description + url)
         const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
@@ -55,7 +62,7 @@ export async function generateBatchEmbeddings(
 ): Promise<Array<number[] | undefined>> {
     try {
         // Check if embeddings are enabled
-        const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+        const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
         if (!embeddingsEnabled) {
             return items.map(() => undefined);
         }

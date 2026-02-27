@@ -591,12 +591,14 @@ async function init() {
             SettingsManager.init().then(async () => {
                 const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled');
                 const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled');
-                
+
                 if (ollamaEnabled || embeddingsEnabled) {
                     logger.info('init', '🔥 Warming up AI models in background...');
                     try {
-                        const { getOllamaService } = await import('./ollama-service');
-                        const ollamaService = getOllamaService();
+                        const { getOllamaService, getOllamaConfigFromSettings } = await import('./ollama-service');
+                        // Pass user's actual settings (endpoint, model, timeout)
+                        const config = await getOllamaConfigFromSettings(!!embeddingsEnabled);
+                        const ollamaService = getOllamaService(config);
                         await ollamaService.warmup();
                     } catch (error) {
                         logger.debug('init', '⚠️ Model warmup failed (non-critical):', error);

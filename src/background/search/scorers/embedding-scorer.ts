@@ -22,7 +22,7 @@
 import { Scorer } from '../../../core/scorer-types';
 import { Logger } from '../../../core/logger';
 import { SettingsManager } from '../../../core/settings';
-import { getOllamaService } from '../../ollama-service';
+import { getOllamaService, getOllamaConfigFromSettings, isCircuitBreakerOpen, checkMemoryPressure } from '../../ollama-service';
 
 const COMPONENT = 'EmbeddingScorer';
 
@@ -60,7 +60,7 @@ const embeddingScorer: Scorer = {
 
   score: (item, _query, _allItems, context) => {
     // Check if embeddings are enabled
-    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') || false;
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     if (!embeddingsEnabled) {
       return 0; // Disabled
     }
@@ -95,10 +95,16 @@ export default embeddingScorer;
  */
 export async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }): Promise<number[]> {
   try {
-    const ollamaService = getOllamaService();
+    // GUARDRAILS: check circuit breaker and memory before generating
+    if (isCircuitBreakerOpen()) { return []; }
+    if (!checkMemoryPressure().ok) { return []; }
+
+    // Use correct embedding model from user settings
+    const config = await getOllamaConfigFromSettings(true);
+    const ollamaService = getOllamaService(config);
     const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
     const result = await ollamaService.generateEmbedding(text);
-    
+
     if (result.success && result.embedding.length > 0) {
       return result.embedding;
     }

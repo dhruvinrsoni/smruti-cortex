@@ -1279,26 +1279,40 @@ function initializePopup() {
         const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
         refreshModelsBtn.disabled = true;
         refreshModelsBtn.textContent = '⏳';
-        
+
+        // GUARDRAIL: 5-second timeout to prevent hanging if Ollama is unresponsive
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         try {
-          const response = await fetch(`${endpoint}/api/tags`);
+          const response = await fetch(`${endpoint}/api/tags`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
           if (!response.ok) {throw new Error(`HTTP ${response.status}`);}
-          
+
           const data = await response.json();
           const models = data.models || [];
-          
-          // Update datalist with available models
-          const datalist = document.getElementById('ollama-models');
-          if (datalist && models.length > 0) {
-            datalist.innerHTML = models.map((m: { name: string }) => 
+
+          // Update BOTH datalists (AI model + embedding model)
+          const ollamaDatalist = document.getElementById('ollama-models');
+          const embeddingDatalist = document.getElementById('embedding-models');
+          if (models.length > 0) {
+            const optionsHtml = models.map((m: { name: string }) =>
               `<option value="${m.name}">${m.name}</option>`
             ).join('');
+            if (ollamaDatalist) { ollamaDatalist.innerHTML = optionsHtml; }
+            if (embeddingDatalist) { embeddingDatalist.innerHTML = optionsHtml; }
             showToast(`Found ${models.length} models`);
           } else {
             showToast('No models found');
           }
         } catch (error) {
-          showToast('Failed to fetch models. Is Ollama running?');
+          clearTimeout(timeoutId);
+          const msg = error instanceof Error && error.name === 'AbortError'
+            ? 'Timed out after 5s. Is Ollama running?'
+            : 'Failed to fetch models. Is Ollama running?';
+          showToast(msg);
           console.error('Fetch models error:', error);
         } finally {
           refreshModelsBtn.disabled = false;

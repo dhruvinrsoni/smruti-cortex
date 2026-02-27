@@ -161,9 +161,34 @@ export class OllamaService {
    * PRIVACY NOTE: Text is sent ONLY to local Ollama (localhost).
    * No external network calls. All processing is on-device.
    */
-  async generateEmbedding(text: string): Promise<EmbeddingResponse> {
+  async generateEmbedding(text: string, abortSignal?: AbortSignal): Promise<EmbeddingResponse> {
     const startTime = Date.now();
     const textPreview = text.length > 100 ? text.substring(0, 100) + '...' : text;
+
+    // === GUARD 1: Circuit breaker ===
+    if (circuitBreaker.isOpen()) {
+      return {
+        embedding: [], model: this.config.model, success: false,
+        duration: 0, error: 'Circuit breaker open — too many recent failures'
+      };
+    }
+
+    // === GUARD 2: Memory pressure ===
+    const mem = checkMemoryPressure();
+    if (!mem.ok) {
+      return {
+        embedding: [], model: this.config.model, success: false,
+        duration: 0, error: `Memory pressure: ${mem.usedMB}MB used (limit: ${mem.limitMB}MB)`
+      };
+    }
+
+    // === GUARD 3: Already aborted ===
+    if (abortSignal?.aborted) {
+      return {
+        embedding: [], model: this.config.model, success: false,
+        duration: 0, error: 'Aborted before start'
+      };
+    }
 
     logger.debug('generateEmbedding', '🤖 Starting embedding generation', {
       textLength: text.length,
@@ -203,17 +228,29 @@ export class OllamaService {
 
     try {
       const controller = new AbortController();
-      
-      // Support infinite timeout: -1 or 0 = no timeout, positive = timeout value
-      const hasTimeout = this.config.timeout > 0;
-      const timeoutId = hasTimeout 
-        ? setTimeout(() => controller.abort(), this.config.timeout)
-        : undefined;
 
-      const timeoutDisplay = hasTimeout ? `${this.config.timeout}ms` : 'infinite';
+      // Support infinite timeout: -1 or 0 = no timeout, positive = timeout value
+      // GUARDRAIL: Even "infinite" is capped at 120s to prevent permanent hangs
+      const effectiveTimeout = this.config.timeout <= 0 ? 120_000 : this.config.timeout;
+      const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
+
+      // If caller provided an abort signal, forward it to our controller
+      if (abortSignal) {
+        if (abortSignal.aborted) {
+          clearTimeout(timeoutId);
+          controller.abort();
+        } else {
+          abortSignal.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+          }, { once: true });
+        }
+      }
+
+      const timeoutDisplay = this.config.timeout <= 0 ? `capped at ${effectiveTimeout}ms` : `${effectiveTimeout}ms`;
       logger.debug('generateEmbedding', `⏱️ Sending POST request (timeout: ${timeoutDisplay})...`);
       const fetchStartTime = Date.now();
-      
+
       const response = await fetch(requestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,9 +258,7 @@ export class OllamaService {
         signal: controller.signal
       });
 
-      if (hasTimeout && timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      clearTimeout(timeoutId);
       const fetchDuration = Date.now() - fetchStartTime;
 
       logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
@@ -285,6 +320,8 @@ export class OllamaService {
         throughput: `${(text.length / duration * 1000).toFixed(0)} chars/sec`
       });
 
+      circuitBreaker.recordSuccess();
+
       return {
         embedding,  // Use the extracted embedding, not data.embedding
         model: this.config.model,
@@ -296,6 +333,8 @@ export class OllamaService {
       const duration = Date.now() - startTime;
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       const isTimeout = errorMsg.includes('abort');
+
+      circuitBreaker.recordFailure();
       
       if (isTimeout) {
         logger.warn('generateEmbedding', `⏱️ REQUEST TIMEOUT after ${duration}ms (limit: ${this.config.timeout}ms)`);
@@ -401,8 +440,97 @@ export class OllamaService {
   }
 }
 
+// === CIRCUIT BREAKER ===
+// Prevents hammering Ollama when it's down or misconfigured
+const circuitBreaker = {
+  failures: 0,
+  maxFailures: 3,           // Trip after 3 consecutive failures
+  cooldownMs: 60_000,       // 1 minute cooldown before retrying
+  lastFailureTime: 0,
+  tripped: false,
+
+  recordFailure(): void {
+    this.failures++;
+    this.lastFailureTime = Date.now();
+    if (this.failures >= this.maxFailures) {
+      this.tripped = true;
+      logger.warn('circuitBreaker', `🔴 Circuit breaker TRIPPED after ${this.failures} consecutive failures. Cooldown: ${this.cooldownMs / 1000}s`);
+    }
+  },
+
+  recordSuccess(): void {
+    if (this.failures > 0) {
+      logger.info('circuitBreaker', `🟢 Circuit breaker reset (was at ${this.failures} failures)`);
+    }
+    this.failures = 0;
+    this.tripped = false;
+  },
+
+  isOpen(): boolean {
+    if (!this.tripped) { return false; }
+    // Check if cooldown has elapsed
+    if (Date.now() - this.lastFailureTime > this.cooldownMs) {
+      logger.info('circuitBreaker', '🟡 Circuit breaker cooldown elapsed, allowing retry');
+      this.tripped = false;
+      this.failures = 0;
+      return false;
+    }
+    return true;
+  }
+};
+
+export function isCircuitBreakerOpen(): boolean {
+  return circuitBreaker.isOpen();
+}
+
+// === MEMORY PRESSURE GUARD ===
+// Chrome extensions have limited memory; prevent embedding generation from consuming it all
+const MEMORY_LIMIT_MB = 512;  // Hard cap: stop AI features if extension exceeds 512MB
+
+export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: number } {
+  try {
+    // performance.memory is available in Chrome/Edge (non-standard but works in extensions)
+    const perfMemory = (performance as any).memory;  // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (perfMemory) {
+      const usedMB = Math.round(perfMemory.usedJSHeapSize / (1024 * 1024));
+      const ok = usedMB < MEMORY_LIMIT_MB;
+      if (!ok) {
+        logger.warn('memoryGuard', `🔴 MEMORY PRESSURE: ${usedMB}MB used (limit: ${MEMORY_LIMIT_MB}MB) — blocking AI operations`);
+      }
+      return { ok, usedMB, limitMB: MEMORY_LIMIT_MB };
+    }
+  } catch { /* ignore */ }
+  return { ok: true, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
+}
+
 // Singleton instance
 let ollamaService: OllamaService | null = null;
+
+/**
+ * Build OllamaConfig from SettingsManager (reads user's actual settings)
+ * This ensures the service always uses the user's configured model, endpoint, and timeout.
+ */
+export async function getOllamaConfigFromSettings(forEmbeddings = false): Promise<Partial<OllamaConfig>> {
+  try {
+    // Lazy dynamic import to avoid circular dependency at module load time
+    const { SettingsManager } = await import('../core/settings');
+
+    const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+    const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
+
+    // Use the correct model based on purpose:
+    // - forEmbeddings=true → use embeddingModel (nomic-embed-text, all-minilm, etc.)
+    // - forEmbeddings=false → use ollamaModel (llama3.2:1b, etc. for text generation)
+    const model = forEmbeddings
+      ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text')
+      : (SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
+
+    return { endpoint, model, timeout, maxRetries: 1 };
+  } catch {
+    logger.debug('getOllamaConfigFromSettings', 'SettingsManager not available, using defaults');
+    return {};
+  }
+}
 
 /**
  * Get or create Ollama service instance
@@ -416,7 +544,7 @@ export function getOllamaService(config?: Partial<OllamaConfig>): OllamaService 
     ollamaService = new OllamaService(config);
     return ollamaService;
   }
-  
+
   // Update existing instance if config provided (CRITICAL: allows settings changes to take effect)
   if (config) {
     const oldTimeout = ollamaService.getConfig().timeout;
@@ -429,6 +557,6 @@ export function getOllamaService(config?: Partial<OllamaConfig>): OllamaService 
   } else {
     logger.trace('getOllamaService', 'Returning existing service instance (no config update)');
   }
-  
+
   return ollamaService;
 }

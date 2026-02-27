@@ -19,6 +19,7 @@
 
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
+import { isCircuitBreakerOpen, checkMemoryPressure } from './ollama-service';
 
 const COMPONENT = 'AIKeywordExpander';
 const logger = Logger.forComponent(COMPONENT);
@@ -84,7 +85,7 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
   // CRITICAL: Check if AI is enabled FIRST
   // Settings may have changed since last search
   await SettingsManager.init();
-  const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') || false;
+  const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
   
   if (!ollamaEnabled) {
     // AI disabled - return original tokens only
@@ -99,10 +100,20 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
     return cached;
   }
 
+  // GUARDRAILS: check circuit breaker and memory before expensive LLM call
+  if (isCircuitBreakerOpen()) {
+    logger.warn('expandQueryKeywords', '🔴 Circuit breaker open — skipping AI expansion');
+    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+  }
+  if (!checkMemoryPressure().ok) {
+    logger.warn('expandQueryKeywords', '🔴 Memory pressure — skipping AI expansion');
+    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+  }
+
   // AI is enabled - call LLM for expansion
   const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
   const model = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
-  const timeout = SettingsManager.getSetting('ollamaTimeout') || 30000;
+  const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
 
   // Check if we have a generation model configured
   // Embedding-only models can't do text generation
