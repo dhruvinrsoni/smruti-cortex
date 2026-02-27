@@ -221,9 +221,6 @@ export class SettingsManager {
                 this.logger.info('init', '⚠️ No stored settings, using defaults:', this.settings);
             }
 
-            // Ensure displayMode always defaults to list
-            this.settings.displayMode = DisplayMode.LIST;
-
             // Apply current settings (non-critical)
             await this.applySettings();
             this.logger.info('init', '✅ Settings initialized and applied');

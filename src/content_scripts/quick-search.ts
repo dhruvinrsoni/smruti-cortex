@@ -27,7 +27,7 @@ import {
   sortResults
 } from '../shared/search-ui-base';
 
-import { type AppSettings } from '../core/settings';
+import { type AppSettings, DisplayMode } from '../core/settings';
 
 // Extend window interface for our extension
 declare global {
@@ -312,6 +312,75 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       padding: 8px 0;
       contain: content;
     }
+    /* Card view: 3-row grid with horizontal scroll (mirrors popup card layout) */
+    .results.cards {
+      display: grid;
+      grid-template-rows: repeat(3, auto);
+      grid-auto-flow: column;
+      grid-auto-columns: clamp(150px, 28vw, 210px);
+      overflow-x: auto;
+      overflow-y: auto;
+      gap: 10px;
+      max-height: 50vh;
+      padding: 8px;
+      contain: layout style;
+    }
+    .results.cards .result-card {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      background: var(--bg-container);
+      transition: all 0.2s ease;
+      overflow: hidden;
+    }
+    .results.cards .result-card:hover,
+    .results.cards .result-card.selected {
+      background: var(--bg-hover);
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.2);
+    }
+    .results.cards .result-card:focus {
+      outline: 2px solid var(--accent-color);
+      outline-offset: -2px;
+    }
+    .results.cards .card-favicon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      background: #24333f;
+      display: block;
+      flex-shrink: 0;
+      margin-bottom: 2px;
+    }
+    .results.cards .card-details {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      width: 100%;
+      gap: 2px;
+    }
+    .results.cards .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.4;
+    }
+    .results.cards .card-url {
+      font-size: 11px;
+      color: var(--text-url);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      line-height: 1.3;
+    }
     .result {
       display: flex;
       flex-direction: column;
@@ -450,6 +519,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
           if (currentLogLevel >= LOG_LEVEL.DEBUG) {
             console.debug('[SmrutiCortex] Fetched settings, focusDelayMs=', focusDelay, 'searchDebounceMs=', searchDebounceMs);
+          }
+          // Re-render results with updated display mode (popup parity)
+          if (currentResults.length > 0) {
+            try { renderResults(currentResults); } catch (e) { /* ignore */ }
           }
         } catch (e) {
           // ignore
@@ -736,7 +809,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Results
     resultsEl = document.createElement('div');
     resultsEl.className = 'results';
-    
+
+    // Redirect vertical wheel scroll to horizontal when in card view
+    resultsEl.addEventListener('wheel', (e) => {
+      if (resultsEl?.classList.contains('cards') && !e.shiftKey) {
+        const delta = e.deltaY || e.deltaX;
+        if (delta !== 0) {
+          e.preventDefault();
+          if (resultsEl) { resultsEl.scrollLeft += delta; }
+        }
+      }
+    }, { passive: false });
+
     const emptyDiv = document.createElement('div');
     emptyDiv.className = 'empty';
     emptyDiv.textContent = 'Type to search your history...';
@@ -1215,46 +1299,123 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // ===== RENDER RESULTS (using shared render function) =====
+  // ===== HIGHLIGHT HELPER (mirrors popup.ts highlightMatches) =====
+  function highlightText(text: string, tokens: string[]): string {
+    if (!text || tokens.length === 0) { return text; }
+    let result = text;
+    for (const token of tokens) {
+      if (token.length < 2) { continue; }
+      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<span class="highlight">$1</span>');
+    }
+    return result;
+  }
+
+  // ===== RENDER RESULTS (card + list mode, mirrors popup.ts renderResults) =====
   function renderResults(results: SearchResult[]): void {
     if (!resultsEl) {return;}
     const t0 = performance.now();
+
+    const isCards = cachedSettings?.displayMode === DisplayMode.CARDS;
+    resultsEl.className = isCards ? 'results cards' : 'results';
 
     // Clear existing results
     while (resultsEl.firstChild) {
       resultsEl.removeChild(resultsEl.firstChild);
     }
 
-    const query = inputEl?.value?.trim().toLowerCase() || '';
-    const tokens = query.split(/\s+/).filter(Boolean);
+    const query = inputEl?.value?.trim() || '';
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
     const emptyMessage = query ? 'No results found' : 'Type to search your history...';
 
-    // Use shared rendering function (DRY principle)
-    const fragment = renderResultsShared(results, tokens, {
-      selectedIndex,
-      emptyMessage,
-      resultClassName: 'result',
-      selectedClassName: 'selected',
-      titleClassName: 'result-title',
-      urlClassName: 'result-url',
-      highlightClassName: 'highlight',
-      emptyClassName: 'empty',
-      onResultClick: (index, _result, _ctrlOrMeta) => {
-        openResult(index, true);
-      }
-    });
+    if (results.length === 0) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'empty';
+      emptyDiv.textContent = emptyMessage;
+      resultsEl.appendChild(emptyDiv);
+      perfLog(`renderResults (empty)`, t0);
+      return;
+    }
 
-    resultsEl.appendChild(fragment);
-    
-    // Make result elements focusable for keyboard navigation
-    resultsEl.querySelectorAll('.result').forEach((result, index) => {
-      (result as HTMLElement).tabIndex = 0;
-      (result as HTMLElement).dataset.index = String(index);
-    });
-    // After rendering, consider focusing the first result depending on settings (popup parity)
+    if (isCards) {
+      // Card rendering — mirrors popup.ts card branch
+      const loadFavicons = cachedSettings?.loadFavicons !== false; // default: true
+      results.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.tabIndex = 0;
+        card.dataset.index = String(idx);
+        if (idx === selectedIndex) { card.classList.add('selected'); }
+
+        const fav = document.createElement('img');
+        fav.className = 'card-favicon';
+        try {
+          fav.src = loadFavicons
+            ? `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=20`
+            : chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        } catch {
+          fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        }
+        fav.onerror = () => { fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg'); };
+
+        const details = document.createElement('div');
+        details.className = 'card-details';
+
+        const title = document.createElement('div');
+        title.className = 'card-title';
+        const bookmarkIndicator = item.isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
+        title.innerHTML = bookmarkIndicator + highlightText(item.title || item.url, tokens);
+        details.appendChild(title);
+
+        if (item.bookmarkFolders && item.bookmarkFolders.length > 0) {
+          const folder = document.createElement('div');
+          folder.className = 'bookmark-folder';
+          folder.textContent = '📁 ' + item.bookmarkFolders.join(' › ');
+          details.appendChild(folder);
+        }
+
+        const url = document.createElement('div');
+        url.className = 'card-url';
+        url.innerHTML = highlightText(item.url, tokens);
+        details.appendChild(url);
+
+        card.appendChild(fav);
+        card.appendChild(details);
+
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openResult(idx, true);
+        });
+
+        resultsEl!.appendChild(card);
+      });
+    } else {
+      // List rendering — use shared function (DRY principle)
+      const fragment = renderResultsShared(results, tokens, {
+        selectedIndex,
+        emptyMessage,
+        resultClassName: 'result',
+        selectedClassName: 'selected',
+        titleClassName: 'result-title',
+        urlClassName: 'result-url',
+        highlightClassName: 'highlight',
+        emptyClassName: 'empty',
+        onResultClick: (index, _result, _ctrlOrMeta) => {
+          openResult(index, true);
+        }
+      });
+      resultsEl.appendChild(fragment);
+
+      // Make list items focusable for keyboard navigation
+      resultsEl.querySelectorAll('.result').forEach((result, index) => {
+        (result as HTMLElement).tabIndex = 0;
+        (result as HTMLElement).dataset.index = String(index);
+      });
+    }
+
+    // Post-render: focus first result if settings allow (popup parity)
     (async () => {
       try {
-        // Fetch settings if not cached
         if (!cachedSettings) {
           cachedSettings = await new Promise<AppSettings>((resolve) => {
             try {
@@ -1268,12 +1429,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
         const rawDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : 0;
         const focusDelay = Math.max(0, Math.min(2000, rawDelay || 0));
+        const itemSel = resultsEl?.classList.contains('cards') ? '.result-card' : '.result';
         if (results.length > 0 && focusDelay > 0) {
-          // Popup behavior: focusDelayMs controls the debounce; if >0, focus the first result
-          // immediately after render (use setTimeout 0 to ensure element is ready)
           setTimeout(() => {
             if (!resultsEl) { return; }
-            const first = resultsEl.querySelector('.result') as HTMLElement | null;
+            const first = resultsEl.querySelector(itemSel) as HTMLElement | null;
             if (first) {
               selectedIndex = 0;
               updateSelection();
@@ -1281,10 +1441,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
           }, 0);
         }
-        // Final fallback: always ensure first result is focusable and focused so Enter works
-        // This ensures pages that steal focus still allow Enter to operate on results.
         if (results.length > 0) {
-          const first = resultsEl.querySelector('.result') as HTMLElement | null;
+          const first = resultsEl?.querySelector(itemSel) as HTMLElement | null;
           if (first) {
             selectedIndex = 0;
             updateSelection();
@@ -1295,8 +1453,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         // ignore
       }
     })();
-    
-    perfLog(`renderResults (${results.length} items)`, t0);
+
+    perfLog(`renderResults (${results.length} items, ${isCards ? 'cards' : 'list'})`, t0);
   }
 
   // ===== RENDER ERROR MESSAGE =====
@@ -1420,13 +1578,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         name: 'results',
         element: null, // Custom handling
         onFocus: () => {
-          // Focus the selected result or first result
+          // Focus the selected result or first result (card or list aware)
           if (currentResults.length > 0) {
-            const selectedResult = resultsEl?.querySelector('.result.selected') as HTMLElement;
+            const isCards = resultsEl?.classList.contains('cards');
+            const itemSel = isCards ? '.result-card' : '.result';
+            const selectedResult = resultsEl?.querySelector(`${itemSel}.selected`) as HTMLElement;
             if (selectedResult) {
               selectedResult.focus();
             } else {
-              const firstResult = resultsEl?.querySelector('.result') as HTMLElement;
+              const firstResult = resultsEl?.querySelector(itemSel) as HTMLElement;
               if (firstResult) {
                 selectedIndex = 0;
                 updateSelection();
@@ -1442,11 +1602,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Determine current focused group
     const getCurrentGroupIndex = (): number => {
       const currentFocused = getFocusedElement() as HTMLElement;
-      
+
       if (currentFocused === inputEl) {return 0;}
       if (currentFocused === settingsBtn) {return 1;}
-      if (currentFocused && currentFocused.classList?.contains('result')) {return 2;}
-      
+      if (currentFocused && (
+        currentFocused.classList?.contains('result') ||
+        currentFocused.classList?.contains('result-card')
+      )) {return 2;}
+
       return -1; // Unknown/not focused
     };
 
@@ -1585,12 +1748,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function updateSelection(): void {
     if (!resultsEl) {return;}
-    resultsEl.querySelectorAll('.result').forEach((el, i) => {
+    const isCards = resultsEl.classList.contains('cards');
+    const itemSel = isCards ? '.result-card' : '.result';
+    resultsEl.querySelectorAll(itemSel).forEach((el, i) => {
       el.classList.toggle('selected', i === selectedIndex);
     });
-    // Scroll into view
-    const selected = resultsEl.querySelector('.result.selected');
-    selected?.scrollIntoView({ block: 'nearest' });
+    // Scroll selected item into view (inline:nearest handles horizontal card scroll)
+    const selected = resultsEl.querySelector(`${itemSel}.selected`);
+    selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // If a result is selected and currently not focused, move focus to it so arrow keys operate there
     if (selected && document.activeElement !== selected) {
       try {
@@ -1660,7 +1825,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       e.stopPropagation();
       e.stopImmediatePropagation();
 
-      if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement === settingsBtn)) {
+      if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement.classList?.contains('result-card') || focusedElement === settingsBtn)) {
         // Results or settings button is focused - handle navigation/action keys
         handleKeydown(e);
       } else {
