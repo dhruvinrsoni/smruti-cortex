@@ -279,7 +279,7 @@
               </div>
             </label>
             <label class="setting-option">
-              <input type="checkbox" id="modal-selectAllOnFocus" checked>
+              <input type="checkbox" id="modal-selectAllOnFocus">
               <span class="option-indicator"></span>
               <div class="option-content">
                 <strong>Select all on Tab focus</strong>
@@ -361,8 +361,9 @@
           </div>
           <div class="setting-actions">
             <button class="action-btn primary" id="modal-rebuild" title="Re-index all browser history">🔄 Rebuild Index</button>
-            <button class="action-btn secondary" id="modal-reset">Reset Settings</button>
-            <button class="action-btn danger" id="modal-clear">🗑️ Clear & Rebuild</button>
+            <button class="action-btn secondary" id="modal-reset" title="Reset settings to defaults — keeps your browsing index intact">↺ Reset Settings</button>
+            <button class="action-btn danger" id="modal-clear" title="Clear browsing index and rebuild — settings unchanged">🗑️ Clear & Rebuild</button>
+            <button class="action-btn danger" id="modal-factory-reset" title="Complete factory reset: clears index, resets settings, clears all caches, then rebuilds">⚠️ Factory Reset</button>
           </div>
           <div class="bookmark-section">
             <h4>Bookmark Extension</h4>
