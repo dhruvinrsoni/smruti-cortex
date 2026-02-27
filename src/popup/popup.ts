@@ -188,13 +188,19 @@ function initializePopup() {
     return query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
   }
 
-  // Highlight matching parts in text
+  // HTML-escape to prevent XSS when using innerHTML
+  function escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Highlight matching parts in text (HTML-safe)
   function highlightMatches(text: string, query: string): string {
+    const safe = escapeHtml(text);
     if (!query.trim() || !SettingsManager.getSetting('highlightMatches')) {
-      return text;
+      return safe;
     }
     const tokens = simpleTokenize(query);
-    let highlighted = text;
+    let highlighted = safe;
     for (const token of tokens) {
       if (token.length < 2) {continue;} // Skip very short tokens
       const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -328,12 +334,10 @@ function initializePopup() {
   }
 
   // Smart debounce - wait for user to stop typing before searching
+  // Note: This is intentionally separate from focusDelayMs (which controls result auto-focus)
   function debounceSearchLocal(q: string) {
     if (debounceTimer) {clearTimeout(debounceTimer);}
-    const delay = SettingsManager.getSetting('focusDelayMs');
-    // Clamp to [0, 2000] ms
-    const safeDelay = typeof delay === 'number' ? Math.max(0, Math.min(delay, 2000)) : 300;
-    debounceTimer = window.setTimeout(() => doSearch(q), safeDelay);
+    debounceTimer = window.setTimeout(() => doSearch(q), 50);
   }
 
   // Assign global
@@ -351,12 +355,12 @@ function initializePopup() {
     }
 
     try {
-      const defaultResultCount = SettingsManager.getSetting('defaultResultCount') || 50;
+      const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
       const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
       resultsLocal = (resp && resp.results) ? resp.results : [];
       
       // Apply current sort setting
-      const sortBy = SettingsManager.getSetting('sortBy') || 'recent';
+      const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
       sortResults(resultsLocal, sortBy);
       
       activeIndex = resultsLocal.length ? 0 : -1;
@@ -389,12 +393,14 @@ function initializePopup() {
 
     try {
       const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q });
+      // Guard against stale responses from slower earlier queries
+      if (q !== currentQuery) {return;}
       resultsLocal = (resp && resp.results) ? resp.results : [];
-      
+
       // Apply current sort setting
       const sortBy = SettingsManager.getSetting('sortBy') || 'best-match';
       sortResults(resultsLocal, sortBy);
-      
+
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
       // Focus the first result item if focusDelayMs > 0
@@ -470,7 +476,7 @@ function initializePopup() {
         if (item.bookmarkFolders && item.bookmarkFolders.length > 0) {
           const folderPath = document.createElement('div');
           folderPath.className = 'bookmark-folder';
-          folderPath.innerHTML = '📁 ' + item.bookmarkFolders.join(' › ');
+          folderPath.textContent = '📁 ' + item.bookmarkFolders.join(' › ');
           details.appendChild(folderPath);
         }
 
@@ -521,7 +527,7 @@ function initializePopup() {
         if (item.bookmarkFolders && item.bookmarkFolders.length > 0) {
           const folderPath = document.createElement('div');
           folderPath.className = 'bookmark-folder';
-          folderPath.innerHTML = '📁 ' + item.bookmarkFolders.join(' › ');
+          folderPath.textContent = '📁 ' + item.bookmarkFolders.join(' › ');
           details.appendChild(folderPath);
         }
 
@@ -693,7 +699,14 @@ function initializePopup() {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (resultsLocal.length === 0) {return;}
-        const newIndex = Math.max(0, currentIndex - 1);
+        if (currentIndex <= 0) {
+          // On first result — return focus to search input
+          activeIndex = -1;
+          highlightActive();
+          input.focus();
+          return;
+        }
+        const newIndex = currentIndex - 1;
         activeIndex = newIndex;
         highlightActive();
         // Focus the new active result item
@@ -707,7 +720,44 @@ function initializePopup() {
         return;
       }
 
-      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (resultsLocal.length === 0) {return;}
+        const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+        if (displayMode === DisplayMode.CARDS) {
+          // In card grid (3 rows), ArrowRight moves to next column (+3)
+          const newIndex = Math.min(resultsLocal.length - 1, currentIndex + 3);
+          if (newIndex !== currentIndex) {
+            activeIndex = newIndex;
+            highlightActive();
+            const selector = '.result-card';
+            const results = resultsNode.querySelectorAll(selector);
+            (results[newIndex] as HTMLElement)?.focus();
+          }
+        } else {
+          openResult(currentIndex, e);
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (resultsLocal.length === 0) {return;}
+        const displayMode2 = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+        if (displayMode2 === DisplayMode.CARDS) {
+          // In card grid (3 rows), ArrowLeft moves to prev column (-3)
+          const newIndex = Math.max(0, currentIndex - 3);
+          if (newIndex !== currentIndex) {
+            activeIndex = newIndex;
+            highlightActive();
+            const results = resultsNode.querySelectorAll('.result-card');
+            (results[newIndex] as HTMLElement)?.focus();
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'Enter') {
         e.preventDefault();
         if (resultsLocal.length === 0) {return;}
         openResult(currentIndex, e);
@@ -830,7 +880,7 @@ function initializePopup() {
 
     // Load current settings into form
     const currentDisplayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-    const currentLogLevel = SettingsManager.getSetting('logLevel') || 2;
+    const currentLogLevel = SettingsManager.getSetting('logLevel') ?? 2;
     const currentHighlight = SettingsManager.getSetting('highlightMatches') ?? true;
     const currentFocusDelay = SettingsManager.getSetting('focusDelayMs') ?? 450;
 
@@ -863,7 +913,7 @@ function initializePopup() {
     // Ollama settings
     const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
     if (ollamaEnabledInput) {
-      ollamaEnabledInput.checked = SettingsManager.getSetting('ollamaEnabled') || false;
+      ollamaEnabledInput.checked = SettingsManager.getSetting('ollamaEnabled') ?? false;
     }
 
     const ollamaEndpointInput = modal.querySelector('#modal-ollamaEndpoint') as HTMLInputElement;
@@ -879,13 +929,13 @@ function initializePopup() {
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
-      ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') || 30000);
+      ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') ?? 30000);
     }
 
     // Semantic search settings
     const embeddingsEnabledInput = modal.querySelector('#modal-embeddingsEnabled') as HTMLInputElement;
     if (embeddingsEnabledInput) {
-      embeddingsEnabledInput.checked = SettingsManager.getSetting('embeddingsEnabled') || false;
+      embeddingsEnabledInput.checked = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     }
 
     const embeddingModelInput = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
@@ -930,10 +980,13 @@ function initializePopup() {
     switchSettingsTab(activeSettingsTab);
   }
 
-  // Initialize bookmark button in settings modal
+  // Initialize bookmark button in settings modal (guarded to prevent duplicate listeners)
+  let bookmarkBtnInitialized = false;
   function initializeBookmarkButton() {
+    if (bookmarkBtnInitialized) {return;}
     const bookmarkBtn = document.getElementById('bookmarkBtn') as HTMLButtonElement;
     if (bookmarkBtn) {
+      bookmarkBtnInitialized = true;
       const extensionURL = chrome.runtime.getURL('popup/popup.html');
 
       // Click to copy URL
@@ -1068,10 +1121,13 @@ function initializePopup() {
     }
   }
   
-  // Set up inspect link handler
+  // Set up inspect link handler (guarded to prevent duplicate listeners)
+  let inspectLinkInitialized = false;
   function setupInspectLink() {
+    if (inspectLinkInitialized) {return;}
     const inspectLink = document.getElementById('storage-inspect-link');
     if (inspectLink) {
+      inspectLinkInitialized = true;
       inspectLink.addEventListener('click', (e) => {
         e.preventDefault();
         // IndexedDB is browser-internal, copy the debug URL for developers
@@ -1399,7 +1455,7 @@ function initializePopup() {
       resetBtn.addEventListener('click', async () => {
         if (confirm('Reset settings to defaults?\n\nThis will:\n• Reset all settings to defaults\n• Clear favicon cache\n• Clear search debug history\n\nYour browsing history index will NOT be affected.')) {
           await SettingsManager.resetToDefaults();
-          await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
+          await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
           sendMessage({ type: 'CLEAR_FAVICON_CACHE' }).catch(() => {});
           sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }).catch(() => {});
           closeSettingsModal();
@@ -1538,7 +1594,7 @@ function initializePopup() {
         try {
           // Reset settings first
           await SettingsManager.resetToDefaults();
-          await Logger.setLevel(SettingsManager.getSetting('logLevel') || 2);
+          await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
           // Clear caches in parallel
           await Promise.allSettled([
             sendMessage({ type: 'CLEAR_FAVICON_CACHE' }),
@@ -1801,8 +1857,8 @@ function initializePopup() {
       const hintsContainer = document.getElementById('hints-container');
       if (hintsContainer && !hintsContainer.innerHTML.trim()) {
         hintsContainer.innerHTML = `
-          <span>Enter: open · Ctrl+Enter: new tab · Shift+Enter: background tab · Ctrl+C: copy HTML · Ctrl+M: copy markdown</span>
-          <span>↓: navigate results · ↑↓←→: move · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
+          <span>Enter: open in new tab · Shift+Enter: background tab · Ctrl+C: copy HTML · Ctrl+M: copy markdown</span>
+          <span>↑↓: navigate · ←→: move columns (cards) · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
         `;
       }
     });
@@ -1826,6 +1882,9 @@ function initializePopup() {
       } else if (message.type === 'PING') {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
+        if (message.settings) {
+          SettingsManager.updateSettings(message.settings).catch(() => {});
+        }
         renderResults();
         sendResponse({ status: 'ok' });
       }
@@ -1838,6 +1897,9 @@ function initializePopup() {
       } else if (message.type === 'PING') {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
+        if (message.settings) {
+          SettingsManager.updateSettings(message.settings).catch(() => {});
+        }
         renderResults();
         sendResponse({ status: 'ok' });
       }
@@ -1901,7 +1963,7 @@ function initializePopup() {
         // Recent searches
         const recentDiv = document.getElementById('analytics-recent-searches');
         if (recentDiv && history.length > 0) {
-          recentDiv.innerHTML = history
+          recentDiv.innerHTML = [...history]
             .reverse()
             .map((entry: SearchDebugEntry) => `
               <div class="search-entry">
@@ -1921,12 +1983,12 @@ function initializePopup() {
       console.error('Failed to load analytics:', err);
     }
 
-    // Close button
-    const closeBtn = modal.querySelector('#analytics-close');
+    // Close button (use onclick to avoid stacking listeners)
+    const closeBtn = modal.querySelector('#analytics-close') as HTMLElement;
     if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
+      closeBtn.onclick = () => {
         modal.classList.add('hidden');
-      });
+      };
     }
   }
 }

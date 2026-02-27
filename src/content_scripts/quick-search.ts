@@ -81,6 +81,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let prewarmed = false;
   let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
+  let hidePortCloseTimer: number | null = null;
 
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
@@ -509,16 +510,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           try {
             if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
           } catch (e) { /* ignore */ }
-          const focusDelay = typeof settings?.focusDelayMs === 'number' ? settings.focusDelayMs : undefined;
-          // If focusDelayMs is defined and >= 0, use it as search debounce (parity with popup)
-          if (typeof focusDelay === 'number') {
-            // Clamp to [0,2000]
-            searchDebounceMs = Math.max(0, Math.min(2000, focusDelay));
-          } else {
-            searchDebounceMs = DEBOUNCE_MS;
-          }
+          // Search debounce is intentionally separate from focusDelayMs
+          // focusDelayMs controls auto-focus to results, not search delay
+          searchDebounceMs = DEBOUNCE_MS;
           if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-            console.debug('[SmrutiCortex] Fetched settings, focusDelayMs=', focusDelay, 'searchDebounceMs=', searchDebounceMs);
+            console.debug('[SmrutiCortex] Fetched settings, searchDebounceMs=', searchDebounceMs);
           }
           // Re-render results with updated display mode (popup parity)
           if (currentResults.length > 0) {
@@ -569,15 +565,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       searchPort.onMessage.addListener((response) => {
         if (response?.results) {
           perfLog('Search results received via port');
-          currentResults = response.results.slice(0, MAX_RESULTS);
-          
-          // Apply current sort setting (safe localStorage access)
-          let currentSort = 'best-match';
-          try {
-            currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
-          } catch {
-            // Sandboxed context - use default
-          }
+          currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
+
+          // Apply current sort setting from cached settings
+          const currentSort = cachedSettings?.sortBy || 'best-match';
           sortResults(currentResults, currentSort);
           
           selectedIndex = 0;
@@ -719,14 +710,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     ];
     
     let currentSortIndex = 0;
-    // Safe localStorage access (fails on sandboxed pages like .mhtml)
-    try {
-      const savedSort = localStorage.getItem('smruti-sort-by') || 'best-match';
+    // Read sort preference from cached settings (synced with popup via SettingsManager)
+    {
+      const savedSort = cachedSettings?.sortBy || 'best-match';
       currentSortIndex = sortOptions.findIndex(opt => opt.value === savedSort);
       if (currentSortIndex === -1) {currentSortIndex = 0;}
-    } catch {
-      // Sandboxed context - use default
-      currentSortIndex = 0;
     }
     
     const updateSortButton = () => {
@@ -740,10 +728,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       e.stopPropagation();
       currentSortIndex = (currentSortIndex + 1) % sortOptions.length;
       const newSort = sortOptions[currentSortIndex].value;
+      // Persist sort preference via settings (synced with popup)
       try {
-        localStorage.setItem('smruti-sort-by', newSort);
+        chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { sortBy: newSort } });
+        if (cachedSettings) { cachedSettings.sortBy = newSort as any; } // eslint-disable-line @typescript-eslint/no-explicit-any
       } catch {
-        // Sandboxed context - can't persist preference
+        // Extension context may be invalid
       }
       updateSortButton();
       
@@ -963,6 +953,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     if (!shadowHost || !overlayEl || !inputEl) {return;}
 
+    // Cancel any pending port close from a previous hideOverlay
+    if (hidePortCloseTimer) {
+      clearTimeout(hidePortCloseTimer);
+      hidePortCloseTimer = null;
+    }
+
     // Show overlay FIRST
     shadowHost.classList.add('visible');
     overlayEl.classList.add('visible');
@@ -1062,7 +1058,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (inputEl) {inputEl.blur();}
     
     // Close port after a delay (in case user reopens quickly)
-    setTimeout(closeSearchPort, 1000);
+    // Timer is cancelled in showOverlay if user reopens
+    hidePortCloseTimer = window.setTimeout(closeSearchPort, 1000) as unknown as number;
   }
 
   function isOverlayVisible(): boolean {
@@ -1129,7 +1126,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     try {
       // Get default result count from cached settings (or use 50 as fallback)
-      const defaultResultCount = cachedSettings?.defaultResultCount || 50;
+      const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
       
       // Request recent history from service worker
       const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
@@ -1263,15 +1260,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
             if (response?.results) {
               perfLog('Search results received via sendMessage', t0);
-              currentResults = response.results.slice(0, MAX_RESULTS);
-              
-              // Apply current sort setting (safe localStorage access)
-              let currentSort = 'best-match';
-              try {
-                currentSort = localStorage.getItem('smruti-sort-by') || 'best-match';
-              } catch {
-                // Sandboxed context - use default
-              }
+              currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
+
+              // Apply current sort setting from cached settings
+              const currentSort = cachedSettings?.sortBy || 'best-match';
               sortResults(currentResults, currentSort);
               
               selectedIndex = 0;
@@ -1300,9 +1292,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== HIGHLIGHT HELPER (mirrors popup.ts highlightMatches) =====
+  function escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   function highlightText(text: string, tokens: string[]): string {
-    if (!text || tokens.length === 0) { return text; }
-    let result = text;
+    if (!text) { return ''; }
+    const safe = escapeHtml(text);
+    if (tokens.length === 0) { return safe; }
+    let result = safe;
     for (const token of tokens) {
       if (token.length < 2) { continue; }
       const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1413,7 +1411,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       });
     }
 
-    // Post-render: focus first result if settings allow (popup parity)
+    // Post-render: focus first result only if selectedIndex hasn't been changed by user
+    const renderSelectedSnapshot = selectedIndex;
     (async () => {
       try {
         if (!cachedSettings) {
@@ -1427,26 +1426,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
           });
         }
+        // Only auto-focus if user hasn't navigated since render started
+        if (selectedIndex !== renderSelectedSnapshot) { return; }
         const rawDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : 0;
         const focusDelay = Math.max(0, Math.min(2000, rawDelay || 0));
         const itemSel = resultsEl?.classList.contains('cards') ? '.result-card' : '.result';
         if (results.length > 0 && focusDelay > 0) {
-          setTimeout(() => {
-            if (!resultsEl) { return; }
-            const first = resultsEl.querySelector(itemSel) as HTMLElement | null;
-            if (first) {
-              selectedIndex = 0;
-              updateSelection();
-              first.focus();
-            }
-          }, 0);
-        }
-        if (results.length > 0) {
           const first = resultsEl?.querySelector(itemSel) as HTMLElement | null;
           if (first) {
-            selectedIndex = 0;
             updateSelection();
-            try { first.focus(); } catch (e) { /* ignore */ }
+            try { first.focus(); } catch { /* ignore */ }
           }
         }
       } catch (e) {
@@ -1622,12 +1611,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const isInputFocused = focused === inputEl;
     
     if (isInputFocused) {
-      // In input: only handle Escape, ArrowDown, Tab, Shift+Tab
+      // In input: only handle Escape, ArrowDown, Enter, Tab, Shift+Tab
       // Allow ALL other keys (including Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+Z, Ctrl+Backspace, etc.) to work normally
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         hideOverlay();
+        return;
+      }
+      if (e.key === 'Enter' && currentResults.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = selectedIndex >= 0 ? selectedIndex : 0;
+        openResult(idx, !e.shiftKey);
         return;
       }
       if (e.key === 'ArrowDown' && currentResults.length > 0) {
@@ -1996,10 +1992,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         try {
           if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
         } catch (e) { /* ignore */ }
-        const focusDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : undefined;
-        if (typeof focusDelay === 'number') {
-          searchDebounceMs = Math.max(0, Math.min(2000, focusDelay));
-        }
+        // Search debounce is separate from focusDelayMs
+        searchDebounceMs = DEBOUNCE_MS;
       } catch {
         // ignore
       }
@@ -2051,6 +2045,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       // Ignore - listeners may already be removed
     }
     
+    // Reset loaded flag so content script can re-initialize after extension update
+    window.__SMRUTI_QUICK_SEARCH_LOADED__ = false;
+
     perfLog('Cleanup complete');
   }
   
