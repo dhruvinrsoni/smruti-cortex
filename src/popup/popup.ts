@@ -1897,7 +1897,8 @@ function initializePopup() {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
         if (message.settings) {
-          SettingsManager.updateSettings(message.settings).catch(() => {});
+          // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
+          SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
         }
         renderResults();
         sendResponse({ status: 'ok' });
@@ -1912,7 +1913,8 @@ function initializePopup() {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
         if (message.settings) {
-          SettingsManager.updateSettings(message.settings).catch(() => {});
+          // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
+          SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
         }
         renderResults();
         sendResponse({ status: 'ok' });

@@ -209,25 +209,13 @@ setupPortBasedMessaging();
             break;
           case 'SETTINGS_CHANGED':
             logger.debug('onMessage', 'Handling SETTINGS_CHANGED:', msg.settings);
-            
-            // CRITICAL: Update SettingsManager cache with new settings
-            // This ensures search-engine reads fresh ollamaEnabled value
+
+            // Use applyRemoteSettings — updates cache + storage but does NOT
+            // re-broadcast. This breaks the infinite ping-pong loop between
+            // popup ↔ service worker that was causing 2.7GB+ memory leaks.
             if (msg.settings) {
-              await SettingsManager.updateSettings(msg.settings);
-              logger.debug('onMessage', 'SettingsManager cache updated with new settings');
-            }
-            
-            // Check if log level changed and update logger if needed
-            if (msg.settings && typeof msg.settings.logLevel === 'number') {
-              const currentLevel = Logger.getLevel();
-              if (currentLevel !== msg.settings.logLevel) {
-                Logger.setLevelInternal(msg.settings.logLevel);
-                logger.info('onMessage', '[SmrutiCortex] Log level updated from SETTINGS_CHANGED', {
-                  from: currentLevel,
-                  to: msg.settings.logLevel,
-                  levelName: LogLevel[msg.settings.logLevel]
-                });
-              }
+              await SettingsManager.applyRemoteSettings(msg.settings);
+              logger.debug('onMessage', 'SettingsManager cache updated (no re-broadcast)');
             }
             sendResponse({ status: 'ok' });
             break;
