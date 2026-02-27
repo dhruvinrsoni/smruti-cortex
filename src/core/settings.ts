@@ -258,6 +258,27 @@ export class SettingsManager {
     }
 
     /**
+     * Apply settings received from another context (popup ↔ service worker).
+     * Updates in-memory cache and saves to storage, but does NOT broadcast
+     * a SETTINGS_CHANGED notification. This breaks the infinite ping-pong loop
+     * that occurs when both contexts re-broadcast on every receive.
+     */
+    static async applyRemoteSettings(settings: Partial<AppSettings>): Promise<void> {
+        try {
+            this.settings = { ...this.settings, ...settings };
+            await this.saveToStorage();
+            // Apply log level locally (no notification)
+            const currentLogLevel = Logger.getLevel();
+            if (currentLogLevel !== this.settings.logLevel) {
+                Logger.setLevelInternal(this.settings.logLevel);
+            }
+            this.logger.debug('applyRemoteSettings', '✅ Remote settings applied (no re-broadcast)');
+        } catch (error) {
+            this.logger.error('applyRemoteSettings', '❌ Failed to apply remote settings:', error);
+        }
+    }
+
+    /**
      * Get specific setting value
      */
     static getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] {
