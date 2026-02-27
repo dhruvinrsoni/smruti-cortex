@@ -42,7 +42,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== CONFIGURATION =====
   const OVERLAY_ID = 'smruti-cortex-overlay';
-  const DEBOUNCE_MS = 30; // Reduced for snappier feel
+  const DEBOUNCE_MS = 150; // Wait for user to pause typing before searching (prevents flicker)
   const MAX_RESULTS = 15;
   
   // Log level constants (matches Logger.LogLevel)
@@ -77,6 +77,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let selectedIndex = 0;
   let currentResults: SearchResult[] = [];
   let debounceTimer: number | null = null;
+  let qsFocusTimer: number | null = null;  // Delayed focus to results (cancelled on new typing)
+  let overlayFocusInterval: ReturnType<typeof setInterval> | null = null; // Tracked to prevent leaks
+  let overlayFocusTimeouts: ReturnType<typeof setTimeout>[] = [];         // Tracked backup timeouts
   let searchPort: chrome.runtime.Port | null = null;
   let prewarmed = false;
   let cachedSettings: AppSettings | null = null;
@@ -993,44 +996,42 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     perfLog('Input focused immediately', t0);
     
     // Strategy 3: Continuous focus attempts with setInterval (nuclear option for selected text in omnibox)
+    // Clear any previous interval/timeouts from a prior showOverlay call to prevent leaks
+    if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
+    overlayFocusTimeouts.forEach(t => clearTimeout(t));
+    overlayFocusTimeouts = [];
+
     let focusAttempts = 0;
     const maxAttempts = 20; // Try for up to 1 second (20 * 50ms)
-    const focusInterval = setInterval(() => {
+    overlayFocusInterval = setInterval(() => {
       focusAttempts++;
-      
-      // Check if we've achieved focus or maxed out attempts
+
       if (focusAttempts >= maxAttempts) {
-        clearInterval(focusInterval);
+        if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
         return;
       }
-      
-      // If our input has focus, stop trying
       if (document.activeElement === inputEl || shadowRoot?.activeElement === inputEl) {
-        clearInterval(focusInterval);
+        if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
         return;
       }
-      
-      // If overlay was closed, stop trying
       if (!isOverlayVisible()) {
-        clearInterval(focusInterval);
+        if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
         return;
       }
-      
-      // Force blur active element and focus our input
+
       try {
         if (document.activeElement && document.activeElement !== inputEl) {
           (document.activeElement as HTMLElement).blur();
         }
       } catch (e) { /* ignore */ }
-      
+
       inputEl.focus();
       inputEl.setSelectionRange(0, 0);
-    }, 50); // Every 50ms
-    
-    // Strategy 4: Backup timeouts at key intervals
-    const focusAtIntervals = [0, 100, 200, 300, 500, 800];
-    focusAtIntervals.forEach(delay => {
-      setTimeout(() => {
+    }, 50);
+
+    // Strategy 4: Backup timeouts at key intervals (tracked for cleanup)
+    [0, 100, 200, 300, 500, 800].forEach(delay => {
+      const tid = setTimeout(() => {
         if (inputEl && isOverlayVisible() && document.activeElement !== inputEl && shadowRoot?.activeElement !== inputEl) {
           try {
             if (document.activeElement && document.activeElement !== inputEl) {
@@ -1041,6 +1042,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           inputEl.setSelectionRange(0, 0);
         }
       }, delay);
+      overlayFocusTimeouts.push(tid);
     });
 
     // Open port for faster messaging (only if extension context is valid)
@@ -1069,6 +1071,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== SEARCH =====
   function handleInput(): void {
     if (debounceTimer) {clearTimeout(debounceTimer);}
+    if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;} // Cancel pending focus shift
     
     // Early check: If extension context is already invalid, attempt recovery immediately
     if (!isExtensionContextValid()) {
@@ -1150,7 +1153,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       
       currentResults = recentItems;
-      selectedIndex = recentItems.length > 0 ? 0 : -1;
+      // Don't auto-select first result — keep focus on input so user can retype.
+      // User can Tab or ArrowDown to navigate results when ready.
+      selectedIndex = -1;
       renderResults(recentItems);
       
       perfLog('loadRecentHistory completed', t0);
@@ -1411,37 +1416,26 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       });
     }
 
-    // Post-render: focus first result only if selectedIndex hasn't been changed by user
+    // Post-render: focus first result after focusDelayMs — ONLY for search results, not recent history.
+    // When selectedIndex === -1, user is browsing default results or cleared the input → don't steal focus.
     const renderSelectedSnapshot = selectedIndex;
-    (async () => {
-      try {
-        if (!cachedSettings) {
-          cachedSettings = await new Promise<AppSettings>((resolve) => {
-            try {
-              chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
-                resolve(resp?.settings || {} as AppSettings);
-              });
-            } catch {
-              resolve({} as AppSettings);
-            }
-          });
-        }
-        // Only auto-focus if user hasn't navigated since render started
-        if (selectedIndex !== renderSelectedSnapshot) { return; }
-        const rawDelay = typeof cachedSettings?.focusDelayMs === 'number' ? cachedSettings.focusDelayMs : 0;
-        const focusDelay = Math.max(0, Math.min(2000, rawDelay || 0));
+    const focusDelay = typeof cachedSettings?.focusDelayMs === 'number'
+      ? Math.max(0, Math.min(2000, cachedSettings.focusDelayMs))
+      : 450; // Default 450ms
+    if (results.length > 0 && focusDelay > 0 && renderSelectedSnapshot >= 0) {
+      if (qsFocusTimer) {clearTimeout(qsFocusTimer);}
+      qsFocusTimer = window.setTimeout(() => {
+        qsFocusTimer = null;
+        // If user navigated or typed since render, skip — stale focus
+        if (selectedIndex !== renderSelectedSnapshot) {return;}
         const itemSel = resultsEl?.classList.contains('cards') ? '.result-card' : '.result';
-        if (results.length > 0 && focusDelay > 0) {
-          const first = resultsEl?.querySelector(itemSel) as HTMLElement | null;
-          if (first) {
-            updateSelection();
-            try { first.focus(); } catch { /* ignore */ }
-          }
+        const first = resultsEl?.querySelector(itemSel) as HTMLElement | null;
+        if (first) {
+          updateSelection();
+          try { first.focus(); } catch { /* ignore */ }
         }
-      } catch (e) {
-        // ignore
-      }
-    })();
+      }, focusDelay) as unknown as number;
+    }
 
     perfLog(`renderResults (${results.length} items, ${isCards ? 'cards' : 'list'})`, t0);
   }
@@ -2018,10 +2012,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     
     // Clear any pending timers
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-      debounceTimer = null;
-    }
+    if (debounceTimer) {clearTimeout(debounceTimer); debounceTimer = null;}
+    if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;}
+    if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
+    overlayFocusTimeouts.forEach(t => clearTimeout(t));
+    overlayFocusTimeouts = [];
+    if (hidePortCloseTimer) {clearTimeout(hidePortCloseTimer); hidePortCloseTimer = null;}
     
     // Remove shadow DOM
     if (shadowHost && shadowHost.parentNode) {

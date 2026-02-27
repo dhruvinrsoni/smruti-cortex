@@ -177,6 +177,7 @@ function initializePopup() {
   let resultsLocal: IndexedItem[] = [];
   let activeIndex = -1;
   let debounceTimer: number | undefined;
+  let focusTimer: number | undefined;  // Delayed focus shift to results (cancelled on new typing)
   let serviceWorkerReady = false;
   let currentQuery = '';
 
@@ -337,7 +338,8 @@ function initializePopup() {
   // Note: This is intentionally separate from focusDelayMs (which controls result auto-focus)
   function debounceSearchLocal(q: string) {
     if (debounceTimer) {clearTimeout(debounceTimer);}
-    debounceTimer = window.setTimeout(() => doSearch(q), 50);
+    if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;} // Cancel pending focus shift
+    debounceTimer = window.setTimeout(() => doSearch(q), 150);
   }
 
   // Assign global
@@ -358,12 +360,14 @@ function initializePopup() {
       const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
       const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
       resultsLocal = (resp && resp.results) ? resp.results : [];
-      
+
       // Apply current sort setting
       const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
       sortResults(resultsLocal, sortBy);
-      
-      activeIndex = resultsLocal.length ? 0 : -1;
+
+      // Don't auto-select first result — keep focus on input so user can retype.
+      // User can Tab or ArrowDown to navigate results when ready.
+      activeIndex = -1;
       renderResults();
     } catch (error) {
       resultsLocal = [];
@@ -403,17 +407,25 @@ function initializePopup() {
 
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
-      // Focus the first result item if focusDelayMs > 0
-      const focusDelay = SettingsManager.getSetting('focusDelayMs');
-      if (typeof focusDelay === 'number' && focusDelay > 0 && resultsLocal.length > 0) {
-        const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-        const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
-        const firstResult = resultsNode.querySelector(selector) as HTMLElement;
-        if (firstResult) {
-          activeIndex = 0;
-          highlightActive();
-          setTimeout(() => firstResult.focus(), 0);
-        }
+      // Focus the first result after focusDelayMs — ONLY for actual search results.
+      // Cancelled if user types again. Doesn't fire for empty/recent-history results.
+      const focusDelay = SettingsManager.getSetting('focusDelayMs') ?? 450;
+      if (focusDelay > 0 && resultsLocal.length > 0 && activeIndex >= 0) {
+        if (focusTimer) {clearTimeout(focusTimer);}
+        const searchSnapshot = currentQuery;
+        focusTimer = window.setTimeout(() => {
+          focusTimer = undefined;
+          // If query changed (user typed more), skip — stale focus
+          if (currentQuery !== searchSnapshot) {return;}
+          const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+          const selector = displayMode === DisplayMode.CARDS ? '.result-card' : 'li';
+          const firstResult = resultsNode.querySelector(selector) as HTMLElement;
+          if (firstResult) {
+            activeIndex = 0;
+            highlightActive();
+            firstResult.focus();
+          }
+        }, focusDelay);
       }
     } catch (error) {
       resultsLocal = [];
@@ -743,8 +755,8 @@ function initializePopup() {
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         if (resultsLocal.length === 0) {return;}
-        const displayMode2 = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-        if (displayMode2 === DisplayMode.CARDS) {
+        const displayModeLeft = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+        if (displayModeLeft === DisplayMode.CARDS) {
           // In card grid (3 rows), ArrowLeft moves to prev column (-3)
           const newIndex = Math.max(0, currentIndex - 3);
           if (newIndex !== currentIndex) {
