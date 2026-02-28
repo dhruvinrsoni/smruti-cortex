@@ -470,6 +470,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       border-radius: 3px;
       font-family: inherit;
     }
+    .help-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--bg-kbd);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: auto;
+      transition: all 0.15s ease;
+    }
+    .help-link:hover {
+      background: var(--accent-color);
+      color: var(--bg-container);
+    }
   `;
 
   // ===== FETCH LOG LEVEL FROM SETTINGS =====
@@ -840,7 +859,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       span.appendChild(document.createTextNode(` ${label}`));
       footer.appendChild(span);
     });
-    
+
+    // Help/tour link
+    const helpLink = document.createElement('a');
+    helpLink.href = 'https://dhruvinrsoni.github.io/smruti-cortex/tour.html';
+    helpLink.target = '_blank';
+    helpLink.rel = 'noopener';
+    helpLink.textContent = '?';
+    helpLink.title = 'Feature tour & help';
+    helpLink.className = 'help-link';
+    footer.appendChild(helpLink);
+
     container.appendChild(header);
     container.appendChild(resultsEl);
     container.appendChild(footer);

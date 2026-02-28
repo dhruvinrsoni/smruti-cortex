@@ -19,7 +19,8 @@
                 </div>
                 <div class="nav-links">
                     <a href="#features">Features</a>
-                    <a href="#demo">Demo</a>
+                    <a href="#experience">Experience</a>
+                    <a href="tour.html">Tour</a>
                     <a href="#privacy">Privacy</a>
                     <a href="https://github.com/dhruvinrsoni/smruti-cortex" target="_blank">GitHub</a>
                     <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
@@ -30,173 +31,311 @@
         </div>
     </nav>
 
-    <!-- Hero Section -->
+    <!-- Hero Section — Full viewport, split layout -->
     <section class="hero">
         <div class="container">
-            <div class="hero-content">
-                <h1 class="hero-title">
-                    Find Any Page <span class="gradient-text">Instantly</span>
-                </h1>
-                <p class="hero-subtitle">
-                    Like "Everything" search for Windows, but for your browser. Ultra-fast, privacy-first history search.
-                </p>
-                <div class="typing-demo">
-                    <span class="typing-cursor">Ctrl+Shift+S</span>
-                    <span class="typing-text" id="typingText"></span>
-                </div>
-                <div class="cta-buttons">
-                    <a href="https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi" class="btn btn-primary" id="chromeBtn" target="_blank">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2z"/>
-                        </svg>
-                        Add to Chrome
-                    </a>
-                    <a href="#" class="btn btn-secondary" id="edgeBtn">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
-                        </svg>
-                        Add to Edge
-                    </a>
-                </div>
-                <p class="hero-stats">
-                    <span class="stat">⚡ &lt;50ms search</span>
-                    <span class="stat">🔐 100% local</span>
-                    <span class="stat">⭐ Open source</span>
-                </p>
-            </div>
-            <div class="hero-visual">
-                <div class="demo-window">
-                    <div class="demo-header">
-                        <div class="demo-dots">
-                            <span></span><span></span><span></span>
-                        </div>
-                        <div class="demo-title">SmrutiCortex</div>
+            <div class="hero-grid">
+                <div class="hero-text">
+                    <h1 class="hero-title">
+                        Find Any Page <span class="gradient-text">Instantly</span>
+                    </h1>
+                    <p class="hero-subtitle">
+                        Ultra-fast, privacy-first browser history search. Like "Everything" for your browser.
+                    </p>
+                    <div class="cta-buttons">
+                        <a href="https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi" class="btn btn-primary" id="chromeBtn" target="_blank">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2z"/></svg>
+                            Add to Chrome — Free
+                        </a>
+                        <a href="#" class="btn btn-secondary btn-sm" id="edgeBtn">Add to Edge</a>
                     </div>
-                    <div class="demo-search">
-                        <input type="text" placeholder="Type to search your history..." id="demoInput" readonly>
-                        <div class="demo-results" id="demoResults"></div>
+                    <div class="hero-stats">
+                        <div class="stat-pill"><span class="stat-icon">⚡</span> &lt;50ms search</div>
+                        <div class="stat-pill"><span class="stat-icon">🔒</span> 100% local</div>
+                        <div class="stat-pill"><span class="stat-icon">⭐</span> Open source</div>
+                    </div>
+                </div>
+                <div class="hero-showcase">
+                    <div class="browser-frame" id="heroFrame">
+                        <div class="browser-titlebar">
+                            <div class="browser-dots">
+                                <span class="dot red"></span>
+                                <span class="dot yellow"></span>
+                                <span class="dot green"></span>
+                            </div>
+                            <div class="browser-address">
+                                <span class="address-text">SmrutiCortex</span>
+                            </div>
+                        </div>
+                        <div class="browser-body">
+                            <div class="hero-screenshots" id="heroScreenshots">
+                                <img src="./screenshots/Screenshot 2026-02-12 200635.png" alt="Search results with highlights" class="hero-screenshot active" loading="eager">
+                                <img src="./screenshots/Screenshot 2026-02-12 200309.png" alt="Quick-search overlay with results" class="hero-screenshot" loading="lazy">
+                                <img src="./screenshots/Screenshot 2026-02-12 200140.png" alt="Quick-search inline overlay" class="hero-screenshot" loading="lazy">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+        <div class="scroll-indicator" aria-hidden="true">
+            <span>See it in action</span>
+            <div class="scroll-chevron">&#8964;</div>
+        </div>
     </section>
 
-    <!-- Features Section -->
+    <!-- Features Section — Alternating image/text -->
     <section id="features" class="features">
         <div class="container">
             <h2 class="section-title">Why SmrutiCortex?</h2>
-            <p class="section-subtitle">The fastest way to find anything in your browser history</p>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Lightning Fast</h3>
-                    <p>Results appear as you type in &lt;50ms. Instant search, zero lag.</p>
+
+            <!-- Category: Search -->
+            <div class="feature-category">
+                <div class="category-label">Search</div>
+
+                <div class="feature-row">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 200635.png" alt="Lightning fast search results" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">⚡</div>
+                        <h3>Lightning Fast</h3>
+                        <p>Results appear as you type in &lt;50ms. Instant search, zero lag.</p>
+                        <kbd>Ctrl+Shift+S</kbd>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔐</div>
-                    <h3>100% Private</h3>
-                    <p>All data stays on your device. No cloud sync, no tracking, no telemetry.</p>
+
+                <div class="feature-row reverse">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 200309.png" alt="Deep Search highlighted matches" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">🎯</div>
+                        <h3>Smart Ranking</h3>
+                        <p>9-scorer Deep Search™ algorithm: recency, frequency, substring, fuzzy match, and more.</p>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⌨️</div>
-                    <h3>Keyboard First</h3>
-                    <p>Ctrl+Shift+S global shortcut. Full arrow key navigation. Zero mouse needed.</p>
+
+                <div class="feature-row">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 200140.png" alt="Keyboard shortcuts in footer" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">⌨️</div>
+                        <h3>Keyboard First</h3>
+                        <p>Full arrow key navigation. Zero mouse needed.</p>
+                        <div class="kbd-group">
+                            <kbd>↑↓</kbd> navigate
+                            <kbd>Enter</kbd> open
+                            <kbd>Ctrl+C</kbd> copy link
+                        </div>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🎯</div>
-                    <h3>Smart Ranking</h3>
-                    <p>Multi-token matching, recency, frequency, and literal substring boost.</p>
+            </div>
+
+            <!-- Category: AI & Intelligence -->
+            <div class="feature-category">
+                <div class="category-label">AI & Intelligence</div>
+
+                <div class="feature-row reverse">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 195843.png" alt="AI search settings" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">🤖</div>
+                        <h3>AI Search</h3>
+                        <p>Optional local AI (Ollama) for keyword expansion and smarter results.</p>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🤖</div>
-                    <h3>AI Search</h3>
-                    <p>Optional local AI (Ollama) for semantic search and query expansion.</p>
+
+                <div class="feature-row">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 195900.png" alt="Semantic search with embeddings" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">🧠</div>
+                        <h3>Semantic Search</h3>
+                        <p>Find pages by meaning, not just keywords. Local embeddings, no cloud.</p>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⭐</div>
-                    <h3>Bookmark Search</h3>
-                    <p>Search bookmarks alongside history with ★ indicator.</p>
+
+                <div class="feature-row reverse">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 200033.png" alt="Bookmark search with indicators" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">⭐</div>
+                        <h3>Bookmark Search</h3>
+                        <p>Search bookmarks alongside history with ★ indicator and 📁 folder paths.</p>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🛡️</div>
-                    <h3>Self-Healing</h3>
-                    <p>Auto-recovery from errors. Health monitoring every 60s.</p>
+            </div>
+
+            <!-- Category: Control & Privacy -->
+            <div class="feature-category">
+                <div class="category-label">Control & Privacy</div>
+
+                <div class="feature-row">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 200057.png" alt="Data management and storage status" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">🔧</div>
+                        <h3>Full Control</h3>
+                        <p>35+ settings, one-click data clear, manual indexing, sensitive-site blacklist.</p>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📊</div>
-                    <h3>Performance Monitor</h3>
-                    <p>Real-time metrics: search timing, cache stats, memory usage.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔧</div>
-                    <h3>Full Control</h3>
-                    <p>One-click data clear, manual indexing, sensitive-site blacklist.</p>
+
+                <div class="feature-row reverse">
+                    <div class="feature-visual">
+                        <img src="./screenshots/Screenshot 2026-02-12 200109.png" alt="Performance monitor and diagnostics" class="feature-img" loading="lazy">
+                    </div>
+                    <div class="feature-info">
+                        <div class="feature-icon-sm">📊</div>
+                        <h3>Performance Monitor</h3>
+                        <p>Real-time metrics: search timing, cache stats, memory usage, self-healing.</p>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Live Demo Section -->
-    <section id="demo" class="demo-section">
+    <!-- Live Experience Section — Interactive demos -->
+    <section id="experience" class="experience-section">
         <div class="container">
-            <h2 class="section-title">See It In Action</h2>
-            <p class="section-subtitle">Type anything to search your history</p>
-            <div class="interactive-demo">
-                <!-- TODO_PLACEHOLDER: Add demo video tab when ready
-                Instructions:
-                1. Record extension walkthrough video (2-3 minutes)
-                2. Upload to YouTube (unlisted or public)
-                3. Add new tab: <button class="demo-tab" data-demo="video">📹 Video Demo</button>
-                4. Add content section with YouTube embed
-                5. NO analytics tracking - keep it simple iframe embed
-                -->
-                <div class="demo-tabs">
-                    <button class="demo-tab active" data-demo="popup">Popup Mode</button>
-                    <button class="demo-tab" data-demo="inline">Inline Overlay</button>
-                    <button class="demo-tab" data-demo="settings">Settings</button>
-                </div>
-                <div class="demo-content">
-                    <!-- TODO_PLACEHOLDER: Replace placeholder images with actual screenshots
-                    Instructions:
-                    1. Create site/screenshots/ folder
-                    2. Capture real extension screenshots:
-                       - popup-demo.png (800x500px) - Main search interface
-                       - inline-demo.png (800x500px) - Inline overlay on page
-                       - settings-demo.png (800x500px) - Settings modal
-                    3. Replace placeholder img src URLs below with: ./screenshots/filename.png
-                    4. Use same dimensions (800x500px) for consistency
-                    5. Consider adding screenshot carousel for multiple views later
-                    -->
-                    <div class="demo-view active" id="demo-popup">
-                        <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Popup Demo" class="demo-local-img">
-                        <div class="demo-overlay">
-                            <div class="demo-controls">
-                                <input type="text" placeholder="Try searching: github api..." class="demo-search-input">
-                                <div class="demo-results-live">
-                                    <div class="demo-result">
-                                        <div class="result-title">GitHub REST API Documentation</div>
-                                        <div class="result-url">docs.github.com/en/rest</div>
-                                    </div>
-                                    <div class="demo-result">
-                                        <div class="result-title">GitHub API v3 - Issues</div>
-                                        <div class="result-url">api.github.com/repos/issues</div>
-                                    </div>
+            <h2 class="section-title">Try It Yourself</h2>
+            <p class="section-subtitle">Experience the extension right here — no install needed</p>
+
+            <!-- Demo 1: Search Simulator -->
+            <div class="demo-block">
+                <div class="demo-block-content">
+                    <div class="demo-block-visual">
+                        <div class="browser-frame simulator-frame">
+                            <div class="browser-titlebar">
+                                <div class="browser-dots">
+                                    <span class="dot red"></span>
+                                    <span class="dot yellow"></span>
+                                    <span class="dot green"></span>
+                                </div>
+                                <div class="browser-address">
+                                    <span class="address-text">SmrutiCortex</span>
+                                </div>
+                            </div>
+                            <div class="simulator" id="searchSimulator">
+                                <div class="sim-header">
+                                    <img src="assets/icon-48.png" alt="" class="sim-logo">
+                                    <span class="sim-brand">SmrutiCortex</span>
+                                </div>
+                                <div class="sim-search-row">
+                                    <input type="text" class="sim-input" id="simInput" placeholder="Type to search your history..." autocomplete="off">
+                                    <select class="sim-sort" aria-label="Sort results">
+                                        <option>Best Match</option>
+                                    </select>
+                                </div>
+                                <div class="sim-count" id="simCount"></div>
+                                <div class="sim-results" id="simResults"></div>
+                                <div class="sim-footer">
+                                    <span><kbd>Enter</kbd> open</span>
+                                    <span><kbd>↑↓</kbd> navigate</span>
+                                    <span><kbd>Esc</kbd> clear</span>
+                                    <span><kbd>Ctrl+Shift+S</kbd> quick open</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="demo-view" id="demo-inline">
-                        <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Inline Demo" class="demo-local-img">
+                    <div class="demo-block-info">
+                        <h3>Popup Search</h3>
+                        <ul class="demo-bullets">
+                            <li><span class="bullet-icon">⚡</span> Instant results as you type</li>
+                            <li><span class="bullet-icon">🎯</span> Matching text highlighted</li>
+                            <li><span class="bullet-icon">⌨️</span> Full keyboard navigation</li>
+                        </ul>
                     </div>
-                    <div class="demo-view" id="demo-settings">
-                        <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Settings Demo" class="demo-local-img">
-                    </div>
-                                        <!-- Screenshot film strip: populated dynamically from site/screenshots/list.json -->
-                                        <div id="screenshot-strip" class="screenshot-strip" aria-label="Screenshots film strip" role="region">
-                                            <div class="screenshot-track" aria-hidden="true"></div>
-                                            <div class="screenshot-empty" style="display:none; padding:16px; text-align:center; color:var(--text-secondary);">No screenshots available</div>
-                                        </div>
                 </div>
+            </div>
+
+            <!-- Demo 2: Quick-Search Overlay -->
+            <div class="demo-block">
+                <div class="demo-block-content reverse">
+                    <div class="demo-block-visual">
+                        <div class="overlay-demo" id="overlayDemo">
+                            <div class="fake-page">
+                                <div class="fake-page-bar"></div>
+                                <div class="fake-page-line w80"></div>
+                                <div class="fake-page-line w60"></div>
+                                <div class="fake-page-line w90"></div>
+                                <div class="fake-page-line w70"></div>
+                                <div class="fake-page-line w50"></div>
+                                <div class="fake-page-line w85"></div>
+                                <div class="fake-page-line w65"></div>
+                            </div>
+                            <div class="overlay-popup" id="overlayPopup">
+                                <div class="sim-header">
+                                    <img src="assets/icon-48.png" alt="" class="sim-logo">
+                                    <input type="text" class="sim-input sim-input-sm" id="overlayInput" placeholder="Search..." autocomplete="off">
+                                </div>
+                                <div class="sim-results sim-results-sm" id="overlayResults"></div>
+                                <div class="sim-footer sim-footer-sm">
+                                    <span><kbd>↑↓</kbd> navigate</span>
+                                    <span><kbd>Esc</kbd> close</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="demo-block-info">
+                        <h3>Quick-Search Overlay</h3>
+                        <ul class="demo-bullets">
+                            <li><span class="bullet-icon">🚀</span> Search on any webpage</li>
+                            <li><span class="bullet-icon">🎹</span> <kbd>Ctrl+Shift+S</kbd> to invoke</li>
+                            <li><span class="bullet-icon">🔍</span> Same powerful search, inline</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Demo 3: View Mode Comparison -->
+            <div class="demo-block">
+                <div class="demo-block-content">
+                    <div class="demo-block-visual">
+                        <div class="comparison-slider" id="comparisonSlider">
+                            <div class="comparison-img-wrap">
+                                <img src="./screenshots/Screenshot 2026-02-12 200635.png" alt="List view" class="comparison-img comparison-left" loading="lazy">
+                                <img src="./screenshots/Screenshot 2026-02-12 200431.png" alt="Card view / Full tab mode" class="comparison-img comparison-right" loading="lazy">
+                                <div class="comparison-handle" id="comparisonHandle">
+                                    <div class="handle-line"></div>
+                                    <div class="handle-grip">⟺</div>
+                                    <div class="handle-line"></div>
+                                </div>
+                            </div>
+                            <div class="comparison-labels">
+                                <span>List View</span>
+                                <span>Full Tab Mode</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="demo-block-info">
+                        <h3>Multiple Views</h3>
+                        <ul class="demo-bullets">
+                            <li><span class="bullet-icon">📋</span> Compact list view</li>
+                            <li><span class="bullet-icon">🃏</span> Card view with full URLs</li>
+                            <li><span class="bullet-icon">🖥️</span> Full tab mode for wide screens</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tour Preview Strip -->
+    <section id="tour-preview" class="tour-preview-section">
+        <div class="container">
+            <div class="tour-preview-header">
+                <h2 class="section-title">Feature Tour</h2>
+                <p class="section-subtitle">15 features, one visual walkthrough</p>
+                <a href="tour.html" class="btn btn-primary">Take the Full Tour</a>
+            </div>
+            <div class="tour-strip" id="tourStrip">
+                <!-- Populated by JS from tour step data -->
             </div>
         </div>
     </section>
@@ -249,29 +388,20 @@
     <section class="cta-section">
         <div class="container">
             <h2>Ready to Find Everything Instantly?</h2>
-            <!-- TODO_PLACEHOLDER: Add testimonials section here when ready
-            Instructions:
-            1. Collect user testimonials from GitHub issues, Chrome Store reviews, social media
-            2. Create testimonials carousel/grid above this CTA
-            3. Include: user name, avatar (optional), quote, star rating
-            4. NO fake testimonials - only real user feedback
-            5. Consider adding video testimonials from YouTube
-            6. NO analytics on testimonials - keep it simple HTML/CSS
-            Example structure:
-            <div class="testimonials">
-                <div class="testimonial-card">
-                    <div class="stars">⭐⭐⭐⭐⭐</div>
-                    <p>"This extension changed my workflow..."</p>
-                    <div class="author">- User Name</div>
-                </div>
-            </div>
-            -->
             <p>Join thousands of users who never lose important pages again</p>
             <div class="cta-buttons">
                 <a href="https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi" class="btn btn-primary btn-large" id="chromeBtn2" target="_blank">Add to Chrome - It's Free</a>
                 <a href="#" class="btn btn-secondary btn-large" id="edgeBtn2">Add to Edge - It's Free</a>
             </div>
             <p class="cta-note">⭐ Open source on <a href="https://github.com/dhruvinrsoni/smruti-cortex" target="_blank">GitHub</a></p>
+        </div>
+    </section>
+
+    <!-- Screenshot Film Strip -->
+    <section class="screenshot-section">
+        <div id="screenshot-strip" class="screenshot-strip" aria-label="Screenshots film strip" role="region">
+            <div class="screenshot-track" aria-hidden="true"></div>
+            <div class="screenshot-empty" style="display:none; padding:16px; text-align:center; color:var(--text-secondary);">No screenshots available</div>
         </div>
     </section>
 
@@ -289,6 +419,7 @@
                     <a href="https://github.com/dhruvinrsoni/smruti-cortex" target="_blank">GitHub</a>
                     <a href="https://github.com/dhruvinrsoni/smruti-cortex/issues" target="_blank">Report Issue</a>
                     <a href="privacy.html">Privacy Policy</a>
+                    <a href="tour.html">Feature Tour</a>
                 </div>
                 <div class="footer-col">
                     <h4>Resources</h4>
@@ -297,7 +428,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>© 2026 SmrutiCortex | Apache-2.0 | Made with ❤️ for privacy</p>
+                <p>&copy; 2026 SmrutiCortex | Apache-2.0 | Made with ❤️ for privacy</p>
             </div>
         </div>
     </footer>
