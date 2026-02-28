@@ -150,7 +150,24 @@ function setupEventListeners() {
     settingsButton.addEventListener('keydown', handleKeydown);
     settingsButton.addEventListener('click', openSettingsPage);
   }
-  
+
+  // Tour/Help button — opens feature tour page
+  const tourButton = $('tour-button') as HTMLButtonElement;
+  if (tourButton) {
+    tourButton.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/tour.html' });
+    });
+  }
+
+  // Settings modal tour link
+  const settingsTourLink = document.getElementById('settings-tour-link');
+  if (settingsTourLink) {
+    settingsTourLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/tour.html' });
+    });
+  }
+
   // Auto-open settings if URL has #settings hash
   if (window.location.hash === '#settings') {
     setTimeout(() => {

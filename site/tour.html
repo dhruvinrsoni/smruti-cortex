@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmrutiCortex - Feature Tour</title>
+    <meta name="description" content="Visual walkthrough of SmrutiCortex features. 15 steps covering search, AI, privacy, and advanced capabilities.">
+    <link rel="icon" type="image/png" href="assets/icon-48.png">
+    <link rel="stylesheet" href="tour.css">
+</head>
+<body>
+    <div class="tour-app" id="tourApp">
+        <!-- Header -->
+        <header class="tour-header">
+            <div class="tour-header-left">
+                <a href="index.html" class="tour-logo" title="Back to home">
+                    <img src="assets/icon-48.png" alt="SmrutiCortex" class="tour-logo-icon">
+                    <span class="tour-logo-text">SmrutiCortex</span>
+                </a>
+                <span class="tour-badge">Feature Tour</span>
+            </div>
+            <div class="tour-header-right">
+                <div class="tour-filters" id="tourFilters">
+                    <button class="filter-pill active" data-filter="all">All</button>
+                    <button class="filter-pill" data-filter="core">Core</button>
+                    <button class="filter-pill" data-filter="ai">AI</button>
+                    <button class="filter-pill" data-filter="privacy">Privacy</button>
+                    <button class="filter-pill" data-filter="advanced">Advanced</button>
+                </div>
+                <button class="theme-toggle" id="tourThemeToggle" aria-label="Toggle dark mode">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Progress bar -->
+        <div class="tour-progress">
+            <div class="tour-progress-bar" id="progressBar"></div>
+        </div>
+
+        <!-- Main content -->
+        <main class="tour-main" id="tourMain">
+            <div class="tour-step-counter" id="stepCounter">Step 1 of 15</div>
+
+            <div class="tour-screenshot-wrap" id="screenshotWrap">
+                <img class="tour-screenshot" id="tourScreenshot" alt="" loading="eager">
+                <div class="tour-highlight" id="tourHighlight"></div>
+            </div>
+
+            <div class="tour-step-info" id="stepInfo">
+                <h2 class="tour-step-title" id="stepTitle"></h2>
+                <p class="tour-step-subtitle" id="stepSubtitle"></p>
+            </div>
+        </main>
+
+        <!-- Navigation -->
+        <footer class="tour-nav">
+            <button class="tour-nav-btn" id="prevBtn" aria-label="Previous step">
+                <span class="nav-arrow">&larr;</span> Prev
+            </button>
+            <div class="tour-dots" id="tourDots"></div>
+            <button class="tour-nav-btn" id="nextBtn" aria-label="Next step">
+                Next <span class="nav-arrow">&rarr;</span>
+            </button>
+        </footer>
+
+        <!-- Auto-play toggle -->
+        <div class="tour-autoplay">
+            <label class="autoplay-label">
+                <input type="checkbox" id="autoplayToggle"> Auto-play (5s)
+            </label>
+        </div>
+
+        <!-- Install CTA -->
+        <div class="tour-cta">
+            <a href="https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi" class="tour-cta-btn" target="_blank">
+                Add to Chrome — Free
+            </a>
+        </div>
+    </div>
+
+    <script src="tour.js"></script>
+</body>
+</html>

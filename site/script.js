@@ -1,8 +1,7 @@
-// Theme Toggle
+// ===== Theme Toggle =====
 const themeToggle = document.getElementById('themeToggle');
 const html = document.documentElement;
 
-// Load theme from localStorage
 const savedTheme = localStorage.getItem('theme') || 'light';
 html.setAttribute('data-theme', savedTheme);
 updateThemeIcon(savedTheme);
@@ -20,108 +19,9 @@ function updateThemeIcon(theme) {
     icon.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 
-// Typing Animation
-const typingText = document.getElementById('typingText');
-const phrases = [
-    'github api',
-    'react documentation',
-    'typescript tutorial',
-    'chrome extension',
-    'machine learning'
-];
-
-let phraseIndex = 0;
-let charIndex = 0;
-let isDeleting = false;
-
-function typeEffect() {
-    const currentPhrase = phrases[phraseIndex];
-    
-    if (isDeleting) {
-        typingText.textContent = currentPhrase.substring(0, charIndex - 1);
-        charIndex--;
-    } else {
-        typingText.textContent = currentPhrase.substring(0, charIndex + 1);
-        charIndex++;
-    }
-    
-    if (!isDeleting && charIndex === currentPhrase.length) {
-        setTimeout(() => { isDeleting = true; }, 1500);
-    } else if (isDeleting && charIndex === 0) {
-        isDeleting = false;
-        phraseIndex = (phraseIndex + 1) % phrases.length;
-    }
-    
-    const typingSpeed = isDeleting ? 50 : 100;
-    setTimeout(typeEffect, typingSpeed);
-}
-
-setTimeout(typeEffect, 500);
-
-// Demo Search Animation
-const demoInput = document.getElementById('demoInput');
-const demoResults = document.getElementById('demoResults');
-
-const sampleResults = [
-    { title: 'GitHub REST API Documentation', url: 'docs.github.com/en/rest' },
-    { title: 'GitHub API v3 - Issues', url: 'api.github.com/repos/issues' },
-    { title: 'Awesome GitHub API', url: 'github.com/awesome/api' }
-];
-
-function showDemoResults() {
-    demoResults.innerHTML = sampleResults.map(result => `
-        <div class="demo-result" style="
-            padding: 12px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            margin-top: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        " onmouseover="this.style.background='var(--bg-secondary)'" 
-           onmouseout="this.style.background='var(--bg-card)'">
-            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-                ${result.title}
-            </div>
-            <div style="font-size: 0.9rem; color: var(--text-secondary); font-family: monospace;">
-                ${result.url}
-            </div>
-        </div>
-    `).join('');
-}
-
-// Auto-show demo results after 2 seconds
-setTimeout(showDemoResults, 2000);
-
-// Demo Tabs
-const demoTabs = document.querySelectorAll('.demo-tab');
-const demoViews = document.querySelectorAll('.demo-view');
-
-demoTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-        const targetDemo = tab.getAttribute('data-demo');
-        
-        demoTabs.forEach(t => t.classList.remove('active'));
-        demoViews.forEach(v => v.classList.remove('active'));
-        
-        tab.classList.add('active');
-        document.getElementById(`demo-${targetDemo}`).classList.add('active');
-    });
-});
-
-// Smooth Scroll
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    });
-});
-
-// Store Links - set to Chrome Web Store URL for both Chrome and Edge
+// ===== Store Links =====
 const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi';
-const EDGE_STORE_URL = CHROME_STORE_URL; // Using Chrome Web Store link as the Edge target
+const EDGE_STORE_URL = CHROME_STORE_URL;
 
 document.querySelectorAll('#chromeBtn, #chromeBtn2').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -137,112 +37,412 @@ document.querySelectorAll('#edgeBtn, #edgeBtn2').forEach(btn => {
     });
 });
 
-// Intersection Observer for Animations
+// ===== Smooth Scroll =====
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+});
+
+// ===== Hero Screenshot Crossfade =====
+(function initHeroCrossfade() {
+    const screenshots = document.querySelectorAll('.hero-screenshot');
+    if (screenshots.length < 2) return;
+    let current = 0;
+    setInterval(() => {
+        screenshots[current].classList.remove('active');
+        current = (current + 1) % screenshots.length;
+        screenshots[current].classList.add('active');
+    }, 4000);
+})();
+
+// ===== Intersection Observer for Animations =====
 const observerOptions = {
     threshold: 0.1,
-    rootMargin: '0px 0px -100px 0px'
+    rootMargin: '0px 0px -80px 0px'
 };
 
 const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
-            entry.target.style.animation = 'fadeInUp 0.8s ease both';
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
         }
     });
 }, observerOptions);
 
-// Observe feature cards
-document.querySelectorAll('.feature-card').forEach(card => {
-    observer.observe(card);
+document.querySelectorAll('.feature-row').forEach((row, i) => {
+    row.style.animationDelay = `${i * 0.1}s`;
+    observer.observe(row);
 });
 
-// Scroll to Top on Page Load
-window.addEventListener('load', () => {
-    window.scrollTo(0, 0);
-});
-
-// Add active state to nav links based on scroll position
+// ===== Active Nav Link =====
 window.addEventListener('scroll', () => {
     const sections = document.querySelectorAll('section[id]');
     const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
-    
     let current = '';
-    
     sections.forEach(section => {
         const sectionTop = section.offsetTop;
-        const sectionHeight = section.clientHeight;
         if (scrollY >= sectionTop - 100) {
             current = section.getAttribute('id');
         }
     });
-    
     navLinks.forEach(link => {
-        link.style.color = 'var(--text-secondary)';
-        if (link.getAttribute('href') === `#${current}`) {
-            link.style.color = 'var(--accent)';
-        }
+        link.style.color = link.getAttribute('href') === `#${current}` ? 'var(--accent)' : '';
     });
 });
 
-console.log('%c SmrutiCortex ', 'background: #667eea; color: white; font-size: 20px; font-weight: bold; padding: 10px;');
-console.log('%c Privacy-first browser history search. All data stays local. ', 'color: #64748b; font-size: 14px;');
-console.log('%c GitHub: https://github.com/dhruvinrsoni/smruti-cortex ', 'color: #3b82f6; font-size: 12px;');
-// ====== Screenshot film strip ======
-async function initScreenshotStrip(){
+// ===== Search Simulator =====
+const SAMPLE_HISTORY = [
+    { title: 'GitHub REST API Documentation', url: 'docs.github.com/en/rest' },
+    { title: 'GitHub - Pull Requests', url: 'github.com/pulls' },
+    { title: 'Stack Overflow - How to center a div', url: 'stackoverflow.com/questions/19461521' },
+    { title: 'Stack Overflow - JavaScript async await', url: 'stackoverflow.com/questions/40400367' },
+    { title: 'MDN Web Docs - Array.prototype.map()', url: 'developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map' },
+    { title: 'MDN Web Docs - CSS Flexbox', url: 'developer.mozilla.org/en-US/docs/Learn/CSS/CSS_layout/Flexbox' },
+    { title: 'React Documentation - Getting Started', url: 'react.dev/learn' },
+    { title: 'React Hooks - useState Tutorial', url: 'react.dev/reference/react/useState' },
+    { title: 'TypeScript Handbook', url: 'typescriptlang.org/docs/handbook' },
+    { title: 'npm - Package Search', url: 'npmjs.com/search' },
+    { title: 'VS Code - Keyboard Shortcuts', url: 'code.visualstudio.com/docs/getstarted/keybindings' },
+    { title: 'Amazon - Shopping Cart', url: 'amazon.com/gp/cart' },
+    { title: 'Amazon Prime Video - Watch List', url: 'amazon.com/gp/video/watchlist' },
+    { title: 'YouTube - Home', url: 'youtube.com' },
+    { title: 'YouTube - How to learn programming', url: 'youtube.com/watch?v=programming101' },
+    { title: 'Reddit - r/webdev', url: 'reddit.com/r/webdev' },
+    { title: 'Reddit - r/programming', url: 'reddit.com/r/programming' },
+    { title: 'Gmail - Inbox', url: 'mail.google.com/mail/u/0/#inbox' },
+    { title: 'Google Docs - Untitled Document', url: 'docs.google.com/document/d/1abc' },
+    { title: 'Google Drive - My Drive', url: 'drive.google.com/drive/my-drive' },
+    { title: 'Notion - Project Dashboard', url: 'notion.so/workspace/project-dashboard' },
+    { title: 'Slack - General Channel', url: 'app.slack.com/client/T01/C01general' },
+    { title: 'Jira - Sprint Board', url: 'mycompany.atlassian.net/jira/boards/1' },
+    { title: 'Wikipedia - History of the Internet', url: 'en.wikipedia.org/wiki/History_of_the_Internet' },
+    { title: 'Wikipedia - Artificial Intelligence', url: 'en.wikipedia.org/wiki/Artificial_intelligence' },
+    { title: 'BBC News - Technology', url: 'bbc.com/news/technology' },
+    { title: 'Hacker News - Top Stories', url: 'news.ycombinator.com' },
+    { title: 'Twitter / X - Home Timeline', url: 'x.com/home' },
+    { title: 'LinkedIn - My Network', url: 'linkedin.com/mynetwork' },
+    { title: 'Coursera - Machine Learning Course', url: 'coursera.org/learn/machine-learning' },
+    { title: 'Udemy - Web Development Bootcamp', url: 'udemy.com/course/web-dev-bootcamp' },
+    { title: 'Netflix - Continue Watching', url: 'netflix.com/browse' },
+    { title: 'Spotify - Liked Songs', url: 'open.spotify.com/collection/tracks' },
+    { title: 'ChatGPT - New Chat', url: 'chatgpt.com' },
+    { title: 'Claude - Anthropic', url: 'claude.ai/new' },
+    { title: 'Figma - Design File', url: 'figma.com/design/abc123' },
+    { title: 'Canva - Create a Design', url: 'canva.com/design/create' },
+    { title: 'eBay - Electronics Deals', url: 'ebay.com/deals/electronics' },
+    { title: 'PayPal - Activity', url: 'paypal.com/myaccount/transactions' },
+    { title: 'Google Maps - Directions', url: 'google.com/maps/dir' },
+    { title: 'Uber Eats - Restaurants Near Me', url: 'ubereats.com/feed' },
+    { title: 'Chrome Web Store - Extensions', url: 'chromewebstore.google.com' },
+    { title: 'W3Schools - HTML Tutorial', url: 'w3schools.com/html' },
+    { title: 'Vercel - Dashboard', url: 'vercel.com/dashboard' },
+    { title: 'Docker Hub - Repositories', url: 'hub.docker.com/repositories' },
+    { title: 'Trello - My Boards', url: 'trello.com/myboards' },
+    { title: 'Medium - Technology Articles', url: 'medium.com/tag/technology' },
+    { title: 'Pinterest - Home Feed', url: 'pinterest.com' },
+    { title: 'Twitch - Live Channels', url: 'twitch.tv/directory' },
+    { title: 'Zoom - Join Meeting', url: 'zoom.us/join' },
+];
+
+function highlightMatch(text, query) {
+    if (!query) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    let result = escaped;
+    for (const term of terms) {
+        const regex = new RegExp('(' + escapeRegex(escapeHtml(term)) + ')', 'gi');
+        result = result.replace(regex, '<mark>$1</mark>');
+    }
+    return result;
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function searchEntries(query, entries) {
+    if (!query.trim()) return entries.slice(0, 15);
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const results = [];
+    for (const entry of entries) {
+        const titleLower = entry.title.toLowerCase();
+        const urlLower = entry.url.toLowerCase();
+        let score = 0;
+        let allMatch = true;
+        for (const term of terms) {
+            const inTitle = titleLower.includes(term);
+            const inUrl = urlLower.includes(term);
+            if (!inTitle && !inUrl) { allMatch = false; break; }
+            if (inTitle) score += 2;
+            if (inUrl) score += 1;
+        }
+        if (allMatch) results.push({ ...entry, score });
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, 15);
+}
+
+function renderResults(container, results, query) {
+    container.innerHTML = '';
+    for (const r of results) {
+        const div = document.createElement('div');
+        div.className = 'sim-result';
+        div.innerHTML = `
+            <div class="sim-favicon">🌐</div>
+            <div class="sim-result-details">
+                <div class="sim-result-title">${highlightMatch(r.title, query)}</div>
+                <div class="sim-result-url">${highlightMatch(r.url, query)}</div>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+}
+
+// Main popup simulator
+(function initSearchSimulator() {
+    const input = document.getElementById('simInput');
+    const resultsEl = document.getElementById('simResults');
+    const countEl = document.getElementById('simCount');
+    if (!input || !resultsEl) return;
+
+    let activeIndex = -1;
+
+    function update() {
+        const query = input.value;
+        const results = searchEntries(query, SAMPLE_HISTORY);
+        renderResults(resultsEl, results, query);
+        countEl.textContent = query.trim() ? `${results.length} results` : '';
+        activeIndex = -1;
+    }
+
+    input.addEventListener('input', update);
+
+    input.addEventListener('keydown', (e) => {
+        const items = resultsEl.querySelectorAll('.sim-result');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, items.length - 1);
+            updateActive(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, -1);
+            updateActive(items);
+        } else if (e.key === 'Escape') {
+            input.value = '';
+            update();
+        }
+    });
+
+    function updateActive(items) {
+        items.forEach((it, i) => it.classList.toggle('active', i === activeIndex));
+        if (activeIndex >= 0 && items[activeIndex]) {
+            items[activeIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    // Show initial results
+    update();
+
+    // Auto-type if user hasn't interacted after 3s of visibility
+    let userTyped = false;
+    input.addEventListener('focus', () => { userTyped = true; });
+    input.addEventListener('input', () => { userTyped = true; });
+
+    const simSection = document.getElementById('searchSimulator');
+    if (simSection) {
+        const simObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && !userTyped) {
+                simObserver.disconnect();
+                setTimeout(() => {
+                    if (!userTyped) autoType(input, 'amazon', update);
+                }, 3000);
+            }
+        }, { threshold: 0.5 });
+        simObserver.observe(simSection);
+    }
+})();
+
+// Overlay simulator
+(function initOverlaySimulator() {
+    const input = document.getElementById('overlayInput');
+    const resultsEl = document.getElementById('overlayResults');
+    if (!input || !resultsEl) return;
+
+    function update() {
+        const query = input.value;
+        const results = searchEntries(query, SAMPLE_HISTORY);
+        renderResults(resultsEl, results.slice(0, 6), query);
+    }
+
+    input.addEventListener('input', update);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { input.value = ''; update(); }
+    });
+    update();
+
+    // Auto-type for overlay
+    let overlayTyped = false;
+    input.addEventListener('focus', () => { overlayTyped = true; });
+    input.addEventListener('input', () => { overlayTyped = true; });
+
+    const overlayDemo = document.getElementById('overlayDemo');
+    if (overlayDemo) {
+        const overlayObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && !overlayTyped) {
+                overlayObserver.disconnect();
+                setTimeout(() => {
+                    if (!overlayTyped) autoType(input, 'youtube', update);
+                }, 2000);
+            }
+        }, { threshold: 0.5 });
+        overlayObserver.observe(overlayDemo);
+    }
+})();
+
+// Auto-type helper
+function autoType(input, text, callback) {
+    let i = 0;
+    const interval = setInterval(() => {
+        if (i <= text.length) {
+            input.value = text.substring(0, i);
+            callback();
+            i++;
+        } else {
+            clearInterval(interval);
+        }
+    }, 120);
+}
+
+// ===== Comparison Slider =====
+(function initComparisonSlider() {
+    const slider = document.getElementById('comparisonSlider');
+    const handle = document.getElementById('comparisonHandle');
+    if (!slider || !handle) return;
+
+    const leftImg = slider.querySelector('.comparison-left');
+    let isDragging = false;
+
+    function setPosition(x) {
+        const rect = slider.getBoundingClientRect();
+        let pct = ((x - rect.left) / rect.width) * 100;
+        pct = Math.max(5, Math.min(95, pct));
+        leftImg.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+        handle.style.left = pct + '%';
+    }
+
+    handle.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        e.preventDefault();
+    });
+
+    handle.addEventListener('touchstart', (e) => {
+        isDragging = true;
+    }, { passive: true });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isDragging) setPosition(e.clientX);
+    });
+
+    window.addEventListener('touchmove', (e) => {
+        if (isDragging && e.touches[0]) setPosition(e.touches[0].clientX);
+    }, { passive: true });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    window.addEventListener('touchend', () => { isDragging = false; });
+})();
+
+// ===== Tour Preview Strip =====
+const TOUR_STEPS = [
+    { id: 'search-speed', title: 'Lightning Search', screenshot: './screenshots/Screenshot 2026-02-12 200635.png', category: 'core' },
+    { id: 'deep-search', title: 'Deep Search Scoring', screenshot: './screenshots/Screenshot 2026-02-12 200309.png', category: 'core' },
+    { id: 'keyboard', title: 'Keyboard Shortcuts', screenshot: './screenshots/Screenshot 2026-02-12 200140.png', category: 'core' },
+    { id: 'overlay', title: 'Quick-Search Overlay', screenshot: './screenshots/Screenshot 2026-02-12 200140.png', category: 'core' },
+    { id: 'display-modes', title: 'Display Modes', screenshot: './screenshots/Screenshot 2026-02-12 200431.png', category: 'core' },
+    { id: 'ai-search', title: 'AI Search (Ollama)', screenshot: './screenshots/Screenshot 2026-02-12 195843.png', category: 'ai' },
+    { id: 'semantic', title: 'Semantic Search', screenshot: './screenshots/Screenshot 2026-02-12 195900.png', category: 'ai' },
+    { id: 'bookmarks', title: 'Bookmark Search', screenshot: './screenshots/Screenshot 2026-02-12 200033.png', category: 'ai' },
+    { id: 'privacy', title: 'Privacy Controls', screenshot: './screenshots/Screenshot 2026-02-12 200033.png', category: 'privacy' },
+    { id: 'data', title: 'Data Management', screenshot: './screenshots/Screenshot 2026-02-12 200057.png', category: 'privacy' },
+    { id: 'performance', title: 'Performance Monitor', screenshot: './screenshots/Screenshot 2026-02-12 200109.png', category: 'advanced' },
+    { id: 'analytics', title: 'Search Analytics', screenshot: './screenshots/Screenshot 2026-02-12 200121.png', category: 'advanced' },
+    { id: 'highlighting', title: 'Match Highlighting', screenshot: './screenshots/Screenshot 2026-02-12 195843.png', category: 'core' },
+    { id: 'settings', title: '35+ Settings', screenshot: './screenshots/Screenshot 2026-02-12 200431.png', category: 'advanced' },
+    { id: 'omnibox', title: 'Omnibox Search', screenshot: './screenshots/Screenshot 2026-02-12 195717.png', category: 'core' },
+];
+
+(function initTourStrip() {
+    const strip = document.getElementById('tourStrip');
+    if (!strip) return;
+
+    TOUR_STEPS.forEach((step, i) => {
+        const card = document.createElement('a');
+        card.href = `tour.html#step/${i + 1}`;
+        card.className = 'tour-card';
+        card.innerHTML = `
+            <img src="${step.screenshot}" alt="${step.title}" class="tour-card-img" loading="lazy">
+            <div class="tour-card-title">${step.title}</div>
+            <div class="tour-card-step">Step ${i + 1} of ${TOUR_STEPS.length}</div>
+        `;
+        strip.appendChild(card);
+    });
+})();
+
+// ===== Scroll to Top on Page Load =====
+window.addEventListener('load', () => {
+    window.scrollTo(0, 0);
+});
+
+// ===== Screenshot Film Strip =====
+async function initScreenshotStrip() {
     const container = document.getElementById('screenshot-strip');
     if (!container) return;
     const track = container.querySelector('.screenshot-track');
     const emptyMsg = container.querySelector('.screenshot-empty');
-    try{
-        const res = await fetch('./screenshots/list.json', {cache: 'no-store'});
+    try {
+        const res = await fetch('./screenshots/list.json', { cache: 'no-store' });
         if (!res.ok) throw new Error('No list');
         const list = await res.json();
-        if (!Array.isArray(list) || list.length === 0){
+        if (!Array.isArray(list) || list.length === 0) {
             emptyMsg.style.display = 'block';
             return;
         }
-        // Build images
         const items = [];
-        for (const name of list){
-            // sanitize filename (allow only relative names without path segments)
-            if (typeof name !== 'string' || name.includes('..') || name.includes('/') ) continue;
+        for (const name of list) {
+            if (typeof name !== 'string' || name.includes('..') || name.includes('/')) continue;
             const img = document.createElement('img');
             img.className = 'screenshot-item';
             img.loading = 'lazy';
             img.alt = `Screenshot: ${name}`;
             img.src = './screenshots/' + encodeURIComponent(name).replace(/%2F/g, '/');
-            // remove broken images
             img.onerror = () => { img.remove(); };
             track.appendChild(img);
             items.push(img);
         }
-        // Replace demo placeholder images with first available screenshots
-        try{
-            const demoImgs = Array.from(document.querySelectorAll('.demo-local-img'));
-            for (let i = 0; i < demoImgs.length && i < list.length; i++){
-                const name = list[i];
-                if (typeof name !== 'string') continue;
-                demoImgs[i].src = './screenshots/' + encodeURIComponent(name).replace(/%2F/g, '/');
-                demoImgs[i].alt = `Screenshot: ${name}`;
-            }
-        }catch(e){}
-        if (items.length === 0){ emptyMsg.style.display = 'block'; return; }
+        if (items.length === 0) { emptyMsg.style.display = 'block'; return; }
 
-        // Duplicate items for seamless loop
-        for (const it of items){
+        // Duplicate for seamless loop
+        for (const it of items) {
             const clone = it.cloneNode(true);
             track.appendChild(clone);
         }
 
-        // Make each original item focusable and record index for lightbox
         items.forEach((el, idx) => {
             el.tabIndex = 0;
             el.dataset.index = String(idx);
-            // also set title for better a11y
-            if (!el.alt || el.alt === '') el.alt = `Screenshot ${idx+1}`;
+            if (!el.alt || el.alt === '') el.alt = `Screenshot ${idx + 1}`;
         });
 
-        // Lightbox wiring (minimal, accessible)
+        // Lightbox
         const lightbox = document.getElementById('lightbox');
         const lbImg = lightbox && lightbox.querySelector('.lightbox-img');
         const lbCaption = lightbox && lightbox.querySelector('.lightbox-caption');
@@ -252,10 +452,10 @@ async function initScreenshotStrip(){
         let currentIndex = 0;
         let lastFocused = null;
 
-        function openLightbox(index){
+        function openLightbox(index) {
             const originals = Array.from(track.querySelectorAll('.screenshot-item')).slice(0, items.length);
             const src = originals[index] && originals[index].src;
-            const caption = originals[index] && (originals[index].alt || (`Screenshot ${index+1}`));
+            const caption = originals[index] && (originals[index].alt || `Screenshot ${index + 1}`);
             if (!lightbox || !lbImg || !src) return;
             lastFocused = document.activeElement;
             currentIndex = index;
@@ -269,7 +469,7 @@ async function initScreenshotStrip(){
             window.addEventListener('keydown', lightboxKeyHandler);
         }
 
-        function closeLightbox(){
+        function closeLightbox() {
             if (!lightbox) return;
             lightbox.classList.remove('open');
             lightbox.setAttribute('aria-hidden', 'true');
@@ -279,11 +479,11 @@ async function initScreenshotStrip(){
             if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
         }
 
-        function showIndex(idx){
+        function showIndex(idx) {
             const originals = Array.from(track.querySelectorAll('.screenshot-item')).slice(0, items.length);
             const safe = ((idx % originals.length) + originals.length) % originals.length;
             const src = originals[safe] && originals[safe].src;
-            const caption = originals[safe] && (originals[safe].alt || (`Screenshot ${safe+1}`));
+            const caption = originals[safe] && (originals[safe].alt || `Screenshot ${safe + 1}`);
             if (!lbImg) return;
             lbImg.src = src;
             lbImg.alt = caption || '';
@@ -291,49 +491,42 @@ async function initScreenshotStrip(){
             currentIndex = safe;
         }
 
-        function lightboxKeyHandler(e){
-            if (e.key === 'Escape') { closeLightbox(); }
-            else if (e.key === 'ArrowRight') { showIndex(currentIndex + 1); }
-            else if (e.key === 'ArrowLeft') { showIndex(currentIndex - 1); }
+        function lightboxKeyHandler(e) {
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowRight') showIndex(currentIndex + 1);
+            else if (e.key === 'ArrowLeft') showIndex(currentIndex - 1);
         }
 
-        // Delegated click handler on track
         track.addEventListener('click', (e) => {
             const img = e.target.closest && e.target.closest('.screenshot-item');
             if (!img) return;
-            const idx = Number(img.dataset.index || 0);
-            openLightbox(idx);
+            openLightbox(Number(img.dataset.index || 0));
         });
 
-        // Keyboard activation (Enter) for focused images
         track.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter'){
+            if (e.key === 'Enter') {
                 const img = e.target.closest && e.target.closest('.screenshot-item');
                 if (!img) return;
-                const idx = Number(img.dataset.index || 0);
-                openLightbox(idx);
+                openLightbox(Number(img.dataset.index || 0));
             }
         });
 
-        // Close / nav handlers
         if (lbClose) lbClose.addEventListener('click', closeLightbox);
         if (lbPrev) lbPrev.addEventListener('click', () => showIndex(currentIndex - 1));
         if (lbNext) lbNext.addEventListener('click', () => showIndex(currentIndex + 1));
         if (lightbox) lightbox.addEventListener('click', (e) => { if (e.target && e.target.dataset && e.target.dataset.action === 'close') closeLightbox(); });
-
-        // Image error handling in lightbox
         if (lbImg) lbImg.addEventListener('error', () => { lbCaption.textContent = 'Failed to load image.'; });
 
-        // Auto-scroll using requestAnimationFrame
-        let speed = 40; // pixels per second
+        // Auto-scroll
+        let speed = 40;
         let running = true;
         let last = performance.now();
 
-        function step(now){
-            const dt = Math.min(100, now - last) / 1000; last = now;
-            if (running){
+        function step(now) {
+            const dt = Math.min(100, now - last) / 1000;
+            last = now;
+            if (running) {
                 container.scrollLeft += speed * dt;
-                // reset when reached half (since we duplicated)
                 const half = track.scrollWidth / 2;
                 if (container.scrollLeft >= half) container.scrollLeft -= half;
             }
@@ -341,21 +534,17 @@ async function initScreenshotStrip(){
         }
         requestAnimationFrame(step);
 
-        // Pause on hover or focus
         container.addEventListener('mouseenter', () => { running = false; });
         container.addEventListener('mouseleave', () => { running = true; last = performance.now(); });
         container.addEventListener('focusin', () => { running = false; });
         container.addEventListener('focusout', () => { running = true; last = performance.now(); });
 
-        // Allow drag-to-scroll
         let isDown = false; let startX = 0; let scrollStart = 0;
-        container.addEventListener('mousedown', (e)=>{ isDown = true; startX = e.pageX - container.offsetLeft; scrollStart = container.scrollLeft; container.style.cursor = 'grabbing'; });
-        window.addEventListener('mouseup', ()=>{ isDown = false; container.style.cursor = ''; });
-        window.addEventListener('mousemove', (e)=>{ if(!isDown) return; e.preventDefault(); const x = e.pageX - container.offsetLeft; const walk = (x - startX); container.scrollLeft = scrollStart - walk; });
-
-    }catch(err){
+        container.addEventListener('mousedown', (e) => { isDown = true; startX = e.pageX - container.offsetLeft; scrollStart = container.scrollLeft; container.style.cursor = 'grabbing'; });
+        window.addEventListener('mouseup', () => { isDown = false; container.style.cursor = ''; });
+        window.addEventListener('mousemove', (e) => { if (!isDown) return; e.preventDefault(); const x = e.pageX - container.offsetLeft; container.scrollLeft = scrollStart - (x - startX); });
+    } catch (err) {
         emptyMsg.style.display = 'block';
-        // Silent failure when list.json is missing - avoid noisy console errors in environments without screenshots
         if (typeof console !== 'undefined' && console.debug) {
             console.debug('[screenshot-strip] no screenshots available or failed to load list.json');
         }
@@ -363,3 +552,8 @@ async function initScreenshotStrip(){
 }
 
 window.addEventListener('load', () => { initScreenshotStrip(); });
+
+// ===== Console Branding =====
+console.log('%c SmrutiCortex ', 'background: #667eea; color: white; font-size: 20px; font-weight: bold; padding: 10px;');
+console.log('%c Privacy-first browser history search. All data stays local. ', 'color: #64748b; font-size: 14px;');
+console.log('%c GitHub: https://github.com/dhruvinrsoni/smruti-cortex ', 'color: #3b82f6; font-size: 12px;');

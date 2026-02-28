@@ -844,3 +844,28 @@ input[type="checkbox"] {
 .search-entry:last-child { border-bottom: none; }
 .search-query { font-size: 13px; color: var(--text); font-weight: 500; }
 .search-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Tour/Help button in header */
+.tour-help-btn {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.tour-help-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Tour link footer in settings modal */
+.settings-tour-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.settings-tour-link {
+  display: inline-flex;
+  gap: 6px;
+  text-decoration: none;
+  font-size: 13px;
+}
