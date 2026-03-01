@@ -887,44 +887,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (e.target === overlayEl) {hideOverlay();}
     });
     
-    // Capture-phase keyboard handling for overlay.
-    // DISABLED: Global handler now handles all key routing
-    // overlayEl.addEventListener('keydown', (e) => {
-    //   // Always allow Tab to flow to browser for native focus movement
-    //   if (e.key === 'Tab') { return; }
-
-    //   // Only act when overlay is visible
-    //   if (!isOverlayVisible()) { return; }
-
-    //   // If the input is focused, let its handlers process the event
-    //   if (document.activeElement === inputEl) { return; }
-
-    //   // For other focused elements (results, settings), handle navigation keys here
-    //   // Debug: log key and active element
-    //   if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-    //     try {
-    //       console.debug('[SmrutiCortex] Overlay keydown:', { key: e.key, active: document.activeElement, selectedIndex });
-    //     } catch (err) {}
-    //   }
-    //   let action = parseKeyboardAction(e);
-    //   // Fallback mapping in case parseKeyboardAction returns null for some edge keys
-    //   if (!action) {
-    //     if (e.key === 'Enter') action = KeyboardAction.OPEN;
-    //     else if (e.key === 'ArrowDown') action = KeyboardAction.NAVIGATE_DOWN;
-    //     else if (e.key === 'ArrowUp') action = KeyboardAction.NAVIGATE_UP;
-    //     else if (e.key === 'ArrowRight') action = KeyboardAction.OPEN_NEW_TAB;
-    //   }
-    //   if (!action) { return; }
-
-    //   // Prevent page-level defaults and route to key handler
-    //   e.preventDefault();
-    //   e.stopPropagation();
-    //   e.stopImmediatePropagation();
-
-    //   // Re-use the same logic as input's keydown handler
-    //   handleKeydown(e);
-    // }, true); // Use capture phase
-    
     // Maintain focus behaviour on mousedown
     // Only force focus when clicking the backdrop (overlay background).
     // Do NOT force-focus when clicking interactive elements (results, settings, input).
@@ -1993,7 +1955,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   ): boolean {
     if (message?.type === 'OPEN_INLINE_SEARCH') {
       const t0 = performance.now();
-      console.log('SmrutiCortex: OPEN_INLINE_SEARCH message received');
+      if (currentLogLevel >= LOG_LEVEL.DEBUG) { console.debug('[SmrutiCortex] OPEN_INLINE_SEARCH message received'); }
       showOverlay(); // showOverlay now handles all focus attempts
       perfLog('Overlay shown via message', t0);
       sendResponse({ success: true, time: performance.now() - t0 });
@@ -2080,7 +2042,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function init(): void {
     const t0 = performance.now();
     
-    console.log('SmrutiCortex: Quick-search initializing');
+    if (currentLogLevel >= LOG_LEVEL.DEBUG) { console.debug('[SmrutiCortex] Quick-search initializing'); }
     
     // Fetch log level from settings first (async, non-blocking)
     fetchLogLevel();
