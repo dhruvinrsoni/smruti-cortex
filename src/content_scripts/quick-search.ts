@@ -1867,122 +1867,274 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  // ===== TEXT EDITING HELPERS =====
+  const undoStack: string[] = [];
+  const redoStack: string[] = [];
+
+  function pushUndo(prevValue: string): void {
+    undoStack.push(prevValue);
+    redoStack.length = 0; // any new edit clears redo
+  }
+
+  function triggerInputEvent(): void {
+    const ev = new Event('input', { bubbles: true });
+    inputEl!.dispatchEvent(ev);
+  }
+
+  /** Index of start of the previous word from pos (going left) */
+  function prevWordBoundary(text: string, pos: number): number {
+    let i = pos;
+    while (i > 0 && /\s/.test(text[i - 1])) i--;
+    while (i > 0 && /\S/.test(text[i - 1])) i--;
+    return i;
+  }
+
+  /** Index of end of the next word from pos (going right) */
+  function nextWordBoundary(text: string, pos: number): number {
+    let i = pos;
+    while (i < text.length && /\S/.test(text[i])) i++;
+    while (i < text.length && /\s/.test(text[i])) i++;
+    return i;
+  }
+
   // ===== DIRECT KEY INPUT HANDLING =====
   function handleKeyInput(e: KeyboardEvent): void {
     if (!inputEl) { return; }
-    
+
     const key = e.key;
-    const start = inputEl.selectionStart || 0;
-    const end = inputEl.selectionEnd || 0;
-    
-    // Handle modifier shortcuts first (Ctrl/Cmd)
+    const start = inputEl.selectionStart ?? 0;
+    const end = inputEl.selectionEnd ?? 0;
+    const val = inputEl.value;
+    const len = val.length;
+
+    // ── Modifier shortcuts (Ctrl/Cmd) ──────────────────────────────────────
     const isMod = e.ctrlKey || e.metaKey;
     if (isMod) {
-      const key = e.key.toLowerCase();
-      // Ctrl/Meta + A => Select All
-      if (key === 'a') {
-        inputEl.setSelectionRange(0, inputEl.value.length);
+      const lk = key.toLowerCase();
+
+      // Ctrl+A => Select All
+      if (lk === 'a') {
+        inputEl.setSelectionRange(0, len);
         return;
       }
-      // Ctrl/Meta + C => Copy selection to clipboard (or copy HTML link if no selection)
-      if (key === 'c') {
-        const selection = inputEl.value.substring((inputEl.selectionStart || 0), (inputEl.selectionEnd || 0));
-        if (selection.length > 0) {
-          // If there's text selected in the input, copy that
-          try { navigator.clipboard.writeText(selection); showToast('Copied'); } catch { showToast('Copy failed'); }
+
+      // Ctrl+C => Copy selection (or HTML link if nothing selected)
+      if (lk === 'c') {
+        const sel = val.substring(start, end);
+        if (sel.length > 0) {
+          try { navigator.clipboard.writeText(sel); showToast('Copied'); } catch { showToast('Copy failed'); }
         } else if (currentResults.length > 0) {
-          // If no text selected but results exist, copy selected result as HTML
-          const idx = selectedIndex >= 0 ? selectedIndex : 0;
-          copyHtmlLink(idx);
+          copyHtmlLink(selectedIndex >= 0 ? selectedIndex : 0);
         }
         return;
       }
-      // Ctrl/Meta + X => Cut
-      if (key === 'x') {
-        const startS = inputEl.selectionStart || 0;
-        const endS = inputEl.selectionEnd || 0;
-        const selection = inputEl.value.substring(startS, endS);
-        if (selection.length > 0) {
-          try { navigator.clipboard.writeText(selection); } catch (e) { /* ignore */ }
-          inputEl.value = inputEl.value.substring(0, startS) + inputEl.value.substring(endS);
-          inputEl.setSelectionRange(startS, startS);
+
+      // Ctrl+X => Cut selection
+      if (lk === 'x') {
+        const sel = val.substring(start, end);
+        if (sel.length > 0) {
+          try { navigator.clipboard.writeText(sel); } catch { /* ignore */ }
+          pushUndo(val);
+          inputEl.value = val.substring(0, start) + val.substring(end);
+          inputEl.setSelectionRange(start, start);
+          triggerInputEvent();
         }
         return;
       }
-      // Ctrl/Meta + V => Paste (async clipboard read)
-      if (key === 'v') {
-        try {
-          navigator.clipboard.readText().then((text) => {
-            const s = inputEl.selectionStart || 0;
-            const epos = inputEl.selectionEnd || 0;
-            inputEl.value = inputEl.value.substring(0, s) + text + inputEl.value.substring(epos);
-            const pos = s + text.length;
-            inputEl.setSelectionRange(pos, pos);
-            // Trigger input event
-            const inputEvent = new Event('input', { bubbles: true });
-            inputEl.dispatchEvent(inputEvent);
-          }).catch(() => { showToast('Paste failed'); });
-        } catch {
-          showToast('Paste failed');
-        }
+
+      // Ctrl+V => Paste
+      if (lk === 'v') {
+        navigator.clipboard.readText().then((text) => {
+          if (!inputEl) return;
+          const s = inputEl.selectionStart ?? 0;
+          const ep = inputEl.selectionEnd ?? 0;
+          pushUndo(inputEl.value);
+          inputEl.value = inputEl.value.substring(0, s) + text + inputEl.value.substring(ep);
+          inputEl.setSelectionRange(s + text.length, s + text.length);
+          triggerInputEvent();
+        }).catch(() => { showToast('Paste failed'); });
         return;
       }
-      // Ctrl/Meta + M => copy markdown for selected/active result (keep existing behavior)
-      if (key === 'm') {
-        // If there are results, copy currently selected result; otherwise no-op
+
+      // Ctrl+M => Copy markdown link
+      if (lk === 'm') {
         if (currentResults.length > 0) {
-          const idx = selectedIndex >= 0 ? selectedIndex : 0;
-          copyMarkdownLink(idx);
+          copyMarkdownLink(selectedIndex >= 0 ? selectedIndex : 0);
         }
         return;
       }
+
+      // Ctrl+Z => Undo
+      if (lk === 'z' && !e.shiftKey) {
+        if (undoStack.length > 0) {
+          redoStack.push(val);
+          inputEl.value = undoStack.pop()!;
+          inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+          triggerInputEvent();
+        }
+        return;
+      }
+
+      // Ctrl+Shift+Z or Ctrl+Y => Redo
+      if ((lk === 'z' && e.shiftKey) || lk === 'y') {
+        if (redoStack.length > 0) {
+          undoStack.push(val);
+          inputEl.value = redoStack.pop()!;
+          inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+          triggerInputEvent();
+        }
+        return;
+      }
+
+      // Ctrl+Backspace => delete word before cursor
+      if (key === 'Backspace') {
+        if (start === end) {
+          const boundary = prevWordBoundary(val, start);
+          if (boundary !== start) {
+            pushUndo(val);
+            inputEl.value = val.substring(0, boundary) + val.substring(start);
+            inputEl.setSelectionRange(boundary, boundary);
+            triggerInputEvent();
+          }
+        } else {
+          pushUndo(val);
+          inputEl.value = val.substring(0, start) + val.substring(end);
+          inputEl.setSelectionRange(start, start);
+          triggerInputEvent();
+        }
+        return;
+      }
+
+      // Ctrl+Delete => delete word after cursor
+      if (key === 'Delete') {
+        if (start === end) {
+          const boundary = nextWordBoundary(val, end);
+          if (boundary !== end) {
+            pushUndo(val);
+            inputEl.value = val.substring(0, start) + val.substring(boundary);
+            inputEl.setSelectionRange(start, start);
+            triggerInputEvent();
+          }
+        } else {
+          pushUndo(val);
+          inputEl.value = val.substring(0, start) + val.substring(end);
+          inputEl.setSelectionRange(start, start);
+          triggerInputEvent();
+        }
+        return;
+      }
+
+      // Ctrl+ArrowLeft => move/extend to previous word boundary
+      if (key === 'ArrowLeft') {
+        const boundary = prevWordBoundary(val, start);
+        if (e.shiftKey) {
+          inputEl.setSelectionRange(boundary, end);
+        } else {
+          inputEl.setSelectionRange(boundary, boundary);
+        }
+        return;
+      }
+
+      // Ctrl+ArrowRight => move/extend to next word boundary
+      if (key === 'ArrowRight') {
+        const boundary = nextWordBoundary(val, end);
+        if (e.shiftKey) {
+          inputEl.setSelectionRange(start, boundary);
+        } else {
+          inputEl.setSelectionRange(boundary, boundary);
+        }
+        return;
+      }
+
+      // Ctrl+Home / Ctrl+End
+      if (key === 'Home') { inputEl.setSelectionRange(0, 0); return; }
+      if (key === 'End') { inputEl.setSelectionRange(len, len); return; }
+
+      // Any other Ctrl+key: ignore (don't insert char, don't fire search)
+      return;
     }
 
-    // Handle special keys
+    // ── Non-modifier special keys ──────────────────────────────────────────
+
     if (key === 'Backspace') {
+      pushUndo(val);
       if (start === end && start > 0) {
-        // Delete single character before cursor
-        inputEl.value = inputEl.value.substring(0, start - 1) + inputEl.value.substring(end);
-        inputEl.selectionStart = inputEl.selectionEnd = start - 1;
+        inputEl.value = val.substring(0, start - 1) + val.substring(end);
+        inputEl.setSelectionRange(start - 1, start - 1);
       } else {
-        // Delete selection
-        inputEl.value = inputEl.value.substring(0, start) + inputEl.value.substring(end);
-        inputEl.selectionStart = inputEl.selectionEnd = start;
+        inputEl.value = val.substring(0, start) + val.substring(end);
+        inputEl.setSelectionRange(start, start);
       }
-    } else if (key === 'Delete') {
-      if (start === end) {
-        // Delete single character after cursor
-        inputEl.value = inputEl.value.substring(0, start) + inputEl.value.substring(end + 1);
-      } else {
-        // Delete selection
-        inputEl.value = inputEl.value.substring(0, start) + inputEl.value.substring(end);
-      }
-      inputEl.selectionStart = inputEl.selectionEnd = start;
-    } else if (key === 'ArrowLeft') {
-      inputEl.selectionStart = inputEl.selectionEnd = Math.max(0, start - 1);
-    } else if (key === 'ArrowRight') {
-      inputEl.selectionStart = inputEl.selectionEnd = Math.min(inputEl.value.length, end + 1);
-    } else if (key === 'Home') {
-      inputEl.selectionStart = inputEl.selectionEnd = 0;
-    } else if (key === 'End') {
-      inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
-    } else if (key === 'Enter') {
-      // Let the input's keydown handler handle Enter
-      const enterEvent = new KeyboardEvent('keydown', {
-        key: 'Enter',
-        bubbles: true,
-        cancelable: true
-      });
-      inputEl.dispatchEvent(enterEvent);
-    } else if (key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      // Insert regular character
-      inputEl.value = inputEl.value.substring(0, start) + key + inputEl.value.substring(end);
-      inputEl.selectionStart = inputEl.selectionEnd = start + 1;
+      triggerInputEvent();
+      return;
     }
-    
-    // Trigger input event for search
-    const inputEvent = new Event('input', { bubbles: true });
-    inputEl.dispatchEvent(inputEvent);
+
+    if (key === 'Delete') {
+      pushUndo(val);
+      if (start === end) {
+        inputEl.value = val.substring(0, start) + val.substring(end + 1);
+      } else {
+        inputEl.value = val.substring(0, start) + val.substring(end);
+      }
+      inputEl.setSelectionRange(start, start);
+      triggerInputEvent();
+      return;
+    }
+
+    if (key === 'ArrowLeft') {
+      if (e.shiftKey) {
+        inputEl.setSelectionRange(Math.max(0, start - 1), end);
+      } else if (start !== end) {
+        inputEl.setSelectionRange(start, start); // collapse to start of selection
+      } else {
+        inputEl.setSelectionRange(Math.max(0, start - 1), Math.max(0, start - 1));
+      }
+      return; // cursor move — no input event
+    }
+
+    if (key === 'ArrowRight') {
+      if (e.shiftKey) {
+        inputEl.setSelectionRange(start, Math.min(len, end + 1));
+      } else if (start !== end) {
+        inputEl.setSelectionRange(end, end); // collapse to end of selection
+      } else {
+        inputEl.setSelectionRange(Math.min(len, end + 1), Math.min(len, end + 1));
+      }
+      return; // cursor move — no input event
+    }
+
+    if (key === 'Home') {
+      if (e.shiftKey) {
+        inputEl.setSelectionRange(0, end);
+      } else {
+        inputEl.setSelectionRange(0, 0);
+      }
+      return;
+    }
+
+    if (key === 'End') {
+      if (e.shiftKey) {
+        inputEl.setSelectionRange(start, len);
+      } else {
+        inputEl.setSelectionRange(len, len);
+      }
+      return;
+    }
+
+    if (key === 'Enter') {
+      // Dispatch to the input's own keydown handler for result navigation
+      inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      return;
+    }
+
+    // ── Regular character insertion ────────────────────────────────────────
+    if (key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      pushUndo(val);
+      inputEl.value = val.substring(0, start) + key + val.substring(end);
+      inputEl.setSelectionRange(start + 1, start + 1);
+      triggerInputEvent();
+    }
+    // Unrecognised key — do nothing (no input event, value unchanged)
   }
 
   // ===== MESSAGE LISTENER (for service worker commands) =====
