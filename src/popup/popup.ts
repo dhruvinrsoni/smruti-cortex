@@ -950,11 +950,8 @@ function initializePopup() {
       ollamaEndpointInput.value = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
     }
 
-    // Model is now a text input, not select
-    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
-    if (ollamaModelInput) {
-      ollamaModelInput.value = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
-    }
+    // Initialize custom model select
+    initModelSelect(SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
@@ -1009,6 +1006,142 @@ function initializePopup() {
     switchSettingsTab(activeSettingsTab);
   }
 
+  // ===== SEARCHABLE MODEL SELECT =====
+  const MODEL_SELECT_DEFAULTS = [
+    { value: 'llama3.2:1b', hint: 'Fast, recommended' },
+    { value: 'llama3.2:3b', hint: 'Better quality' },
+    { value: 'gemma2:2b', hint: 'Alternative' },
+    { value: 'phi3:mini', hint: 'Microsoft' },
+    { value: 'qwen2.5:1.5b', hint: 'Alibaba' },
+    { value: 'mistral:7b', hint: 'Mistral' },
+  ];
+  let modelSelectOptions: Array<{ value: string; hint?: string }> = [...MODEL_SELECT_DEFAULTS];
+  let modelSelectInitialized = false;
+  let renderModelSelectList: ((filter?: string) => void) | null = null;
+
+  function initModelSelect(currentValue: string): void {
+    const valueEl = document.getElementById('model-select-value');
+    const hiddenInput = document.getElementById('modal-ollamaModel') as HTMLInputElement | null;
+    if (valueEl) valueEl.textContent = currentValue;
+    if (hiddenInput) hiddenInput.value = currentValue;
+
+    if (modelSelectInitialized) return;
+    modelSelectInitialized = true;
+
+    const trigger = document.getElementById('model-select-trigger');
+    const dropdown = document.getElementById('model-select-dropdown');
+    const searchInput = document.getElementById('model-select-search') as HTMLInputElement | null;
+    const listEl = document.getElementById('model-select-list');
+    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput) return;
+
+    function renderList(filter = '') {
+      const lf = filter.toLowerCase().trim();
+      const filtered = lf
+        ? modelSelectOptions.filter(o => o.value.toLowerCase().includes(lf) || (o.hint || '').toLowerCase().includes(lf))
+        : [...modelSelectOptions];
+
+      listEl!.innerHTML = '';
+      if (filtered.length === 0 && lf) {
+        const div = document.createElement('div');
+        div.className = 'model-select-option';
+        div.textContent = `↵ Use "${filter}"`;
+        div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectModel(filter.trim()); });
+        listEl!.appendChild(div);
+      } else {
+        filtered.forEach((o) => {
+          const div = document.createElement('div');
+          div.className = 'model-select-option' + (o.value === hiddenInput!.value ? ' selected' : '');
+          div.dataset.value = o.value;
+          const label = document.createElement('span');
+          label.className = 'model-select-option-label';
+          label.textContent = o.value;
+          div.appendChild(label);
+          if (o.hint) {
+            const hint = document.createElement('span');
+            hint.className = 'model-select-option-hint';
+            hint.textContent = o.hint;
+            div.appendChild(hint);
+          }
+          div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectModel(o.value); });
+          div.addEventListener('mouseenter', () => highlight(div));
+          listEl!.appendChild(div);
+        });
+      }
+    }
+
+    function highlight(activeEl?: Element | null) {
+      listEl!.querySelectorAll('.model-select-option').forEach(el => el.classList.toggle('highlighted', el === activeEl));
+    }
+
+    function getHighlighted(): HTMLElement | null {
+      return listEl!.querySelector('.model-select-option.highlighted');
+    }
+
+    function selectModel(value: string) {
+      valueEl!.textContent = value;
+      hiddenInput!.value = value;
+      hiddenInput!.dispatchEvent(new Event('change', { bubbles: true }));
+      closeDropdown();
+    }
+
+    function openDropdown() {
+      dropdown!.removeAttribute('hidden');
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput!.value = '';
+      renderList();
+      searchInput!.focus();
+    }
+
+    function closeDropdown() {
+      dropdown!.setAttribute('hidden', '');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    renderModelSelectList = renderList;
+
+    trigger.addEventListener('click', () => {
+      if (dropdown.hasAttribute('hidden')) openDropdown(); else closeDropdown();
+    });
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); openDropdown(); }
+    });
+
+    searchInput.addEventListener('input', () => renderList(searchInput.value));
+    searchInput.addEventListener('keydown', (e) => {
+      const options = Array.from(listEl!.querySelectorAll('.model-select-option')) as HTMLElement[];
+      const highlighted = getHighlighted();
+      let idx = highlighted ? options.indexOf(highlighted) : -1;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        idx = Math.min(idx + 1, options.length - 1);
+        highlight(options[idx]);
+        options[idx]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        idx = Math.max(idx - 1, 0);
+        highlight(options[idx]);
+        options[idx]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlighted?.dataset.value) {
+          selectModel(highlighted.dataset.value);
+        } else if (searchInput.value.trim()) {
+          selectModel(searchInput.value.trim());
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeDropdown();
+        trigger.focus();
+      }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      const wrap = document.getElementById('model-select-wrap');
+      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) closeDropdown();
+    });
+  }
+
   // Initialize bookmark button in settings modal (guarded to prevent duplicate listeners)
   let bookmarkBtnInitialized = false;
   function initializeBookmarkButton() {
@@ -1017,12 +1150,28 @@ function initializePopup() {
     if (bookmarkBtn) {
       bookmarkBtnInitialized = true;
       const extensionURL = chrome.runtime.getURL('popup/popup.html');
+      const bookmarkTitle = 'SmrutiCortex — Instant History Search';
+
+      // Detect browser
+      const isFirefox = extensionURL.startsWith('moz-extension://');
+      const isEdge = !isFirefox && navigator.userAgent.includes('Edg/');
+      const browserName = isFirefox ? 'Firefox' : isEdge ? 'Edge' : 'Chrome';
+      const barName = isFirefox ? 'Bookmarks Toolbar' : isEdge ? 'Favorites Bar' : 'Bookmarks Bar';
+
+      // Update UI text for the detected browser
+      const titleEl = document.getElementById('bookmark-section-title');
+      const descEl = document.getElementById('bookmark-section-desc');
+      const btnTextEl = document.getElementById('bookmark-btn-text');
+      if (titleEl) titleEl.textContent = `Bookmark in ${browserName}`;
+      if (descEl) descEl.textContent = `Drag to your ${barName}, or click to copy the extension URL.`;
+      if (btnTextEl) btnTextEl.textContent = `Drag to ${barName}`;
+      bookmarkBtn.title = `Drag to your ${barName} · Click to copy link`;
 
       // Click to copy URL
       bookmarkBtn.addEventListener('click', (e) => {
         e.preventDefault();
         navigator.clipboard.writeText(extensionURL).then(() => {
-          showToast('📋 Extension URL copied! Now add as bookmark.');
+          showToast(`📋 Link copied — paste it into ${browserName} to add bookmark.`);
         }).catch(() => {
           showToast('❌ Failed to copy URL', true);
         });
@@ -1034,16 +1183,16 @@ function initializePopup() {
           e.dataTransfer.effectAllowed = 'link';
           e.dataTransfer.setData('text/uri-list', extensionURL);
           e.dataTransfer.setData('text/plain', extensionURL);
-          // Set bookmark data with title for browser
-          e.dataTransfer.setData('text/x-moz-url', `${extensionURL}\nSmrutiCortex - Browser History Search`);
-          // For Chrome bookmark creation
-          e.dataTransfer.setData('text/html', `<a href="${extensionURL}">SmrutiCortex Search</a>`);
+          // Firefox: sets both URL and display title
+          e.dataTransfer.setData('text/x-moz-url', `${extensionURL}\n${bookmarkTitle}`);
+          // Chrome / Edge: anchor tag carries the title
+          e.dataTransfer.setData('text/html', `<a href="${extensionURL}">${bookmarkTitle}</a>`);
         }
       });
 
-      // Visual feedback on drag
+      // Visual feedback on drag end
       bookmarkBtn.addEventListener('dragend', () => {
-        showToast('✅ Drag complete! Check your bookmarks.');
+        showToast(`✅ Drop it on your ${barName} to save!`);
       });
     }
   }
@@ -1289,7 +1438,7 @@ function initializePopup() {
       });
     }
 
-    // Ollama model changes (now text input)
+    // Ollama model changes (hidden input synced by custom model select)
     const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
     if (ollamaModelInput) {
       ollamaModelInput.addEventListener('change', async () => {
@@ -1323,15 +1472,18 @@ function initializePopup() {
           const data = await response.json();
           const models = data.models || [];
 
-          // Update BOTH datalists (AI model + embedding model)
-          const ollamaDatalist = document.getElementById('ollama-models');
+          // Update model select + embedding datalist
           const embeddingDatalist = document.getElementById('embedding-models');
           if (models.length > 0) {
-            const optionsHtml = models.map((m: { name: string }) =>
-              `<option value="${m.name}">${m.name}</option>`
-            ).join('');
-            if (ollamaDatalist) { ollamaDatalist.innerHTML = optionsHtml; }
-            if (embeddingDatalist) { embeddingDatalist.innerHTML = optionsHtml; }
+            // Update the custom AI model select
+            modelSelectOptions = models.map((m: { name: string }) => ({ value: m.name }));
+            if (renderModelSelectList) renderModelSelectList();
+            // Update embedding datalist (still uses native datalist)
+            if (embeddingDatalist) {
+              embeddingDatalist.innerHTML = models.map((m: { name: string }) =>
+                `<option value="${m.name}">${m.name}</option>`
+              ).join('');
+            }
             showToast(`Found ${models.length} models`);
           } else {
             showToast('No models found');
