@@ -81,7 +81,10 @@
     <div class="settings-modal-content">
       <div class="settings-header">
         <h2>Settings</h2>
-        <button id="settings-close" class="settings-close" title="Close">×</button>
+        <div class="settings-header-right">
+          <a href="#" id="settings-tour-link" class="settings-tour-btn" title="Feature Tour & Help">📖 Feature Tour & Help</a>
+          <button id="settings-close" class="settings-close" title="Close">×</button>
+        </div>
       </div>
       <div class="settings-tabs" role="tablist">
         <button class="settings-tab active" data-tab="general" role="tab" aria-selected="true">⚙️ General</button>
@@ -211,21 +214,23 @@
             </label>
             <label class="setting-option">
               <div style="display:flex; gap:8px; align-items:center;">
-                <input type="text" id="modal-ollamaModel" placeholder="llama3.2:1b" style="width:160px;" list="ollama-models">
-                <datalist id="ollama-models">
-                  <option value="llama3.2:1b">Fast, recommended</option>
-                  <option value="llama3.2:3b">Better quality</option>
-                  <option value="gemma2:2b">Alternative</option>
-                  <option value="phi3:mini">Microsoft</option>
-                  <option value="qwen2.5:1.5b">Alibaba</option>
-                  <option value="mistral:7b">Mistral</option>
-                </datalist>
-                <button type="button" id="refresh-models-btn" style="padding:4px 8px; cursor:pointer;" title="Fetch available models from Ollama">🔄</button>
+                <div class="model-select-wrap" id="model-select-wrap">
+                  <div class="model-select-trigger" id="model-select-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-label="AI Model">
+                    <span class="model-select-value" id="model-select-value">llama3.2:1b</span>
+                    <span class="model-select-arrow">▾</span>
+                  </div>
+                  <div class="model-select-dropdown" id="model-select-dropdown" role="listbox" hidden>
+                    <input type="text" class="model-select-search" id="model-select-search" placeholder="Search or type model…" autocomplete="off" spellcheck="false">
+                    <div class="model-select-list" id="model-select-list"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="modal-ollamaModel" value="llama3.2:1b">
+                <button type="button" id="refresh-models-btn" class="refresh-models-btn" title="Fetch installed models from Ollama">🔄</button>
               </div>
               <span class="option-indicator"></span>
               <div class="option-content">
                 <strong>AI Model</strong>
-                <small>Type any model name or pick from suggestions. Click 🔄 to fetch installed models.</small>
+                <small>Search or type any model name. Click 🔄 to fetch installed models from Ollama.</small>
               </div>
             </label>
             <label class="setting-option">
@@ -367,11 +372,11 @@
             <button class="action-btn danger" id="modal-factory-reset" title="Complete factory reset: clears index, resets settings, clears all caches, then rebuilds">⚠️ Factory Reset</button>
           </div>
           <div class="bookmark-section">
-            <h4>Bookmark Extension</h4>
-            <p>Add SmrutiCortex to your bookmarks bar for quick access.</p>
+            <h4 id="bookmark-section-title">Bookmark Extension</h4>
+            <p id="bookmark-section-desc">Add SmrutiCortex to your bookmarks bar for quick access.</p>
             <button id="bookmarkBtn" class="bookmark-btn" draggable="true" title="Drag to bookmarks bar or click to copy URL">
               <img src="../assets/icon-bookmark.svg" alt="" class="bookmark-icon" />
-              Bookmark This Page
+              <span id="bookmark-btn-text">Bookmark This Page</span>
             </button>
           </div>
         </div>
@@ -402,10 +407,6 @@
             <button class="action-btn warning" id="clear-search-debug" title="Clear all debug history">🗑️ Clear Debug History</button>
           </div>
         </div>
-      </div>
-      <!-- Tour link footer — visible on all tabs -->
-      <div class="settings-tour-footer">
-        <a href="#" id="settings-tour-link" class="action-btn secondary settings-tour-link" title="Open Feature Tour & Help">📖 Feature Tour & Help</a>
       </div>
     </div>
   </div>

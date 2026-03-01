@@ -845,27 +845,124 @@ input[type="checkbox"] {
 .search-query { font-size: 13px; color: var(--text); font-weight: 500; }
 .search-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-/* Tour/Help button in header */
-.tour-help-btn {
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--accent);
-  border-color: var(--accent);
+/* Settings header right group (tour link + close) */
+.settings-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.tour-help-btn:hover {
+
+.settings-tour-btn {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  line-height: 1.4;
+}
+.settings-tour-btn:hover {
   background: var(--accent);
   color: #fff;
 }
 
-/* Tour link footer in settings modal */
-.settings-tour-footer {
-  padding: 10px 16px;
-  border-top: 1px solid var(--border);
-  text-align: center;
+/* Searchable model select */
+.model-select-wrap {
+  position: relative;
+  width: 190px;
 }
-.settings-tour-link {
-  display: inline-flex;
+.model-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
-  text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
   font-size: 13px;
+  color: var(--text);
+  user-select: none;
+  min-height: 30px;
+}
+.model-select-trigger:hover,
+.model-select-trigger:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.model-select-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-select-arrow {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.model-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 240px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  z-index: 9999;
+  overflow: hidden;
+}
+.model-select-search {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+.model-select-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.model-select-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+.model-select-option:hover,
+.model-select-option.highlighted {
+  background: var(--hover);
+}
+.model-select-option.selected .model-select-option-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+.model-select-option-hint {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.refresh-models-btn {
+  padding: 4px 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
 }
