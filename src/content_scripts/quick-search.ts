@@ -85,6 +85,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
   let hidePortCloseTimer: number | null = null;
+  let spinnerEl: HTMLDivElement | null = null;
+  let aiStatusBarEl: HTMLDivElement | null = null;
+  let searchInProgress = false;
 
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
@@ -489,6 +492,69 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       background: var(--accent-color);
       color: var(--bg-container);
     }
+    /* Loading spinner shown during AI-powered searches */
+    .search-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border-color);
+      border-top-color: var(--accent-color);
+      border-radius: 50%;
+      animation: sc-spin 0.7s linear infinite;
+      margin-left: 8px;
+      flex-shrink: 0;
+      display: none;
+    }
+    .search-spinner.active {
+      display: block;
+    }
+    @keyframes sc-spin {
+      to { transform: rotate(360deg); }
+    }
+    /* AI status bar below the header */
+    .ai-status-bar {
+      padding: 3px 16px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .ai-status-bar.visible {
+      display: flex;
+    }
+    .ai-status-bar .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .ai-badge.ai-active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+    }
+    .ai-badge.ai-cache {
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+    }
+    .ai-badge.ai-error {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+    }
+    .ai-badge.ai-semantic {
+      background: rgba(139, 92, 246, 0.15);
+      color: #8b5cf6;
+    }
+    .ai-status-bar .ai-time {
+      margin-left: auto;
+      opacity: 0.7;
+    }
   `;
 
   // ===== FETCH LOG LEVEL FROM SETTINGS =====
@@ -585,6 +651,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('Search port opened', t0);
       
       searchPort.onMessage.addListener((response) => {
+        hideSpinner();
         if (response?.results) {
           perfLog('Search results received via port');
           currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
@@ -592,9 +659,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           // Apply current sort setting from cached settings
           const currentSort = cachedSettings?.sortBy || 'best-match';
           sortResults(currentResults, currentSort);
-          
+
           selectedIndex = 0;
           renderResults(currentResults);
+          renderAIStatus(response.aiStatus);
         }
       });
 
@@ -812,12 +880,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       hideOverlay();
     });
     
+    // Loading spinner (shown during AI-powered searches)
+    spinnerEl = document.createElement('div');
+    spinnerEl.className = 'search-spinner';
+
     header.appendChild(logo);
     header.appendChild(inputEl);
+    header.appendChild(spinnerEl);
     header.appendChild(sortBtn);
     header.appendChild(selectAllBadge);
     header.appendChild(settingsBtn);
-    
+
+    // AI status bar (below header, shows AI feedback)
+    aiStatusBarEl = document.createElement('div');
+    aiStatusBarEl.className = 'ai-status-bar';
+
     // Results
     resultsEl = document.createElement('div');
     resultsEl.className = 'results';
@@ -871,6 +948,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     footer.appendChild(helpLink);
 
     container.appendChild(header);
+    container.appendChild(aiStatusBarEl);
     container.appendChild(resultsEl);
     container.appendChild(footer);
     overlayEl.appendChild(container);
@@ -1082,12 +1160,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function hideOverlay(): void {
     if (!shadowHost || !overlayEl) {return;}
-    
+
     shadowHost.classList.remove('visible');
     overlayEl.classList.remove('visible');
-    
+
     if (inputEl) {inputEl.blur();}
-    
+    hideSpinner();
+    renderAIStatus(null);
+
     // Close port after a delay (in case user reopens quickly)
     // Timer is cancelled in showOverlay if user reopens
     hidePortCloseTimer = window.setTimeout(closeSearchPort, 1000) as unknown as number;
@@ -1138,6 +1218,103 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       }
       performSearch(query);
     }, searchDebounceMs);
+  }
+
+  // ===== LOADING SPINNER & AI STATUS =====
+  function showSpinner(): void {
+    searchInProgress = true;
+    if (spinnerEl) spinnerEl.classList.add('active');
+  }
+
+  function hideSpinner(): void {
+    searchInProgress = false;
+    if (spinnerEl) spinnerEl.classList.remove('active');
+  }
+
+  function renderAIStatus(aiStatus: {
+    aiKeywords?: string;
+    semantic?: string;
+    expandedCount?: number;
+    embeddingsGenerated?: number;
+    searchTimeMs?: number;
+  } | null | undefined): void {
+    if (!aiStatusBarEl) return;
+
+    // Clear previous content
+    aiStatusBarEl.textContent = '';
+    aiStatusBarEl.classList.remove('visible');
+
+    if (!aiStatus) return;
+
+    const badges: HTMLSpanElement[] = [];
+
+    // Keyword expansion status
+    if (aiStatus.aiKeywords && aiStatus.aiKeywords !== 'disabled') {
+      const badge = document.createElement('span');
+      badge.className = 'ai-badge';
+
+      switch (aiStatus.aiKeywords) {
+        case 'expanded':
+          badge.classList.add('ai-active');
+          badge.textContent = `\u{1F916} +${aiStatus.expandedCount || 0} AI keywords`;
+          break;
+        case 'cache-hit':
+          badge.classList.add('ai-cache');
+          badge.textContent = `\u26A1 AI cache (+${aiStatus.expandedCount || 0})`;
+          break;
+        case 'prefix-hit':
+          badge.classList.add('ai-cache');
+          badge.textContent = `\u26A1 AI prefix match (+${aiStatus.expandedCount || 0})`;
+          break;
+        case 'error':
+          badge.classList.add('ai-error');
+          badge.textContent = '\u274C AI expansion failed';
+          break;
+        case 'no-new-keywords':
+          badge.classList.add('ai-active');
+          badge.textContent = '\u{1F916} AI active';
+          break;
+      }
+      badges.push(badge);
+    }
+
+    // Semantic search status
+    if (aiStatus.semantic && aiStatus.semantic !== 'disabled') {
+      const badge = document.createElement('span');
+      badge.className = 'ai-badge';
+
+      switch (aiStatus.semantic) {
+        case 'active':
+          badge.classList.add('ai-semantic');
+          badge.textContent = aiStatus.embeddingsGenerated
+            ? `\u{1F9E0} Semantic (+${aiStatus.embeddingsGenerated} cached)`
+            : '\u{1F9E0} Semantic active';
+          break;
+        case 'error':
+          badge.classList.add('ai-error');
+          badge.textContent = '\u{1F9E0} Semantic error';
+          break;
+        case 'circuit-breaker':
+          badge.classList.add('ai-error');
+          badge.textContent = '\u{1F534} Circuit breaker open';
+          break;
+      }
+      badges.push(badge);
+    }
+
+    if (badges.length === 0) return;
+
+    badges.forEach(b => aiStatusBarEl!.appendChild(b));
+
+    // Search time
+    if (aiStatus.searchTimeMs) {
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'ai-time';
+      timeSpan.textContent = `${aiStatus.searchTimeMs}ms`;
+      aiStatusBarEl.appendChild(timeSpan);
+    }
+
+    aiStatusBarEl.classList.add('visible');
   }
 
   // Load recent history (smart default results when query is empty)
@@ -1204,9 +1381,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const sanitizedQuery = sanitizeQuery(query);
     if (!sanitizedQuery) {
       // Empty query after sanitization - load recent history (smart default results)
+      hideSpinner();
+      renderAIStatus(null);
       loadRecentHistory();
       return;
     }
+
+    // Show loading spinner while search is in progress
+    showSpinner();
 
     // Check extension context validity first
     if (!isExtensionContextValid()) {
@@ -1279,6 +1461,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         chrome.runtime.sendMessage(
           { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' },
           (response) => {
+            hideSpinner();
             if (chrome.runtime.lastError) {
               console.warn('[SmrutiCortex] Search error:', chrome.runtime.lastError);
               currentResults = [];
@@ -1299,13 +1482,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               // Apply current sort setting from cached settings
               const currentSort = cachedSettings?.sortBy || 'best-match';
               sortResults(currentResults, currentSort);
-              
+
               selectedIndex = 0;
               renderResults(currentResults);
+              renderAIStatus(response.aiStatus);
             }
           }
         );
       } catch (e) {
+        hideSpinner();
         console.warn('[SmrutiCortex] Search request failed:', e);
         currentResults = [];
         const errorMsg = e instanceof Error ? e.message : 'Unknown error';

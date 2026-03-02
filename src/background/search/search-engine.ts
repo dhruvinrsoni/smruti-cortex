@@ -15,12 +15,24 @@ import { browserAPI } from '../../core/helpers';
 import { Logger } from '../../core/logger';
 import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
-import { expandQueryKeywords } from '../ai-keyword-expander';
+import { expandQueryKeywords, getLastExpansionSource } from '../ai-keyword-expander';
 import { applyDiversityFilter, ScoredItem } from './diversity-filter';
 import { performanceTracker } from '../performance-monitor';
 import { getExpandedTerms } from './query-expansion';
 import { recordSearchDebug } from '../diagnostics';
 import { getSearchCache } from './search-cache';
+
+// === AI SEARCH STATUS ===
+// Tracks what happened during the last search for user feedback
+export interface AISearchStatus {
+    aiKeywords: 'disabled' | 'cache-hit' | 'prefix-hit' | 'expanded' | 'error' | 'no-new-keywords';
+    semantic: 'disabled' | 'active' | 'error' | 'circuit-breaker';
+    expandedCount: number;
+    embeddingsGenerated: number;
+    searchTimeMs: number;
+}
+let lastAIStatus: AISearchStatus | null = null;
+export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; }
 
 // === SEARCH CANCELLATION ===
 // Allows cancelling a previous search when a new one starts
@@ -67,25 +79,45 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     
     // Check if AI keyword expansion is enabled
     const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
-    
+
+    // Initialize AI status tracking for user feedback
+    const aiStatus: AISearchStatus = {
+        aiKeywords: ollamaEnabled ? 'no-new-keywords' : 'disabled',
+        semantic: 'disabled',
+        expandedCount: 0,
+        embeddingsGenerated: 0,
+        searchTimeMs: 0,
+    };
+
     // AI-expanded tokens (includes synonyms, related terms)
     // This is ONE LLM call, not 600+ embeddings!
     let searchTokens: string[] = synonymExpandedTokens; // Start with synonym-expanded tokens
     let aiExpanded = false;
-    
+
     if (ollamaEnabled) {
         logger.info('runSearch', '🤖 AI keyword expansion ACTIVE');
         try {
             const expandedTokens = await expandQueryKeywords(q);
+            const expansionSource = getLastExpansionSource();
             if (expandedTokens.length > originalTokens.length) {
                 searchTokens = expandedTokens;
                 aiExpanded = true;
-                logger.info('runSearch', `✅ Expanded "${q}" → ${searchTokens.length} keywords`, {
+                aiStatus.expandedCount = expandedTokens.length - originalTokens.length;
+                // Map expansion source to status
+                if (expansionSource === 'cache-hit') {
+                    aiStatus.aiKeywords = 'cache-hit';
+                } else if (expansionSource === 'prefix-hit') {
+                    aiStatus.aiKeywords = 'prefix-hit';
+                } else {
+                    aiStatus.aiKeywords = 'expanded';
+                }
+                logger.info('runSearch', `✅ Expanded "${q}" → ${searchTokens.length} keywords (source: ${expansionSource})`, {
                     original: originalTokens,
                     expanded: searchTokens.filter(t => !originalTokens.includes(t))
                 });
             }
         } catch (error) {
+            aiStatus.aiKeywords = 'error';
             logger.warn('runSearch', '⚠️ Keyword expansion failed, using original query', { error });
         }
     } else {
@@ -101,11 +133,13 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
 
     // Generate query embedding for semantic search if enabled
     if (embeddingsEnabled) {
+        aiStatus.semantic = 'active';
         // Check abort and circuit breaker BEFORE expensive Ollama calls
         if (searchAbort.signal.aborted) { return []; }
 
         const ollamaModule = await import('../ollama-service');
         if (ollamaModule.isCircuitBreakerOpen()) {
+            aiStatus.semantic = 'circuit-breaker';
             logger.warn('runSearch', '🔴 Circuit breaker open — skipping semantic search');
         } else {
             logger.info('runSearch', '🧠 Semantic search ACTIVE - generating query embedding');
@@ -118,9 +152,11 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                     queryEmbedding = embeddingResult.embedding;
                     logger.info('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
                 } else {
+                    aiStatus.semantic = 'error';
                     logger.warn('runSearch', `⚠️ Query embedding generation failed: ${embeddingResult.error || 'empty'}`);
                 }
             } catch (error) {
+                aiStatus.semantic = 'error';
                 logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', { error });
             }
         }
@@ -483,6 +519,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             item.embedding = undefined;
         }
         if (embeddingsGenerated > 0) {
+            aiStatus.embeddingsGenerated = embeddingsGenerated;
             logger.info('runSearch', `🧠 Embedding generation stats: ${embeddingsGenerated}/${MAX_EMBEDDINGS_PER_SEARCH} cap, ${embeddingTimeSpent.toFixed(0)}ms/${EMBEDDING_TIME_BUDGET_MS}ms budget`);
         }
     }
@@ -495,13 +532,17 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     // Record search performance
     const searchDuration = performance.now() - searchStartTime;
     performanceTracker.recordSearch(searchDuration);
-    
+
+    // Store AI status for the UI
+    aiStatus.searchTimeMs = Math.round(searchDuration);
+    lastAIStatus = aiStatus;
+
     // Record search debug (always - lightweight)
     recordSearchDebug(q, finalResults.length, searchDuration);
-    
+
     // Enhanced logging with AI breakdown
     if (aiOnlyMatches > 0 || hybridMatches > 0) {
-        logger.info('runSearch', 
+        logger.info('runSearch',
             `🔍 "${q}" → ${finalResults.length} results ` +
             `(${keywordMatches - hybridMatches} keyword + ${aiOnlyMatches} AI-only + ${hybridMatches} hybrid | ${items.length} indexed)`
         );

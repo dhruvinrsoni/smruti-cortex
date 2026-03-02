@@ -424,6 +424,29 @@ body {
     transform: scale(1.02);
 }
 
+/* Architecture diagram (Engineering category) */
+.architecture-diagram {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 16px;
+}
+.arch-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px 12px;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.arch-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.arch-icon { font-size: 28px; margin-bottom: 6px; }
+.arch-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--text-primary); }
+.arch-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+
 .feature-info {
     padding: 1rem 0;
 }
