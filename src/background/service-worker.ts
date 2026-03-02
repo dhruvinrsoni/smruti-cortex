@@ -145,10 +145,12 @@ function setupPortBasedMessaging() {
           }
 
           try {
+            const { getLastAIStatus } = await import('./search/search-engine');
             const results = await runSearch(msg.query);
+            const aiStatus = getLastAIStatus();
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
             if (!portDisconnected) {
-              try { port.postMessage({ results }); } catch { /* port closed during async search */ }
+              try { port.postMessage({ results, aiStatus }); } catch { /* port closed during async search */ }
             }
           } catch (error) {
             logger.error('portMessage', 'Search error:', error);
@@ -216,6 +218,12 @@ setupPortBasedMessaging();
             if (msg.settings) {
               await SettingsManager.applyRemoteSettings(msg.settings);
               logger.debug('onMessage', 'SettingsManager cache updated (no re-broadcast)');
+
+              // Clear search cache when settings change — ensures AI features
+              // take effect immediately instead of serving stale cached results
+              const { clearSearchCache } = await import('./search/search-cache');
+              clearSearchCache();
+              logger.debug('onMessage', 'Search cache cleared after settings change');
             }
             sendResponse({ status: 'ok' });
             break;
@@ -309,9 +317,11 @@ setupPortBasedMessaging();
             switch (msg.type) {
               case 'SEARCH_QUERY': {
                 logger.info('onMessage', `Popup search: "${msg.query}"`);
+                const { getLastAIStatus } = await import('./search/search-engine');
                 const results = await runSearch(msg.query);
+                const aiStatus = getLastAIStatus();
                 logger.debug('onMessage', 'Search completed, results:', results.length);
-                sendResponse({ results });
+                sendResponse({ results, aiStatus });
                 break;
               }
 
@@ -466,6 +476,79 @@ setupPortBasedMessaging();
                   });
                 } catch (error) {
                   logger.error('onMessage', 'SELF_HEAL failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_EMBEDDING_STATS': {
+                logger.debug('onMessage', 'GET_EMBEDDING_STATS requested');
+                try {
+                  const { getAllIndexedItems } = await import('./database');
+                  const items = await getAllIndexedItems();
+                  const withEmbeddings = items.filter(i => i.embedding && i.embedding.length > 0);
+                  const totalDims = withEmbeddings.reduce((sum, i) => sum + (i.embedding?.length || 0), 0);
+                  const estimatedBytes = totalDims * 8; // ~8 bytes per float64 dimension
+                  const { SettingsManager } = await import('../core/settings');
+                  const embeddingModel = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+                  sendResponse({
+                    status: 'OK',
+                    total: items.length,
+                    withEmbeddings: withEmbeddings.length,
+                    estimatedBytes,
+                    embeddingModel,
+                  });
+                } catch (error) {
+                  logger.error('onMessage', 'GET_EMBEDDING_STATS failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_ALL_EMBEDDINGS': {
+                logger.info('onMessage', '🧠 CLEAR_ALL_EMBEDDINGS requested');
+                try {
+                  const { getAllIndexedItems, saveIndexedItem } = await import('./database');
+                  const items = await getAllIndexedItems();
+                  let cleared = 0;
+                  for (const item of items) {
+                    if (item.embedding && item.embedding.length > 0) {
+                      item.embedding = undefined;
+                      await saveIndexedItem(item);
+                      cleared++;
+                    }
+                  }
+                  logger.info('onMessage', `✅ Cleared embeddings from ${cleared} items`);
+                  sendResponse({ status: 'OK', cleared });
+                } catch (error) {
+                  logger.error('onMessage', 'CLEAR_ALL_EMBEDDINGS failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_AI_CACHE_STATS': {
+                logger.debug('onMessage', 'GET_AI_CACHE_STATS requested');
+                try {
+                  const { loadCache, getCacheStats } = await import('./ai-keyword-cache');
+                  await loadCache();
+                  const stats = getCacheStats();
+                  sendResponse({ status: 'OK', ...stats });
+                } catch (error) {
+                  logger.error('onMessage', 'GET_AI_CACHE_STATS failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_AI_CACHE': {
+                logger.info('onMessage', '📝 CLEAR_AI_CACHE requested');
+                try {
+                  const { clearAIKeywordCache } = await import('./ai-keyword-cache');
+                  const result = await clearAIKeywordCache();
+                  sendResponse({ status: 'OK', ...result });
+                } catch (error) {
+                  logger.error('onMessage', 'CLEAR_AI_CACHE failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;

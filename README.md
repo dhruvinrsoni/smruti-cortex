@@ -216,6 +216,31 @@ ollama pull nomic-embed-text
 
 **📖 Full guide:** See [SEMANTIC_SEARCH.md](docs/SEMANTIC_SEARCH.md)
 
+### 🛡️ AI Safety Architecture
+
+Production-grade safety layers protect your browser — every AI feature degrades gracefully:
+
+| Protection | What It Does |
+|-----------|-------------|
+| **Circuit Breaker** | 3 consecutive Ollama failures → all AI pauses 60s. Auto-resets on cooldown. |
+| **Memory Guard** | Blocks AI when extension memory exceeds 512MB. |
+| **Concurrent Limiter** | 1 Ollama call at a time. Prevents resource contention. |
+| **Embedding Caps** | Max 10 embeddings per search, 5-second time budget. |
+| **Persistent Cache** | 5,000 keyword expansions survive restarts. Prefix matching. Gets faster over time. |
+| **Input Validation** | 200-char query limit, 8KB embedding text limit. |
+| **Graceful Degradation** | Every AI feature falls back to keyword search. Extension always works without Ollama. |
+
+#### Required Models
+
+| Feature | Model | Command | Size |
+|---------|-------|---------|------|
+| AI Keyword Expansion | `llama3.2:1b` ★ | `ollama pull llama3.2:1b` | 1.3 GB |
+| Semantic Search | `nomic-embed-text` ★ | `ollama pull nomic-embed-text` | 274 MB |
+
+> **Important:** You must manually pull models before enabling features. SmrutiCortex cannot download models — Ollama manages model downloads.
+
+**📖 Full architecture:** See [AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md)
+
 ### 🔍 Quality Checks
 
 ```bash

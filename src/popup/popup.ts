@@ -1008,12 +1008,12 @@ function initializePopup() {
 
   // ===== SEARCHABLE MODEL SELECT =====
   const MODEL_SELECT_DEFAULTS = [
-    { value: 'llama3.2:1b', hint: 'Fast, recommended' },
-    { value: 'llama3.2:3b', hint: 'Better quality' },
-    { value: 'gemma2:2b', hint: 'Alternative' },
-    { value: 'phi3:mini', hint: 'Microsoft' },
-    { value: 'qwen2.5:1.5b', hint: 'Alibaba' },
-    { value: 'mistral:7b', hint: 'Mistral' },
+    { value: 'llama3.2:1b',  hint: '1.3 GB · Fast ★' },
+    { value: 'llama3.2:3b',  hint: '2.0 GB · Best balance ★' },
+    { value: 'gemma2:2b',    hint: '1.6 GB · Google' },
+    { value: 'phi3:mini',    hint: '2.3 GB · Microsoft' },
+    { value: 'qwen2.5:1.5b', hint: '1.0 GB · Alibaba' },
+    { value: 'mistral:7b',   hint: '4.1 GB · High quality ★' },
   ];
   let modelSelectOptions: Array<{ value: string; hint?: string }> = [...MODEL_SELECT_DEFAULTS];
   let modelSelectInitialized = false;
@@ -1058,7 +1058,7 @@ function initializePopup() {
           div.appendChild(label);
           if (o.hint) {
             const hint = document.createElement('span');
-            hint.className = 'model-select-option-hint';
+            hint.className = 'model-select-option-hint' + (o.hint.includes('★') ? ' recommended' : '');
             hint.textContent = o.hint;
             div.appendChild(hint);
           }
@@ -1234,6 +1234,42 @@ function initializePopup() {
       sizeEl.textContent = '-- KB';
     }
   }
+  async function loadEmbeddingStats() {
+    const countEl = document.getElementById('embedding-count');
+    const storageEl = document.getElementById('embedding-storage-est');
+    const modelEl = document.getElementById('embedding-model-info');
+    const barEl = document.getElementById('embedding-admin-bar');
+    if (!countEl) return;
+
+    try {
+      const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_STATS' }, resolve);
+      });
+      if (resp?.status === 'OK') {
+        countEl.textContent = `${resp.withEmbeddings}/${resp.total} pages`;
+        if (storageEl) storageEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;
+        if (modelEl) modelEl.textContent = resp.embeddingModel;
+        if (barEl) barEl.style.width = `${resp.total > 0 ? Math.round(resp.withEmbeddings / resp.total * 100) : 0}%`;
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function loadAICacheStats() {
+    const countEl = document.getElementById('ai-cache-count');
+    const sizeEl = document.getElementById('ai-cache-size');
+    if (!countEl) return;
+
+    try {
+      const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        chrome.runtime.sendMessage({ type: 'GET_AI_CACHE_STATS' }, resolve);
+      });
+      if (resp?.status === 'OK') {
+        countEl.textContent = `${resp.size} entries`;
+        if (sizeEl) sizeEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;
+      }
+    } catch { /* ignore */ }
+  }
+
   // Fetch and display storage quota info
   async function fetchStorageQuotaInfo() {
     const storageUsedEl = document.getElementById('storage-used');
@@ -1584,6 +1620,55 @@ function initializePopup() {
         }
         clearFaviconCacheBtn.disabled = false;
         clearFaviconCacheBtn.textContent = 'Clear Cache';
+      });
+    }
+
+    // Embedding admin - load stats and handle buttons
+    loadEmbeddingStats();
+    const embeddingRefreshBtn = modal.querySelector('#embedding-refresh-stats') as HTMLButtonElement;
+    if (embeddingRefreshBtn) {
+      embeddingRefreshBtn.addEventListener('click', () => loadEmbeddingStats());
+    }
+    const embeddingClearBtn = modal.querySelector('#embedding-clear-all') as HTMLButtonElement;
+    if (embeddingClearBtn) {
+      embeddingClearBtn.addEventListener('click', async () => {
+        if (!confirm('Clear all AI embeddings?\n\nPages are kept. Embeddings regenerate on next search.')) return;
+        embeddingClearBtn.disabled = true;
+        embeddingClearBtn.textContent = '⏳ Clearing...';
+        try {
+          const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            chrome.runtime.sendMessage({ type: 'CLEAR_ALL_EMBEDDINGS' }, resolve);
+          });
+          if (resp?.status === 'OK') {
+            showToast(`Cleared embeddings from ${resp.cleared} pages`);
+            loadEmbeddingStats();
+          } else {
+            showToast('Failed to clear embeddings');
+          }
+        } catch { showToast('Error clearing embeddings'); }
+        embeddingClearBtn.disabled = false;
+        embeddingClearBtn.textContent = '🗑️ Clear Embeddings';
+      });
+    }
+
+    // AI keyword cache - load stats and handle clear
+    loadAICacheStats();
+    const clearAICacheBtn = modal.querySelector('#clear-ai-cache') as HTMLButtonElement;
+    if (clearAICacheBtn) {
+      clearAICacheBtn.addEventListener('click', async () => {
+        clearAICacheBtn.disabled = true;
+        try {
+          const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            chrome.runtime.sendMessage({ type: 'CLEAR_AI_CACHE' }, resolve);
+          });
+          if (resp?.status === 'OK') {
+            showToast(`Cleared ${resp.cleared} cached expansions`);
+            loadAICacheStats();
+          } else {
+            showToast('Failed to clear AI cache');
+          }
+        } catch { showToast('Error clearing AI cache'); }
+        clearAICacheBtn.disabled = false;
       });
     }
 

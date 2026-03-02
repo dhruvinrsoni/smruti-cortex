@@ -19,10 +19,16 @@
 
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { isCircuitBreakerOpen, checkMemoryPressure } from './ollama-service';
+import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot } from './ollama-service';
+import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
 
 const COMPONENT = 'AIKeywordExpander';
 const logger = Logger.forComponent(COMPONENT);
+
+// Tracks the source of the last expansion for UI feedback
+export type ExpansionSource = 'cache-hit' | 'prefix-hit' | 'ollama' | 'disabled' | 'skipped' | 'error';
+let lastExpansionSource: ExpansionSource = 'disabled';
+export function getLastExpansionSource(): ExpansionSource { return lastExpansionSource; }
 
 /**
  * Response format we expect from the LLM (strict JSON)
@@ -33,80 +39,70 @@ interface KeywordExpansionResponse {
 }
 
 /**
- * AI expansion cache with TTL
- */
-interface CacheEntry {
-  keywords: string[];
-  timestamp: number;
-}
-
-const aiCache = new Map<string, CacheEntry>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_SIZE = 50;
-
-function getCachedExpansion(query: string): string[] | null {
-  const entry = aiCache.get(query);
-  if (!entry) {return null;}
-  
-  if (Date.now() - entry.timestamp > CACHE_TTL) {
-    aiCache.delete(query);
-    return null;
-  }
-  
-  return entry.keywords;
-}
-
-function cacheExpansion(query: string, keywords: string[]): void {
-  // Evict oldest if cache is full
-  if (aiCache.size >= MAX_CACHE_SIZE && !aiCache.has(query)) {
-    const oldestKey = aiCache.keys().next().value;
-    aiCache.delete(oldestKey);
-  }
-  
-  aiCache.set(query, {
-    keywords,
-    timestamp: Date.now()
-  });
-}
-
-/**
  * Expand query keywords using local LLM prompting
  * 
  * @param query - The user's search query
  * @returns Array of expanded keywords (original + synonyms/related terms)
  */
+const MAX_QUERY_LENGTH = 200; // Prevent sending huge text to LLM
+
 export async function expandQueryKeywords(query: string): Promise<string[]> {
   const normalizedQuery = query.trim().toLowerCase();
-  
+
   if (!normalizedQuery) {
     return [];
+  }
+
+  // === GUARD: Query length limit ===
+  if (normalizedQuery.length > MAX_QUERY_LENGTH) {
+    logger.trace('expandQueryKeywords', `Query too long (${normalizedQuery.length} > ${MAX_QUERY_LENGTH}), skipping AI`);
+    lastExpansionSource = 'skipped';
+    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
 
   // CRITICAL: Check if AI is enabled FIRST
   // Settings may have changed since last search
   await SettingsManager.init();
   const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
-  
+
   if (!ollamaEnabled) {
     // AI disabled - return original tokens only
     logger.trace('expandQueryKeywords', 'AI disabled, returning original tokens');
+    lastExpansionSource = 'disabled';
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
 
-  // Check cache first
+  // Ensure persistent cache is loaded from chrome.storage.local
+  await loadCache();
+
+  // Check cache: exact match first, then prefix match
   const cached = getCachedExpansion(normalizedQuery);
   if (cached) {
-    logger.debug('expandQueryKeywords', `⚡ AI cache hit for: "${normalizedQuery}"`);
+    logger.debug('expandQueryKeywords', `⚡ Cache hit for: "${normalizedQuery}" (${cached.length} keywords)`);
+    lastExpansionSource = 'cache-hit';
     return cached;
   }
+  const prefixMatch = getPrefixMatch(normalizedQuery);
+  if (prefixMatch) {
+    logger.debug('expandQueryKeywords', `⚡ Prefix cache hit for: "${normalizedQuery}" (${prefixMatch.length} keywords)`);
+    lastExpansionSource = 'prefix-hit';
+    return prefixMatch;
+  }
 
-  // GUARDRAILS: check circuit breaker and memory before expensive LLM call
+  // GUARDRAILS: check circuit breaker, memory, and concurrency before expensive LLM call
   if (isCircuitBreakerOpen()) {
     logger.warn('expandQueryKeywords', '🔴 Circuit breaker open — skipping AI expansion');
+    lastExpansionSource = 'skipped';
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
   if (!checkMemoryPressure().ok) {
     logger.warn('expandQueryKeywords', '🔴 Memory pressure — skipping AI expansion');
+    lastExpansionSource = 'skipped';
+    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+  }
+  if (!acquireOllamaSlot()) {
+    logger.debug('expandQueryKeywords', '🔒 Ollama slot busy — skipping AI expansion');
+    lastExpansionSource = 'skipped';
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
   }
 
@@ -118,7 +114,7 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
   // Check if we have a generation model configured
   // Embedding-only models can't do text generation
   const generationModel = getGenerationModel(model);
-  
+
   logger.info('expandQueryKeywords', `🤖 Expanding keywords for: "${normalizedQuery}"`, {
     generationModel,
     endpoint
@@ -126,19 +122,23 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
 
   try {
     const expandedKeywords = await callOllamaForKeywords(endpoint, generationModel, normalizedQuery, timeout);
-    
+
     // Cache the result
     cacheExpansion(normalizedQuery, expandedKeywords);
-    
+
     logger.info('expandQueryKeywords', `✅ Expanded "${normalizedQuery}" → ${expandedKeywords.length} keywords`, {
       sample: expandedKeywords.slice(0, 10)
     });
 
+    lastExpansionSource = 'ollama';
     return expandedKeywords;
   } catch (error) {
     logger.warn('expandQueryKeywords', '❌ Expansion failed, using original query', { error });
+    lastExpansionSource = 'error';
     // Fallback to original query tokens
     return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+  } finally {
+    releaseOllamaSlot();
   }
 }
 

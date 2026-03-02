@@ -163,6 +163,14 @@ export class OllamaService {
    */
   async generateEmbedding(text: string, abortSignal?: AbortSignal): Promise<EmbeddingResponse> {
     const startTime = Date.now();
+
+    // === GUARD 0: Input length validation ===
+    const MAX_EMBEDDING_TEXT_LENGTH = 8192;
+    if (text.length > MAX_EMBEDDING_TEXT_LENGTH) {
+      text = text.substring(0, MAX_EMBEDDING_TEXT_LENGTH);
+      logger.debug('generateEmbedding', `Truncated input to ${MAX_EMBEDDING_TEXT_LENGTH} chars`);
+    }
+
     const textPreview = text.length > 100 ? text.substring(0, 100) + '...' : text;
 
     // === GUARD 1: Circuit breaker ===
@@ -182,8 +190,17 @@ export class OllamaService {
       };
     }
 
-    // === GUARD 3: Already aborted ===
+    // === GUARD 3: Concurrent request limiter ===
+    if (!requestSemaphore.acquire()) {
+      return {
+        embedding: [], model: this.config.model, success: false,
+        duration: 0, error: 'Another Ollama request in progress — try again shortly'
+      };
+    }
+
+    // === GUARD 4: Already aborted ===
     if (abortSignal?.aborted) {
+      requestSemaphore.release();
       return {
         embedding: [], model: this.config.model, success: false,
         duration: 0, error: 'Aborted before start'
@@ -361,6 +378,8 @@ export class OllamaService {
         duration,
         error: errorMsg
       };
+    } finally {
+      requestSemaphore.release();
     }
   }
 
@@ -482,6 +501,30 @@ const circuitBreaker = {
 export function isCircuitBreakerOpen(): boolean {
   return circuitBreaker.isOpen();
 }
+
+// === CONCURRENT REQUEST LIMITER ===
+// Ollama processes requests sequentially; concurrent calls just queue and waste memory.
+// This semaphore prevents multiple in-flight Ollama calls from stacking up.
+const requestSemaphore = {
+  active: 0,
+  maxConcurrent: 1,
+
+  acquire(): boolean {
+    if (this.active >= this.maxConcurrent) {
+      logger.debug('requestSemaphore', `🔒 Request rejected: ${this.active}/${this.maxConcurrent} slots in use`);
+      return false;
+    }
+    this.active++;
+    return true;
+  },
+
+  release(): void {
+    this.active = Math.max(0, this.active - 1);
+  }
+};
+
+export function acquireOllamaSlot(): boolean { return requestSemaphore.acquire(); }
+export function releaseOllamaSlot(): void { requestSemaphore.release(); }
 
 // === MEMORY PRESSURE GUARD ===
 // Chrome extensions have limited memory; prevent embedding generation from consuming it all
