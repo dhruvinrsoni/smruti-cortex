@@ -1,0 +1,103 @@
+name: Lint Report (Manual)
+
+# Purpose: Generate a full, human-readable ESLint report for the codebase.
+# Trigger: Manual only (workflow_dispatch) — never runs automatically.
+# Output: lint-report.json (machine-readable) + lint-report.md (human/LLM-ready)
+# Result: Never fails — informational only. Download artifacts to feed to an LLM.
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Path to lint (e.g. src, src/background, src/content_scripts)'
+        required: false
+        default: 'src'
+        type: string
+
+jobs:
+  lint-report:
+    name: Generate Full Lint Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint — JSON output (never fails)
+        run: |
+          npx eslint ${{ inputs.scope || 'src' }} \
+            --ext .ts,.tsx \
+            --report-unused-disable-directives \
+            --format json \
+            --output-file lint-report.json || true
+
+      - name: Build human-readable Markdown report
+        run: |
+          node -e "
+          const fs = require('fs');
+          const raw = JSON.parse(fs.readFileSync('lint-report.json', 'utf8'));
+          const ts = new Date().toISOString();
+          let errors = 0, warnings = 0;
+          const byRule = {};
+          let body = '';
+
+          for (const file of raw) {
+            if (!file.messages.length) continue;
+            const rel = file.filePath.replace(process.cwd() + '/', '');
+            body += '## ' + rel + '\n\n';
+            for (const m of file.messages) {
+              const sev = m.severity === 2 ? 'ERROR' : 'WARN';
+              if (m.severity === 2) errors++; else warnings++;
+              const rule = m.ruleId || 'unknown';
+              byRule[rule] = (byRule[rule] || 0) + 1;
+              body += '- [' + sev + '] L' + m.line + ':' + m.column +
+                      ' — ' + m.message + ' \`(' + rule + ')\`\n';
+            }
+            body += '\n';
+          }
+
+          const total = errors + warnings;
+          let header = '# ESLint Lint Report\n\n';
+          header += 'Generated: ' + ts + '\n';
+          header += 'Scope: \`' + (process.env.SCOPE || 'src') + '\`\n\n';
+          header += '**Total: ' + total + ' issues — ' + errors + ' errors, ' + warnings + ' warnings**\n\n';
+
+          const sorted = Object.entries(byRule).sort((a,b) => b[1]-a[1]);
+          header += '## Issues by Rule\n\n';
+          header += '| Rule | Count |\n|------|-------|\n';
+          for (const [rule, count] of sorted) {
+            header += '| \`' + rule + '\` | ' + count + ' |\n';
+          }
+          header += '\n---\n\n## Issues by File\n\n';
+
+          const report = header + body;
+          fs.writeFileSync('lint-report.md', report);
+          console.log('Done: ' + total + ' issues (' + errors + ' errors, ' + warnings + ' warnings)');
+          "
+        env:
+          SCOPE: ${{ inputs.scope || 'src' }}
+
+      - name: Upload lint artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report-${{ github.run_number }}
+          path: |
+            lint-report.json
+            lint-report.md
+          retention-days: 90
+
+      - name: Print to GitHub Step Summary
+        run: cat lint-report.md >> $GITHUB_STEP_SUMMARY
