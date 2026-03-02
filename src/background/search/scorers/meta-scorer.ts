@@ -15,12 +15,12 @@ const metaScorer: Scorer = {
         const keywords = (item.metaKeywords || []).join(' ').toLowerCase();
         const text = desc + ' ' + keywords;
 
-        if (!text.trim()) return 0;
+        if (!text.trim()) {return 0;}
 
         const originalTokens = tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
-        if (searchTokens.length === 0) return 0;
+        if (searchTokens.length === 0) {return 0;}
 
         // Graduated match for expanded tokens
         const expandedGraduated = graduatedMatchScore(searchTokens, text);

@@ -867,7 +867,7 @@ function initializePopup() {
   // Switch settings tab — show only sections matching the given tab name
   function switchSettingsTab(tabName: string) {
     const modal = document.getElementById('settings-modal');
-    if (!modal) return;
+    if (!modal) {return;}
     activeSettingsTab = tabName;
 
     // Update tab buttons
@@ -885,7 +885,7 @@ function initializePopup() {
 
     // Scroll content to top when switching tabs
     const content = modal.querySelector('.settings-content');
-    if (content) content.scrollTop = 0;
+    if (content) {content.scrollTop = 0;}
   }
 
   // Show settings modal overlay (doesn't replace app content)
@@ -1022,18 +1022,21 @@ function initializePopup() {
   function initModelSelect(currentValue: string): void {
     const valueEl = document.getElementById('model-select-value');
     const hiddenInput = document.getElementById('modal-ollamaModel') as HTMLInputElement | null;
-    if (valueEl) valueEl.textContent = currentValue;
-    if (hiddenInput) hiddenInput.value = currentValue;
+    if (valueEl) {valueEl.textContent = currentValue;}
+    if (hiddenInput) {hiddenInput.value = currentValue;}
 
-    if (modelSelectInitialized) return;
+    if (modelSelectInitialized) {return;}
     modelSelectInitialized = true;
 
     const trigger = document.getElementById('model-select-trigger');
     const dropdown = document.getElementById('model-select-dropdown');
     const searchInput = document.getElementById('model-select-search') as HTMLInputElement | null;
     const listEl = document.getElementById('model-select-list');
-    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput) return;
+    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput) {return;}
 
+    // All variables above are null-checked. TypeScript cannot narrow them inside closures,
+    // so we suppress non-null assertion warnings for this entire block.
+    /* eslint-disable @typescript-eslint/no-non-null-assertion */
     function renderList(filter = '') {
       const lf = filter.toLowerCase().trim();
       const filtered = lf
@@ -1100,7 +1103,7 @@ function initializePopup() {
     renderModelSelectList = renderList;
 
     trigger.addEventListener('click', () => {
-      if (dropdown.hasAttribute('hidden')) openDropdown(); else closeDropdown();
+      if (dropdown.hasAttribute('hidden')) {openDropdown();} else {closeDropdown();}
     });
     trigger.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); openDropdown(); }
@@ -1138,8 +1141,9 @@ function initializePopup() {
 
     document.addEventListener('mousedown', (e) => {
       const wrap = document.getElementById('model-select-wrap');
-      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) closeDropdown();
+      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) {closeDropdown();}
     });
+    /* eslint-enable @typescript-eslint/no-non-null-assertion */
   }
 
   // Initialize bookmark button in settings modal (guarded to prevent duplicate listeners)
@@ -1162,9 +1166,9 @@ function initializePopup() {
       const titleEl = document.getElementById('bookmark-section-title');
       const descEl = document.getElementById('bookmark-section-desc');
       const btnTextEl = document.getElementById('bookmark-btn-text');
-      if (titleEl) titleEl.textContent = `Bookmark in ${browserName}`;
-      if (descEl) descEl.textContent = `Drag to your ${barName}, or click to copy the extension URL.`;
-      if (btnTextEl) btnTextEl.textContent = `Drag to ${barName}`;
+      if (titleEl) {titleEl.textContent = `Bookmark in ${browserName}`;}
+      if (descEl) {descEl.textContent = `Drag to your ${barName}, or click to copy the extension URL.`;}
+      if (btnTextEl) {btnTextEl.textContent = `Drag to ${barName}`;}
       bookmarkBtn.title = `Drag to your ${barName} · Click to copy link`;
 
       // Click to copy URL
@@ -1239,7 +1243,7 @@ function initializePopup() {
     const storageEl = document.getElementById('embedding-storage-est');
     const modelEl = document.getElementById('embedding-model-info');
     const barEl = document.getElementById('embedding-admin-bar');
-    if (!countEl) return;
+    if (!countEl) {return;}
 
     try {
       const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1247,9 +1251,9 @@ function initializePopup() {
       });
       if (resp?.status === 'OK') {
         countEl.textContent = `${resp.withEmbeddings}/${resp.total} pages`;
-        if (storageEl) storageEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;
-        if (modelEl) modelEl.textContent = resp.embeddingModel;
-        if (barEl) barEl.style.width = `${resp.total > 0 ? Math.round(resp.withEmbeddings / resp.total * 100) : 0}%`;
+        if (storageEl) {storageEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;}
+        if (modelEl) {modelEl.textContent = resp.embeddingModel;}
+        if (barEl) {barEl.style.width = `${resp.total > 0 ? Math.round(resp.withEmbeddings / resp.total * 100) : 0}%`;}
       }
     } catch { /* ignore */ }
   }
@@ -1257,7 +1261,7 @@ function initializePopup() {
   async function loadAICacheStats() {
     const countEl = document.getElementById('ai-cache-count');
     const sizeEl = document.getElementById('ai-cache-size');
-    if (!countEl) return;
+    if (!countEl) {return;}
 
     try {
       const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1265,7 +1269,7 @@ function initializePopup() {
       });
       if (resp?.status === 'OK') {
         countEl.textContent = `${resp.size} entries`;
-        if (sizeEl) sizeEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;
+        if (sizeEl) {sizeEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;}
       }
     } catch { /* ignore */ }
   }
@@ -1386,7 +1390,7 @@ function initializePopup() {
     modal.querySelectorAll('.settings-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = (btn as HTMLElement).dataset.tab;
-        if (tab) switchSettingsTab(tab);
+        if (tab) {switchSettingsTab(tab);}
       });
     });
 
@@ -1513,7 +1517,7 @@ function initializePopup() {
           if (models.length > 0) {
             // Update the custom AI model select
             modelSelectOptions = models.map((m: { name: string }) => ({ value: m.name }));
-            if (renderModelSelectList) renderModelSelectList();
+            if (renderModelSelectList) {renderModelSelectList();}
             // Update embedding datalist (still uses native datalist)
             if (embeddingDatalist) {
               embeddingDatalist.innerHTML = models.map((m: { name: string }) =>
@@ -1632,7 +1636,7 @@ function initializePopup() {
     const embeddingClearBtn = modal.querySelector('#embedding-clear-all') as HTMLButtonElement;
     if (embeddingClearBtn) {
       embeddingClearBtn.addEventListener('click', async () => {
-        if (!confirm('Clear all AI embeddings?\n\nPages are kept. Embeddings regenerate on next search.')) return;
+        if (!confirm('Clear all AI embeddings?\n\nPages are kept. Embeddings regenerate on next search.')) {return;}
         embeddingClearBtn.disabled = true;
         embeddingClearBtn.textContent = '⏳ Clearing...';
         try {

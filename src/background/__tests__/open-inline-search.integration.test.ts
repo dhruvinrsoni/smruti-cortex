@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => {
 
   // Explicit mock for APIs the test cares about; everything else falls through
   // to noOp() via proxied() so no TypeError on unknown nested .addListener calls.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).chrome = proxied({
     commands: proxied({
       onCommand: {
@@ -103,6 +104,7 @@ describe('OPEN_INLINE_SEARCH integration', () => {
     expect(mocks.commandCallback).toBeTruthy();
 
     // Trigger the command listener as Chrome would
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     mocks.commandCallback!('open-popup');
 
     // Allow async flow to run
