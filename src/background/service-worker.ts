@@ -150,12 +150,12 @@ function setupPortBasedMessaging() {
             const aiStatus = getLastAIStatus();
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
             if (!portDisconnected) {
-              try { port.postMessage({ results, aiStatus, query: msg.query }); } catch { /* port closed during async search */ }
+              try { port.postMessage({ results, aiStatus, query: msg.query, skipAI: !!msg.skipAI }); } catch { /* port closed during async search */ }
             }
           } catch (error) {
             logger.error('portMessage', 'Search error:', error);
             if (!portDisconnected) {
-              try { port.postMessage({ error: (error as Error).message, query: msg.query }); } catch { /* port closed */ }
+              try { port.postMessage({ error: (error as Error).message, query: msg.query, skipAI: !!msg.skipAI }); } catch { /* port closed */ }
             }
           }
         }
@@ -321,7 +321,7 @@ setupPortBasedMessaging();
                 const results = await runSearch(msg.query, { skipAI: !!msg.skipAI });
                 const aiStatus = getLastAIStatus();
                 logger.debug('onMessage', 'Search completed, results:', results.length);
-                sendResponse({ results, aiStatus, query: msg.query });
+                sendResponse({ results, aiStatus, query: msg.query, skipAI: !!msg.skipAI });
                 break;
               }
 

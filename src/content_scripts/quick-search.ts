@@ -85,6 +85,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
   let aiDebounceTimer: number | null = null; // Separate longer debounce for AI expansion
+  let aiSearchPending = false; // True from handleInput until Phase 2 response arrives (or AI disabled)
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
@@ -671,7 +672,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             return;
           }
 
-          perfLog('Search results received via port');
+          const isPhase1 = response.skipAI === true;
+          perfLog(`Search results received via port (${isPhase1 ? 'Phase 1' : 'Phase 2'})`);
+
           currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
           // Apply current sort setting from cached settings
@@ -682,9 +685,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           selectedIndex = currentResults.length > 0 ? 0 : -1;
           renderResults(currentResults);
 
-          // Phase 2 (AI) response: hide spinner and show AI status
-          const hasAIResults = (response.aiStatus?.aiKeywords && response.aiStatus.aiKeywords !== 'disabled');
-          if (hasAIResults || !aiDebounceTimer) {
+          // Loading state logic:
+          // - Phase 1 response + AI still pending → keep spinner, skip AI status
+          // - Phase 2 response (or Phase 1 with no AI) → hide spinner, show AI status
+          if (isPhase1 && aiSearchPending) {
+            // Phase 1 done, but AI search is still pending — keep spinner visible
+            perfLog('Phase 1 done, AI still pending — spinner stays');
+          } else {
+            // Final response for this search cycle
+            aiSearchPending = false;
             hideSpinner();
             renderAIStatus(response.aiStatus);
           }
@@ -1190,6 +1199,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     overlayEl.classList.remove('visible');
 
     if (inputEl) {inputEl.blur();}
+    aiSearchPending = false;
     hideSpinner();
     renderAIStatus(null);
 
@@ -1235,11 +1245,22 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
+    // Determine AI state for this search cycle
+    const aiEnabled = cachedSettings?.ollamaEnabled ?? false;
+    aiSearchPending = aiEnabled; // Track: AI response still expected for this query
+
+    // Show spinner immediately — covers both normal search latency and AI wait
+    showSpinner();
+    // Clear previous AI status (new search starting)
+    renderAIStatus(null);
+
     // Phase 1: Fast non-AI search (short debounce)
     debounceTimer = window.setTimeout(() => {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
         // Load recent history when query is cleared
+        aiSearchPending = false;
+        hideSpinner();
         loadRecentHistory();
         return;
       }
@@ -1248,14 +1269,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
     // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
-    const aiEnabled = cachedSettings?.ollamaEnabled ?? false;
     if (aiEnabled) {
       const aiDelayMs = cachedSettings?.aiSearchDelayMs ?? 500;
-      showSpinner(); // Show spinner immediately so user knows AI is pending
       aiDebounceTimer = window.setTimeout(() => {
         aiDebounceTimer = null;
         const query = inputEl?.value?.trim() || '';
-        if (query.length === 0) {return;}
+        if (query.length === 0) {
+          aiSearchPending = false;
+          hideSpinner();
+          return;
+        }
         perfLog(`AI Phase 2 triggered for: "${query}" (delay: ${aiDelayMs}ms)`);
         performSearch(query, false); // skipAI=false for full AI expansion
       }, aiDelayMs);
@@ -1422,13 +1445,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const sanitizedQuery = sanitizeQuery(query);
     if (!sanitizedQuery) {
       // Empty query after sanitization - load recent history (smart default results)
+      aiSearchPending = false;
       hideSpinner();
       renderAIStatus(null);
       loadRecentHistory();
       return;
     }
 
-    // Show loading spinner while search is in progress
+    // Ensure spinner is visible (handleInput already shows it, but this covers
+    // direct calls to performSearch and edge cases like context recovery retries)
     showSpinner();
 
     // Check extension context validity first
@@ -1503,6 +1528,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI },
           (response) => {
             if (chrome.runtime.lastError) {
+              aiSearchPending = false;
               hideSpinner();
               console.warn('[SmrutiCortex] Search error:', chrome.runtime.lastError);
               currentResults = [];
@@ -1526,7 +1552,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
                 return;
               }
 
-              perfLog('Search results received via sendMessage', t0);
+              const isPhase1 = response.skipAI === true;
+              perfLog(`Search results received via sendMessage (${isPhase1 ? 'Phase 1' : 'Phase 2'})`, t0);
+
               currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
               // Apply current sort setting from cached settings
@@ -1537,9 +1565,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               selectedIndex = currentResults.length > 0 ? 0 : -1;
               renderResults(currentResults);
 
-              // Phase 2 (AI) response: hide spinner and show AI status
-              const hasAIResults = (response.aiStatus?.aiKeywords && response.aiStatus.aiKeywords !== 'disabled');
-              if (hasAIResults || !aiDebounceTimer) {
+              // Loading state: same logic as port handler
+              if (isPhase1 && aiSearchPending) {
+                perfLog('Phase 1 done, AI still pending — spinner stays');
+              } else {
+                aiSearchPending = false;
                 hideSpinner();
                 renderAIStatus(response.aiStatus);
               }
@@ -1547,6 +1577,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
         );
       } catch (e) {
+        aiSearchPending = false;
         hideSpinner();
         console.warn('[SmrutiCortex] Search request failed:', e);
         currentResults = [];
