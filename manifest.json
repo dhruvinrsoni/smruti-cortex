@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SmrutiCortex: Instant Browser History Search",
   "short_name": "SmrutiCortex",
-  "description": "SmrutiCortex is your intelligent browser history search assistant. Quickly find any URL, bookmark, or browsing session with ultra-fast search capabilities.",
+  "description": "Ultra-fast browser history search. Find any page instantly. 100% local, privacy-first, no cloud sync.",
   "version": "8.0.0",
   "permissions": [
     "history",
