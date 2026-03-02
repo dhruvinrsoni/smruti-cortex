@@ -119,5 +119,20 @@ Next Steps (v9.0.0 Planning)
 - Theme customization (light/dark/auto)
 - Export/import history index
 
+### Additions (March 2026)
+
+**AI Search Feedback**
+- Loading spinner in overlay while AI processes the query
+- AI status bar with colored badges after results return: `ai-expanded` (purple), `cache-hit` (blue), `semantic` (teal), `skipped` (grey), `error` (red)
+- `ExpansionSource` tracking (`fresh` / `cache-hit` / `skipped` / `error`) piped all the way from background to UI
+
+**Cache Reliability**
+- Cache invalidation on settings change — toggling AI on/off (or any other settings change) immediately clears the stale search cache, so the next query always runs fresh
+
+**Code Quality**
+- All 76 ESLint issues resolved: 52 errors (curly braces, quotes) fixed automatically; 24 warnings (unused vars, non-null assertions) fixed manually — `npm run lint` exits clean with 0 issues
+- `npm run lint` is the single source of truth — `lint-report.yml` GitHub Action calls the same npm script (no separate npx invocation)
+- Integration test for `OPEN_INLINE_SEARCH` command completely rewritten using `vi.hoisted()` for correct module-load-time mocking; deep no-op Proxy in helpers.ts prevents TypeErrors on any chrome API chain
+
 ---
-Released: February 2026
+Released: March 2026
