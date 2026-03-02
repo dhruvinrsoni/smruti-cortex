@@ -199,6 +199,7 @@ function initializePopup() {
   let currentQuery = '';
   let currentAIExpandedKeywords: string[] = [];
   let aiDebounceTimer: number | undefined;
+  let aiSearchPending = false; // True from debounceSearch until Phase 2 response arrives
 
   // Assign global results
   results = resultsLocal;
@@ -362,12 +363,18 @@ function initializePopup() {
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined;}
     if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;} // Cancel pending focus shift
 
+    // Determine AI state for this search cycle
+    const aiEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
+    aiSearchPending = aiEnabled;
+
+    // Show loading state immediately
+    resultCountNode.textContent = 'Searching...';
+
     // Phase 1: Fast non-AI search
     debounceTimer = window.setTimeout(() => doSearch(q, true), 150);
 
     // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
     // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
-    const aiEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
     if (aiEnabled) {
       const aiDelayMs = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
       aiDebounceTimer = window.setTimeout(() => {
@@ -417,6 +424,7 @@ function initializePopup() {
     currentQuery = q;
     if (!q || q.trim() === '') {
       // Show recent history when query is cleared
+      aiSearchPending = false;
       loadRecentHistory();
       return;
     }
@@ -425,6 +433,7 @@ function initializePopup() {
     if (!isServiceWorkerReady) {
       resultsLocal = [];
       activeIndex = -1;
+      aiSearchPending = false;
       renderResults();
       resultCountNode.textContent = 'Initializing...';
       resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
@@ -444,6 +453,15 @@ function initializePopup() {
 
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
+
+      // Loading state: Phase 1 + AI pending → show "AI expanding...", otherwise final count
+      if (skipAI && aiSearchPending) {
+        resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'} \u00B7 AI expanding...`;
+      } else {
+        aiSearchPending = false;
+        resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
+      }
+
       // Focus the first result after focusDelayMs — ONLY for actual search results.
       // Cancelled if user types again. Doesn't fire for empty/recent-history results.
       const focusDelay = SettingsManager.getSetting('focusDelayMs') ?? 450;
@@ -467,6 +485,7 @@ function initializePopup() {
     } catch (error) {
       resultsLocal = [];
       activeIndex = -1;
+      aiSearchPending = false;
       renderResults();
     }
   }
