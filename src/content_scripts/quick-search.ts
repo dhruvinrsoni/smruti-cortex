@@ -562,6 +562,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       background: rgba(139, 92, 246, 0.15);
       color: #8b5cf6;
     }
+    .ai-badge.ai-lexical {
+      background: rgba(100, 116, 139, 0.12);
+      color: #64748b;
+      letter-spacing: 0.04em;
+    }
     .ai-status-bar .ai-time {
       margin-left: auto;
       opacity: 0.7;
@@ -1311,6 +1316,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     const badges: HTMLSpanElement[] = [];
 
+    // ◈ LEXICAL — always shown: signals tokenized keyword search is active
+    const lexBadge = document.createElement('span');
+    lexBadge.className = 'ai-badge ai-lexical';
+    lexBadge.textContent = '\u25C8 LEXICAL';
+    lexBadge.title = 'Token-indexed keyword search';
+    badges.push(lexBadge);
+
     // Keyword expansion status
     if (aiStatus.aiKeywords && aiStatus.aiKeywords !== 'disabled') {
       const badge = document.createElement('span');
@@ -1323,11 +1335,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           break;
         case 'cache-hit':
           badge.classList.add('ai-cache');
-          badge.textContent = `\u26A1 AI cache (+${aiStatus.expandedCount || 0})`;
+          badge.textContent = `\u2B21 ENGRAM +${aiStatus.expandedCount || 0}`;
+          badge.title = 'AI synonyms recalled from neural cache';
           break;
         case 'prefix-hit':
           badge.classList.add('ai-cache');
-          badge.textContent = `\u26A1 AI prefix match (+${aiStatus.expandedCount || 0})`;
+          badge.textContent = `\u2B21 ENGRAM +${aiStatus.expandedCount || 0}`;
+          badge.title = 'AI prefix-matched from neural cache';
           break;
         case 'error':
           badge.classList.add('ai-error');
@@ -1364,8 +1378,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       }
       badges.push(badge);
     }
-
-    if (badges.length === 0) {return;}
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     badges.forEach(b => aiStatusBarEl!.appendChild(b));
