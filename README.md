@@ -45,8 +45,10 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | 🎲 **Diverse Results** | Filters duplicate URLs for variety (default ON) |
 | ⭐ **Bookmark Search** | Index and search bookmarks with ★ indicator |
 | 🔍 **Query Expansion** | Find related terms with synonym matching |
-| 🤖 **AI Search** | Optional keyword expansion via local Ollama |
-| 🧠 **Semantic Search** | Find by meaning with AI embeddings (NEW) |
+| 🤖 **AI Search** | Optional keyword expansion via local Ollama — 100% private, zero cloud |
+| 🔄 **Dual-Phase Search** | Keyword results in ~150ms, AI synonym expansion runs in parallel — never blocks |
+| 🏷️ **Search Telemetry** | Live status badges: `Keyword Match [LEXICAL]`, `AI Recalled [ENGRAM]`, `AI Expanded [NEURAL]` |
+| 🧠 **Semantic Search** | Find by meaning with AI embeddings — local only |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
 | 📊 **Performance Monitor** | Real-time search timing and cache stats |
 | 🔧 **Diagnostics Export** | Export system info for bug reports |
@@ -172,9 +174,11 @@ src/
 #### 1. AI Keyword Expansion (Fast)
 **Local AI keyword expansion** via [Ollama](https://ollama.ai). 100% local, no cloud.
 
-**How:** Type "war" → AI expands to ["war", "battle", "combat", "conflict"] → finds matching URLs.
+**How:** Type "war" → AI expands to `["war", "battle", "combat", "conflict"]` → keyword-matches URLs containing any of these.
 
-ONE LLM call per search. Fast and smart.
+**Dual-phase:** Keyword results appear instantly (~150ms). AI expansion runs in parallel — you see results before AI is done thinking.
+
+**Per-keyword cache:** Each word is cached independently. Type "github issues tracker" → `github` reuses cached expansion, only `tracker` calls Ollama. Gets faster with every search.
 
 **Setup:**
 ```bash
@@ -226,7 +230,8 @@ Production-grade safety layers protect your browser — every AI feature degrade
 | **Memory Guard** | Blocks AI when extension memory exceeds 512MB. |
 | **Concurrent Limiter** | 1 Ollama call at a time. Prevents resource contention. |
 | **Embedding Caps** | Max 10 embeddings per search, 5-second time budget. |
-| **Persistent Cache** | 5,000 keyword expansions survive restarts. Prefix matching. Gets faster over time. |
+| **Persistent Cache** | 5,000 per-keyword expansions survive restarts. Prefix matching. Gets faster with every search. |
+| **Search Telemetry** | Every result shows its source: `Keyword Match [LEXICAL]` · `AI Recalled [ENGRAM]` · `AI Expanded [NEURAL]` |
 | **Input Validation** | 200-char query limit, 8KB embedding text limit. |
 | **Graceful Degradation** | Every AI feature falls back to keyword search. Extension always works without Ollama. |
 
