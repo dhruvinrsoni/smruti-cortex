@@ -38,6 +38,18 @@ export function isChromium(): boolean {
     return typeof chrome !== 'undefined' && !isFirefox();
 }
 
+// Deeply nested no-op proxy — safe for any property access or call chain.
+// Used as a fallback in test/non-extension environments so that
+// browserAPI.runtime.onConnect.addListener(...) never throws.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeNoOpProxy(): any {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return new Proxy(function() {} as any, {
+        get: () => makeNoOpProxy(),
+        apply: () => undefined,
+    });
+}
+
 export const browserAPI = (() => {
     if (typeof chrome !== 'undefined') {
         // MV3 Chrome, Edge, Brave, Opera
@@ -47,15 +59,20 @@ export const browserAPI = (() => {
         // Firefox, Safari (WebExtension polyfill)
         return browser;
     }
-    // Fallback proxy for test/non-extension environments
+    // Fallback proxy for test/non-extension environments.
+    // Reads from globalThis.chrome/browser at access time so test mocks
+    // set up after module evaluation are still picked up.
     const handler = {
-        get(_target: any, prop: string) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            const real = (globalThis as any).chrome ?? (globalThis as any).browser; // eslint-disable-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get(_target: any, prop: string) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const real = (globalThis as any).chrome ?? (globalThis as any).browser;
             if (real && prop in real) {
                 return real[prop];
             }
-            // Return no-op function for missing APIs
-            return (..._args: any[]) => undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+            // Return a deep no-op proxy so nested access like
+            // .runtime.onConnect.addListener never throws.
+            return makeNoOpProxy();
         }
     };
     return new Proxy({}, handler) as typeof chrome;
