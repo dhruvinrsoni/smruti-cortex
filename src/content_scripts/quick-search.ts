@@ -1316,10 +1316,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     const badges: HTMLSpanElement[] = [];
 
-    // ◈ LEXICAL — always shown: signals tokenized keyword search is active
+    // Always shown — celebrates the speed of token-indexed keyword search
     const lexBadge = document.createElement('span');
     lexBadge.className = 'ai-badge ai-lexical';
-    lexBadge.textContent = '\u25C8 LEXICAL';
+    lexBadge.textContent = 'Locked In [LEXICAL]';
     lexBadge.title = 'Token-indexed keyword search';
     badges.push(lexBadge);
 
@@ -1331,25 +1331,28 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       switch (aiStatus.aiKeywords) {
         case 'expanded':
           badge.classList.add('ai-active');
-          badge.textContent = `\u{1F916} +${aiStatus.expandedCount || 0} AI keywords`;
+          badge.textContent = `Hot Take [NEURAL] +${aiStatus.expandedCount || 0}`;
+          badge.title = 'Live AI keyword expansion via Ollama';
           break;
         case 'cache-hit':
           badge.classList.add('ai-cache');
-          badge.textContent = `\u2B21 ENGRAM +${aiStatus.expandedCount || 0}`;
+          badge.textContent = `Mind Palace [ENGRAM] +${aiStatus.expandedCount || 0}`;
           badge.title = 'AI synonyms recalled from neural cache';
           break;
         case 'prefix-hit':
           badge.classList.add('ai-cache');
-          badge.textContent = `\u2B21 ENGRAM +${aiStatus.expandedCount || 0}`;
+          badge.textContent = `Mind Palace [ENGRAM] +${aiStatus.expandedCount || 0}`;
           badge.title = 'AI prefix-matched from neural cache';
           break;
         case 'error':
           badge.classList.add('ai-error');
-          badge.textContent = '\u274C AI expansion failed';
+          badge.textContent = 'Cold Start [OLLAMA]';
+          badge.title = 'AI expansion failed — Ollama may be warming up';
           break;
         case 'no-new-keywords':
           badge.classList.add('ai-active');
-          badge.textContent = '\u{1F916} AI active';
+          badge.textContent = 'Standing By [NEURAL]';
+          badge.title = 'AI enabled, exact match found — no new keywords needed';
           break;
       }
       badges.push(badge);
