@@ -87,6 +87,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
+  let currentAIExpandedTokens: string[] = [];
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
     try {
@@ -191,8 +192,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       --accent-color: #0d6efd;
       --highlight-bg: #fff3cd;
       --highlight-text: #664d03;
+      --highlight-ai-bg: #ede9fe;
+      --highlight-ai-text: #4c1d95;
     }
-    
+
     @media (prefers-color-scheme: dark) {
       :host {
         --bg-overlay: rgba(0, 0, 0, 0.6);
@@ -207,6 +210,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         --accent-color: #89b4fa;
         --highlight-bg: #fab387;
         --highlight-text: #1e1e2e;
+        --highlight-ai-bg: #4c1d95;
+        --highlight-ai-text: #ede9fe;
       }
     }
     
@@ -425,6 +430,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     .highlight {
       background: var(--highlight-bg);
       color: var(--highlight-text);
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+    .highlight-ai {
+      background: var(--highlight-ai-bg);
+      color: var(--highlight-ai-text);
       border-radius: 2px;
       padding: 0 2px;
     }
@@ -658,6 +669,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           const currentSort = cachedSettings?.sortBy || 'best-match';
           sortResults(currentResults, currentSort);
 
+          currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
           selectedIndex = 0;
           renderResults(currentResults);
           renderAIStatus(response.aiStatus);
@@ -1480,6 +1492,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               const currentSort = cachedSettings?.sortBy || 'best-match';
               sortResults(currentResults, currentSort);
 
+              currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
               selectedIndex = 0;
               renderResults(currentResults);
               renderAIStatus(response.aiStatus);
@@ -1512,17 +1525,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function highlightText(text: string, tokens: string[]): string {
+  function highlightText(text: string, tokens: string[], aiTokens: string[] = []): string {
     if (!text) { return ''; }
     const safe = escapeHtml(text);
-    if (tokens.length === 0) { return safe; }
-    let result = safe;
-    for (const token of tokens) {
-      if (token.length < 2) { continue; }
-      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<span class="highlight">$1</span>');
-    }
-    return result;
+    const validTokens = tokens.filter(t => t.length >= 2);
+    const originalSet = new Set(validTokens.map(t => t.toLowerCase()));
+    const aiOnlyTokens = aiTokens.filter(t => t.length >= 2 && !originalSet.has(t.toLowerCase()));
+    const allValid = [...validTokens, ...aiOnlyTokens];
+    if (allValid.length === 0) { return safe; }
+    const pattern = allValid.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    return safe.replace(new RegExp(`(${pattern})`, 'gi'), (match) => {
+      const cls = originalSet.has(match.toLowerCase()) ? 'highlight' : 'highlight-ai';
+      return `<span class="${cls}">${match}</span>`;
+    });
   }
 
   // ===== RENDER RESULTS (card + list mode, mirrors popup.ts renderResults) =====
@@ -1578,7 +1593,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const title = document.createElement('div');
         title.className = 'card-title';
         const bookmarkIndicator = item.isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
-        title.innerHTML = bookmarkIndicator + highlightText(item.title || item.url, tokens);
+        title.innerHTML = bookmarkIndicator + highlightText(item.title || item.url, tokens, currentAIExpandedTokens);
         details.appendChild(title);
 
         if (item.bookmarkFolders && item.bookmarkFolders.length > 0) {
@@ -1590,7 +1605,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
         const url = document.createElement('div');
         url.className = 'card-url';
-        url.innerHTML = highlightText(item.url, tokens);
+        url.innerHTML = highlightText(item.url, tokens, currentAIExpandedTokens);
         details.appendChild(url);
 
         card.appendChild(fav);
@@ -1615,6 +1630,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         urlClassName: 'result-url',
         highlightClassName: 'highlight',
         emptyClassName: 'empty',
+        aiTokens: currentAIExpandedTokens,
+        aiHighlightClassName: 'highlight-ai',
         onResultClick: (index, _result, _ctrlOrMeta) => {
           openResult(index, true);
         }
