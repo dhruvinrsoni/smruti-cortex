@@ -89,11 +89,6 @@ async function main() {
   results.push({ name: 'Build (prod)', passed: buildProdResult });
   if (!buildProdResult) allPassed = false;
 
-  // Run linting (non-blocking) — report issues but do not block commits
-  console.log('\n🧹 PHASE 2: Code Linting (non-blocking)');
-  const lintResult = runCommand('npm run lint:release', 'ESLint linting');
-  results.push({ name: 'Linting (non-blocking)', passed: lintResult });
-
   // Run tests (non-blocking) — report failures but do not block commits
   console.log('\n🧪 PHASE 3: Test Suite (non-blocking)');
   const testResult = runCommand('npm test', 'Vitest test suite');

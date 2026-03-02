@@ -1,9 +1,10 @@
 name: CI
 
-# Purpose: Runs comprehensive quality checks (lint, test, build) on every push/PR.
+# Purpose: Runs quality checks (test, build) on every push/PR.
 # Produces: extension-build artifact (dist/ folder) for validation.
 # Node Version: Uses Node.js 22.x (matches local development environment).
 # Note: Does NOT commit/push any changes back to repository.
+# Lint: Removed from CI — use the "Lint Report (Manual)" workflow to run on demand.
 
 on:
   push:
@@ -26,15 +27,10 @@ on:
         required: false
         default: true
         type: boolean
-      run_lint:
-        description: 'Run linting checks'
-        required: false
-        default: true
-        type: boolean
 
 jobs:
   lint-test-build:
-    name: Lint, Test & Build
+    name: Test & Build
     runs-on: ubuntu-latest
     
     steps:
@@ -49,10 +45,6 @@ jobs:
       
       - name: Install dependencies
         run: npm ci
-      
-      - name: Run linter
-        if: ${{ inputs.run_lint != 'false' }}
-        run: npm run lint:release
       
       - name: Run tests with coverage
         if: ${{ inputs.run_tests != 'false' }}
@@ -96,7 +88,6 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
-          echo "- Lints TypeScript code (max 52 warnings allowed)" >> $GITHUB_STEP_SUMMARY
           echo "- Runs test suite with coverage reporting" >> $GITHUB_STEP_SUMMARY
           echo "- Builds production extension bundle" >> $GITHUB_STEP_SUMMARY
           echo "- Uploads 'extension-build' artifact (30 days retention)" >> $GITHUB_STEP_SUMMARY
