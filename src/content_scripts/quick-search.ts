@@ -84,6 +84,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let prewarmed = false;
   let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
+  let aiDebounceTimer: number | null = null; // Separate longer debounce for AI expansion
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
@@ -660,8 +661,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('Search port opened', t0);
       
       searchPort.onMessage.addListener((response) => {
-        hideSpinner();
         if (response?.results) {
+          // Staleness guard: ignore responses for old queries
+          // Compare both sides lowercased to avoid case mismatch
+          const currentInputQuery = (inputEl?.value?.trim() || '').toLowerCase();
+          const responseQuery = (response.query || '').toLowerCase();
+          if (responseQuery && responseQuery !== currentInputQuery) {
+            perfLog(`Ignoring stale response for "${responseQuery}" (current: "${currentInputQuery}")`);
+            return;
+          }
+
           perfLog('Search results received via port');
           currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
@@ -670,9 +679,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           sortResults(currentResults, currentSort);
 
           currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
-          selectedIndex = 0;
+          selectedIndex = currentResults.length > 0 ? 0 : -1;
           renderResults(currentResults);
-          renderAIStatus(response.aiStatus);
+
+          // Phase 2 (AI) response: hide spinner and show AI status
+          const hasAIResults = (response.aiStatus?.aiKeywords && response.aiStatus.aiKeywords !== 'disabled');
+          if (hasAIResults || !aiDebounceTimer) {
+            hideSpinner();
+            renderAIStatus(response.aiStatus);
+          }
         }
       });
 
@@ -1190,8 +1205,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== SEARCH =====
   function handleInput(): void {
     if (debounceTimer) {clearTimeout(debounceTimer);}
+    if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
     if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;} // Cancel pending focus shift
-    
+
     // Early check: If extension context is already invalid, attempt recovery immediately
     if (!isExtensionContextValid()) {
       perfLog('Extension context invalid during input - attempting silent recovery');
@@ -1201,7 +1217,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           // Continue with search after recovery
           const query = inputEl?.value?.trim() || '';
           if (query.length > 0) {
-            performSearch(query);
+            performSearch(query, true);
           }
         } else {
           // Show error after failed recovery attempts
@@ -1218,7 +1234,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       });
       return;
     }
-    
+
+    // Phase 1: Fast non-AI search (short debounce)
     debounceTimer = window.setTimeout(() => {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
@@ -1226,8 +1243,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         loadRecentHistory();
         return;
       }
-      performSearch(query);
+      performSearch(query, true); // skipAI=true for instant results
     }, searchDebounceMs);
+
+    // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
+    // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
+    const aiEnabled = cachedSettings?.ollamaEnabled ?? false;
+    if (aiEnabled) {
+      const aiDelayMs = cachedSettings?.aiSearchDelayMs ?? 500;
+      showSpinner(); // Show spinner immediately so user knows AI is pending
+      aiDebounceTimer = window.setTimeout(() => {
+        aiDebounceTimer = null;
+        const query = inputEl?.value?.trim() || '';
+        if (query.length === 0) {return;}
+        perfLog(`AI Phase 2 triggered for: "${query}" (delay: ${aiDelayMs}ms)`);
+        performSearch(query, false); // skipAI=false for full AI expansion
+      }, aiDelayMs);
+    }
   }
 
   // ===== LOADING SPINNER & AI STATUS =====
@@ -1382,7 +1414,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  function performSearch(query: string): void {
+  function performSearch(query: string, skipAI: boolean = false): void {
     const t0 = performance.now();
     perfLog(`performSearch: "${query}"`);
 
@@ -1432,7 +1464,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Use port if available (faster), otherwise fallback to sendMessage
     if (searchPort) {
       try {
-        searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
+        searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
         perfLog('Search query sent via port', t0);
         // Check for runtime errors after async operation
         if (chrome.runtime.lastError) {
@@ -1448,7 +1480,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         // Try once more with new port
         if (searchPort) {
           try {
-            searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' });
+            searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
             perfLog('Search query sent via reconnected port', t0);
             // Check for runtime errors after async operation
             if (chrome.runtime.lastError) {
@@ -1468,10 +1500,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       // Attempt one-shot sendMessage and handle errors
       try {
         chrome.runtime.sendMessage(
-          { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline' },
+          { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI },
           (response) => {
-            hideSpinner();
             if (chrome.runtime.lastError) {
+              hideSpinner();
               console.warn('[SmrutiCortex] Search error:', chrome.runtime.lastError);
               currentResults = [];
               renderErrorResults(
@@ -1485,6 +1517,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               return;
             }
             if (response?.results) {
+              // Staleness guard: ignore responses for old queries
+              // Compare both sides lowercased to avoid case mismatch
+              const currentInputQuery = (inputEl?.value?.trim() || '').toLowerCase();
+              const responseQuery = (response.query || '').toLowerCase();
+              if (responseQuery && responseQuery !== currentInputQuery) {
+                perfLog(`Ignoring stale sendMessage response for "${responseQuery}"`);
+                return;
+              }
+
               perfLog('Search results received via sendMessage', t0);
               currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
@@ -1493,9 +1534,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               sortResults(currentResults, currentSort);
 
               currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
-              selectedIndex = 0;
+              selectedIndex = currentResults.length > 0 ? 0 : -1;
               renderResults(currentResults);
-              renderAIStatus(response.aiStatus);
+
+              // Phase 2 (AI) response: hide spinner and show AI status
+              const hasAIResults = (response.aiStatus?.aiKeywords && response.aiStatus.aiKeywords !== 'disabled');
+              if (hasAIResults || !aiDebounceTimer) {
+                hideSpinner();
+                renderAIStatus(response.aiStatus);
+              }
             }
           }
         );
@@ -2395,6 +2442,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Clear any pending timers
     if (debounceTimer) {clearTimeout(debounceTimer); debounceTimer = null;}
+    if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
     if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;}
     if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
     overlayFocusTimeouts.forEach(t => clearTimeout(t));

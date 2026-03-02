@@ -39,7 +39,7 @@ export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; 
 // Allows cancelling a previous search when a new one starts
 let activeSearchAbort: AbortController | null = null;
 
-export async function runSearch(query: string): Promise<IndexedItem[]> {
+export async function runSearch(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
     // Cancel any in-flight search (prevents concurrent embedding generation storms)
     if (activeSearchAbort) {
         activeSearchAbort.abort();
@@ -57,12 +57,19 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     }
 
     // Check cache first for instant results
+    // IMPORTANT: Skip cache when AI expansion is requested (!skipAI) — Phase 1 may have
+    // cached non-AI results under the same key, and Phase 2 needs a fresh search with AI.
     const searchCache = getSearchCache();
-    const cachedResults = searchCache.get(q);
-    if (cachedResults) {
-        const cacheTime = performance.now() - searchStartTime;
-        logger.info('runSearch', `⚡ Cache hit! Returning ${cachedResults.length} results in ${cacheTime.toFixed(2)}ms`);
-        return cachedResults;
+    const useCache = options?.skipAI !== false; // cache OK for Phase 1 (skipAI=true) or default
+    if (useCache) {
+        const cachedResults = searchCache.get(q);
+        if (cachedResults) {
+            const cacheTime = performance.now() - searchStartTime;
+            logger.info('runSearch', `⚡ Cache hit! Returning ${cachedResults.length} results in ${cacheTime.toFixed(2)}ms`);
+            return cachedResults;
+        }
+    } else {
+        logger.debug('runSearch', 'Skipping cache — AI expansion requested (Phase 2)');
     }
 
     // Original tokens from query
@@ -96,7 +103,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
     let searchTokens: string[] = synonymExpandedTokens; // Start with synonym-expanded tokens
     let aiExpanded = false;
 
-    if (ollamaEnabled) {
+    if (ollamaEnabled && !options?.skipAI) {
         logger.info('runSearch', '🤖 AI keyword expansion ACTIVE');
         try {
             const expandedTokens = await expandQueryKeywords(q);
@@ -124,6 +131,8 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
             aiStatus.aiKeywords = 'error';
             logger.warn('runSearch', '⚠️ Keyword expansion failed, using original query', { error });
         }
+    } else if (ollamaEnabled && options?.skipAI) {
+        logger.info('runSearch', '🔍 Keyword search (AI deferred — Phase 1)');
     } else {
         logger.info('runSearch', '🔍 Keyword search (AI disabled)');
     }

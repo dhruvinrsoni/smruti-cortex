@@ -213,7 +213,11 @@ function getGenerationModel(configuredModel: string): string {
 }
 
 /**
- * Call Ollama's /api/generate endpoint for keyword expansion
+ * Call Ollama's /api/chat endpoint for keyword expansion.
+ * Uses /api/chat (not /api/generate) because chat-tuned models like llama3.2
+ * respond reliably to structured messages with system + user roles.
+ * /api/generate was wrapping prompts in the chat template automatically, causing
+ * the model to emit EOS or stop tokens before generating useful output.
  */
 async function callOllamaForKeywords(
   endpoint: string,
@@ -221,19 +225,23 @@ async function callOllamaForKeywords(
   keyword: string,
   timeout: number
 ): Promise<string[]> {
-  // Single keyword — no hardcoded example to prevent model from copying it
-  const prompt = `List 5 synonyms or related words for: "${keyword}"
-Include "${keyword}" as the first element. Output ONLY a JSON array, nothing else:`;
-
-  const requestUrl = `${endpoint}/api/generate`;
+  const requestUrl = `${endpoint}/api/chat`;
   const requestBody = {
     model: model,
-    prompt: prompt,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a thesaurus API. Respond with ONLY a JSON array of strings, no other text.'
+      },
+      {
+        role: 'user',
+        content: `List 5 synonyms or related words for: "${keyword}". Include "${keyword}" as the first element.`
+      }
+    ],
     stream: false,
     options: {
       temperature: 0.2,   // Very low for consistent output
       num_predict: 150,   // Enough for ~15-20 keywords in array format
-      stop: ['\n\n', '```']  // Stop at double newline or code block start
     }
   };
 
@@ -269,7 +277,8 @@ Include "${keyword}" as the first element. Output ONLY a JSON array, nothing els
     }
 
     const data = await response.json();
-    const generatedText = data.response || '';
+    // /api/chat returns { message: { content: "..." } }, /api/generate returns { response: "..." }
+    const generatedText = data.message?.content || data.response || '';
 
     logger.debug('callOllamaForKeywords', `📨 Response received in ${duration}ms`, {
       responseLength: generatedText.length,
@@ -321,9 +330,14 @@ function parseKeywordResponse(responseText: string, originalTokens: string[]): s
         
         parsed.forEach((k: unknown) => {
           if (typeof k === 'string' && k.length >= 2) {
-            const cleaned = k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-            if (cleaned.length >= 2) {
-              allKeywords.add(cleaned);
+            // Split multi-word synonyms into individual tokens for keyword matching
+            // e.g., "bug tracker" → ["bug", "tracker"] (both searchable)
+            const words = k.toLowerCase().trim().split(/\s+/);
+            for (const word of words) {
+              const cleaned = word.replace(/[^a-z0-9]/g, '');
+              if (cleaned.length >= 2) {
+                allKeywords.add(cleaned);
+              }
             }
           }
         });
@@ -364,9 +378,13 @@ function parseKeywordResponse(responseText: string, originalTokens: string[]): s
       if (Array.isArray(parsed.expanded)) {
         parsed.expanded.forEach(k => {
           if (typeof k === 'string' && k.length > 0) {
-            const cleaned = k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-            if (cleaned.length >= 2) {
-              allKeywords.add(cleaned);
+            // Split multi-word synonyms into individual tokens
+            const words = k.toLowerCase().trim().split(/\s+/);
+            for (const word of words) {
+              const cleaned = word.replace(/[^a-z0-9]/g, '');
+              if (cleaned.length >= 2) {
+                allKeywords.add(cleaned);
+              }
             }
           }
         });

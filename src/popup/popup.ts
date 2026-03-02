@@ -198,6 +198,7 @@ function initializePopup() {
   let serviceWorkerReady = false;
   let currentQuery = '';
   let currentAIExpandedKeywords: string[] = [];
+  let aiDebounceTimer: number | undefined;
 
   // Assign global results
   results = resultsLocal;
@@ -354,11 +355,26 @@ function initializePopup() {
   }
 
   // Smart debounce - wait for user to stop typing before searching
+  // Two-phase: Phase 1 (150ms) = instant non-AI results, Phase 2 (500ms) = AI expansion
   // Note: This is intentionally separate from focusDelayMs (which controls result auto-focus)
   function debounceSearchLocal(q: string) {
     if (debounceTimer) {clearTimeout(debounceTimer);}
+    if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined;}
     if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;} // Cancel pending focus shift
-    debounceTimer = window.setTimeout(() => doSearch(q), 150);
+
+    // Phase 1: Fast non-AI search
+    debounceTimer = window.setTimeout(() => doSearch(q, true), 150);
+
+    // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
+    // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
+    const aiEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
+    if (aiEnabled) {
+      const aiDelayMs = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
+      aiDebounceTimer = window.setTimeout(() => {
+        aiDebounceTimer = undefined;
+        doSearch(q, false);
+      }, aiDelayMs);
+    }
   }
 
   // Assign global
@@ -396,8 +412,8 @@ function initializePopup() {
     }
   }
 
-  // Fast search
-  async function doSearch(q: string) {
+  // Fast search (skipAI=true for Phase 1, false for Phase 2 with AI)
+  async function doSearch(q: string, skipAI: boolean = false) {
     currentQuery = q;
     if (!q || q.trim() === '') {
       // Show recent history when query is cleared
@@ -416,7 +432,7 @@ function initializePopup() {
     }
 
     try {
-      const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q });
+      const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q, skipAI });
       // Guard against stale responses from slower earlier queries
       if (q !== currentQuery) {return;}
       resultsLocal = (resp && resp.results) ? resp.results : [];

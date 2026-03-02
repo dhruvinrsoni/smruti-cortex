@@ -146,16 +146,16 @@ function setupPortBasedMessaging() {
 
           try {
             const { getLastAIStatus } = await import('./search/search-engine');
-            const results = await runSearch(msg.query);
+            const results = await runSearch(msg.query, { skipAI: !!msg.skipAI });
             const aiStatus = getLastAIStatus();
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
             if (!portDisconnected) {
-              try { port.postMessage({ results, aiStatus }); } catch { /* port closed during async search */ }
+              try { port.postMessage({ results, aiStatus, query: msg.query }); } catch { /* port closed during async search */ }
             }
           } catch (error) {
             logger.error('portMessage', 'Search error:', error);
             if (!portDisconnected) {
-              try { port.postMessage({ error: (error as Error).message }); } catch { /* port closed */ }
+              try { port.postMessage({ error: (error as Error).message, query: msg.query }); } catch { /* port closed */ }
             }
           }
         }
@@ -316,12 +316,12 @@ setupPortBasedMessaging();
             }
             switch (msg.type) {
               case 'SEARCH_QUERY': {
-                logger.info('onMessage', `Popup search: "${msg.query}"`);
+                logger.info('onMessage', `Popup search: "${msg.query}" (skipAI: ${!!msg.skipAI})`);
                 const { getLastAIStatus } = await import('./search/search-engine');
-                const results = await runSearch(msg.query);
+                const results = await runSearch(msg.query, { skipAI: !!msg.skipAI });
                 const aiStatus = getLastAIStatus();
                 logger.debug('onMessage', 'Search completed, results:', results.length);
-                sendResponse({ results, aiStatus });
+                sendResponse({ results, aiStatus, query: msg.query });
                 break;
               }
 

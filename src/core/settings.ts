@@ -25,6 +25,7 @@ export interface AppSettings {
     ollamaEndpoint?: string;      // Ollama API endpoint (default: 'http://localhost:11434')
     ollamaModel?: string;         // Ollama model for keyword expansion (default: 'llama3.2:1b')
     ollamaTimeout?: number;       // Max embedding generation time in ms (default: 30000 = 30s, -1 = infinite/no timeout)
+    aiSearchDelayMs?: number;     // Delay in ms before AI expansion triggers after user stops typing (default: 500)
     embeddingsEnabled?: boolean;  // Enable semantic search with embeddings (default: false)
     embeddingModel?: string;      // Ollama model for embeddings (default: 'nomic-embed-text')
     // Privacy settings
@@ -91,6 +92,10 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     ollamaTimeout: {
         default: 30000,  // 30 seconds (generous for first-time model loading on slower systems)
         validate: (val) => typeof val === 'number' && (val === -1 || (val >= 5000 && val <= 120000)),  // -1 = infinite, or 5s-120s
+    },
+    aiSearchDelayMs: {
+        default: 500,  // Wait 500ms of idle typing before triggering AI expansion
+        validate: (val) => typeof val === 'number' && val >= 200 && val <= 3000,  // 200ms-3s
     },
     // Semantic search settings
     embeddingsEnabled: {
