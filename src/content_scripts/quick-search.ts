@@ -87,8 +87,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
-  let searchInProgress = false;
-
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
     try {
@@ -1222,13 +1220,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== LOADING SPINNER & AI STATUS =====
   function showSpinner(): void {
-    searchInProgress = true;
-    if (spinnerEl) spinnerEl.classList.add('active');
+    if (spinnerEl) {spinnerEl.classList.add('active');}
   }
 
   function hideSpinner(): void {
-    searchInProgress = false;
-    if (spinnerEl) spinnerEl.classList.remove('active');
+    if (spinnerEl) {spinnerEl.classList.remove('active');}
   }
 
   function renderAIStatus(aiStatus: {
@@ -1238,13 +1234,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     embeddingsGenerated?: number;
     searchTimeMs?: number;
   } | null | undefined): void {
-    if (!aiStatusBarEl) return;
+    if (!aiStatusBarEl) {return;}
 
     // Clear previous content
     aiStatusBarEl.textContent = '';
     aiStatusBarEl.classList.remove('visible');
 
-    if (!aiStatus) return;
+    if (!aiStatus) {return;}
 
     const badges: HTMLSpanElement[] = [];
 
@@ -1302,8 +1298,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       badges.push(badge);
     }
 
-    if (badges.length === 0) return;
+    if (badges.length === 0) {return;}
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     badges.forEach(b => aiStatusBarEl!.appendChild(b));
 
     // Search time
@@ -1550,7 +1547,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       emptyDiv.className = 'empty';
       emptyDiv.textContent = emptyMessage;
       resultsEl.appendChild(emptyDiv);
-      perfLog(`renderResults (empty)`, t0);
+      perfLog('renderResults (empty)', t0);
       return;
     }
 
@@ -1604,6 +1601,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           openResult(idx, true);
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         resultsEl!.appendChild(card);
       });
     } else {
@@ -2063,22 +2061,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function triggerInputEvent(): void {
     const ev = new Event('input', { bubbles: true });
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     inputEl!.dispatchEvent(ev);
   }
 
   /** Index of start of the previous word from pos (going left) */
   function prevWordBoundary(text: string, pos: number): number {
     let i = pos;
-    while (i > 0 && /\s/.test(text[i - 1])) i--;
-    while (i > 0 && /\S/.test(text[i - 1])) i--;
+    while (i > 0 && /\s/.test(text[i - 1])) {i--;}
+    while (i > 0 && /\S/.test(text[i - 1])) {i--;}
     return i;
   }
 
   /** Index of end of the next word from pos (going right) */
   function nextWordBoundary(text: string, pos: number): number {
     let i = pos;
-    while (i < text.length && /\S/.test(text[i])) i++;
-    while (i < text.length && /\s/.test(text[i])) i++;
+    while (i < text.length && /\S/.test(text[i])) {i++;}
+    while (i < text.length && /\s/.test(text[i])) {i++;}
     return i;
   }
 
@@ -2130,7 +2129,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       // Ctrl+V => Paste
       if (lk === 'v') {
         navigator.clipboard.readText().then((text) => {
-          if (!inputEl) return;
+          if (!inputEl) {return;}
           const s = inputEl.selectionStart ?? 0;
           const ep = inputEl.selectionEnd ?? 0;
           pushUndo(inputEl.value);
@@ -2153,7 +2152,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (lk === 'z' && !e.shiftKey) {
         if (undoStack.length > 0) {
           redoStack.push(val);
-          inputEl.value = undoStack.pop()!;
+          inputEl.value = undoStack.pop()!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
           inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
           triggerInputEvent();
         }
@@ -2164,7 +2163,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if ((lk === 'z' && e.shiftKey) || lk === 'y') {
         if (redoStack.length > 0) {
           undoStack.push(val);
-          inputEl.value = redoStack.pop()!;
+          inputEl.value = redoStack.pop()!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
           inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
           triggerInputEvent();
         }

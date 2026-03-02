@@ -11,7 +11,6 @@ import metaScorer from './scorers/meta-scorer';
 import embeddingScorer from './scorers/embedding-scorer';
 import {
     tokenize,
-    countExactKeywordMatches,
     classifyTokenMatches,
     graduatedMatchScore,
     countConsecutiveMatches,
@@ -34,7 +33,7 @@ const crossDimensionalScorer: Scorer = {
         const originalTokens = tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
-        if (searchTokens.length < 2) return 0;
+        if (searchTokens.length < 2) {return 0;}
 
         // Define dimensions with graduated matching
         const dimensions: Record<string, { content: string; weight: number }> = {
@@ -66,7 +65,7 @@ const crossDimensionalScorer: Scorer = {
         let totalScore = 0;
         const matchedTokens = searchTokens.filter(t => tokenBestMatch[t].bestType !== MatchType.NONE);
 
-        if (matchedTokens.length < 2) return 0;
+        if (matchedTokens.length < 2) {return 0;}
 
         // Graduated bonus per token: weight by match quality × dimension count
         for (const token of matchedTokens) {
@@ -112,7 +111,7 @@ const multiTokenMatchScorer: Scorer = {
         const haystack = `${title} ${url} ${metaDescription} ${bookmarkFolders}`;
 
         const originalTokens = tokenize(query);
-        if (originalTokens.length < 2) return 0;
+        if (originalTokens.length < 2) {return 0;}
 
         // ─── Graduated match score across all content ───────────────
         const graduated = graduatedMatchScore(originalTokens, haystack);

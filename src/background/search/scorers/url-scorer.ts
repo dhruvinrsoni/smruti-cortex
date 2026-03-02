@@ -22,7 +22,7 @@ const urlScorer: Scorer = {
         const originalTokens = tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
-        if (searchTokens.length === 0) return 0;
+        if (searchTokens.length === 0) {return 0;}
 
         // ─── Graduated URL match (expanded tokens) ──────────────────
         const urlGraduated = graduatedMatchScore(searchTokens, url);

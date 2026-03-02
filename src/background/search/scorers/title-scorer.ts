@@ -28,10 +28,10 @@ const titleScorer: Scorer = {
         const originalTokens = tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
-        if (searchTokens.length === 0) return 0;
+        if (searchTokens.length === 0) {return 0;}
 
         // Exact title match with original query (highest relevance)
-        if (title === query) return 1;
+        if (title === query) {return 1;}
 
         // ─── 1. Graduated match quality for expanded tokens ─────────────
         const expandedGraduated = graduatedMatchScore(searchTokens, title);

@@ -11,12 +11,6 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      scope:
-        description: 'Path to lint (e.g. src, src/background, src/content_scripts)'
-        required: false
-        default: 'src'
-        type: string
 
 jobs:
   lint-report:
@@ -37,12 +31,7 @@ jobs:
         run: npm ci
 
       - name: Run ESLint — JSON output (never fails)
-        run: |
-          npx eslint ${{ inputs.scope || 'src' }} \
-            --ext .ts,.tsx \
-            --report-unused-disable-directives \
-            --format json \
-            --output-file lint-report.json || true
+        run: npm run lint -- --format json --output-file lint-report.json || true
 
       - name: Build human-readable Markdown report
         run: |
@@ -72,7 +61,7 @@ jobs:
           const total = errors + warnings;
           let header = '# ESLint Lint Report\n\n';
           header += 'Generated: ' + ts + '\n';
-          header += 'Scope: \`' + (process.env.SCOPE || 'src') + '\`\n\n';
+          header += 'Scope: \`src\`\n\n';
           header += '**Total: ' + total + ' issues — ' + errors + ' errors, ' + warnings + ' warnings**\n\n';
 
           const sorted = Object.entries(byRule).sort((a,b) => b[1]-a[1]);
@@ -87,9 +76,6 @@ jobs:
           fs.writeFileSync('lint-report.md', report);
           console.log('Done: ' + total + ' issues (' + errors + ' errors, ' + warnings + ' warnings)');
           "
-        env:
-          SCOPE: ${{ inputs.scope || 'src' }}
-
       - name: Upload lint artifacts
         uses: actions/upload-artifact@v4
         with:

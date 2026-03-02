@@ -5,7 +5,7 @@ import { ingestHistory, performFullRebuild } from './indexing';
 import { runSearch } from './search/search-engine';
 import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
-import { Logger, LogLevel } from '../core/logger';
+import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring } from './resilience';
 

@@ -48,16 +48,16 @@ export function classifyMatch(token: string, text: string): MatchType {
     const lowerToken = token.toLowerCase();
 
     // Fast path: no match at all
-    if (!lowerText.includes(lowerToken)) return MatchType.NONE;
+    if (!lowerText.includes(lowerToken)) {return MatchType.NONE;}
 
     // Check exact word-boundary match (strongest signal)
     const escaped = lowerToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const exactRegex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`);
-    if (exactRegex.test(lowerText)) return MatchType.EXACT;
+    if (exactRegex.test(lowerText)) {return MatchType.EXACT;}
 
     // Check prefix match: token appears at the start of a word
     const prefixRegex = new RegExp(`(^|[^a-z0-9])${escaped}`);
-    if (prefixRegex.test(lowerText)) return MatchType.PREFIX;
+    if (prefixRegex.test(lowerText)) {return MatchType.PREFIX;}
 
     // It matched via includes() but not at boundaries → substring
     return MatchType.SUBSTRING;
@@ -80,7 +80,7 @@ export function classifyTokenMatches(tokens: string[], text: string): MatchType[
  * Example: 2 EXACT + 1 PREFIX out of 3 tokens → (1.0 + 1.0 + 0.75) / 3 = 0.917
  */
 export function graduatedMatchScore(tokens: string[], text: string): number {
-    if (tokens.length === 0) return 0;
+    if (tokens.length === 0) {return 0;}
     const types = classifyTokenMatches(tokens, text);
     const total = types.reduce((sum, t) => sum + MATCH_WEIGHTS[t], 0);
     return total / tokens.length;
@@ -94,7 +94,7 @@ export function graduatedMatchScore(tokens: string[], text: string): number {
 export function matchPosition(token: string, text: string): number {
     const lowerText = text.toLowerCase();
     const idx = lowerText.indexOf(token.toLowerCase());
-    if (idx < 0) return 1.0;
+    if (idx < 0) {return 1.0;}
     return lowerText.length > 0 ? idx / lowerText.length : 1.0;
 }
 
@@ -104,7 +104,7 @@ export function matchPosition(token: string, text: string): number {
  * Example: tokens ["rar","my","all"] in "RAR-My-All" → 2 consecutive pairs found.
  */
 export function countConsecutiveMatches(tokens: string[], text: string): number {
-    if (tokens.length < 2) return 0;
+    if (tokens.length < 2) {return 0;}
 
     const lowerText = text.toLowerCase();
     let consecutiveCount = 0;

@@ -38,7 +38,7 @@ let dirty = false;
  * Safe to call multiple times — only loads once.
  */
 export async function loadCache(): Promise<void> {
-  if (loaded) return;
+  if (loaded) {return;}
 
   try {
     const result = await new Promise<Record<string, unknown>>((resolve) => {
@@ -63,11 +63,11 @@ export async function loadCache(): Promise<void> {
  */
 function scheduleSave(): void {
   dirty = true;
-  if (saveTimer) return;
+  if (saveTimer) {return;}
 
   saveTimer = setTimeout(async () => {
     saveTimer = null;
-    if (!dirty) return;
+    if (!dirty) {return;}
     dirty = false;
 
     try {
@@ -88,7 +88,7 @@ function scheduleSave(): void {
  */
 export function getCachedExpansion(query: string): string[] | null {
   const entry = cache.get(query);
-  if (!entry) return null;
+  if (!entry) {return null;}
 
   if (Date.now() - entry.t > CACHE_TTL) {
     cache.delete(query);
@@ -106,13 +106,13 @@ export function getCachedExpansion(query: string): string[] | null {
  * Returns the best (most-hit) match, or null.
  */
 export function getPrefixMatch(query: string): string[] | null {
-  if (query.length < 2) return null; // Too short for prefix matching
+  if (query.length < 2) {return null;} // Too short for prefix matching
 
   const now = Date.now();
   let bestMatch: { keywords: string[]; hits: number } | null = null;
 
   for (const [key, entry] of cache) {
-    if (now - entry.t > CACHE_TTL) continue;
+    if (now - entry.t > CACHE_TTL) {continue;}
 
     // Cached key starts with what user typed (e.g. "github api" starts with "git")
     if (key.startsWith(query) && key !== query) {
