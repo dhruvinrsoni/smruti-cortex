@@ -189,6 +189,7 @@ function initializePopup() {
   const input = $local('search-input') as HTMLInputElement;
   const resultsNode = $local('results') as HTMLUListElement;
   const resultCountNode = $local('result-count') as HTMLDivElement;
+  const popupSpinner = $local('search-spinner') as HTMLDivElement | null;
   const settingsButton = $local('settings-button') as HTMLButtonElement; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   let resultsLocal: IndexedItem[] = [];
@@ -367,7 +368,8 @@ function initializePopup() {
     const aiEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
     aiSearchPending = aiEnabled;
 
-    // Show loading state immediately
+    // Show spinner + loading text immediately
+    if (popupSpinner) {popupSpinner.classList.add('active');}
     resultCountNode.textContent = 'Searching...';
 
     // Phase 1: Fast non-AI search
@@ -425,6 +427,7 @@ function initializePopup() {
     if (!q || q.trim() === '') {
       // Show recent history when query is cleared
       aiSearchPending = false;
+      if (popupSpinner) {popupSpinner.classList.remove('active');}
       loadRecentHistory();
       return;
     }
@@ -434,6 +437,7 @@ function initializePopup() {
       resultsLocal = [];
       activeIndex = -1;
       aiSearchPending = false;
+      if (popupSpinner) {popupSpinner.classList.remove('active');}
       renderResults();
       resultCountNode.textContent = 'Initializing...';
       resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
@@ -454,11 +458,15 @@ function initializePopup() {
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
 
-      // Loading state: Phase 1 + AI pending → show "AI expanding...", otherwise final count
+      // Loading state: Phase 1 + AI pending → keep spinner, show "AI expanding..."
+      // Phase 2 response (or non-AI) → hide spinner, show final count
       if (skipAI && aiSearchPending) {
-        resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'} \u00B7 AI expanding...`;
+        // Phase 1 done, AI still in flight — keep spinner, update count with hint
+        resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'} · AI expanding...`;
       } else {
+        // Final response
         aiSearchPending = false;
+        if (popupSpinner) {popupSpinner.classList.remove('active');}
         resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
       }
 
@@ -486,6 +494,7 @@ function initializePopup() {
       resultsLocal = [];
       activeIndex = -1;
       aiSearchPending = false;
+      if (popupSpinner) {popupSpinner.classList.remove('active');}
       renderResults();
     }
   }

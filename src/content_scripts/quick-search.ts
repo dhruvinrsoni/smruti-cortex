@@ -194,8 +194,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       --accent-color: #0d6efd;
       --highlight-bg: #fff3cd;
       --highlight-text: #664d03;
-      --highlight-ai-bg: #ede9fe;
-      --highlight-ai-text: #4c1d95;
+      --highlight-ai-bg: #dcfce7;
+      --highlight-ai-text: #14532d;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -212,8 +212,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         --accent-color: #89b4fa;
         --highlight-bg: #fab387;
         --highlight-text: #1e1e2e;
-        --highlight-ai-bg: #4c1d95;
-        --highlight-ai-text: #ede9fe;
+        --highlight-ai-bg: #14532d;
+        --highlight-ai-text: #dcfce7;
       }
     }
     
