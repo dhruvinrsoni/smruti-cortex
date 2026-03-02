@@ -363,21 +363,21 @@ function autoType(input, text, callback) {
 
 // ===== Tour Preview Strip =====
 const TOUR_STEPS = [
-    { id: 'search-speed', title: 'Lightning Search', screenshot: './screenshots/Screenshot 2026-02-12 200635.png', category: 'core' },
-    { id: 'deep-search', title: 'Deep Search Scoring', screenshot: './screenshots/Screenshot 2026-02-12 200309.png', category: 'core' },
-    { id: 'keyboard', title: 'Keyboard Shortcuts', screenshot: './screenshots/Screenshot 2026-02-12 200140.png', category: 'core' },
-    { id: 'overlay', title: 'Quick-Search Overlay', screenshot: './screenshots/Screenshot 2026-02-12 200140.png', category: 'core' },
-    { id: 'display-modes', title: 'Display Modes', screenshot: './screenshots/Screenshot 2026-02-12 200431.png', category: 'core' },
-    { id: 'ai-search', title: 'AI Search (Ollama)', screenshot: './screenshots/Screenshot 2026-02-12 195843.png', category: 'ai' },
-    { id: 'semantic', title: 'Semantic Search', screenshot: './screenshots/Screenshot 2026-02-12 195900.png', category: 'ai' },
-    { id: 'bookmarks', title: 'Bookmark Search', screenshot: './screenshots/Screenshot 2026-02-12 200033.png', category: 'ai' },
-    { id: 'privacy', title: 'Privacy Controls', screenshot: './screenshots/Screenshot 2026-02-12 200033.png', category: 'privacy' },
-    { id: 'data', title: 'Data Management', screenshot: './screenshots/Screenshot 2026-02-12 200057.png', category: 'privacy' },
-    { id: 'performance', title: 'Performance Monitor', screenshot: './screenshots/Screenshot 2026-02-12 200109.png', category: 'advanced' },
-    { id: 'analytics', title: 'Search Analytics', screenshot: './screenshots/Screenshot 2026-02-12 200121.png', category: 'advanced' },
-    { id: 'highlighting', title: 'Match Highlighting', screenshot: './screenshots/Screenshot 2026-02-12 195843.png', category: 'core' },
-    { id: 'settings', title: '35+ Settings', screenshot: './screenshots/Screenshot 2026-02-12 200431.png', category: 'advanced' },
-    { id: 'omnibox', title: 'Omnibox Search', screenshot: './screenshots/Screenshot 2026-02-12 195717.png', category: 'core' },
+    { id: 'search-speed',  title: 'Lightning Search',      screenshot: "./screenshots/Samvada Studio popup in action with keywords 'git smruti'Screenshot 2026-02-12 200635.png",                                                                                          category: 'core' },
+    { id: 'deep-search',   title: 'Deep Search Scoring',   screenshot: './screenshots/Samvada Studio Settings Search Tab Screenshot 2026-03-02 205823.png',                                                                                                                   category: 'core' },
+    { id: 'keyboard',      title: 'Keyboard Shortcuts',    screenshot: './screenshots/Samvada Studio quick search popup Screenshot 2026-02-03 000836.png',                                                                                                                    category: 'core' },
+    { id: 'overlay',       title: 'Quick-Search Overlay',  screenshot: "./screenshots/Samvada Studio quick serach in action with keywords 'smruti git' Screenshot 2026-02-12 200309.png",                                                                                    category: 'core' },
+    { id: 'display-modes', title: 'Display Modes',         screenshot: './screenshots/Samvada Studio settings page via popup html of extension in new tab Screenshot 2026-02-12 200431.png',                                                                                  category: 'core' },
+    { id: 'ai-search',     title: 'AI Search — Dual-Phase',screenshot: "./screenshots/Samvada Studio AI Search in action 'spy' keyword hihglighted results with symantic results of 'agent' via ollama Screenshot 2026-03-02 021737.png",                                   category: 'ai' },
+    { id: 'semantic',      title: 'Semantic Search',       screenshot: './screenshots/Samvada Studio Settings AI Tab Screenshot 2026-03-02 204945.png',                                                                                                                       category: 'ai' },
+    { id: 'bookmarks',     title: 'Bookmark Search',       screenshot: "./screenshots/Samvada Studio popup in action with keywords 'git smruti'Screenshot 2026-02-12 200635.png",                                                                                            category: 'ai' },
+    { id: 'privacy',       title: 'Privacy Controls',      screenshot: './screenshots/Samvada Studio Settings Privacy Tab Screenshot 2026-03-02 204959.png',                                                                                                                  category: 'privacy' },
+    { id: 'data',          title: 'Data Management',       screenshot: './screenshots/Samvada Studio Settings Data Tab Screenshot 2026-03-02 205015.png',                                                                                                                     category: 'privacy' },
+    { id: 'performance',   title: 'Performance Monitor',   screenshot: './screenshots/Samvada Studio Settings Data Tab Screenshot 2026-03-02 205015.png',                                                                                                                     category: 'advanced' },
+    { id: 'analytics',     title: 'Search Analytics',      screenshot: './screenshots/Samvada Studio Settings Advanced Tab Screenshot 2026-03-02 205030.png',                                                                                                                 category: 'advanced' },
+    { id: 'highlighting',  title: 'AI Green Highlights',   screenshot: "./screenshots/Samvada Studio AI Search in action 'spy' keyword hihglighted results with symantic results of 'agent' via ollama Screenshot 2026-03-02 021737.png",                                   category: 'core' },
+    { id: 'settings',      title: '35+ Settings',          screenshot: './screenshots/Samvada Studio Settings General Tab Screenshot 2026-03-02 204909.png',                                                                                                                  category: 'advanced' },
+    { id: 'omnibox',       title: 'Omnibox Search',        screenshot: './screenshots/Samvada Studio extension popup Screenshot 2026-02-03 000744.png',                                                                                                                       category: 'core' },
 ];
 
 (function initTourStrip() {
