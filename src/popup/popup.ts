@@ -197,6 +197,7 @@ function initializePopup() {
   let focusTimer: number | undefined;  // Delayed focus shift to results (cancelled on new typing)
   let serviceWorkerReady = false;
   let currentQuery = '';
+  let currentAIExpandedKeywords: string[] = [];
 
   // Assign global results
   results = resultsLocal;
@@ -212,20 +213,21 @@ function initializePopup() {
   }
 
   // Highlight matching parts in text (HTML-safe)
-  function highlightMatches(text: string, query: string): string {
+  function highlightMatches(text: string, query: string, aiKeywords: string[] = []): string {
     const safe = escapeHtml(text);
-    if (!query.trim() || !SettingsManager.getSetting('highlightMatches')) {
+    if (!SettingsManager.getSetting('highlightMatches')) {
       return safe;
     }
-    const tokens = simpleTokenize(query);
-    let highlighted = safe;
-    for (const token of tokens) {
-      if (token.length < 2) {continue;} // Skip very short tokens
-      const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`(${escapedToken})`, 'gi');
-      highlighted = highlighted.replace(regex, '<mark>$1</mark>');
-    }
-    return highlighted;
+    const tokens = query.trim() ? simpleTokenize(query) : [];
+    const validTokens = tokens.filter(t => t.length >= 2);
+    const originalSet = new Set(validTokens.map(t => t.toLowerCase()));
+    const aiOnlyTokens = aiKeywords.filter(t => t.length >= 2 && !originalSet.has(t.toLowerCase()));
+    const allValid = [...validTokens, ...aiOnlyTokens];
+    if (allValid.length === 0) { return safe; }
+    const pattern = allValid.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    return safe.replace(new RegExp(`(${pattern})`, 'gi'), (match) => {
+      return originalSet.has(match.toLowerCase()) ? `<mark>${match}</mark>` : `<mark class="ai">${match}</mark>`;
+    });
   }
 
   /**
@@ -377,6 +379,7 @@ function initializePopup() {
       const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
       const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
       resultsLocal = (resp && resp.results) ? resp.results : [];
+      currentAIExpandedKeywords = [];
 
       // Apply current sort setting
       const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
@@ -417,6 +420,7 @@ function initializePopup() {
       // Guard against stale responses from slower earlier queries
       if (q !== currentQuery) {return;}
       resultsLocal = (resp && resp.results) ? resp.results : [];
+      currentAIExpandedKeywords = resp?.aiStatus?.aiExpandedKeywords ?? [];
 
       // Apply current sort setting
       const sortBy = SettingsManager.getSetting('sortBy') || 'best-match';
@@ -497,7 +501,7 @@ function initializePopup() {
         title.className = 'card-title';
         // Add bookmark indicator if item is bookmarked
         const bookmarkIndicator = item.isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
-        title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
+        title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery, currentAIExpandedKeywords);
 
         details.appendChild(title);
 
@@ -511,7 +515,7 @@ function initializePopup() {
 
         const url = document.createElement('div');
         url.className = 'card-url';
-        url.innerHTML = highlightMatches(item.url, currentQuery);
+        url.innerHTML = highlightMatches(item.url, currentQuery, currentAIExpandedKeywords);
 
         details.appendChild(url);
         card.appendChild(fav);
@@ -548,7 +552,7 @@ function initializePopup() {
         title.className = 'result-title';
         // Add bookmark indicator if item is bookmarked
         const bookmarkIndicator = item.isBookmark ? '<span class="bookmark-indicator" title="Bookmarked">★</span> ' : '';
-        title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery);
+        title.innerHTML = bookmarkIndicator + highlightMatches(item.title || item.url, currentQuery, currentAIExpandedKeywords);
 
         details.appendChild(title);
 
@@ -562,7 +566,7 @@ function initializePopup() {
 
         const url = document.createElement('div');
         url.className = 'result-url';
-        url.innerHTML = highlightMatches(item.url, currentQuery);
+        url.innerHTML = highlightMatches(item.url, currentQuery, currentAIExpandedKeywords);
 
         details.appendChild(url);
         li.appendChild(fav);

@@ -199,19 +199,23 @@ export function escapeRegex(str: string): string {
 export interface TextSegment {
   text: string;
   isHighlight: boolean;
+  isHighlightAI: boolean;  // true when matched by AI-expanded keyword (not original query)
 }
 
-export function highlightText(text: string, tokens: string[]): TextSegment[] {
-  if (!text || tokens.length === 0) {
-    return [{ text, isHighlight: false }];
+export function highlightText(text: string, tokens: string[], aiTokens: string[] = []): TextSegment[] {
+  if (!text || (tokens.length === 0 && aiTokens.length === 0)) {
+    return [{ text, isHighlight: false, isHighlightAI: false }];
   }
 
-  const validTokens = tokens.filter(t => t.length >= 2);
-  if (validTokens.length === 0) {
-    return [{ text, isHighlight: false }];
+  const originalSet = new Set(tokens.filter(t => t.length >= 2).map(t => t.toLowerCase()));
+  const aiOnlyTokens = aiTokens.filter(t => t.length >= 2 && !originalSet.has(t.toLowerCase()));
+  const allValid = [...tokens.filter(t => t.length >= 2), ...aiOnlyTokens];
+
+  if (allValid.length === 0) {
+    return [{ text, isHighlight: false, isHighlightAI: false }];
   }
 
-  const pattern = validTokens.map(escapeRegex).join('|');
+  const pattern = allValid.map(escapeRegex).join('|');
   const regex = new RegExp(`(${pattern})`, 'gi');
 
   const segments: TextSegment[] = [];
@@ -219,27 +223,16 @@ export function highlightText(text: string, tokens: string[]): TextSegment[] {
   let match;
 
   while ((match = regex.exec(text)) !== null) {
-    // Add text before match
     if (match.index > lastIndex) {
-      segments.push({
-        text: text.slice(lastIndex, match.index),
-        isHighlight: false
-      });
+      segments.push({ text: text.slice(lastIndex, match.index), isHighlight: false, isHighlightAI: false });
     }
-    // Add highlighted match
-    segments.push({
-      text: match[1],
-      isHighlight: true
-    });
+    const isAI = !originalSet.has(match[1].toLowerCase());
+    segments.push({ text: match[1], isHighlight: !isAI, isHighlightAI: isAI });
     lastIndex = regex.lastIndex;
   }
 
-  // Add remaining text
   if (lastIndex < text.length) {
-    segments.push({
-      text: text.slice(lastIndex),
-      isHighlight: false
-    });
+    segments.push({ text: text.slice(lastIndex), isHighlight: false, isHighlightAI: false });
   }
 
   return segments;
@@ -252,12 +245,19 @@ export function appendHighlightedTextToDOM(
   parent: HTMLElement,
   text: string,
   tokens: string[],
-  highlightClassName: string = 'highlight'
+  highlightClassName: string = 'highlight',
+  aiTokens: string[] = [],
+  aiHighlightClassName: string = 'highlight-ai'
 ): void {
-  const segments = highlightText(text, tokens);
-  
+  const segments = highlightText(text, tokens, aiTokens);
+
   segments.forEach(segment => {
-    if (segment.isHighlight) {
+    if (segment.isHighlightAI) {
+      const span = document.createElement('span');
+      span.className = aiHighlightClassName;
+      span.textContent = segment.text;
+      parent.appendChild(span);
+    } else if (segment.isHighlight) {
       const span = document.createElement('span');
       span.className = highlightClassName;
       span.textContent = segment.text;
@@ -370,6 +370,8 @@ export interface RenderOptions {
   highlightClassName: string;
   emptyClassName: string;
   onResultClick?: (index: number, result: SearchResult, ctrlOrMeta: boolean) => void;
+  aiTokens?: string[];            // AI-expanded keywords for purple highlighting
+  aiHighlightClassName?: string;  // CSS class for AI highlights, default 'highlight-ai'
 }
 
 export function renderResults(
@@ -409,13 +411,15 @@ export function renderResults(
       titleDiv.appendChild(bookmarkIcon);
     }
     
-    appendHighlightedTextToDOM(titleDiv, result.title || result.url, tokens, options.highlightClassName);
+    const aiTokens = options.aiTokens ?? [];
+    const aiHighlightClassName = options.aiHighlightClassName ?? 'highlight-ai';
+    appendHighlightedTextToDOM(titleDiv, result.title || result.url, tokens, options.highlightClassName, aiTokens, aiHighlightClassName);
     div.appendChild(titleDiv);
 
     // URL
     const urlDiv = document.createElement('div');
     urlDiv.className = options.urlClassName;
-    appendHighlightedTextToDOM(urlDiv, truncateUrl(result.url), tokens, options.highlightClassName);
+    appendHighlightedTextToDOM(urlDiv, truncateUrl(result.url), tokens, options.highlightClassName, aiTokens, aiHighlightClassName);
     
     // Add bookmark folder path if available
     if (result.isBookmark && result.bookmarkFolders && result.bookmarkFolders.length > 0) {

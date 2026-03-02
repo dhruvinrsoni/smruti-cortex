@@ -62,14 +62,14 @@ describe('escapeRegex', () => {
 describe('highlightText', () => {
   it('should return unhighlighted text when no tokens provided', () => {
     const result = highlightText('hello world', []);
-    expect(result).toEqual([{ text: 'hello world', isHighlight: false }]);
+    expect(result).toEqual([{ text: 'hello world', isHighlight: false, isHighlightAI: false }]);
   });
 
   it('should highlight matching tokens', () => {
     const result = highlightText('hello world', ['hello']);
     expect(result).toEqual([
-      { text: 'hello', isHighlight: true },
-      { text: ' world', isHighlight: false },
+      { text: 'hello', isHighlight: true, isHighlightAI: false },
+      { text: ' world', isHighlight: false, isHighlightAI: false },
     ]);
   });
 
@@ -85,21 +85,21 @@ describe('highlightText', () => {
 
   it('should ignore tokens shorter than 2 characters', () => {
     const result = highlightText('a b c', ['a', 'b', 'c']);
-    expect(result).toEqual([{ text: 'a b c', isHighlight: false }]);
+    expect(result).toEqual([{ text: 'a b c', isHighlight: false, isHighlightAI: false }]);
   });
 
   it('should handle multiple different tokens', () => {
     const result = highlightText('hello world', ['hello', 'world']);
     expect(result).toEqual([
-      { text: 'hello', isHighlight: true },
-      { text: ' ', isHighlight: false },
-      { text: 'world', isHighlight: true },
+      { text: 'hello', isHighlight: true, isHighlightAI: false },
+      { text: ' ', isHighlight: false, isHighlightAI: false },
+      { text: 'world', isHighlight: true, isHighlightAI: false },
     ]);
   });
 
   it('should handle empty text', () => {
     const result = highlightText('', ['test']);
-    expect(result).toEqual([{ text: '', isHighlight: false }]);
+    expect(result).toEqual([{ text: '', isHighlight: false, isHighlightAI: false }]);
   });
 });
 

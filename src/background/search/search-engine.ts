@@ -30,6 +30,7 @@ export interface AISearchStatus {
     expandedCount: number;
     embeddingsGenerated: number;
     searchTimeMs: number;
+    aiExpandedKeywords: string[];  // AI-generated keywords only (excludes original query tokens)
 }
 let lastAIStatus: AISearchStatus | null = null;
 export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; }
@@ -87,6 +88,7 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
         expandedCount: 0,
         embeddingsGenerated: 0,
         searchTimeMs: 0,
+        aiExpandedKeywords: [],
     };
 
     // AI-expanded tokens (includes synonyms, related terms)
@@ -103,6 +105,8 @@ export async function runSearch(query: string): Promise<IndexedItem[]> {
                 searchTokens = expandedTokens;
                 aiExpanded = true;
                 aiStatus.expandedCount = expandedTokens.length - originalTokens.length;
+                const originalSet = new Set(originalTokens.map(t => t.toLowerCase()));
+                aiStatus.aiExpandedKeywords = expandedTokens.filter(t => !originalSet.has(t.toLowerCase()));
                 // Map expansion source to status
                 if (expansionSource === 'cache-hit') {
                     aiStatus.aiKeywords = 'cache-hit';
