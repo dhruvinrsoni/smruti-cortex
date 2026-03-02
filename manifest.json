@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SmrutiCortex: Instant Browser History Search",
   "short_name": "SmrutiCortex",
-  "description": "Ultra-fast browser history search. Find any page instantly. 100% local, privacy-first, no cloud sync.",
+  "description": "Instant browser history search. Local AI via Ollama: live synonym expansion, per-keyword cache. 100% private. Zero cloud.",
   "version": "8.0.0",
   "permissions": [
     "history",

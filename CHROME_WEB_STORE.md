@@ -31,7 +31,7 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 **SmrutiCortex**
 
 ### Short Description (132 chars max)
-Ultra-fast browser history search. Find any page instantly. 100% local, privacy-first, no cloud sync.
+Instant browser history search. Local AI via Ollama: live synonym expansion, per-keyword cache. 100% private. Zero cloud.
 
 ### Detailed Description (16,000 chars max)
 
@@ -56,7 +56,9 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 💾 **Data Management** — Storage quota monitoring, one-click rebuild
 ⌨️ **Keyboard-First** — Ctrl+Shift+S instant access, full arrow key navigation
 🎨 **Clean UI** — Minimal, distraction-free interface
-🤖 **AI Search** — Optional local keyword expansion (Ollama)
+🤖 **AI Search** — Local keyword expansion via Ollama. 100% private, zero cloud
+🔄 **Dual-Phase Search** — Keyword results appear instantly; AI synonym expansion runs in parallel. You never wait.
+🏷️ **Search Telemetry** — Every result shows how it was found: Keyword Match [LEXICAL], AI Recalled [ENGRAM], or AI Expanded [NEURAL]
 🌐 **Cross-Browser** — Works on Chrome, Edge, and Firefox
 
 **PRIVACY GUARANTEE:**
