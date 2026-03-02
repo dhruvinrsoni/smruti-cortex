@@ -75,68 +75,108 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
   // Ensure persistent cache is loaded from chrome.storage.local
   await loadCache();
 
-  // Check cache: exact match first, then prefix match
-  const cached = getCachedExpansion(normalizedQuery);
-  if (cached) {
-    logger.debug('expandQueryKeywords', `⚡ Cache hit for: "${normalizedQuery}" (${cached.length} keywords)`);
-    lastExpansionSource = 'cache-hit';
-    return cached;
-  }
-  const prefixMatch = getPrefixMatch(normalizedQuery);
-  if (prefixMatch) {
-    logger.debug('expandQueryKeywords', `⚡ Prefix cache hit for: "${normalizedQuery}" (${prefixMatch.length} keywords)`);
-    lastExpansionSource = 'prefix-hit';
-    return prefixMatch;
+  // Tokenize into individual keywords (≥2 chars for meaningful expansion)
+  const allTokens = normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+  const expandableTokens = allTokens.filter(t => t.length >= 2);
+
+  if (expandableTokens.length === 0) {
+    lastExpansionSource = 'skipped';
+    return allTokens;
   }
 
-  // GUARDRAILS: check circuit breaker, memory, and concurrency before expensive LLM call
+  // Per-keyword cache lookup: check each token individually
+  const allKeywords = new Set<string>(allTokens); // Always include all original tokens
+  const uncachedTokens: string[] = [];
+  let anyFromCache = false;
+
+  for (const token of expandableTokens) {
+    const cached = getCachedExpansion(token);
+    if (cached) {
+      cached.forEach(k => allKeywords.add(k));
+      anyFromCache = true;
+      logger.debug('expandQueryKeywords', `⚡ Cache hit for: "${token}" (${cached.length} keywords)`);
+      continue;
+    }
+
+    const prefix = getPrefixMatch(token);
+    if (prefix) {
+      prefix.forEach(k => allKeywords.add(k));
+      anyFromCache = true;
+      logger.debug('expandQueryKeywords', `⚡ Prefix cache hit for: "${token}" (${prefix.length} keywords)`);
+      continue;
+    }
+
+    uncachedTokens.push(token);
+  }
+
+  // If all keywords were cached, return immediately
+  if (uncachedTokens.length === 0) {
+    lastExpansionSource = anyFromCache ? 'cache-hit' : 'skipped';
+    return Array.from(allKeywords);
+  }
+
+  // GUARDRAILS: check circuit breaker, memory, and concurrency before expensive LLM calls
   if (isCircuitBreakerOpen()) {
     logger.warn('expandQueryKeywords', '🔴 Circuit breaker open — skipping AI expansion');
-    lastExpansionSource = 'skipped';
-    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+    lastExpansionSource = anyFromCache ? 'cache-hit' : 'skipped';
+    return Array.from(allKeywords);
   }
   if (!checkMemoryPressure().ok) {
     logger.warn('expandQueryKeywords', '🔴 Memory pressure — skipping AI expansion');
-    lastExpansionSource = 'skipped';
-    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+    lastExpansionSource = anyFromCache ? 'cache-hit' : 'skipped';
+    return Array.from(allKeywords);
   }
   if (!acquireOllamaSlot()) {
     logger.debug('expandQueryKeywords', '🔒 Ollama slot busy — skipping AI expansion');
-    lastExpansionSource = 'skipped';
-    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+    lastExpansionSource = anyFromCache ? 'cache-hit' : 'skipped';
+    return Array.from(allKeywords);
   }
 
-  // AI is enabled - call LLM for expansion
+  // AI is enabled - call LLM for each uncached keyword individually
   const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
   const model = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
   const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
-
-  // Check if we have a generation model configured
-  // Embedding-only models can't do text generation
   const generationModel = getGenerationModel(model);
 
-  logger.info('expandQueryKeywords', `🤖 Expanding keywords for: "${normalizedQuery}"`, {
+  logger.info('expandQueryKeywords', `🤖 Expanding ${uncachedTokens.length} keyword(s): [${uncachedTokens.join(', ')}]`, {
     generationModel,
-    endpoint
+    endpoint,
+    cachedCount: expandableTokens.length - uncachedTokens.length
   });
 
+  let anyOllamaCalled = false;
+
   try {
-    const expandedKeywords = await callOllamaForKeywords(endpoint, generationModel, normalizedQuery, timeout);
+    // Expand each uncached keyword individually (sequential to avoid overwhelming Ollama)
+    for (const keyword of uncachedTokens) {
+      try {
+        const expanded = await callOllamaForKeywords(endpoint, generationModel, keyword, timeout);
+        cacheExpansion(keyword, expanded); // Cache per-keyword
+        expanded.forEach(k => allKeywords.add(k));
+        anyOllamaCalled = true;
 
-    // Cache the result
-    cacheExpansion(normalizedQuery, expandedKeywords);
+        logger.info('expandQueryKeywords', `✅ Expanded "${keyword}" → ${expanded.length} keywords`, {
+          sample: expanded.slice(0, 8)
+        });
+      } catch (error) {
+        logger.warn('expandQueryKeywords', `❌ Failed to expand "${keyword}", continuing`, { error });
+        // Continue with other keywords — don't fail entire expansion
+      }
+    }
 
-    logger.info('expandQueryKeywords', `✅ Expanded "${normalizedQuery}" → ${expandedKeywords.length} keywords`, {
-      sample: expandedKeywords.slice(0, 10)
-    });
+    if (anyOllamaCalled) {
+      lastExpansionSource = 'ollama';
+    } else if (anyFromCache) {
+      lastExpansionSource = 'cache-hit';
+    } else {
+      lastExpansionSource = 'error';
+    }
 
-    lastExpansionSource = 'ollama';
-    return expandedKeywords;
+    return Array.from(allKeywords);
   } catch (error) {
-    logger.warn('expandQueryKeywords', '❌ Expansion failed, using original query', { error });
-    lastExpansionSource = 'error';
-    // Fallback to original query tokens
-    return normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+    logger.warn('expandQueryKeywords', '❌ Expansion failed, using available keywords', { error });
+    lastExpansionSource = anyFromCache ? 'cache-hit' : 'error';
+    return Array.from(allKeywords);
   } finally {
     releaseOllamaSlot();
   }
@@ -178,21 +218,12 @@ function getGenerationModel(configuredModel: string): string {
 async function callOllamaForKeywords(
   endpoint: string,
   model: string,
-  query: string,
+  keyword: string,
   timeout: number
 ): Promise<string[]> {
-  const originalTokens = query.split(/\s+/).filter(t => t.length > 0);
-
-  // Craft a MINIMAL prompt for fast, valid JSON output
-  // Key: Ask for LESS data to avoid truncation
-  const prompt = `Expand these search keywords with 5 synonyms. Output ONLY a JSON array, nothing else.
-
-Keywords: ${originalTokens.join(', ')}
-
-Example input: "war"
-Example output: ["war","battle","fight","combat","conflict","military"]
-
-Your JSON array:`;
+  // Single keyword — no hardcoded example to prevent model from copying it
+  const prompt = `List 5 synonyms or related words for: "${keyword}"
+Include "${keyword}" as the first element. Output ONLY a JSON array, nothing else:`;
 
   const requestUrl = `${endpoint}/api/generate`;
   const requestBody = {
@@ -209,7 +240,7 @@ Your JSON array:`;
   logger.debug('callOllamaForKeywords', '📡 Sending generation request', {
     url: requestUrl,
     model,
-    queryTokens: originalTokens
+    keyword
   });
 
   const controller = new AbortController();
@@ -246,7 +277,7 @@ Your JSON array:`;
     });
 
     // Parse the JSON response, handling various edge cases
-    const expandedKeywords = parseKeywordResponse(generatedText, originalTokens);
+    const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
     
     return expandedKeywords;
 
