@@ -106,7 +106,7 @@ export async function runSearch(query: string, options?: { skipAI?: boolean }): 
     if (ollamaEnabled && !options?.skipAI) {
         logger.info('runSearch', '🤖 AI keyword expansion ACTIVE');
         try {
-            const expandedTokens = await expandQueryKeywords(q);
+            const expandedTokens = await expandQueryKeywords(q, searchAbort.signal);
             const expansionSource = getLastExpansionSource();
             if (expandedTokens.length > originalTokens.length) {
                 searchTokens = expandedTokens;
