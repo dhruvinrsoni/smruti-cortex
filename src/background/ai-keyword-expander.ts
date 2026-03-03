@@ -46,7 +46,7 @@ interface KeywordExpansionResponse {
  */
 const MAX_QUERY_LENGTH = 200; // Prevent sending huge text to LLM
 
-export async function expandQueryKeywords(query: string): Promise<string[]> {
+export async function expandQueryKeywords(query: string, abortSignal?: AbortSignal): Promise<string[]> {
   const normalizedQuery = query.trim().toLowerCase();
 
   if (!normalizedQuery) {
@@ -150,7 +150,7 @@ export async function expandQueryKeywords(query: string): Promise<string[]> {
     // Expand each uncached keyword individually (sequential to avoid overwhelming Ollama)
     for (const keyword of uncachedTokens) {
       try {
-        const expanded = await callOllamaForKeywords(endpoint, generationModel, keyword, timeout);
+        const expanded = await callOllamaForKeywords(endpoint, generationModel, keyword, timeout, abortSignal);
         cacheExpansion(keyword, expanded); // Cache per-keyword
         expanded.forEach(k => allKeywords.add(k));
         anyOllamaCalled = true;
@@ -223,7 +223,8 @@ async function callOllamaForKeywords(
   endpoint: string,
   model: string,
   keyword: string,
-  timeout: number
+  timeout: number,
+  searchSignal?: AbortSignal
 ): Promise<string[]> {
   const requestUrl = `${endpoint}/api/chat`;
   const requestBody = {
@@ -254,6 +255,18 @@ async function callOllamaForKeywords(
   const controller = new AbortController();
   const hasTimeout = timeout > 0;
   const timeoutId = hasTimeout ? setTimeout(() => controller.abort(), timeout) : undefined;
+
+  // Propagate search abort signal so Ollama fetch is cancelled when the search is superseded.
+  // This releases the Ollama slot immediately, preventing the next search's embedding from
+  // failing with "Another Ollama request in progress".
+  const onSearchAbort = () => controller.abort();
+  if (searchSignal) {
+    if (searchSignal.aborted) {
+      if (hasTimeout && timeoutId) clearTimeout(timeoutId);
+      throw new Error('Search aborted before Ollama call');
+    }
+    searchSignal.addEventListener('abort', onSearchAbort, { once: true });
+  }
 
   const startTime = Date.now();
 
@@ -287,16 +300,21 @@ async function callOllamaForKeywords(
 
     // Parse the JSON response, handling various edge cases
     const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
-    
+    if (searchSignal) searchSignal.removeEventListener('abort', onSearchAbort);
+    if (hasTimeout && timeoutId) clearTimeout(timeoutId);
     return expandedKeywords;
 
   } catch (error: unknown) {
     if (hasTimeout && timeoutId) {
       clearTimeout(timeoutId);
     }
+    if (searchSignal) {
+      searchSignal.removeEventListener('abort', onSearchAbort);
+    }
 
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Timeout after ${timeout}ms - try increasing timeout or use infinite (-1)`);
+      // Could be timeout OR search abort — either way, propagate as abort so caller skips gracefully
+      throw new Error(`Aborted (timeout or search superseded)`);
     }
     throw error;
   }
