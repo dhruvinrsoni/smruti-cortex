@@ -285,17 +285,24 @@ ollama pull nomic-embed-text
               </div>
             </label>
             <label class="setting-option">
-              <input type="text" id="modal-embeddingModel" placeholder="nomic-embed-text" style="width:160px;" list="embedding-models">
-              <datalist id="embedding-models">
-                <option value="nomic-embed-text">274 MB · Best balance ★</option>
-                <option value="all-minilm">46 MB · Lightest ★</option>
-                <option value="mxbai-embed-large">670 MB · High quality ★</option>
-                <option value="snowflake-arctic-embed">669 MB · Retrieval-optimized</option>
-              </datalist>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div class="model-select-wrap" id="embed-select-wrap">
+                  <div class="model-select-trigger" id="embed-select-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-label="Embedding Model">
+                    <span class="model-select-value" id="embed-select-value">nomic-embed-text</span>
+                    <span class="model-select-arrow">▾</span>
+                  </div>
+                  <div class="model-select-dropdown" id="embed-select-dropdown" role="listbox" hidden>
+                    <input type="text" class="model-select-search" id="embed-select-search" placeholder="Search or type model…" autocomplete="off" spellcheck="false">
+                    <div class="model-select-list" id="embed-select-list"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="modal-embeddingModel" value="nomic-embed-text">
+                <button type="button" id="refresh-embed-models-btn" class="refresh-models-btn" title="Fetch embedding models from Ollama (filters by 'embed')">🔄</button>
+              </div>
               <span class="option-indicator"></span>
               <div class="option-content">
                 <strong>Embedding Model</strong>
-                <small>Dedicated model for generating text embeddings (not chat models)</small>
+                <small>Search or type any embedding model. Click 🔄 to fetch installed embedding models from Ollama.</small>
               </div>
             </label>
           </div>

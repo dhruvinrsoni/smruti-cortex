@@ -1012,10 +1012,7 @@ function initializePopup() {
       embeddingsEnabledInput.checked = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     }
 
-    const embeddingModelInput = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
-    if (embeddingModelInput) {
-      embeddingModelInput.value = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
-    }
+    initEmbedSelect(SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text');
 
     // Privacy settings
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
@@ -1190,6 +1187,142 @@ function initializePopup() {
     document.addEventListener('mousedown', (e) => {
       const wrap = document.getElementById('model-select-wrap');
       if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) {closeDropdown();}
+    });
+    /* eslint-enable @typescript-eslint/no-non-null-assertion */
+  }
+
+  // ===== SEARCHABLE EMBEDDING MODEL SELECT =====
+  const EMBED_SELECT_DEFAULTS = [
+    { value: 'nomic-embed-text',       hint: '274 MB · Best balance ★' },
+    { value: 'all-minilm',             hint: '46 MB · Lightest ★' },
+    { value: 'mxbai-embed-large',      hint: '670 MB · High quality ★' },
+    { value: 'snowflake-arctic-embed', hint: '669 MB · Retrieval-optimized' },
+  ];
+  let embedSelectOptions: Array<{ value: string; hint?: string }> = [...EMBED_SELECT_DEFAULTS];
+  let embedSelectInitialized = false;
+  let renderEmbedSelectList: ((filter?: string) => void) | null = null;
+
+  function initEmbedSelect(currentValue: string): void {
+    const valueEl = document.getElementById('embed-select-value');
+    const hiddenInput = document.getElementById('modal-embeddingModel') as HTMLInputElement | null;
+    if (valueEl) {valueEl.textContent = currentValue;}
+    if (hiddenInput) {hiddenInput.value = currentValue;}
+
+    if (embedSelectInitialized) {return;}
+    embedSelectInitialized = true;
+
+    const trigger = document.getElementById('embed-select-trigger');
+    const dropdown = document.getElementById('embed-select-dropdown');
+    const searchInput = document.getElementById('embed-select-search') as HTMLInputElement | null;
+    const listEl = document.getElementById('embed-select-list');
+    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput) {return;}
+
+    /* eslint-disable @typescript-eslint/no-non-null-assertion */
+    function renderList(filter = '') {
+      const lf = filter.toLowerCase().trim();
+      const filtered = lf
+        ? embedSelectOptions.filter(o => o.value.toLowerCase().includes(lf) || (o.hint || '').toLowerCase().includes(lf))
+        : [...embedSelectOptions];
+
+      listEl!.innerHTML = '';
+      if (filtered.length === 0 && lf) {
+        const div = document.createElement('div');
+        div.className = 'model-select-option';
+        div.textContent = `↵ Use "${filter}"`;
+        div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectEmbed(filter.trim()); });
+        listEl!.appendChild(div);
+      } else {
+        filtered.forEach((o) => {
+          const div = document.createElement('div');
+          div.className = 'model-select-option' + (o.value === hiddenInput!.value ? ' selected' : '');
+          div.dataset.value = o.value;
+          const label = document.createElement('span');
+          label.className = 'model-select-option-label';
+          label.textContent = o.value;
+          div.appendChild(label);
+          if (o.hint) {
+            const hint = document.createElement('span');
+            hint.className = 'model-select-option-hint' + (o.hint.includes('★') ? ' recommended' : '');
+            hint.textContent = o.hint;
+            div.appendChild(hint);
+          }
+          div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectEmbed(o.value); });
+          div.addEventListener('mouseenter', () => highlightEmbed(div));
+          listEl!.appendChild(div);
+        });
+      }
+    }
+
+    function highlightEmbed(activeEl?: Element | null) {
+      listEl!.querySelectorAll('.model-select-option').forEach(el => el.classList.toggle('highlighted', el === activeEl));
+    }
+
+    function getHighlightedEmbed(): HTMLElement | null {
+      return listEl!.querySelector('.model-select-option.highlighted');
+    }
+
+    function selectEmbed(value: string) {
+      valueEl!.textContent = value;
+      hiddenInput!.value = value;
+      hiddenInput!.dispatchEvent(new Event('change', { bubbles: true }));
+      closeEmbedDropdown();
+    }
+
+    function openEmbedDropdown() {
+      dropdown!.removeAttribute('hidden');
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput!.value = '';
+      renderList();
+      searchInput!.focus();
+    }
+
+    function closeEmbedDropdown() {
+      dropdown!.setAttribute('hidden', '');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    renderEmbedSelectList = renderList;
+
+    trigger.addEventListener('click', () => {
+      if (dropdown.hasAttribute('hidden')) {openEmbedDropdown();} else {closeEmbedDropdown();}
+    });
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); openEmbedDropdown(); }
+    });
+
+    searchInput.addEventListener('input', () => renderList(searchInput.value));
+    searchInput.addEventListener('keydown', (e) => {
+      const options = Array.from(listEl!.querySelectorAll('.model-select-option')) as HTMLElement[];
+      const highlighted = getHighlightedEmbed();
+      let idx = highlighted ? options.indexOf(highlighted) : -1;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        idx = Math.min(idx + 1, options.length - 1);
+        highlightEmbed(options[idx]);
+        options[idx]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        idx = Math.max(idx - 1, 0);
+        highlightEmbed(options[idx]);
+        options[idx]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlighted?.dataset.value) {
+          selectEmbed(highlighted.dataset.value);
+        } else if (searchInput.value.trim()) {
+          selectEmbed(searchInput.value.trim());
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeEmbedDropdown();
+        trigger.focus();
+      }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      const wrap = document.getElementById('embed-select-wrap');
+      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) {closeEmbedDropdown();}
     });
     /* eslint-enable @typescript-eslint/no-non-null-assertion */
   }
@@ -1560,18 +1693,9 @@ function initializePopup() {
           const data = await response.json();
           const models = data.models || [];
 
-          // Update model select + embedding datalist
-          const embeddingDatalist = document.getElementById('embedding-models');
           if (models.length > 0) {
-            // Update the custom AI model select
             modelSelectOptions = models.map((m: { name: string }) => ({ value: m.name }));
             if (renderModelSelectList) {renderModelSelectList();}
-            // Update embedding datalist (still uses native datalist)
-            if (embeddingDatalist) {
-              embeddingDatalist.innerHTML = models.map((m: { name: string }) =>
-                `<option value="${m.name}">${m.name}</option>`
-              ).join('');
-            }
             showToast(`Found ${models.length} models`);
           } else {
             showToast('No models found');
@@ -1628,13 +1752,55 @@ function initializePopup() {
       });
     }
 
-    const embeddingModelInput = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
-    if (embeddingModelInput) {
-      embeddingModelInput.addEventListener('change', async () => {
-        const val = embeddingModelInput.value.trim();
+    const embeddingModelHidden = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
+    if (embeddingModelHidden) {
+      embeddingModelHidden.addEventListener('change', async () => {
+        const val = embeddingModelHidden.value.trim();
         if (val) {
           await SettingsManager.setSetting('embeddingModel', val);
           showToast(`Embedding model set to: ${val}`);
+        }
+      });
+    }
+
+    // Refresh embedding models button - fetch embedding models from Ollama (filtered by 'embed')
+    const refreshEmbedModelsBtn = modal.querySelector('#refresh-embed-models-btn') as HTMLButtonElement;
+    if (refreshEmbedModelsBtn) {
+      refreshEmbedModelsBtn.addEventListener('click', async () => {
+        const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+        refreshEmbedModelsBtn.disabled = true;
+        refreshEmbedModelsBtn.textContent = '⏳';
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        try {
+          const response = await fetch(`${endpoint}/api/tags`, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (!response.ok) {throw new Error(`HTTP ${response.status}`);}
+
+          const data = await response.json();
+          const allModels: Array<{ name: string }> = data.models || [];
+          const embedModels = allModels.filter(m => m.name.toLowerCase().includes('embed'));
+
+          if (embedModels.length > 0) {
+            embedSelectOptions = embedModels.map(m => ({ value: m.name }));
+            if (renderEmbedSelectList) {renderEmbedSelectList();}
+            showToast(`Found ${embedModels.length} embedding model${embedModels.length > 1 ? 's' : ''}`);
+          } else if (allModels.length > 0) {
+            showToast('No embedding models found. Try: ollama pull nomic-embed-text');
+          } else {
+            showToast('No models found. Is Ollama running?');
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          const msg = error instanceof Error && error.name === 'AbortError'
+            ? 'Timed out after 5s. Is Ollama running?'
+            : 'Failed to fetch models. Is Ollama running?';
+          showToast(msg);
+        } finally {
+          refreshEmbedModelsBtn.disabled = false;
+          refreshEmbedModelsBtn.textContent = '🔄';
         }
       });
     }
