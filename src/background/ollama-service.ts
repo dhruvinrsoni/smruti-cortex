@@ -588,15 +588,21 @@ export function getOllamaService(config?: Partial<OllamaConfig>): OllamaService 
     return ollamaService;
   }
 
-  // Update existing instance if config provided (CRITICAL: allows settings changes to take effect)
+  // Update existing instance only when config actually changed (CRITICAL: allows settings changes to take effect)
   if (config) {
-    const oldTimeout = ollamaService.getConfig().timeout;
-    logger.debug('getOllamaService', '🔄 Updating existing service config', {
-      newConfig: config,
-      oldTimeout,
-      newTimeout: config.timeout
-    });
-    ollamaService.updateConfig(config);
+    const current = ollamaService.getConfig();
+    const hasChange = (Object.keys(config) as Array<keyof OllamaConfig>).some(
+      key => config[key] !== current[key]
+    );
+    if (hasChange) {
+      logger.debug('getOllamaService', '🔄 Config changed — updating service', {
+        oldTimeout: current.timeout,
+        newTimeout: config.timeout
+      });
+      ollamaService.updateConfig(config);
+    } else {
+      logger.trace('getOllamaService', 'Config unchanged, skipping update');
+    }
   } else {
     logger.trace('getOllamaService', 'Returning existing service instance (no config update)');
   }
