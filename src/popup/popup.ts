@@ -1450,7 +1450,7 @@ function initializePopup() {
       });
       if (resp?.status === 'OK') {
         countEl.textContent = `${resp.size} entries`;
-        if (sizeEl) {sizeEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;}
+        if (sizeEl) {sizeEl.textContent = `~${resp.estimatedBytes} B`;}
       }
     } catch { /* ignore */ }
   }
