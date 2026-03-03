@@ -144,8 +144,14 @@ export async function runSearch(query: string, options?: { skipAI?: boolean }): 
     const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     let queryEmbedding: number[] | undefined;
 
-    // Generate query embedding for semantic search if enabled
-    if (embeddingsEnabled) {
+    // Generate query embedding for semantic search if enabled.
+    // Skip in Phase 1 (skipAI: true) when keyword AI is also enabled — Phase 2 will run the
+    // embedding properly after keyword expansion completes. Avoids Ollama slot contention.
+    // Exception: if only semantic is enabled (no keyword AI), Phase 2 never fires, so
+    // embedding must run in Phase 1.
+    const keywordAIEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
+    const skipEmbeddingThisPhase = (options?.skipAI === true) && keywordAIEnabled;
+    if (embeddingsEnabled && !skipEmbeddingThisPhase) {
         aiStatus.semantic = 'active';
         // Check abort and circuit breaker BEFORE expensive Ollama calls
         if (searchAbort.signal.aborted) { return []; }
