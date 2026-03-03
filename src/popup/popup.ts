@@ -1051,6 +1051,12 @@ function initializePopup() {
     switchSettingsTab(activeSettingsTab);
   }
 
+  function formatBytes(bytes: number): string {
+    if (bytes >= 1_048_576) {return `${(bytes / 1_048_576).toFixed(1)} MB`;}
+    if (bytes >= 1_024)     {return `${Math.round(bytes / 1_024)} KB`;}
+    return `${bytes} B`;
+  }
+
   // ===== SEARCHABLE MODEL SELECT =====
   const MODEL_SELECT_DEFAULTS = [
     { value: 'llama3.2:1b',  hint: '1.3 GB · Fast ★' },
@@ -1409,14 +1415,14 @@ function initializePopup() {
       
       if (response?.status === 'OK') {
         countEl.textContent = `${response.count} icons`;
-        sizeEl.textContent = `${Math.round(response.totalSize / 1024)} KB`;
+        sizeEl.textContent = formatBytes(response.totalSize);
       } else {
         countEl.textContent = '-- icons';
-        sizeEl.textContent = '-- KB';
+        sizeEl.textContent = '--';
       }
     } catch (err) {
       countEl.textContent = '-- icons';
-      sizeEl.textContent = '-- KB';
+      sizeEl.textContent = '--';
     }
   }
   async function loadEmbeddingStats() {
@@ -1432,7 +1438,7 @@ function initializePopup() {
       });
       if (resp?.status === 'OK') {
         countEl.textContent = `${resp.withEmbeddings}/${resp.total} pages`;
-        if (storageEl) {storageEl.textContent = `~${Math.round(resp.estimatedBytes / 1024)} KB`;}
+        if (storageEl) {storageEl.textContent = `~${formatBytes(resp.estimatedBytes)}`;}
         if (modelEl) {modelEl.textContent = resp.embeddingModel;}
         if (barEl) {barEl.style.width = `${resp.total > 0 ? Math.round(resp.withEmbeddings / resp.total * 100) : 0}%`;}
       }
@@ -1828,7 +1834,7 @@ function initializePopup() {
             chrome.runtime.sendMessage({ type: 'CLEAR_FAVICON_CACHE' }, resolve);
           });
           if (response?.status === 'OK') {
-            showToast(`Cleared ${response.cleared} favicons, freed ${Math.round(response.freedBytes / 1024)}KB`);
+            showToast(`Cleared ${response.cleared} favicons, freed ${formatBytes(response.freedBytes)}`);
             loadFaviconCacheStats();
           } else {
             showToast('Failed to clear favicon cache');
