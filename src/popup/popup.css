@@ -1042,5 +1042,5 @@ input[type="checkbox"] {
   background: var(--bg);
 }
 .action-btn.secondary:hover { background: var(--card); }
-.action-btn.danger { color: #ef4444; }
-.action-btn.danger:hover { background: #fef2f2; border-color: #ef4444; }
+.action-btn.danger { background: var(--bg); color: #ef4444; border-color: #ef4444; }
+.action-btn.danger:hover { background: #fef2f2; }
