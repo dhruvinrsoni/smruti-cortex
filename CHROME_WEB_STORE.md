@@ -127,13 +127,11 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 **Recommended size:** 1280x800px or 640x400px
 
 **Available screenshots** (in `site/screenshots/`):
-1. **AI Search in action** — `Samvada Studio AI Search in action 'spy' keyword...` — green keyword highlights + semantic synonym results (most impressive, use first)
-2. **Popup search** — `Samvada Studio popup in action with keywords 'git smruti'...` — shows live keyword highlighting in popup
-3. **Quick search overlay** — `Samvada Studio quick serach in action with keywords 'smruti git'...` — inline overlay on a real webpage
-4. **Settings — AI Tab** — `Samvada Studio Settings AI Tab...` — Ollama config, semantic search toggle
-5. **Settings — General Tab** — `Samvada Studio Settings General Tab...` — 35+ settings, full control
-
-**Note:** Screenshot filenames still say "Samvada Studio" (old brand name). The actual UI shown is SmrutiCortex. Chrome reviews the image content, not filenames — this is fine.
+1. **AI Search — 'jira'** — `SmrutiCortex latest quick-search 'jira'...015040.png` — AI cache badge + yellow keyword + green AI-cache highlights (most impressive, use first)
+2. **Popup search — 'git smruti'** — `SmrutiCortex popup 'git smruti'...124029.png` — yellow keyword highlights, Best Match results
+3. **Quick-search overlay — 'git smruti'** — `SmrutiCortex latest quick-serach 'git smruti'...123923.png` — inline overlay with LEXICAL/NEURAL badges
+4. **Settings — AI Tab** — `SmrutiCortex Settings AI Tab enable ai search...204945.png` — Ollama config, semantic search, embeddings, AI cache
+5. **Data Tab — Health & Indexing** — `SmrutiCortex Settings Data tab Data Management...124703.png` — "● Healthy · 867 items indexed", storage bar
 
 ### Promo Images (Optional but recommended)
 - **Small tile:** 440x280px
