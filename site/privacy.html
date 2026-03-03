@@ -27,7 +27,7 @@
 </head>
 <body>
     <h1>SmrutiCortex Privacy Policy</h1>
-    <p class="update-date">Last Updated: February 3, 2026</p>
+    <p class="update-date">Last Updated: March 3, 2026</p>
 
     <div class="highlight">
         <strong>Privacy Guarantee:</strong> SmrutiCortex is a 100% local, privacy-first browser extension. All data processing happens on your device. We do not collect, transmit, or store any personal data externally.
@@ -44,6 +44,7 @@
         <li>Visit timestamps and visit counts</li>
         <li>Optional metadata (keywords, descriptions) extracted from pages you visit</li>
         <li>Optional AI embeddings (if semantic search is enabled)</li>
+        <li>Optional AI keyword expansion cache (if AI search is enabled — up to 5,000 per-keyword entries)</li>
         <li>Extension settings and preferences</li>
     </ul>
 
@@ -51,24 +52,41 @@
     <p>All data is stored exclusively in:</p>
     <ul>
         <li>Browser IndexedDB (local database on your device)</li>
-        <li>Chrome Storage Local API (settings only)</li>
+        <li>Chrome Storage Local API (settings and AI keyword expansion cache)</li>
     </ul>
     <p><strong>No cloud storage or external servers are used.</strong></p>
 
     <h2>4. Data Transmission</h2>
     <p>SmrutiCortex does NOT:</p>
     <ul>
-        <li>Send any data to external servers</li>
-        <li>Use cloud storage or sync services</li>
-        <li>Transmit browsing history anywhere</li>
-        <li>Include analytics or tracking tools</li>
-        <li>Use third-party services (except optional local AI)</li>
+        <li>Send any data to external servers or the internet</li>
+        <li>Use cloud storage or cloud sync services</li>
+        <li>Transmit your browsing history, URLs, or page titles to any external party</li>
+        <li>Include analytics, telemetry, or tracking of any kind</li>
+        <li>Connect to any internet service without explicit user action</li>
     </ul>
 
-    <h3>Optional Features:</h3>
+    <h3>Optional Features That May Involve Network Connections:</h3>
     <ul>
-        <li><strong>Favicon Loading:</strong> When enabled, fetches site icons via Google Favicon API (can be disabled in Settings)</li>
-        <li><strong>Local AI (Ollama):</strong> Requires user to install Ollama locally; no cloud AI calls are made</li>
+        <li>
+            <strong>Favicon Loading (Google Favicon API):</strong> When enabled in Settings, fetches site icons from Google's favicon service.
+            Only the domain name (e.g., <code>github.com</code>) is sent — no URLs, no page content, no personal data.
+            Disabled by default. Toggle off anytime in Settings → Privacy.
+        </li>
+        <li>
+            <strong>AI Features — Ollama (local only):</strong> All AI features in SmrutiCortex — keyword expansion and semantic search — communicate
+            <strong>exclusively</strong> with <a href="https://ollama.ai" target="_blank">Ollama</a>, an open-source AI application that the user
+            installs and runs entirely on their own device. This is not a cloud service.
+            <ul>
+                <li>Ollama runs on the user's own machine as a local process, not on any external server.</li>
+                <li>By default, SmrutiCortex connects to Ollama at <code>http://localhost:11434</code> — no internet connection is made.</li>
+                <li>SmrutiCortex sends <strong>only individual search keywords</strong> to Ollama for synonym expansion (e.g., the word "table" — not URLs, not page titles, not browsing history, not any personal data).</li>
+                <li>For semantic search, SmrutiCortex sends short page text snippets to Ollama for embedding generation — processed locally and never transmitted beyond the user's device.</li>
+                <li>The Ollama endpoint and model can be configured by the user in Settings → AI. SmrutiCortex connects only to whatever endpoint the user specifies; configuring a non-localhost endpoint is the user's own choice and responsibility.</li>
+                <li>AI features are <strong>disabled by default</strong>. Enabling them requires the user to separately install Ollama on their device.</li>
+                <li>SmrutiCortex does not install, manage, or have any control over the user's Ollama instance.</li>
+            </ul>
+        </li>
     </ul>
 
     <h2>5. Data Retention</h2>

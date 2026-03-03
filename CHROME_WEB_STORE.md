@@ -16,11 +16,11 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 
 ## 📋 Pre-Submission Checklist
 
-- [ ] Build production zip: `npm run package`
+- [ ] Build production zip: `npm run package` → `release/smruti-cortex-v8.0.0.zip`
 - [ ] Test in clean Chrome profile
-- [ ] Verify all features work
+- [ ] Verify all features work (AI search, semantic, keyword telemetry badges)
 - [ ] Check privacy compliance
-- [ ] Prepare store assets (screenshots, icons)
+- [ ] Prepare store assets (screenshots from `site/screenshots/`)
 - [ ] Review store listing content below
 
 ---
@@ -126,13 +126,14 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 ### Screenshots (Required — 1-5 images)
 **Recommended size:** 1280x800px or 640x400px
 
-**Screenshot Ideas:**
-1. **Main search interface** — Show search input with results
-2. **Fast search demo** — Animated GIF of typing and instant results
-3. **Keyboard shortcuts** — Overlay showing Ctrl+Shift+S in action
-4. **Privacy emphasis** — Visual showing local-only storage
+**Available screenshots** (in `site/screenshots/`):
+1. **AI Search in action** — `Samvada Studio AI Search in action 'spy' keyword...` — green keyword highlights + semantic synonym results (most impressive, use first)
+2. **Popup search** — `Samvada Studio popup in action with keywords 'git smruti'...` — shows live keyword highlighting in popup
+3. **Quick search overlay** — `Samvada Studio quick serach in action with keywords 'smruti git'...` — inline overlay on a real webpage
+4. **Settings — AI Tab** — `Samvada Studio Settings AI Tab...` — Ollama config, semantic search toggle
+5. **Settings — General Tab** — `Samvada Studio Settings General Tab...` — 35+ settings, full control
 
-**Tools:** Use Chrome DevTools screenshots or Snagit/Greenshot
+**Note:** Screenshot filenames still say "Samvada Studio" (old brand name). The actual UI shown is SmrutiCortex. Chrome reviews the image content, not filenames — this is fine.
 
 ### Promo Images (Optional but recommended)
 - **Small tile:** 440x280px
@@ -146,7 +147,7 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 
 **SmrutiCortex Privacy Policy**
 
-**Last Updated:** January 1, 2026
+**Last Updated:** March 3, 2026
 
 **1. Data Collection**
 
@@ -169,11 +170,13 @@ All data is stored exclusively in:
 **4. Data Transmission**
 
 SmrutiCortex does NOT:
-- Send any data to external servers
-- Use cloud storage or sync
-- Transmit browsing history anywhere
-- Include analytics or tracking
-- Use third-party services
+- Send any data to external servers or the internet
+- Use cloud storage or cloud sync
+- Transmit browsing history, URLs, or page titles anywhere
+- Include analytics, telemetry, or tracking
+- Connect to any internet service without explicit user action
+
+Optional AI features (keyword expansion, semantic search) connect **only** to Ollama — an open-source AI application the user installs and runs locally on their own device. By default this is `http://localhost:11434`. No internet connection is involved. SmrutiCortex sends only search keywords to Ollama — not URLs or history.
 
 **5. Data Retention**
 
@@ -379,7 +382,7 @@ SmrutiCortex works natively on Edge with the same package!
 
 ### SmrutiCortex Privacy Policy
 
-**Last Updated:** February 3, 2026
+**Last Updated:** March 3, 2026
 
 #### Privacy Guarantee
 
@@ -398,6 +401,7 @@ The extension stores the following data in your browser's local IndexedDB:
 - Visit timestamps and visit counts
 - Optional metadata (keywords, descriptions) extracted from pages you visit
 - Optional AI embeddings (if semantic search is enabled)
+- Optional AI keyword expansion cache (if AI search is enabled — up to 5,000 per-keyword entries)
 - Extension settings and preferences
 
 #### 3. Where Data is Stored
@@ -405,7 +409,7 @@ The extension stores the following data in your browser's local IndexedDB:
 All data is stored exclusively in:
 
 - Browser IndexedDB (local database on your device)
-- Chrome Storage Local API (settings only)
+- Chrome Storage Local API (settings and AI keyword expansion cache)
 
 **No cloud storage or external servers are used.**
 
@@ -413,16 +417,24 @@ All data is stored exclusively in:
 
 SmrutiCortex does **NOT**:
 
-- Send any data to external servers
-- Use cloud storage or sync services
-- Transmit browsing history anywhere
-- Include analytics or tracking tools
-- Use third-party services (except optional local AI)
+- Send any data to external servers or the internet
+- Use cloud storage or cloud sync services
+- Transmit your browsing history, URLs, or page titles to any external party
+- Include analytics, telemetry, or tracking of any kind
+- Connect to any internet service without explicit user action
 
-##### Optional Features:
+##### Optional Features That May Involve Network Connections:
 
-- **Favicon Loading:** When enabled, fetches site icons via Google Favicon API (can be disabled in Settings)
-- **Local AI (Ollama):** Requires user to install Ollama locally; no cloud AI calls are made
+- **Favicon Loading (Google Favicon API):** When enabled in Settings, fetches site icons from Google's favicon service. Only the domain name (e.g., `github.com`) is sent — no URLs, no page content, no personal data. Disabled by default.
+
+- **AI Features — Ollama (local only):** All AI features in SmrutiCortex — keyword expansion and semantic search — communicate **exclusively** with [Ollama](https://ollama.ai), an open-source AI application that the user installs and runs entirely on their own device. This is not a cloud service.
+  - Ollama runs on the user's own machine as a local process, not on any external server.
+  - By default, SmrutiCortex connects to Ollama at `http://localhost:11434` — no internet connection is made.
+  - SmrutiCortex sends **only individual search keywords** to Ollama for synonym expansion (e.g., the word "table" — not URLs, not page titles, not browsing history, not any personal data).
+  - For semantic search, SmrutiCortex sends short page text snippets to Ollama for embedding generation — processed locally and never transmitted beyond the user's device.
+  - The Ollama endpoint and model can be configured by the user in Settings → AI. SmrutiCortex connects only to whatever endpoint the user specifies; configuring a non-localhost endpoint is the user's own choice and responsibility.
+  - AI features are **disabled by default**. Enabling them requires the user to separately install Ollama on their device.
+  - SmrutiCortex does not install, manage, or have any control over the user's Ollama instance.
 
 #### 5. Data Retention
 
