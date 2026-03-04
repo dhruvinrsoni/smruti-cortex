@@ -23,6 +23,7 @@ import { Scorer } from '../../../core/scorer-types';
 import { Logger } from '../../../core/logger';
 import { SettingsManager } from '../../../core/settings';
 import { getOllamaService, getOllamaConfigFromSettings, isCircuitBreakerOpen, checkMemoryPressure } from '../../ollama-service';
+import { buildEmbeddingText } from '../../embedding-text';
 
 const COMPONENT = 'EmbeddingScorer';
 
@@ -102,7 +103,7 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
     // Use correct embedding model from user settings
     const config = await getOllamaConfigFromSettings(true);
     const ollamaService = getOllamaService(config);
-    const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
+    const text = buildEmbeddingText(item);
     const result = await ollamaService.generateEmbedding(text);
 
     if (result.success && result.embedding.length > 0) {
