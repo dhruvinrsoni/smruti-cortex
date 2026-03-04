@@ -386,7 +386,7 @@ const TOUR_STEPS = [
 
     TOUR_STEPS.forEach((step, i) => {
         const card = document.createElement('a');
-        card.href = `feature-tour.html#step/${i + 1}`;
+        card.href = `tour.html#step/${i + 1}`;
         card.className = 'tour-card';
         card.innerHTML = `
             <img src="${step.screenshot}" alt="${step.title}" class="tour-card-img" loading="lazy">
