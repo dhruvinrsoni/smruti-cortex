@@ -190,6 +190,7 @@ function initializePopup() {
   const resultsNode = $local('results') as HTMLUListElement;
   const resultCountNode = $local('result-count') as HTMLDivElement;
   const popupSpinner = $local('search-spinner') as HTMLDivElement | null;
+  const aiStatusBarEl = $local('ai-status-bar') as HTMLDivElement | null;
   const settingsButton = $local('settings-button') as HTMLButtonElement; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   let resultsLocal: IndexedItem[] = [];
@@ -231,6 +232,93 @@ function initializePopup() {
     return safe.replace(new RegExp(`(${pattern})`, 'gi'), (match) => {
       return originalSet.has(match.toLowerCase()) ? `<mark>${match}</mark>` : `<mark class="ai">${match}</mark>`;
     });
+  }
+
+  function renderAIStatus(aiStatus: {
+    aiKeywords?: string;
+    semantic?: string;
+    expandedCount?: number;
+    embeddingsGenerated?: number;
+    searchTimeMs?: number;
+  } | null | undefined): void {
+    if (!aiStatusBarEl) {return;}
+    aiStatusBarEl.textContent = '';
+    aiStatusBarEl.classList.remove('visible');
+    if (!aiStatus) {return;}
+
+    const badges: HTMLSpanElement[] = [];
+
+    const lexBadge = document.createElement('span');
+    lexBadge.className = 'ai-badge ai-lexical';
+    lexBadge.textContent = 'Keyword Match [LEXICAL]';
+    lexBadge.title = 'Token-indexed keyword search';
+    badges.push(lexBadge);
+
+    if (aiStatus.aiKeywords && aiStatus.aiKeywords !== 'disabled') {
+      const badge = document.createElement('span');
+      badge.className = 'ai-badge';
+      switch (aiStatus.aiKeywords) {
+        case 'expanded':
+          badge.classList.add('ai-active');
+          badge.textContent = `AI Expanded +${aiStatus.expandedCount || 0} [NEURAL]`;
+          badge.title = 'Live AI keyword expansion via Ollama';
+          break;
+        case 'cache-hit':
+          badge.classList.add('ai-cache');
+          badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
+          badge.title = 'AI synonyms recalled from cache';
+          break;
+        case 'prefix-hit':
+          badge.classList.add('ai-cache');
+          badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
+          badge.title = 'AI prefix-matched from cache';
+          break;
+        case 'error':
+          badge.classList.add('ai-error');
+          badge.textContent = 'AI Offline [OLLAMA]';
+          badge.title = 'AI expansion failed — Ollama may be warming up';
+          break;
+        case 'no-new-keywords':
+          badge.classList.add('ai-active');
+          badge.textContent = 'AI Active [NEURAL]';
+          badge.title = 'AI enabled — exact match found, no extra keywords needed';
+          break;
+      }
+      badges.push(badge);
+    }
+
+    if (aiStatus.semantic && aiStatus.semantic !== 'disabled') {
+      const badge = document.createElement('span');
+      badge.className = 'ai-badge';
+      switch (aiStatus.semantic) {
+        case 'active':
+          badge.classList.add('ai-semantic');
+          badge.textContent = aiStatus.embeddingsGenerated
+            ? `\u{1F9E0} Semantic (+${aiStatus.embeddingsGenerated} cached)`
+            : '\u{1F9E0} Semantic active';
+          break;
+        case 'error':
+          badge.classList.add('ai-error');
+          badge.textContent = '\u{1F9E0} Semantic error';
+          break;
+        case 'circuit-breaker':
+          badge.classList.add('ai-error');
+          badge.textContent = '\u{1F534} Circuit breaker open';
+          break;
+      }
+      badges.push(badge);
+    }
+
+    badges.forEach(b => aiStatusBarEl!.appendChild(b)); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+    if (aiStatus.searchTimeMs) {
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'ai-time';
+      timeSpan.textContent = `${aiStatus.searchTimeMs}ms`;
+      aiStatusBarEl.appendChild(timeSpan);
+    }
+
+    aiStatusBarEl.classList.add('visible');
   }
 
   /**
@@ -405,6 +493,7 @@ function initializePopup() {
       const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
       resultsLocal = (resp && resp.results) ? resp.results : [];
       currentAIExpandedKeywords = [];
+      renderAIStatus(null);
 
       // Apply current sort setting
       const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
@@ -457,6 +546,7 @@ function initializePopup() {
 
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();
+      renderAIStatus(resp?.aiStatus);
 
       // Loading state: Phase 1 + AI pending → keep spinner, show "AI expanding..."
       // Phase 2 response (or non-AI) → hide spinner, show final count
@@ -496,6 +586,7 @@ function initializePopup() {
       aiSearchPending = false;
       if (popupSpinner) {popupSpinner.classList.remove('active');}
       renderResults();
+      renderAIStatus(null);
     }
   }
 
