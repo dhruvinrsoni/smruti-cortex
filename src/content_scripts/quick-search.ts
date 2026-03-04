@@ -62,6 +62,26 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // Dynamic log level - fetched from settings
   let currentLogLevel = LOG_LEVEL.INFO;
 
+  // ===== STRUCTURED LOGGING =====
+  // All logs go through these helpers so they respect the dynamic log level
+  const log = {
+    error: (tag: string, ...args: unknown[]) => {
+      if (currentLogLevel >= LOG_LEVEL.ERROR) { console.error(`[SmrutiCortex:${tag}]`, ...args); }
+    },
+    warn: (tag: string, ...args: unknown[]) => {
+      if (currentLogLevel >= LOG_LEVEL.WARN) { console.warn(`[SmrutiCortex:${tag}]`, ...args); }
+    },
+    info: (tag: string, ...args: unknown[]) => {
+      if (currentLogLevel >= LOG_LEVEL.INFO) { console.info(`[SmrutiCortex:${tag}]`, ...args); }
+    },
+    debug: (tag: string, ...args: unknown[]) => {
+      if (currentLogLevel >= LOG_LEVEL.DEBUG) { console.debug(`[SmrutiCortex:${tag}]`, ...args); }
+    },
+    trace: (tag: string, ...args: unknown[]) => {
+      if (currentLogLevel >= LOG_LEVEL.TRACE) { console.debug(`[SmrutiCortex:${tag}]`, ...args); }
+    },
+  };
+
   // ===== PERFORMANCE TIMING =====
   const perfLog = (label: string, startTime?: number) => {
     if (currentLogLevel < LOG_LEVEL.DEBUG) {return;}
@@ -95,6 +115,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let spinnerEl: HTMLDivElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
+  let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
+  const SPINNER_TIMEOUT_MS = 15_000; // Hide spinner after 15s if no response
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
     try {
@@ -592,9 +614,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
         if (typeof response?.logLevel === 'number') {
           currentLogLevel = response.logLevel;
-          if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-            console.debug(`[SmrutiCortex] Log level set to ${currentLogLevel}`);
-          }
+          log.debug('logLevel', `Log level set to ${currentLogLevel}`);
         }
       });
     } catch (e) {
@@ -622,9 +642,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           // Search debounce is intentionally separate from focusDelayMs
           // focusDelayMs controls auto-focus to results, not search delay
           searchDebounceMs = DEBOUNCE_MS;
-          if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-            console.debug('[SmrutiCortex] Fetched settings, searchDebounceMs=', searchDebounceMs);
-          }
+          log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
           // Re-render results with updated display mode (popup parity)
           if (currentResults.length > 0) {
             try { renderResults(currentResults); } catch (e) { /* ignore */ }
@@ -662,7 +680,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Check extension context validity first
     if (!isExtensionContextValid()) {
-      console.warn('[SmrutiCortex] Cannot open port: extension context invalidated');
+      log.warn('port', 'Cannot open port: extension context invalidated');
       return;
     }
     
@@ -672,18 +690,28 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('Search port opened', t0);
       
       searchPort.onMessage.addListener((response) => {
+        // Handle error responses from service worker
+        if (response?.error) {
+          log.warn('port', 'Error response from service worker:', response.error);
+          aiSearchPending = false;
+          hideSpinner();
+          // Don't render error as results — just clear spinner and log it
+          // The error badge will show via aiStatus if it's an AI error
+          return;
+        }
+
         if (response?.results) {
           // Staleness guard: ignore responses for old queries
           // Compare both sides lowercased to avoid case mismatch
           const currentInputQuery = (inputEl?.value?.trim() || '').toLowerCase();
           const responseQuery = (response.query || '').toLowerCase();
           if (responseQuery && responseQuery !== currentInputQuery) {
-            perfLog(`Ignoring stale response for "${responseQuery}" (current: "${currentInputQuery}")`);
+            log.debug('port', `Ignoring stale response for "${responseQuery}" (current: "${currentInputQuery}")`);
             return;
           }
 
           const isPhase1 = response.skipAI === true;
-          perfLog(`Search results received via port (${isPhase1 ? 'Phase 1' : 'Phase 2'})`);
+          log.debug('port', `Search results received (${isPhase1 ? 'Phase 1 LEXICAL' : 'Phase 2 AI'}): ${response.results.length} results`);
 
           currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
@@ -699,10 +727,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           // - Phase 1 response + AI still pending → keep spinner, skip AI status
           // - Phase 2 response (or Phase 1 with no AI) → hide spinner, show AI status
           if (isPhase1 && aiSearchPending) {
-            // Phase 1 done, but AI search is still pending — keep spinner visible
-            perfLog('Phase 1 done, AI still pending — spinner stays');
+            log.debug('port', 'Phase 1 done, AI Phase 2 still pending — spinner stays');
           } else {
-            // Final response for this search cycle
+            log.debug('port', 'Final response — hiding spinner, rendering AI status');
             aiSearchPending = false;
             hideSpinner();
             renderAIStatus(response.aiStatus);
@@ -712,29 +739,36 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       searchPort.onDisconnect.addListener(() => {
         const lastError = chrome.runtime.lastError;
-        // Only log errors if extension context is still valid
         // bfcache navigation causes port closure - this is expected and not an error
         if (isExtensionContextValid()) {
           if (lastError) {
-            console.warn('[SmrutiCortex] Search port disconnected with error:', lastError.message);
+            log.warn('port', 'Port disconnected with error:', lastError.message);
           } else {
-            perfLog('Search port disconnected');
+            log.debug('port', 'Port disconnected (normal)');
           }
         }
+
+        // Clean up pending state — port is gone, no more responses coming
+        if (aiSearchPending) {
+          log.info('port', 'Port disconnected while AI search pending — clearing pending state');
+          aiSearchPending = false;
+          hideSpinner();
+        }
+
         searchPort = null;
         
         // If context is still valid, automatically try to reconnect after a delay
         if (isExtensionContextValid()) {
           setTimeout(() => {
             if (!searchPort && isExtensionContextValid()) {
-              perfLog('Auto-reconnecting search port');
+              log.debug('port', 'Auto-reconnecting search port');
               openSearchPort();
             }
           }, 500);
         }
       });
     } catch (e) {
-      console.warn('[SmrutiCortex] Failed to open search port:', e);
+      log.error('port', 'Failed to open search port:', (e as Error).message);
       searchPort = null;
     }
   }
@@ -916,7 +950,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     settingsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!chrome.runtime?.id) {
-        console.warn('[SmrutiCortex] Cannot open settings: extension context invalidated');
+        log.warn('settings', 'Cannot open settings: extension context invalidated');
         return;
       }
       // Open the extension popup page in a new tab
@@ -1074,16 +1108,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Debug focus issues
     inputEl.addEventListener('focus', () => {
-      if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-        console.debug('[SmrutiCortex] Input focused');
-      }
+      log.debug('focus', 'Input focused');
     });
     // Remove aggressive refocus from blur — prefer native focus behavior and Tab navigation.
     // Keep a light debug hook for visibility only.
     inputEl.addEventListener('blur', (e) => {
-      if (currentLogLevel >= LOG_LEVEL.DEBUG) {
-        console.debug('[SmrutiCortex] Input blurred (no refocus). relatedTarget:', (e as FocusEvent).relatedTarget);
-      }
+      log.debug('focus', 'Input blurred. relatedTarget:', (e as FocusEvent).relatedTarget);
     });
 
     // Append to document
@@ -1097,7 +1127,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== SHOW/HIDE =====
   function showOverlay(): void {
     const t0 = performance.now();
-    perfLog('showOverlay called');
+    log.debug('overlay', 'showOverlay called');
 
     if (!shadowHost) {
       const t1 = performance.now();
@@ -1205,6 +1235,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function hideOverlay(): void {
     if (!shadowHost || !overlayEl) {return;}
 
+    log.debug('overlay', 'Hiding overlay');
     shadowHost.classList.remove('visible');
     overlayEl.classList.remove('visible');
 
@@ -1212,6 +1243,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     aiSearchPending = false;
     hideSpinner();
     renderAIStatus(null);
+    // Clear any pending debounce timers (prevents stale searches after close)
+    if (debounceTimer) {clearTimeout(debounceTimer); debounceTimer = null;}
+    if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
 
     // Close port after a delay (in case user reopens quickly)
     // Timer is cancelled in showOverlay if user reopens
@@ -1230,10 +1264,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Early check: If extension context is already invalid, attempt recovery immediately
     if (!isExtensionContextValid()) {
-      perfLog('Extension context invalid during input - attempting silent recovery');
+      log.warn('handleInput', 'Extension context invalid — attempting recovery');
       attemptContextRecovery().then(recovered => {
         if (recovered) {
-          perfLog('Context recovered successfully');
+          log.info('handleInput', 'Context recovered successfully');
           // Continue with search after recovery
           const query = inputEl?.value?.trim() || '';
           if (query.length > 0) {
@@ -1258,6 +1292,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Determine AI state for this search cycle
     const aiEnabled = cachedSettings?.ollamaEnabled ?? false;
     aiSearchPending = aiEnabled; // Track: AI response still expected for this query
+    log.trace('handleInput', `Input changed, aiEnabled=${aiEnabled}, aiSearchPending=${aiSearchPending}`);
 
     // Show spinner immediately — covers both normal search latency and AI wait
     showSpinner();
@@ -1269,11 +1304,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const query = inputEl?.value?.trim() || '';
       if (query.length === 0) {
         // Load recent history when query is cleared
+        log.debug('handleInput', 'Query empty — loading recent history');
         aiSearchPending = false;
         hideSpinner();
         loadRecentHistory();
         return;
       }
+      log.debug('handleInput', `Phase 1 (LEXICAL) firing for "${query}"`);
       performSearch(query, true); // skipAI=true for instant results
     }, searchDebounceMs);
 
@@ -1285,6 +1322,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         aiDebounceTimer = null;
         const query = inputEl?.value?.trim() || '';
         if (query.length === 0) {
+          log.debug('handleInput', 'Phase 2 skipped — query empty');
           aiSearchPending = false;
           hideSpinner();
           return;
@@ -1298,14 +1336,37 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== LOADING SPINNER & AI STATUS =====
   function showSpinner(): void {
     if (spinnerEl) {spinnerEl.classList.add('active');}
+    log.trace('spinner', 'Spinner shown');
+    // Start safety timeout — hides spinner if no response arrives
+    clearSpinnerTimeout();
+    spinnerTimeoutTimer = window.setTimeout(() => {
+      log.warn('spinner', `Spinner timeout after ${SPINNER_TIMEOUT_MS}ms — hiding stuck spinner`);
+      aiSearchPending = false;
+      hideSpinner();
+    }, SPINNER_TIMEOUT_MS);
   }
 
   function hideSpinner(): void {
     if (spinnerEl) {spinnerEl.classList.remove('active');}
+    clearSpinnerTimeout();
+    log.trace('spinner', 'Spinner hidden');
+  }
+
+  function clearSpinnerTimeout(): void {
+    if (spinnerTimeoutTimer) {
+      clearTimeout(spinnerTimeoutTimer);
+      spinnerTimeoutTimer = null;
+    }
   }
 
   // Thin wrapper — delegates to shared renderAIStatus with this overlay's container
   function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
+    log.debug('aiStatus', 'Rendering AI status:', aiStatus ? {
+      aiKeywords: aiStatus.aiKeywords,
+      semantic: aiStatus.semantic,
+      expandedCount: aiStatus.expandedCount,
+      searchTimeMs: aiStatus.searchTimeMs,
+    } : 'cleared');
     renderAIStatusShared(aiStatusBarEl, aiStatus);
   }
 
@@ -1359,20 +1420,20 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('loadRecentHistory completed', t0);
       perfLog(`Loaded ${recentItems.length} recent items`);
     } catch (error) {
-      perfLog('loadRecentHistory error: ' + (error as Error).message);
+      log.warn('loadRecentHistory', 'Failed to load recent history:', (error as Error).message);
       currentResults = [];
       renderResults([]);
     }
   }
 
   function performSearch(query: string, skipAI: boolean = false): void {
-    const t0 = performance.now();
-    perfLog(`performSearch: "${query}"`);
+    log.debug('performSearch', `query="${query}" skipAI=${skipAI}`);
 
     // Sanitize query to prevent issues with special characters
     const sanitizedQuery = sanitizeQuery(query);
     if (!sanitizedQuery) {
       // Empty query after sanitization - load recent history (smart default results)
+      log.debug('performSearch', 'Query empty after sanitization — loading recent history');
       aiSearchPending = false;
       hideSpinner();
       renderAIStatus(null);
@@ -1386,26 +1447,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Check extension context validity first
     if (!isExtensionContextValid()) {
-      perfLog('Extension context invalid during search - attempting recovery');
+      log.warn('performSearch', 'Extension context invalid — attempting recovery');
       currentResults = [];
-      
+
       // Attempt silent recovery first
       attemptContextRecovery().then(recovered => {
         if (recovered) {
-          perfLog('Context recovered - retrying search');
+          log.info('performSearch', 'Context recovered — retrying search');
           showToast('Extension reconnected');
           // Retry the search
           performSearch(query);
         } else {
-          // Show error only after recovery attempts fail
-          console.warn('[SmrutiCortex] Cannot search: extension context invalidated after recovery attempts');
+          log.error('performSearch', 'Context recovery failed after all attempts');
           renderErrorResults(
             '🔄 Extension was updated. Please reload this page to continue searching.',
             () => window.location.reload()
           );
         }
       }).catch(() => {
-        console.warn('[SmrutiCortex] Context recovery failed');
+        log.error('performSearch', 'Context recovery threw an error');
         renderErrorResults(
           '🔄 Extension was updated. Please reload this page to continue searching.',
           () => window.location.reload()
@@ -1418,37 +1478,40 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (searchPort) {
       try {
         searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
-        perfLog('Search query sent via port', t0);
+        log.debug('performSearch', `Query sent via port: "${sanitizedQuery}" (skipAI=${skipAI})`);
         // Check for runtime errors after async operation
         if (chrome.runtime.lastError) {
-          console.warn('[SmrutiCortex] Port message error (likely bfcache):', chrome.runtime.lastError.message);
+          log.warn('performSearch', 'Port message error (likely bfcache):', chrome.runtime.lastError.message);
           searchPort = null;
           openSearchPort();
           return;
         }
       } catch (err) {
-        console.warn('[SmrutiCortex] Failed to send via port, trying to reconnect:', err);
+        log.warn('performSearch', 'Failed to send via port, reconnecting:', (err as Error).message);
         searchPort = null;
         openSearchPort();
         // Try once more with new port
         if (searchPort) {
           try {
             searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
-            perfLog('Search query sent via reconnected port', t0);
+            log.debug('performSearch', 'Query sent via reconnected port');
             // Check for runtime errors after async operation
             if (chrome.runtime.lastError) {
-              console.warn('[SmrutiCortex] Reconnected port message error:', chrome.runtime.lastError.message);
+              log.warn('performSearch', 'Reconnected port error:', chrome.runtime.lastError.message);
               searchPort = null;
             }
             return;
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            log.warn('performSearch', 'Reconnected port also failed:', (e as Error).message);
+          }
         }
         // Fall through to sendMessage fallback
       }
     }
-    
+
     // Fallback to one-shot sendMessage if no port
     if (!searchPort) {
+      log.info('performSearch', 'Using sendMessage fallback (no port)');
 
       // Attempt one-shot sendMessage and handle errors
       try {
@@ -1458,7 +1521,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (chrome.runtime.lastError) {
               aiSearchPending = false;
               hideSpinner();
-              console.warn('[SmrutiCortex] Search error:', chrome.runtime.lastError);
+              log.error('performSearch', 'sendMessage error:', chrome.runtime.lastError.message);
               currentResults = [];
               renderErrorResults(
                 'Search failed: ' + chrome.runtime.lastError.message,
@@ -1470,18 +1533,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               );
               return;
             }
+            if (response?.error) {
+              // Service worker returned an error (e.g., SyntaxError, init failure)
+              log.warn('performSearch', 'Service worker error response:', response.error);
+              aiSearchPending = false;
+              hideSpinner();
+              return;
+            }
             if (response?.results) {
               // Staleness guard: ignore responses for old queries
               // Compare both sides lowercased to avoid case mismatch
               const currentInputQuery = (inputEl?.value?.trim() || '').toLowerCase();
               const responseQuery = (response.query || '').toLowerCase();
               if (responseQuery && responseQuery !== currentInputQuery) {
-                perfLog(`Ignoring stale sendMessage response for "${responseQuery}"`);
+                log.debug('sendMessage', `Ignoring stale response for "${responseQuery}" (current: "${currentInputQuery}")`);
                 return;
               }
 
               const isPhase1 = response.skipAI === true;
-              perfLog(`Search results received via sendMessage (${isPhase1 ? 'Phase 1' : 'Phase 2'})`, t0);
+              log.debug('sendMessage', `Results received (${isPhase1 ? 'Phase 1 LEXICAL' : 'Phase 2 AI'}): ${response.results.length} results`);
 
               currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
@@ -1495,8 +1565,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
               // Loading state: same logic as port handler
               if (isPhase1 && aiSearchPending) {
-                perfLog('Phase 1 done, AI still pending — spinner stays');
+                log.debug('sendMessage', 'Phase 1 done, AI Phase 2 still pending — spinner stays');
               } else {
+                log.debug('sendMessage', 'Final response — hiding spinner, rendering AI status');
                 aiSearchPending = false;
                 hideSpinner();
                 renderAIStatus(response.aiStatus);
@@ -1507,7 +1578,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       } catch (e) {
         aiSearchPending = false;
         hideSpinner();
-        console.warn('[SmrutiCortex] Search request failed:', e);
+        log.error('performSearch', 'sendMessage threw:', (e as Error).message);
         currentResults = [];
         const errorMsg = e instanceof Error ? e.message : 'Unknown error';
         renderErrorResults(
@@ -1719,7 +1790,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           btn.disabled = false;
           btn.textContent = '❌ Failed - Try Again';
           btn.style.opacity = '1';
-          console.error('[SmrutiCortex] Reconnect failed:', err);
+          log.error('reconnect', 'Reconnect failed:', (err as Error).message);
         }
       });
       resultsEl.appendChild(btn);
@@ -2345,7 +2416,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   ): boolean {
     if (message?.type === 'OPEN_INLINE_SEARCH') {
       const t0 = performance.now();
-      console.log('SmrutiCortex: OPEN_INLINE_SEARCH message received');
+      log.info('message', 'OPEN_INLINE_SEARCH received');
       showOverlay(); // showOverlay now handles all focus attempts
       perfLog('Overlay shown via message', t0);
       sendResponse({ success: true, time: performance.now() - t0 });
@@ -2380,7 +2451,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== CLEANUP =====
   function cleanup(): void {
-    perfLog('Cleaning up quick-search resources');
+    log.debug('cleanup', 'Cleaning up quick-search resources');
     
     // Disconnect search port
     if (searchPort) {
@@ -2400,6 +2471,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     overlayFocusTimeouts.forEach(t => clearTimeout(t));
     overlayFocusTimeouts = [];
     if (hidePortCloseTimer) {clearTimeout(hidePortCloseTimer); hidePortCloseTimer = null;}
+    clearSpinnerTimeout();
     
     // Remove shadow DOM
     if (shadowHost && shadowHost.parentNode) {
@@ -2433,7 +2505,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function init(): void {
     const t0 = performance.now();
     
-    console.log('SmrutiCortex: Quick-search initializing');
+    log.info('init', 'Quick-search initializing');
     
     // Fetch log level from settings first (async, non-blocking)
     fetchLogLevel();
@@ -2459,12 +2531,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (chrome?.runtime?.onMessage) {
       try {
         chrome.runtime.onMessage.addListener(handleMessage);
-        perfLog('Message listener registered');
+        log.debug('init', 'Message listener registered');
       } catch (err) {
-        console.error('SmrutiCortex: Failed to register message listener', err);
+        log.error('init', 'Failed to register message listener:', (err as Error).message);
       }
     } else {
-      console.warn('SmrutiCortex: chrome.runtime.onMessage not available');
+      log.warn('init', 'chrome.runtime.onMessage not available');
     }
     
     // Cleanup on page unload/navigation
