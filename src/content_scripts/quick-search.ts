@@ -727,7 +727,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           // - Phase 1 response + AI still pending → keep spinner, skip AI status
           // - Phase 2 response (or Phase 1 with no AI) → hide spinner, show AI status
           if (isPhase1 && aiSearchPending) {
-            log.debug('port', 'Phase 1 done, AI Phase 2 still pending — spinner stays');
+            log.debug('port', 'Phase 1 done, AI Phase 2 still pending — showing spinner');
+            showSpinner(); // Show spinner NOW — Phase 1 results are already rendered above
           } else {
             log.debug('port', 'Final response — hiding spinner, rendering AI status');
             aiSearchPending = false;
@@ -1294,8 +1295,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     aiSearchPending = aiEnabled; // Track: AI response still expected for this query
     log.trace('handleInput', `Input changed, aiEnabled=${aiEnabled}, aiSearchPending=${aiSearchPending}`);
 
-    // Show spinner immediately — covers both normal search latency and AI wait
-    showSpinner();
+    // Don't show spinner yet — Phase 1 results render first.
+    // Spinner only appears after Phase 1 completes if AI is still pending.
     // Clear previous AI status (new search starting)
     renderAIStatus(null);
 
@@ -1441,9 +1442,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
-    // Ensure spinner is visible (handleInput already shows it, but this covers
-    // direct calls to performSearch and edge cases like context recovery retries)
-    showSpinner();
+    // Spinner is NOT shown here — it's managed by response handlers.
+    // Phase 1 results render without spinner; spinner appears only when AI is pending.
 
     // Check extension context validity first
     if (!isExtensionContextValid()) {
@@ -1565,7 +1565,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
               // Loading state: same logic as port handler
               if (isPhase1 && aiSearchPending) {
-                log.debug('sendMessage', 'Phase 1 done, AI Phase 2 still pending — spinner stays');
+                log.debug('sendMessage', 'Phase 1 done, AI Phase 2 still pending — showing spinner');
+                showSpinner(); // Show spinner NOW — Phase 1 results are already rendered above
               } else {
                 log.debug('sendMessage', 'Final response — hiding spinner, rendering AI status');
                 aiSearchPending = false;
