@@ -22,6 +22,7 @@ import { getExpandedTerms } from './query-expansion';
 import { recordSearchDebug } from '../diagnostics';
 import { getSearchCache } from './search-cache';
 import { embeddingProcessor } from '../embedding-processor';
+import { buildEmbeddingText } from '../embedding-text';
 
 // === AI SEARCH STATUS ===
 // Tracks what happened during the last search for user feedback
@@ -257,7 +258,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 if (!ollamaModule.isCircuitBreakerOpen() && ollamaModule.checkMemoryPressure().ok) {
                     const embStart = performance.now();
                     const embConfig = await ollamaModule.getOllamaConfigFromSettings(true);
-                    const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
+                    const text = buildEmbeddingText(item);
                     const embeddingResult = await ollamaModule.getOllamaService(embConfig)
                         .generateEmbedding(text, searchAbort.signal);
                     embeddingTimeSpent += performance.now() - embStart;

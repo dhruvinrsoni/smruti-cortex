@@ -165,7 +165,9 @@ export class OllamaService {
     const startTime = Date.now();
 
     // === GUARD 0: Input length validation ===
-    const MAX_EMBEDDING_TEXT_LENGTH = 8192;
+    // Conservative limit — ~2000 chars ≈ ~500 tokens, safe for models with 512-8192 token contexts.
+    // Callers should use buildEmbeddingText() which already enforces this, but this is a safety net.
+    const MAX_EMBEDDING_TEXT_LENGTH = 2000;
     if (text.length > MAX_EMBEDDING_TEXT_LENGTH) {
       text = text.substring(0, MAX_EMBEDDING_TEXT_LENGTH);
       logger.debug('generateEmbedding', `Truncated input to ${MAX_EMBEDDING_TEXT_LENGTH} chars`);
@@ -283,11 +285,29 @@ export class OllamaService {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'No error details');
-        
+
+        // === Handle 400 "context length exceeded" — input problem, NOT server failure ===
+        // Don't trip circuit breaker for input validation errors.
+        // This happens when text exceeds the model's token context window.
+        if (response.status === 400 && (errorText.includes('context length') || errorText.includes('input length'))) {
+          logger.warn('generateEmbedding',
+            `⚠️ Input too long for model context window (${text.length} chars). ` +
+            'Text was already truncated — model may have a very small context. ' +
+            'Consider using a model with larger context (e.g., nomic-embed-text:latest).');
+
+          // Graceful failure — do NOT count toward circuit breaker
+          requestSemaphore.release();
+          return {
+            embedding: [], model: this.config.model, success: false,
+            duration: Date.now() - startTime,
+            error: `Input too long for model context (${text.length} chars)`
+          };
+        }
+
         // Provide helpful error message for common issues
         const errorMsg = `Ollama API error: ${response.status} ${response.statusText}`;
         let helpText = '';
-        
+
         if (response.status === 403) {
           // CORS issue - Ollama is blocking the extension origin
           helpText = 'CORS blocked. Set OLLAMA_ORIGINS=* environment variable and restart Ollama.';
@@ -300,14 +320,14 @@ export class OllamaService {
             docker: 'docker run -e OLLAMA_ORIGINS="*" ...'
           });
         }
-        
+
         logger.debug('generateEmbedding', '❌ Ollama API returned error', {
           status: response.status,
           statusText: response.statusText,
           errorBody: errorText,
           helpText
         });
-        
+
         throw new Error(helpText ? `${errorMsg} - ${helpText}` : `${errorMsg} - ${errorText}`);
       }
 

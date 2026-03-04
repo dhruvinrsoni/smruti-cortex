@@ -7,6 +7,7 @@ import { IndexedItem } from './schema';
 import { BRAND_NAME } from '../core/constants';
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
+import { buildEmbeddingText } from './embedding-text';
 
 const logger = Logger.forComponent('Indexing');
 
@@ -32,8 +33,8 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
         const config = await getOllamaConfigFromSettings(true);
         const ollamaService = getOllamaService(config);
 
-        // Create text for embedding (title + description + url)
-        const text = `${item.title} ${item.metaDescription || ''} ${item.url}`.trim();
+        // Create clean, bounded text for embedding (strips query params, enforces limits)
+        const text = buildEmbeddingText(item);
 
         logger.debug('generateItemEmbedding', `🧠 Generating embedding for: "${item.title.substring(0, 50)}..."`);
 
