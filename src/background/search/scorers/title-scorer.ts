@@ -11,7 +11,7 @@ import {
 } from '../tokenizer';
 
 /**
- * Deep Search Title Scorer
+ * Vivek Search Title Scorer
  *
  * Graduated multi-signal title relevance scoring:
  *  1. Per-token graduated match quality (exact > prefix > substring)

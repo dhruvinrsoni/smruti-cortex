@@ -42,7 +42,7 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 **KEY FEATURES:**
 
 ⚡ **Ultra-Fast Search** — Results appear as you type (< 50ms)
-🎯 **Deep Search™ Ranking** — Graduated multi-parameter scoring (exact > prefix > substring)
+🎯 **Vivek Search Ranking** — Graduated multi-parameter scoring (exact > prefix > substring)
 🎯 **Strict Matching** — Only shows results containing your search terms (default ON, configurable)
 🎲 **Diverse Results** — Filters duplicate URLs automatically for variety (default ON, configurable)
 ⭐ **Bookmark Search** — Search bookmarks alongside history with ★ indicator (v6.0)

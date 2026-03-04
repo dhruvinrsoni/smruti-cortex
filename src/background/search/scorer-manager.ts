@@ -1,4 +1,4 @@
-// scorer-manager.ts — Deep Search scoring pipeline
+// scorer-manager.ts — Vivek Search scoring pipeline
 // Collects all scorers into a single weighted scoring pipeline with graduated match classification
 
 import { Scorer, ScorerContext } from '../../core/scorer-types';

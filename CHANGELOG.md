@@ -5,7 +5,7 @@ All notable changes to SmrutiCortex are documented here.
 ## [8.0.0] — 2026-03-01
 
 ### Search Intelligence
-- **Deep Search™ algorithm** — Graduated multi-token scoring with intent-priority ranking; exact phrase matches and multi-token intent now score significantly higher than partial matches
+- **Vivek Search algorithm** — Graduated multi-token scoring with intent-priority ranking; exact phrase matches and multi-token intent now score significantly higher than partial matches
 - **Exact keyword boost** — Exact keyword matches in title and URL receive additional score boosts for more relevant top results
 - **Smart defaults** — Popup loads your recent browsing history immediately on open, before you type anything, using a configurable `defaultResultCount` setting
 - **Recent history backend** — New `GET_RECENT_HISTORY` message handler with dedicated `lastVisit` index for fast recency queries

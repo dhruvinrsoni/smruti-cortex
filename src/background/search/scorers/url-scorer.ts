@@ -8,7 +8,7 @@ import {
 } from '../tokenizer';
 
 /**
- * Deep Search URL Scorer
+ * Vivek Search URL Scorer
  *
  * Graduated URL relevance scoring across hostname, path, and full URL.
  * Uses match classification (exact > prefix > substring) instead of binary includes().
