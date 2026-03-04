@@ -209,13 +209,15 @@ ollama pull nomic-embed-text
 ```
 
 **How it works:**
-- Generates embeddings on-demand during search (cached for speed)
+- Background processor generates embeddings for all indexed pages automatically
+- Pause/resume controls in Settings → AI → Embedding Management
 - Compares meaning using vector similarity
 - Finds conceptually related pages, not just keyword matches
+- Search always gets priority — embedding generation pauses during search
 
 **Performance:**
-- First search per page: 200-500ms (generates embedding)
-- Subsequent searches: ~50ms (uses cached embedding)
+- Background embedding: ~1-3 items/second (depends on hardware)
+- Search with cached embeddings: ~50ms
 - Storage: ~4KB per page
 
 **📖 Full guide:** See [SEMANTIC_SEARCH.md](docs/SEMANTIC_SEARCH.md)
@@ -229,11 +231,23 @@ Production-grade safety layers protect your browser — every AI feature degrade
 | **Circuit Breaker** | 3 consecutive Ollama failures → all AI pauses 60s. Auto-resets on cooldown. |
 | **Memory Guard** | Blocks AI when extension memory exceeds 512MB. |
 | **Concurrent Limiter** | 1 Ollama call at a time. Prevents resource contention. |
-| **Embedding Caps** | Max 10 embeddings per search, 5-second time budget. |
+| **Background Processor** | Systematically generates embeddings with pause/resume UI. Yields to search automatically. |
 | **Persistent Cache** | 5,000 per-keyword expansions survive restarts. Prefix matching. Gets faster with every search. |
 | **Search Telemetry** | Every result shows its source: `Keyword Match [LEXICAL]` · `AI Recalled [ENGRAM]` · `AI Expanded [NEURAL]` |
 | **Input Validation** | 200-char query limit, 8KB embedding text limit. |
 | **Graceful Degradation** | Every AI feature falls back to keyword search. Extension always works without Ollama. |
+
+#### What These Terms Mean (Plain Language)
+
+- **Circuit Breaker** — If Ollama fails 3 times in a row, SmrutiCortex stops calling it for 60 seconds to avoid wasting resources. After 60 seconds, it tries again. If the next call succeeds, everything resets to normal. This prevents the extension from endlessly hammering a broken or offline Ollama instance.
+
+- **Memory Guard** — Chrome extensions share your computer's memory. If SmrutiCortex uses more than 512MB (rare, but possible with very large histories), AI features pause automatically to keep your browser responsive. Normal search always works.
+
+- **Concurrent Limiter (Semaphore)** — Ollama processes one request at a time internally. Sending multiple requests simultaneously just wastes memory. SmrutiCortex enforces one-at-a-time to keep things fast and efficient.
+
+- **Background Embedding Processor** — When semantic search is enabled, SmrutiCortex generates embeddings for all your indexed pages in the background. You can see progress, pause, or resume from Settings → AI → Embedding Management. When you search, the processor automatically pauses to give search priority, then resumes when your search is done.
+
+- **Graceful Degradation** — If Ollama isn't running, isn't installed, or any AI feature fails, SmrutiCortex seamlessly falls back to keyword-only search. The extension always works — AI just makes it smarter when available.
 
 #### Required Models
 

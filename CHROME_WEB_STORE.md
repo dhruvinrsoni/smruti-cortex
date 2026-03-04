@@ -89,6 +89,14 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 • Esc: Clear search
 • Type "sc " in address bar for quick access
 
+**AI SAFETY (built-in protections):**
+
+• Circuit Breaker — If Ollama fails 3 times in a row, AI pauses for 60 seconds and retries automatically. Prevents wasting resources on a broken connection.
+• Memory Guard — AI features pause if extension memory exceeds 512MB, keeping your browser fast.
+• Concurrent Limiter — One AI request at a time. No resource contention.
+• Background Embedding Processor — Generates semantic embeddings in the background with pause/resume controls. Search always gets priority.
+• Graceful Degradation — If Ollama isn't running, extension falls back to keyword search seamlessly. Always works without AI.
+
 **TECHNICAL DETAILS:**
 
 • Manifest V3 (future-proof)
