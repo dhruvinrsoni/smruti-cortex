@@ -203,7 +203,7 @@ ollama pull llama3.2:1b
 ```bash
 # 1. Install Ollama + keyword expansion setup above
 # 2. Pull embedding model
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text:latest
 
 # 3. Enable in Settings → Semantic Search
 ```
@@ -290,7 +290,7 @@ Production-grade safety layers protect your browser — every AI feature degrade
 | Feature | Model | Command | Size |
 |---------|-------|---------|------|
 | AI Keyword Expansion | `llama3.2:1b` ★ | `ollama pull llama3.2:1b` | 1.3 GB |
-| Semantic Search | `nomic-embed-text` ★ | `ollama pull nomic-embed-text` | 274 MB |
+| Semantic Search | `nomic-embed-text:latest` ★ | `ollama pull nomic-embed-text:latest` | 274 MB |
 
 > **Important:** You must manually pull models before enabling features. SmrutiCortex cannot download models — Ollama manages model downloads.
 

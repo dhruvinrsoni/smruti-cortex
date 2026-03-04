@@ -77,7 +77,7 @@
         <li><strong>AI Keyword Expansion:</strong> Your search query is sent only to your local Ollama instance to generate synonyms. The query never leaves your device over the internet.</li>
         <li><strong>Semantic Search (Embeddings):</strong> Page titles and URLs are sent only to your local Ollama instance to generate vector embeddings. These embeddings are stored locally in IndexedDB. No page content or embeddings are transmitted externally.</li>
         <li><strong>No Cloud Fallback:</strong> If Ollama is not running or not installed, AI features are simply disabled. SmrutiCortex never falls back to a cloud AI service — it falls back to keyword-only search, which requires zero network access.</li>
-        <li><strong>No Model Downloads:</strong> SmrutiCortex does not download AI models. You must manually pull models using Ollama's own commands (<code>ollama pull</code>). SmrutiCortex only uses models already available on your machine.</li>
+        <li><strong>No Model Downloads:</strong> SmrutiCortex does not download AI models. You must manually pull models using Ollama's own commands (<code>ollama pull model-name:tag</code>). SmrutiCortex only uses models already available on your machine.</li>
     </ul>
 
     <h2>5. Data Retention</h2>

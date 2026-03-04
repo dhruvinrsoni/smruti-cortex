@@ -339,7 +339,7 @@ For items without cached embeddings:
 ```bash
 # 1. Install Ollama: https://ollama.ai
 # 2. Pull embedding model
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text:latest
 
 # 3. Enable in Settings → AI → Semantic Search
 ```

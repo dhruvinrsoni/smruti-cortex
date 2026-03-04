@@ -18,7 +18,7 @@ const logger = Logger.forComponent(COMPONENT);
 
 export interface OllamaConfig {
   endpoint: string;          // Default: 'http://localhost:11434'
-  model: string;             // Default: 'embeddinggemma:300m'
+  model: string;             // Default: 'nomic-embed-text:latest'
   timeout: number;           // Max time for embedding generation (ms)
   maxRetries: number;        // Retry attempts on failure
 }
@@ -50,7 +50,7 @@ export class OllamaService {
   constructor(config?: Partial<OllamaConfig>) {
     this.config = {
       endpoint: config?.endpoint || 'http://localhost:11434',
-      model: config?.model || 'embeddinggemma:300m',
+      model: config?.model || 'nomic-embed-text:latest',
       timeout: config?.timeout || 10000,    // 10s max (first request needs time for model loading)
       maxRetries: config?.maxRetries || 1
     };
@@ -566,7 +566,7 @@ export async function getOllamaConfigFromSettings(forEmbeddings = false): Promis
     // - forEmbeddings=true → use embeddingModel (nomic-embed-text, all-minilm, etc.)
     // - forEmbeddings=false → use ollamaModel (llama3.2:1b, etc. for text generation)
     const model = forEmbeddings
-      ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text')
+      ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text:latest')
       : (SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
 
     return { endpoint, model, timeout, maxRetries: 1 };
