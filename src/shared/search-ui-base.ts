@@ -473,16 +473,166 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: number | null = null;
-  
+
   return function(this: unknown, ...args: Parameters<T>): void {
     const later = () => {
       timeout = null;
       func.apply(this, args);
     };
-    
+
     if (timeout !== null) {
       clearTimeout(timeout);
     }
     timeout = window.setTimeout(later, wait);
   };
+}
+
+// =============================================================================
+// Shared HTML utilities (popup + quick-search)
+// =============================================================================
+
+/**
+ * HTML-escape a string to prevent XSS when using innerHTML.
+ */
+export function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Lowercase-split a query string into tokens.
+ */
+export function tokenizeQuery(query: string): string[] {
+  return query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+}
+
+/**
+ * Produce an HTML string with keyword highlights.
+ * normalWrap / aiWrap are called for each match; they receive the raw matched
+ * text and must return the wrapped HTML (callers choose tag + class).
+ *
+ * Example (popup):  m => `<mark>${m}</mark>`,  m => `<mark class="ai">${m}</mark>`
+ * Example (overlay): m => `<span class="highlight">${m}</span>`, ...
+ */
+export function highlightHtml(
+  text: string,
+  tokens: string[],
+  aiTokens: string[] = [],
+  normalWrap: (m: string) => string,
+  aiWrap: (m: string) => string
+): string {
+  if (!text) { return ''; }
+  const safe = escapeHtml(text);
+  const validTokens = tokens.filter(t => t.length >= 2);
+  const originalSet = new Set(validTokens.map(t => t.toLowerCase()));
+  const aiOnlyTokens = aiTokens.filter(t => t.length >= 2 && !originalSet.has(t.toLowerCase()));
+  const allValid = [...validTokens, ...aiOnlyTokens];
+  if (allValid.length === 0) { return safe; }
+  const pattern = allValid.map(t => escapeRegex(t)).join('|');
+  return safe.replace(new RegExp(`(${pattern})`, 'gi'), (match) =>
+    originalSet.has(match.toLowerCase()) ? normalWrap(match) : aiWrap(match)
+  );
+}
+
+/**
+ * AI status object returned by the search engine.
+ */
+export interface AIStatus {
+  aiKeywords?: string;
+  semantic?: string;
+  expandedCount?: number;
+  embeddingsGenerated?: number;
+  searchTimeMs?: number;
+}
+
+/**
+ * Render AI telemetry badges (LEXICAL / NEURAL / ENGRAM / OLLAMA / Semantic)
+ * into the given container element.  Pass null/undefined aiStatus to clear.
+ *
+ * Required CSS classes on the host page:
+ *   .ai-status-bar, .ai-status-bar.visible, .ai-badge,
+ *   .ai-badge.ai-active, .ai-badge.ai-cache, .ai-badge.ai-error,
+ *   .ai-badge.ai-semantic, .ai-badge.ai-lexical, .ai-time
+ */
+export function renderAIStatus(
+  container: HTMLElement | null,
+  aiStatus: AIStatus | null | undefined
+): void {
+  if (!container) { return; }
+  container.textContent = '';
+  container.classList.remove('visible');
+  if (!aiStatus) { return; }
+
+  const badges: HTMLSpanElement[] = [];
+
+  const lexBadge = document.createElement('span');
+  lexBadge.className = 'ai-badge ai-lexical';
+  lexBadge.textContent = 'Keyword Match [LEXICAL]';
+  lexBadge.title = 'Token-indexed keyword search';
+  badges.push(lexBadge);
+
+  if (aiStatus.aiKeywords && aiStatus.aiKeywords !== 'disabled') {
+    const badge = document.createElement('span');
+    badge.className = 'ai-badge';
+    switch (aiStatus.aiKeywords) {
+      case 'expanded':
+        badge.classList.add('ai-active');
+        badge.textContent = `AI Expanded +${aiStatus.expandedCount || 0} [NEURAL]`;
+        badge.title = 'Live AI keyword expansion via Ollama';
+        break;
+      case 'cache-hit':
+        badge.classList.add('ai-cache');
+        badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
+        badge.title = 'AI synonyms recalled from cache';
+        break;
+      case 'prefix-hit':
+        badge.classList.add('ai-cache');
+        badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
+        badge.title = 'AI prefix-matched from cache';
+        break;
+      case 'error':
+        badge.classList.add('ai-error');
+        badge.textContent = 'AI Offline [OLLAMA]';
+        badge.title = 'AI expansion failed — Ollama may be warming up';
+        break;
+      case 'no-new-keywords':
+        badge.classList.add('ai-active');
+        badge.textContent = 'AI Active [NEURAL]';
+        badge.title = 'AI enabled — exact match found, no extra keywords needed';
+        break;
+    }
+    badges.push(badge);
+  }
+
+  if (aiStatus.semantic && aiStatus.semantic !== 'disabled') {
+    const badge = document.createElement('span');
+    badge.className = 'ai-badge';
+    switch (aiStatus.semantic) {
+      case 'active':
+        badge.classList.add('ai-semantic');
+        badge.textContent = aiStatus.embeddingsGenerated
+          ? `\u{1F9E0} Semantic (+${aiStatus.embeddingsGenerated} cached)`
+          : '\u{1F9E0} Semantic active';
+        break;
+      case 'error':
+        badge.classList.add('ai-error');
+        badge.textContent = '\u{1F9E0} Semantic error';
+        break;
+      case 'circuit-breaker':
+        badge.classList.add('ai-error');
+        badge.textContent = '\u{1F534} Circuit breaker open';
+        break;
+    }
+    badges.push(badge);
+  }
+
+  badges.forEach(b => container.appendChild(b));
+
+  if (aiStatus.searchTimeMs) {
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'ai-time';
+    timeSpan.textContent = `${aiStatus.searchTimeMs}ms`;
+    container.appendChild(timeSpan);
+  }
+
+  container.classList.add('visible');
 }

@@ -18,13 +18,18 @@
 import {
   type SearchResult,
   type FocusableGroup,
+  type AIStatus,
   KeyboardAction,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
   handleCyclicTabNavigation,
   parseKeyboardAction,
   renderResults as renderResultsShared,
-  sortResults
+  sortResults,
+  escapeHtml,
+  tokenizeQuery,
+  highlightHtml,
+  renderAIStatus as renderAIStatusShared,
 } from '../shared/search-ui-base';
 
 import { type AppSettings, DisplayMode } from '../core/settings';
@@ -1299,101 +1304,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (spinnerEl) {spinnerEl.classList.remove('active');}
   }
 
-  function renderAIStatus(aiStatus: {
-    aiKeywords?: string;
-    semantic?: string;
-    expandedCount?: number;
-    embeddingsGenerated?: number;
-    searchTimeMs?: number;
-  } | null | undefined): void {
-    if (!aiStatusBarEl) {return;}
-
-    // Clear previous content
-    aiStatusBarEl.textContent = '';
-    aiStatusBarEl.classList.remove('visible');
-
-    if (!aiStatus) {return;}
-
-    const badges: HTMLSpanElement[] = [];
-
-    // Always shown — signals token-indexed keyword search is active
-    const lexBadge = document.createElement('span');
-    lexBadge.className = 'ai-badge ai-lexical';
-    lexBadge.textContent = 'Keyword Match [LEXICAL]';
-    lexBadge.title = 'Token-indexed keyword search';
-    badges.push(lexBadge);
-
-    // Keyword expansion status
-    if (aiStatus.aiKeywords && aiStatus.aiKeywords !== 'disabled') {
-      const badge = document.createElement('span');
-      badge.className = 'ai-badge';
-
-      switch (aiStatus.aiKeywords) {
-        case 'expanded':
-          badge.classList.add('ai-active');
-          badge.textContent = `AI Expanded +${aiStatus.expandedCount || 0} [NEURAL]`;
-          badge.title = 'Live AI keyword expansion via Ollama';
-          break;
-        case 'cache-hit':
-          badge.classList.add('ai-cache');
-          badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
-          badge.title = 'AI synonyms recalled from cache';
-          break;
-        case 'prefix-hit':
-          badge.classList.add('ai-cache');
-          badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
-          badge.title = 'AI prefix-matched from cache';
-          break;
-        case 'error':
-          badge.classList.add('ai-error');
-          badge.textContent = 'AI Offline [OLLAMA]';
-          badge.title = 'AI expansion failed — Ollama may be warming up';
-          break;
-        case 'no-new-keywords':
-          badge.classList.add('ai-active');
-          badge.textContent = 'AI Active [NEURAL]';
-          badge.title = 'AI enabled — exact match found, no extra keywords needed';
-          break;
-      }
-      badges.push(badge);
-    }
-
-    // Semantic search status
-    if (aiStatus.semantic && aiStatus.semantic !== 'disabled') {
-      const badge = document.createElement('span');
-      badge.className = 'ai-badge';
-
-      switch (aiStatus.semantic) {
-        case 'active':
-          badge.classList.add('ai-semantic');
-          badge.textContent = aiStatus.embeddingsGenerated
-            ? `\u{1F9E0} Semantic (+${aiStatus.embeddingsGenerated} cached)`
-            : '\u{1F9E0} Semantic active';
-          break;
-        case 'error':
-          badge.classList.add('ai-error');
-          badge.textContent = '\u{1F9E0} Semantic error';
-          break;
-        case 'circuit-breaker':
-          badge.classList.add('ai-error');
-          badge.textContent = '\u{1F534} Circuit breaker open';
-          break;
-      }
-      badges.push(badge);
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    badges.forEach(b => aiStatusBarEl!.appendChild(b));
-
-    // Search time
-    if (aiStatus.searchTimeMs) {
-      const timeSpan = document.createElement('span');
-      timeSpan.className = 'ai-time';
-      timeSpan.textContent = `${aiStatus.searchTimeMs}ms`;
-      aiStatusBarEl.appendChild(timeSpan);
-    }
-
-    aiStatusBarEl.classList.add('visible');
+  // Thin wrapper — delegates to shared renderAIStatus with this overlay's container
+  function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
+    renderAIStatusShared(aiStatusBarEl, aiStatus);
   }
 
   // Load recent history (smart default results when query is empty)
@@ -1613,24 +1526,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // ===== HIGHLIGHT HELPER (mirrors popup.ts highlightMatches) =====
-  function escapeHtml(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
+  // ===== HIGHLIGHT HELPER — thin wrapper over shared highlightHtml =====
   function highlightText(text: string, tokens: string[], aiTokens: string[] = []): string {
-    if (!text) { return ''; }
-    const safe = escapeHtml(text);
-    const validTokens = tokens.filter(t => t.length >= 2);
-    const originalSet = new Set(validTokens.map(t => t.toLowerCase()));
-    const aiOnlyTokens = aiTokens.filter(t => t.length >= 2 && !originalSet.has(t.toLowerCase()));
-    const allValid = [...validTokens, ...aiOnlyTokens];
-    if (allValid.length === 0) { return safe; }
-    const pattern = allValid.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    return safe.replace(new RegExp(`(${pattern})`, 'gi'), (match) => {
-      const cls = originalSet.has(match.toLowerCase()) ? 'highlight' : 'highlight-ai';
-      return `<span class="${cls}">${match}</span>`;
-    });
+    return highlightHtml(
+      text, tokens, aiTokens,
+      m => `<span class="highlight">${m}</span>`,
+      m => `<span class="highlight-ai">${m}</span>`
+    );
   }
 
   // ===== RENDER RESULTS (card + list mode, mirrors popup.ts renderResults) =====
@@ -1647,7 +1549,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     const query = inputEl?.value?.trim() || '';
-    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const tokens = tokenizeQuery(query);
     const emptyMessage = query ? 'No results found' : 'Type to search your history...';
 
     if (results.length === 0) {
