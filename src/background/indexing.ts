@@ -8,6 +8,7 @@ import { BRAND_NAME } from '../core/constants';
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { buildEmbeddingText } from './embedding-text';
+import { performanceTracker } from './performance-monitor';
 
 const logger = Logger.forComponent('Indexing');
 
@@ -285,6 +286,8 @@ async function performFullHistoryIndex(): Promise<void> {
         processingDurationMs: processingDuration,
         itemsPerSecond: Math.round((processedItems / processingDuration) * 1000)
     });
+
+    performanceTracker.recordIndexing(totalDuration, processedItems);
 }
 
 /**
@@ -363,6 +366,7 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
     if (added > 0 || updated > 0) {
         const hoursIndexed = Math.round((Date.now() - sinceTimestamp) / (1000 * 60 * 60));
         logger.info('performIncrementalHistoryIndex', `📈 Indexed ${added} new, ${updated} updated URLs (${hoursIndexed}h) in ${Math.round(totalDuration / 1000)}s`);
+        performanceTracker.recordIndexing(totalDuration, added + updated);
     }
 }
 
@@ -701,6 +705,8 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
             updated,
             total: allBookmarks.length
         });
+
+        performanceTracker.recordIndexing(duration, indexed + updated);
 
     } catch (error) {
         logger.error('performBookmarksIndex', '❌ Bookmarks indexing failed:', error);
