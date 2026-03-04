@@ -1399,6 +1399,8 @@ function initializePopup() {
     const modal = document.getElementById('settings-modal');
     if (modal) {
       modal.classList.add('hidden');
+      // Stop embedding progress polling
+      stopEmbeddingProgressPolling();
       // Re-focus search input
       const input = $('search-input') as HTMLInputElement;
       if (input) {
@@ -1448,6 +1450,108 @@ function initializePopup() {
         if (modelEl) {modelEl.textContent = resp.embeddingModel;}
         if (barEl) {barEl.style.width = `${resp.total > 0 ? Math.round(resp.withEmbeddings / resp.total * 100) : 0}%`;}
       }
+    } catch { /* ignore */ }
+  }
+
+  // === Embedding Processor Progress Polling ===
+  let embeddingProgressInterval: ReturnType<typeof setInterval> | null = null;
+
+  function startEmbeddingProgressPolling() {
+    stopEmbeddingProgressPolling();
+    updateEmbeddingProcessorUI(); // immediate
+    embeddingProgressInterval = setInterval(updateEmbeddingProcessorUI, 2000);
+  }
+
+  function stopEmbeddingProgressPolling() {
+    if (embeddingProgressInterval) {
+      clearInterval(embeddingProgressInterval);
+      embeddingProgressInterval = null;
+    }
+  }
+
+  async function updateEmbeddingProcessorUI() {
+    const statusEl = document.getElementById('embedding-processor-status');
+    const stateEl = document.getElementById('embedding-processor-state');
+    const progressEl = document.getElementById('embedding-processor-progress');
+    const speedEl = document.getElementById('embedding-processor-speed');
+    const etaEl = document.getElementById('embedding-processor-eta');
+    const barEl = document.getElementById('embedding-processor-bar');
+    const startBtn = document.getElementById('embedding-start-btn') as HTMLButtonElement | null;
+    const pauseBtn = document.getElementById('embedding-pause-btn') as HTMLButtonElement | null;
+    const resumeBtn = document.getElementById('embedding-resume-btn') as HTMLButtonElement | null;
+
+    // Only show if embeddings are enabled
+    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
+    if (!embeddingsEnabled || !statusEl) {
+      if (statusEl) { statusEl.style.display = 'none'; }
+      if (startBtn) { startBtn.style.display = 'none'; }
+      if (pauseBtn) { pauseBtn.style.display = 'none'; }
+      if (resumeBtn) { resumeBtn.style.display = 'none'; }
+      return;
+    }
+
+    try {
+      const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_PROGRESS' }, resolve);
+      });
+
+      if (resp?.status !== 'OK' || !resp.progress) { return; }
+
+      const p = resp.progress;
+      statusEl.style.display = 'block';
+
+      // State display
+      const stateLabels: Record<string, string> = {
+        idle: 'Idle',
+        running: 'Running',
+        paused: 'Paused',
+        completed: 'Completed',
+        error: 'Error',
+      };
+      if (stateEl) {
+        stateEl.textContent = stateLabels[p.state] || p.state;
+        stateEl.style.color = p.state === 'running' ? '#10b981'
+          : p.state === 'error' ? '#ef4444'
+          : p.state === 'completed' ? '#3b82f6'
+          : p.state === 'paused' ? '#f59e0b'
+          : 'inherit';
+      }
+
+      // Progress: "145/867 (17%)"
+      if (progressEl) {
+        const pct = p.total > 0 ? Math.round(p.withEmbeddings / p.total * 100) : 0;
+        progressEl.textContent = `${p.withEmbeddings}/${p.total} (${pct}%)`;
+      }
+
+      // Speed: "12 items/min"
+      if (speedEl) {
+        speedEl.textContent = p.speed > 0 ? `${p.speed} items/min` : '--';
+      }
+
+      // ETA: "~12 min"
+      if (etaEl) {
+        if (p.state === 'completed') {
+          etaEl.textContent = 'Done';
+        } else if (p.state === 'error') {
+          etaEl.textContent = p.lastError ? p.lastError.substring(0, 40) : 'Error';
+        } else {
+          etaEl.textContent = p.estimatedMinutes > 0 ? `~${p.estimatedMinutes} min` : '--';
+        }
+      }
+
+      // Progress bar
+      if (barEl) {
+        const pct = p.total > 0 ? Math.round(p.withEmbeddings / p.total * 100) : 0;
+        barEl.style.width = `${pct}%`;
+      }
+
+      // Button visibility
+      if (startBtn) { startBtn.style.display = (p.state === 'idle' || p.state === 'completed' || p.state === 'error') ? '' : 'none'; }
+      if (pauseBtn) { pauseBtn.style.display = p.state === 'running' ? '' : 'none'; }
+      if (resumeBtn) { resumeBtn.style.display = p.state === 'paused' ? '' : 'none'; }
+
+      // Also refresh the embedding stats bar
+      loadEmbeddingStats();
     } catch { /* ignore */ }
   }
 
@@ -1880,6 +1984,51 @@ function initializePopup() {
         embeddingClearBtn.textContent = '🗑️ Clear Embeddings';
       });
     }
+
+    // Embedding processor controls — Start / Pause / Resume
+    const embStartBtn = modal.querySelector('#embedding-start-btn') as HTMLButtonElement;
+    const embPauseBtn = modal.querySelector('#embedding-pause-btn') as HTMLButtonElement;
+    const embResumeBtn = modal.querySelector('#embedding-resume-btn') as HTMLButtonElement;
+
+    if (embStartBtn) {
+      embStartBtn.addEventListener('click', async () => {
+        embStartBtn.disabled = true;
+        try {
+          await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            chrome.runtime.sendMessage({ type: 'START_EMBEDDING_PROCESSOR' }, resolve);
+          });
+          updateEmbeddingProcessorUI();
+        } catch { /* ignore */ }
+        embStartBtn.disabled = false;
+      });
+    }
+    if (embPauseBtn) {
+      embPauseBtn.addEventListener('click', async () => {
+        embPauseBtn.disabled = true;
+        try {
+          await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            chrome.runtime.sendMessage({ type: 'PAUSE_EMBEDDING_PROCESSOR' }, resolve);
+          });
+          updateEmbeddingProcessorUI();
+        } catch { /* ignore */ }
+        embPauseBtn.disabled = false;
+      });
+    }
+    if (embResumeBtn) {
+      embResumeBtn.addEventListener('click', async () => {
+        embResumeBtn.disabled = true;
+        try {
+          await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            chrome.runtime.sendMessage({ type: 'RESUME_EMBEDDING_PROCESSOR' }, resolve);
+          });
+          updateEmbeddingProcessorUI();
+        } catch { /* ignore */ }
+        embResumeBtn.disabled = false;
+      });
+    }
+
+    // Start polling for embedding processor progress
+    startEmbeddingProgressPolling();
 
     // AI keyword cache - load stats and handle clear
     loadAICacheStats();

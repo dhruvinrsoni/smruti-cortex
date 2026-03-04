@@ -333,7 +333,24 @@ ollama pull nomic-embed-text
               <div class="ai-admin-bar" id="embedding-admin-bar" style="width: 0%"></div>
             </div>
           </div>
-          <div class="setting-actions" style="gap:8px;display:flex;margin-top:8px;">
+          <div class="embedding-processor-status" id="embedding-processor-status" style="display:none; margin-top:8px;">
+            <div class="ai-admin-info">
+              <span id="embedding-processor-state" style="font-weight:600;">Idle</span>
+              <span class="ai-admin-sep">&bull;</span>
+              <span id="embedding-processor-progress">0/0</span>
+              <span class="ai-admin-sep">&bull;</span>
+              <span id="embedding-processor-speed">--</span>
+              <span class="ai-admin-sep">&bull;</span>
+              <span id="embedding-processor-eta">--</span>
+            </div>
+            <div class="ai-admin-bar-container">
+              <div class="ai-admin-bar" id="embedding-processor-bar" style="width:0%; background: var(--accent-color, #10b981);"></div>
+            </div>
+          </div>
+          <div class="setting-actions" style="gap:8px;display:flex;margin-top:8px;flex-wrap:wrap;">
+            <button class="action-btn secondary" id="embedding-start-btn" title="Start generating embeddings for all pages">&#x25B6; Generate All</button>
+            <button class="action-btn secondary" id="embedding-pause-btn" title="Pause embedding generation" style="display:none;">&#x23F8; Pause</button>
+            <button class="action-btn secondary" id="embedding-resume-btn" title="Resume embedding generation" style="display:none;">&#x25B6; Resume</button>
             <button class="action-btn secondary" id="embedding-refresh-stats" title="Refresh embedding statistics">📊 Refresh</button>
             <button class="action-btn danger" id="embedding-clear-all" title="Remove all embeddings (pages kept, embeddings regenerate on next search)">🗑️ Clear Embeddings</button>
           </div>

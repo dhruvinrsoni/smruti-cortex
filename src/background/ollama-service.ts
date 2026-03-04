@@ -216,6 +216,7 @@ export class OllamaService {
     // Quick availability check
     const status = await this.checkAvailability();
     if (!status.available) {
+      requestSemaphore.release();
       logger.info('generateEmbedding', `❌ Cannot generate embedding: ${status.error || 'Ollama not available'}`);
       return {
         embedding: [],

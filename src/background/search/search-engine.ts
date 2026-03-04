@@ -21,6 +21,7 @@ import { performanceTracker } from '../performance-monitor';
 import { getExpandedTerms } from './query-expansion';
 import { recordSearchDebug } from '../diagnostics';
 import { getSearchCache } from './search-cache';
+import { embeddingProcessor } from '../embedding-processor';
 
 // === AI SEARCH STATUS ===
 // Tracks what happened during the last search for user feedback
@@ -40,6 +41,17 @@ export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; 
 let activeSearchAbort: AbortController | null = null;
 
 export async function runSearch(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
+    // Signal to embedding processor: search is active → yield Ollama slot
+    embeddingProcessor.setSearchActive(true);
+
+    try {
+        return await runSearchInner(query, options);
+    } finally {
+        embeddingProcessor.setSearchActive(false);
+    }
+}
+
+async function runSearchInner(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
     // Cancel any in-flight search (prevents concurrent embedding generation storms)
     if (activeSearchAbort) {
         activeSearchAbort.abort();
