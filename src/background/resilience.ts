@@ -76,7 +76,8 @@ export async function checkHealth(): Promise<HealthStatus> {
     };
 
     lastHealthStatus = status;
-    
+    performanceTracker.recordHealthCheck();
+
     if (status.isHealthy) {
         logger.debug('checkHealth', '✅ Health check passed', { indexedItems });
     } else {

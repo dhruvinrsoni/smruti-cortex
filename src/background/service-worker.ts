@@ -693,6 +693,11 @@ async function init() {
     initializationPromise = (async () => {
         const initStartTime = performance.now();
         logger.info('init', '[SmrutiCortex] Init function called');
+
+        // Track service worker restart for performance monitor
+        const { performanceTracker } = await import('./performance-monitor');
+        performanceTracker.recordRestart();
+
         try {
             logger.debug('init', 'Initializing service worker…');
 
