@@ -38,6 +38,15 @@
     .hints{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
     mark{background-color:#fef3c7;color:#92400e;padding:0 1px;border-radius:2px;font-weight:500}
     mark.ai{background-color:#dcfce7;color:#14532d;padding:0 1px;border-radius:2px;font-weight:500}
+    .ai-status-bar{display:none;flex-wrap:wrap;gap:4px;align-items:center;min-height:20px}
+    .ai-status-bar.visible{display:flex}
+    .ai-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.02em}
+    .ai-badge.ai-active{background:rgba(16,185,129,.15);color:#10b981}
+    .ai-badge.ai-cache{background:rgba(59,130,246,.15);color:#3b82f6}
+    .ai-badge.ai-error{background:rgba(239,68,68,.15);color:#ef4444}
+    .ai-badge.ai-semantic{background:rgba(139,92,246,.15);color:#8b5cf6}
+    .ai-badge.ai-lexical{background:rgba(100,116,139,.12);color:#64748b;letter-spacing:.04em}
+    .ai-time{font-size:10px;color:var(--muted);margin-left:4px}
   </style>
   <link rel="stylesheet" href="popup.css" />
 </head>
@@ -73,6 +82,7 @@
         <div class="search-spinner" id="search-spinner"></div>
         <div id="result-count" class="result-count" aria-live="polite"></div>
       </div>
+      <div id="ai-status-bar" class="ai-status-bar" aria-live="polite"></div>
       <ul id="results" class="results" role="listbox"></ul>
     </main>
 
