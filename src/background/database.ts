@@ -235,6 +235,71 @@ export async function clearIndexedDB(): Promise<void> {
 }
 
 // -------------------------------------------------------------------
+// Embedding-specific queries (cursor-based for memory efficiency)
+// -------------------------------------------------------------------
+
+/**
+ * Count items with and without embeddings using a lightweight cursor scan.
+ * Avoids loading full embedding arrays into memory.
+ */
+export async function countItemsWithoutEmbeddings(): Promise<{ total: number; withoutEmbeddings: number }> {
+    const db = dbInstance || await openDatabase();
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readonly');
+        const store = txn.objectStore(STORE_NAME);
+        const request = store.openCursor();
+
+        let total = 0;
+        let withoutEmbeddings = 0;
+
+        request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            if (cursor) {
+                total++;
+                const item = cursor.value as IndexedItem;
+                if (!item.embedding || item.embedding.length === 0) {
+                    withoutEmbeddings++;
+                }
+                cursor.continue();
+            } else {
+                resolve({ total, withoutEmbeddings });
+            }
+        };
+
+        request.onerror = () => reject(request.error);
+    });
+}
+
+/**
+ * Get a batch of items that lack embeddings.
+ * Returns full IndexedItem (needed to save back with the generated embedding).
+ */
+export async function getItemsWithoutEmbeddingsBatch(batchSize: number): Promise<IndexedItem[]> {
+    const db = dbInstance || await openDatabase();
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readonly');
+        const store = txn.objectStore(STORE_NAME);
+        const request = store.openCursor();
+        const results: IndexedItem[] = [];
+
+        request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            if (cursor && results.length < batchSize) {
+                const item = cursor.value as IndexedItem;
+                if (!item.embedding || item.embedding.length === 0) {
+                    results.push(item);
+                }
+                cursor.continue();
+            } else {
+                resolve(results);
+            }
+        };
+
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// -------------------------------------------------------------------
 // chrome.storage.local for settings (universal across all browsers)
 // -------------------------------------------------------------------
 export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {

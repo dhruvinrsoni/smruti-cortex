@@ -209,13 +209,17 @@ setupPortBasedMessaging();
             logger.info('onMessage', '[SmrutiCortex] Log level set to', Logger.getLevel());
             sendResponse({ status: 'ok' });
             break;
-          case 'SETTINGS_CHANGED':
+          case 'SETTINGS_CHANGED': {
             logger.debug('onMessage', 'Handling SETTINGS_CHANGED:', msg.settings);
 
             // Use applyRemoteSettings — updates cache + storage but does NOT
             // re-broadcast. This breaks the infinite ping-pong loop between
             // popup ↔ service worker that was causing 2.7GB+ memory leaks.
             if (msg.settings) {
+              // Track old values before applying
+              const wasEmbeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
+              const oldEmbeddingModel = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+
               await SettingsManager.applyRemoteSettings(msg.settings);
               logger.debug('onMessage', 'SettingsManager cache updated (no re-broadcast)');
 
@@ -224,9 +228,26 @@ setupPortBasedMessaging();
               const { clearSearchCache } = await import('./search/search-cache');
               clearSearchCache();
               logger.debug('onMessage', 'Search cache cleared after settings change');
+
+              // Manage embedding processor based on setting changes
+              const nowEmbeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
+              const nowEmbeddingModel = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+              const { embeddingProcessor } = await import('./embedding-processor');
+
+              if (!wasEmbeddingsEnabled && nowEmbeddingsEnabled) {
+                logger.info('onMessage', '🧠 Embeddings enabled — starting background processor');
+                embeddingProcessor.start();
+              } else if (wasEmbeddingsEnabled && !nowEmbeddingsEnabled) {
+                logger.info('onMessage', '🧠 Embeddings disabled — stopping background processor');
+                embeddingProcessor.stop();
+              } else if (nowEmbeddingsEnabled && oldEmbeddingModel !== nowEmbeddingModel) {
+                logger.info('onMessage', `🧠 Embedding model changed (${oldEmbeddingModel} → ${nowEmbeddingModel}) — stopping processor`);
+                embeddingProcessor.stop();
+              }
             }
             sendResponse({ status: 'ok' });
             break;
+          }
           case 'POPUP_PERF_LOG':
             // Log popup performance timing info
             logger.info('onMessage', `[PopupPerf] ${msg.stage} | ts=${msg.timestamp} | elapsedMs=${msg.elapsedMs}`);
@@ -522,6 +543,10 @@ setupPortBasedMessaging();
               case 'CLEAR_ALL_EMBEDDINGS': {
                 logger.info('onMessage', '🧠 CLEAR_ALL_EMBEDDINGS requested');
                 try {
+                  // Stop the background processor first
+                  const { embeddingProcessor } = await import('./embedding-processor');
+                  embeddingProcessor.stop();
+
                   const { getAllIndexedItems, saveIndexedItem } = await import('./database');
                   const items = await getAllIndexedItems();
                   let cleared = 0;
@@ -536,6 +561,56 @@ setupPortBasedMessaging();
                   sendResponse({ status: 'OK', cleared });
                 } catch (error) {
                   logger.error('onMessage', 'CLEAR_ALL_EMBEDDINGS failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              // === EMBEDDING PROCESSOR CONTROLS ===
+              case 'START_EMBEDDING_PROCESSOR': {
+                logger.info('onMessage', '🧠 START_EMBEDDING_PROCESSOR requested');
+                try {
+                  const { embeddingProcessor } = await import('./embedding-processor');
+                  await embeddingProcessor.start();
+                  sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
+                } catch (error) {
+                  logger.error('onMessage', 'START_EMBEDDING_PROCESSOR failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'PAUSE_EMBEDDING_PROCESSOR': {
+                logger.info('onMessage', '⏸ PAUSE_EMBEDDING_PROCESSOR requested');
+                try {
+                  const { embeddingProcessor } = await import('./embedding-processor');
+                  embeddingProcessor.pause();
+                  sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
+                } catch (error) {
+                  logger.error('onMessage', 'PAUSE_EMBEDDING_PROCESSOR failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'RESUME_EMBEDDING_PROCESSOR': {
+                logger.info('onMessage', '▶ RESUME_EMBEDDING_PROCESSOR requested');
+                try {
+                  const { embeddingProcessor } = await import('./embedding-processor');
+                  embeddingProcessor.resume();
+                  sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
+                } catch (error) {
+                  logger.error('onMessage', 'RESUME_EMBEDDING_PROCESSOR failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_EMBEDDING_PROGRESS': {
+                try {
+                  const { embeddingProcessor } = await import('./embedding-processor');
+                  sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
+                } catch (error) {
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -687,6 +762,17 @@ async function init() {
                         await ollamaService.warmup();
                     } catch (error) {
                         logger.debug('init', '⚠️ Model warmup failed (non-critical):', error);
+                    }
+                }
+
+                // Auto-start background embedding processor if semantic search is enabled
+                if (embeddingsEnabled) {
+                    logger.info('init', '🧠 Starting background embedding processor...');
+                    try {
+                        const { embeddingProcessor } = await import('./embedding-processor');
+                        await embeddingProcessor.start();
+                    } catch (error) {
+                        logger.debug('init', '⚠️ Embedding processor auto-start failed (non-critical):', error);
                     }
                 }
             }).catch(() => {/* ignore */});
