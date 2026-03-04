@@ -219,7 +219,7 @@
 ollama pull llama3.2:1b
 
 # Semantic search (embeddings):
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text:latest
 
 # Enable CORS (required):
 # Windows: setx OLLAMA_ORIGINS "*"
@@ -298,7 +298,7 @@ ollama pull nomic-embed-text
               <div style="display:flex; gap:8px; align-items:center;">
                 <div class="model-select-wrap" id="embed-select-wrap">
                   <div class="model-select-trigger" id="embed-select-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-label="Embedding Model">
-                    <span class="model-select-value" id="embed-select-value">nomic-embed-text</span>
+                    <span class="model-select-value" id="embed-select-value">nomic-embed-text:latest</span>
                     <span class="model-select-arrow">▾</span>
                   </div>
                   <div class="model-select-dropdown" id="embed-select-dropdown" role="listbox" hidden>
@@ -306,7 +306,7 @@ ollama pull nomic-embed-text
                     <div class="model-select-list" id="embed-select-list"></div>
                   </div>
                 </div>
-                <input type="hidden" id="modal-embeddingModel" value="nomic-embed-text">
+                <input type="hidden" id="modal-embeddingModel" value="nomic-embed-text:latest">
                 <button type="button" id="refresh-embed-models-btn" class="refresh-models-btn" title="Fetch embedding models from Ollama (filters by 'embed')">🔄</button>
               </div>
               <span class="option-indicator"></span>
