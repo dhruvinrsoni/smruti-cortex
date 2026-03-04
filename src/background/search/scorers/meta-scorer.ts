@@ -2,7 +2,7 @@ import { Scorer } from '../../../core/scorer-types';
 import { tokenize, graduatedMatchScore } from '../tokenizer';
 
 /**
- * Deep Search Meta Scorer
+ * Vivek Search Meta Scorer
  *
  * Graduated scoring against page meta description and keywords.
  * Uses match classification (exact > prefix > substring).

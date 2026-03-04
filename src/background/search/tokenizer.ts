@@ -1,5 +1,5 @@
-// tokenizer.ts — Deep Search tokenizer with graduated match classification
-// Part of SmrutiCortex Deep Search™ algorithm
+// tokenizer.ts — Vivek Search tokenizer with graduated match classification
+// Part of SmrutiCortex Vivek Search algorithm
 
 export function tokenize(text: string): string[] {
     return text
@@ -9,7 +9,7 @@ export function tokenize(text: string): string[] {
         .filter(Boolean);
 }
 
-// ─── Deep Search Match Classification ───────────────────────────────────────
+// ─── Vivek Search Match Classification ───────────────────────────────────────
 // Graduated match types, ordered from strongest to weakest signal:
 //   EXACT    (1.0) — Token matches at word boundaries: "rar" in "RAR-My-All"
 //   PREFIX   (0.75) — Token matches the start of a word: "iss" in "Issue"

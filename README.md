@@ -40,7 +40,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 |---------|-------------|
 | ⚡ **Instant Search** | Results < 50ms as you type |
 | ⌨️ **Keyboard-First** | `Ctrl+Shift+S` global shortcut |
-| 🎯 **Deep Search™** | Graduated multi-parameter ranking (exact > prefix > substring) |
+| 🎯 **Vivek Search** | Graduated multi-parameter ranking (exact > prefix > substring) |
 | 🎯 **Strict Matching** | Only show results containing your search terms (default) |
 | 🎲 **Diverse Results** | Filters duplicate URLs for variety (default ON) |
 | ⭐ **Bookmark Search** | Index and search bookmarks with ★ indicator |
@@ -99,7 +99,7 @@ npm run build
 **Quick Access:**
 - Type `sc ` in address bar + query
 
-**Search Quality Controls (Deep Search™):**
+**Search Quality Controls (Vivek Search):**
 - **Graduated Match Classification**: Exact keyword > prefix > substring matching (not binary)
   - `rar my iss` finds "[RAR-My-All] Issue Navigator" because "rar" and "my" are exact, "iss" is a prefix of "Issue"
 - **9-Scorer Pipeline**: Title, URL, recency, frequency, cross-dimensional, meta, domain familiarity, multi-token, AI embedding
@@ -109,7 +109,7 @@ npm run build
   - Toggle OFF: Settings → "Show duplicate URLs"
 - **Literal Substring Boost**: Results with exact query string get 50% score boost
 - **Phrase Matching**: Consecutive token detection rewards query terms appearing together
-- See [Deep Search Algorithm docs](docs/DEEP_SEARCH_ALGORITHM.md) for full details
+- See [Vivek Search Algorithm docs](docs/VIVEK_SEARCH_ALGORITHM.md) for full details
 
 ---
 

@@ -9,8 +9,8 @@ const TOUR_STEPS = [
         category: 'core'
     },
     {
-        id: 'deep-search',
-        title: 'Deep Search Scoring',
+        id: 'vivek-search',
+        title: 'Vivek Search Scoring',
         subtitle: '9-scorer ranking algorithm: recency, frequency, substring match, multi-token coverage, and more. Highlighted matches show exactly why each result ranked.',
         screenshot: './screenshots/Screenshot 2026-02-12 200309.png',
         highlight: { x: '3%', y: '20%', w: '94%', h: '55%' },

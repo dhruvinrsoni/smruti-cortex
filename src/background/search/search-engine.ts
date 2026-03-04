@@ -1,4 +1,4 @@
-// search-engine.ts — SmrutiCortex Deep Search™ Engine
+// search-engine.ts — SmrutiCortex Vivek Search Engine
 
 import { getAllIndexedItems } from '../database';
 import { getAllScorers } from './scorer-manager';
@@ -361,14 +361,14 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
         }
 
-        // ─── Deep Search Post-Score Boosters ────────────────────────────
+        // ─── Vivek Search Post-Score Boosters ────────────────────────────
         // Boost score for literal substring matches (exact query found)
         if (hasLiteralMatch && score > 0) {
             score *= 1.5; // 50% boost for exact literal matches
         }
 
         // Graduated match quality boost for original tokens against title
-        // Replaces the old binary exact-keyword multiplier with Deep Search classification
+        // Replaces the old binary exact-keyword multiplier with Vivek Search classification
         if (score > 0 && originalTokens.length > 0) {
             const titleMatchTypes = classifyTokenMatches(originalTokens, titleText);
 

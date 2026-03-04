@@ -5,7 +5,7 @@ Release tag: v2.2.0
 
 Overview
 --------
-- **Deep Search™ algorithm** — Complete overhaul of the search ranking engine with graduated match classification, replacing binary substring matching with a 4-tier quality system.
+- **Vivek Search algorithm** — Complete overhaul of the search ranking engine with graduated match classification, replacing binary substring matching with a 4-tier quality system.
 - Primary goals: dramatically better ranking for partial and multi-word queries, production-grade search quality.
 
 Highlights
@@ -26,8 +26,8 @@ Highlights
 - **Position-aware Scoring** — Tokens matching earlier in the title score higher.
 - **Phrase Matching** — Consecutive token detection rewards query terms appearing together in the text.
 - **New Tokenizer Utilities** — `classifyMatch()`, `classifyTokenMatches()`, `graduatedMatchScore()`, `matchPosition()`, `countConsecutiveMatches()` — exported for all scorers and future extensions.
-- **Deep Search™ Documentation** — Comprehensive algorithm documentation at `docs/DEEP_SEARCH_ALGORITHM.md` with collapsible sections, formulas, examples, and future roadmap.
-- **Branding** — "Deep Search™" added to popup subtitle, README feature table, and Chrome Web Store listing.
+- **Vivek Search Documentation** — Comprehensive algorithm documentation at `docs/VIVEK_SEARCH_ALGORITHM.md` with collapsible sections, formulas, examples, and future roadmap.
+- **Branding** — "Vivek Search" added to popup subtitle, README feature table, and Chrome Web Store listing.
 
 Bug Fixes & Improvements
 ------------------------
