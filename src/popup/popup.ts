@@ -528,14 +528,17 @@ function initializePopup() {
 
         const fav = document.createElement('img');
         fav.className = 'card-favicon';
-        try {
-          if (loadFavicons) {
-            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=32`;
-          } else {
-            fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
-          }
-        } catch {
-          fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        const cardFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        fav.src = cardFavFallback;
+        fav.onerror = () => { fav.src = cardFavFallback; };
+        if (loadFavicons) {
+          try {
+            const hostname = new URL(item.url).hostname;
+            chrome.runtime.sendMessage({ type: 'GET_FAVICON', hostname }, (resp) => {
+              if (chrome.runtime.lastError) { return; }
+              if (resp?.dataUrl) { fav.src = resp.dataUrl; }
+            });
+          } catch { /* ignore */ }
         }
 
         const details = document.createElement('div');
@@ -579,14 +582,17 @@ function initializePopup() {
 
         const fav = document.createElement('img');
         fav.className = 'favicon';
-        try {
-          if (loadFavicons) {
-            fav.src = `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=16`;
-          } else {
-            fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
-          }
-        } catch {
-          fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        const listFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        fav.src = listFavFallback;
+        fav.onerror = () => { fav.src = listFavFallback; };
+        if (loadFavicons) {
+          try {
+            const hostname = new URL(item.url).hostname;
+            chrome.runtime.sendMessage({ type: 'GET_FAVICON', hostname }, (resp) => {
+              if (chrome.runtime.lastError) { return; }
+              if (resp?.dataUrl) { fav.src = resp.dataUrl; }
+            });
+          } catch { /* ignore */ }
         }
 
         const details = document.createElement('div');
