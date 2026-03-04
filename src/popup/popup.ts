@@ -11,13 +11,18 @@ import { IndexedItem } from '../background/schema';
 import {
   type SearchResult,
   type FocusableGroup,
+  type AIStatus,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
   handleCyclicTabNavigation,
   openUrl,
   parseKeyboardAction, // eslint-disable-line @typescript-eslint/no-unused-vars
   KeyboardAction, // eslint-disable-line @typescript-eslint/no-unused-vars
-  sortResults
+  sortResults,
+  escapeHtml,
+  tokenizeQuery,
+  highlightHtml,
+  renderAIStatus as renderAIStatusShared,
 } from '../shared/search-ui-base';
 
 // Lazy-loaded imports for non-critical features
@@ -206,119 +211,23 @@ function initializePopup() {
   // Assign global results
   results = resultsLocal;
 
-  // Simple inline tokenizer for highlighting (avoids heavy import)
-  function simpleTokenize(query: string): string[] {
-    return query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
-  }
-
-  // HTML-escape to prevent XSS when using innerHTML
-  function escapeHtml(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  // Highlight matching parts in text (HTML-safe)
+  // Highlight matching parts in text (HTML-safe, uses shared core logic)
   function highlightMatches(text: string, query: string, aiKeywords: string[] = []): string {
-    const safe = escapeHtml(text);
     if (!SettingsManager.getSetting('highlightMatches')) {
-      return safe;
+      return escapeHtml(text);
     }
-    const tokens = query.trim() ? simpleTokenize(query) : [];
-    const validTokens = tokens.filter(t => t.length >= 2);
-    const originalSet = new Set(validTokens.map(t => t.toLowerCase()));
-    const aiOnlyTokens = aiKeywords.filter(t => t.length >= 2 && !originalSet.has(t.toLowerCase()));
-    const allValid = [...validTokens, ...aiOnlyTokens];
-    if (allValid.length === 0) { return safe; }
-    const pattern = allValid.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    return safe.replace(new RegExp(`(${pattern})`, 'gi'), (match) => {
-      return originalSet.has(match.toLowerCase()) ? `<mark>${match}</mark>` : `<mark class="ai">${match}</mark>`;
-    });
+    return highlightHtml(
+      text,
+      query.trim() ? tokenizeQuery(query) : [],
+      aiKeywords,
+      m => `<mark>${m}</mark>`,
+      m => `<mark class="ai">${m}</mark>`
+    );
   }
 
-  function renderAIStatus(aiStatus: {
-    aiKeywords?: string;
-    semantic?: string;
-    expandedCount?: number;
-    embeddingsGenerated?: number;
-    searchTimeMs?: number;
-  } | null | undefined): void {
-    if (!aiStatusBarEl) {return;}
-    aiStatusBarEl.textContent = '';
-    aiStatusBarEl.classList.remove('visible');
-    if (!aiStatus) {return;}
-
-    const badges: HTMLSpanElement[] = [];
-
-    const lexBadge = document.createElement('span');
-    lexBadge.className = 'ai-badge ai-lexical';
-    lexBadge.textContent = 'Keyword Match [LEXICAL]';
-    lexBadge.title = 'Token-indexed keyword search';
-    badges.push(lexBadge);
-
-    if (aiStatus.aiKeywords && aiStatus.aiKeywords !== 'disabled') {
-      const badge = document.createElement('span');
-      badge.className = 'ai-badge';
-      switch (aiStatus.aiKeywords) {
-        case 'expanded':
-          badge.classList.add('ai-active');
-          badge.textContent = `AI Expanded +${aiStatus.expandedCount || 0} [NEURAL]`;
-          badge.title = 'Live AI keyword expansion via Ollama';
-          break;
-        case 'cache-hit':
-          badge.classList.add('ai-cache');
-          badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
-          badge.title = 'AI synonyms recalled from cache';
-          break;
-        case 'prefix-hit':
-          badge.classList.add('ai-cache');
-          badge.textContent = `AI Recalled +${aiStatus.expandedCount || 0} [ENGRAM]`;
-          badge.title = 'AI prefix-matched from cache';
-          break;
-        case 'error':
-          badge.classList.add('ai-error');
-          badge.textContent = 'AI Offline [OLLAMA]';
-          badge.title = 'AI expansion failed — Ollama may be warming up';
-          break;
-        case 'no-new-keywords':
-          badge.classList.add('ai-active');
-          badge.textContent = 'AI Active [NEURAL]';
-          badge.title = 'AI enabled — exact match found, no extra keywords needed';
-          break;
-      }
-      badges.push(badge);
-    }
-
-    if (aiStatus.semantic && aiStatus.semantic !== 'disabled') {
-      const badge = document.createElement('span');
-      badge.className = 'ai-badge';
-      switch (aiStatus.semantic) {
-        case 'active':
-          badge.classList.add('ai-semantic');
-          badge.textContent = aiStatus.embeddingsGenerated
-            ? `\u{1F9E0} Semantic (+${aiStatus.embeddingsGenerated} cached)`
-            : '\u{1F9E0} Semantic active';
-          break;
-        case 'error':
-          badge.classList.add('ai-error');
-          badge.textContent = '\u{1F9E0} Semantic error';
-          break;
-        case 'circuit-breaker':
-          badge.classList.add('ai-error');
-          badge.textContent = '\u{1F534} Circuit breaker open';
-          break;
-      }
-      badges.push(badge);
-    }
-
-    badges.forEach(b => aiStatusBarEl!.appendChild(b)); // eslint-disable-line @typescript-eslint/no-non-null-assertion
-
-    if (aiStatus.searchTimeMs) {
-      const timeSpan = document.createElement('span');
-      timeSpan.className = 'ai-time';
-      timeSpan.textContent = `${aiStatus.searchTimeMs}ms`;
-      aiStatusBarEl.appendChild(timeSpan);
-    }
-
-    aiStatusBarEl.classList.add('visible');
+  // Thin wrapper — delegates to shared renderAIStatus with this popup's container
+  function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
+    renderAIStatusShared(aiStatusBarEl, aiStatus);
   }
 
   /**
