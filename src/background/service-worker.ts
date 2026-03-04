@@ -451,6 +451,20 @@ setupPortBasedMessaging();
                 break;
               }
 
+              case 'GET_FAVICON': {
+                const hostname = msg.hostname as string;
+                logger.trace('onMessage', 'GET_FAVICON requested:', hostname);
+                try {
+                  const { getFaviconWithCache } = await import('./favicon-cache');
+                  const dataUrl = await getFaviconWithCache(hostname);
+                  sendResponse({ dataUrl });
+                } catch (error) {
+                  logger.warn('onMessage', 'GET_FAVICON failed:', error);
+                  sendResponse({ dataUrl: null });
+                }
+                break;
+              }
+
               case 'GET_HEALTH_STATUS': {
                 logger.debug('onMessage', 'GET_HEALTH_STATUS requested');
                 try {

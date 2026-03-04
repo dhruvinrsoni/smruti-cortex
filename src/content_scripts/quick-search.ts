@@ -1671,14 +1671,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
         const fav = document.createElement('img');
         fav.className = 'card-favicon';
-        try {
-          fav.src = loadFavicons
-            ? `https://www.google.com/s2/favicons?domain=${new URL(item.url).hostname}&sz=20`
-            : chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
-        } catch {
-          fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        const qsFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        fav.src = qsFavFallback;
+        fav.onerror = () => { fav.src = qsFavFallback; };
+        if (loadFavicons) {
+          try {
+            const hostname = new URL(item.url).hostname;
+            chrome.runtime.sendMessage({ type: 'GET_FAVICON', hostname }, (resp) => {
+              if (chrome.runtime.lastError) { return; }
+              if (resp?.dataUrl) { fav.src = resp.dataUrl; }
+            });
+          } catch { /* ignore */ }
         }
-        fav.onerror = () => { fav.src = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg'); };
 
         const details = document.createElement('div');
         details.className = 'card-details';
