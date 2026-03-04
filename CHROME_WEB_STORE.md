@@ -89,6 +89,22 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 • Esc: Clear search
 • Type "sc " in address bar for quick access
 
+**SEARCH STATUS BADGES (what the labels mean):**
+
+• "Keyword Match [LEXICAL]" (green) — Standard keyword search results
+• "AI Expanded +N [NEURAL]" (blue) — Live AI synonym expansion via Ollama
+• "AI Recalled +N [ENGRAM]" (yellow) — Cached AI synonyms from previous searches (instant)
+• "AI Offline [OLLAMA]" (red) — Ollama not running — keyword search still works
+• "Semantic active" (purple) — Semantic search comparing page meanings via embeddings
+• "Circuit breaker open" (red) — Too many Ollama failures, AI paused 60s then auto-retries
+
+**EMBEDDING PROCESSOR (Settings → AI → Embedding Management):**
+
+• "Running" (green) — Generating embeddings in background
+• "Paused" (yellow) — User paused, click Resume to continue
+• "Completed" (blue) — All pages embedded, semantic search at full power
+• "Idle" — Not started, click Generate All to begin
+
 **AI SAFETY (built-in protections):**
 
 • Circuit Breaker — If Ollama fails 3 times in a row, AI pauses for 60 seconds and retries automatically. Prevents wasting resources on a broken connection.

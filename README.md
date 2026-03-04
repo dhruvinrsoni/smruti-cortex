@@ -237,6 +237,42 @@ Production-grade safety layers protect your browser — every AI feature degrade
 | **Input Validation** | 200-char query limit, 8KB embedding text limit. |
 | **Graceful Degradation** | Every AI feature falls back to keyword search. Extension always works without Ollama. |
 
+#### Status Labels You'll See
+
+**Search Telemetry Badges** (appear below the search bar after each search):
+
+| Badge | Color | Meaning |
+|-------|-------|---------|
+| `Keyword Match [LEXICAL]` | 🟢 Green | Standard keyword search — results matched your typed words |
+| `AI Expanded +N [NEURAL]` | 🔵 Blue | Live AI expansion — Ollama generated N extra synonyms right now |
+| `AI Recalled +N [ENGRAM]` | 🟡 Yellow | Cached AI — N synonyms recalled from previous searches (instant, no Ollama call) |
+| `AI Active [NEURAL]` | 🔵 Blue | AI is enabled and ready, but exact match found — no extra keywords needed |
+| `AI Offline [OLLAMA]` | 🔴 Red | Ollama is not running or unreachable — keyword search still works |
+| `🧠 Semantic active` | 🟣 Purple | Semantic search is comparing page meanings via embeddings |
+| `🧠 Semantic (+N cached)` | 🟣 Purple | Semantic search active, N new embeddings were generated and cached |
+| `🧠 Semantic error` | 🔴 Red | Semantic search failed (usually Ollama issue) |
+| `🔴 Circuit breaker open` | 🔴 Red | Too many Ollama failures — AI paused for 60s cooldown (see below) |
+
+**Embedding Processor States** (visible in Settings → AI → Embedding Management):
+
+| State | Color | Meaning |
+|-------|-------|---------|
+| `Running` | 🟢 Green | Actively generating embeddings in background |
+| `Paused` | 🟡 Yellow | User paused via ⏸ button — click ▶ Resume to continue |
+| `Completed` | 🔵 Blue | All indexed pages have embeddings — semantic search is at full power |
+| `Error` | 🔴 Red | Something went wrong (details shown next to state) |
+| `Idle` | ⚪ Default | Not started — click ▶ Generate All to begin |
+
+**Console/DevTools Labels** (for developers — visible in service worker console):
+
+| Log Message | What It Means |
+|-------------|---------------|
+| `🔴 Circuit breaker TRIPPED after 3 consecutive failures` | Ollama failed 3 times in a row. All AI calls pause for 60 seconds, then auto-retry. |
+| `🟢 Circuit breaker reset` | A successful Ollama call after failures — everything back to normal. |
+| `🟡 Circuit breaker cooldown elapsed, allowing retry` | 60-second cooldown finished — SmrutiCortex will try Ollama again. |
+| `🔒 Request rejected: 1/1 slots in use` | Another Ollama request is already in progress. This one was skipped (not an error — normal queuing). |
+| `🔴 MEMORY PRESSURE: NMB used (limit: 512MB)` | Extension memory is high. AI features paused to keep browser responsive. |
+
 #### What These Terms Mean (Plain Language)
 
 - **Circuit Breaker** — If Ollama fails 3 times in a row, SmrutiCortex stops calling it for 60 seconds to avoid wasting resources. After 60 seconds, it tries again. If the next call succeeds, everything resets to normal. This prevents the extension from endlessly hammering a broken or offline Ollama instance.
