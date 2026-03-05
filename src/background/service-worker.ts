@@ -140,8 +140,16 @@ function setupPortBasedMessaging() {
           logger.debug('portMessage', `Quick-search query: "${msg.query}"`);
 
           if (!initialized) {
-            try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
-            return;
+            // SW is still starting up — wait for it rather than failing the search
+            if (initializationPromise) {
+              try { await initializationPromise; } catch {
+                try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
+                return;
+              }
+            } else {
+              try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
+              return;
+            }
           }
 
           try {
@@ -329,11 +337,19 @@ setupPortBasedMessaging();
             break;
           }
           default:
-            // For other messages, check if initialized
+            // For other messages, wait for initialization rather than failing immediately
             if (!initialized) {
-              logger.debug('onMessage', 'Service worker not initialized yet, rejecting message:', msg.type);
-              sendResponse({ error: 'Service worker not ready' });
-              break;
+              if (initializationPromise) {
+                logger.debug('onMessage', 'Service worker initializing, waiting for init before handling:', msg.type);
+                try { await initializationPromise; } catch {
+                  sendResponse({ error: 'Service worker not ready' });
+                  break;
+                }
+              } else {
+                logger.debug('onMessage', 'Service worker not initialized yet, rejecting message:', msg.type);
+                sendResponse({ error: 'Service worker not ready' });
+                break;
+              }
             }
             switch (msg.type) {
               case 'SEARCH_QUERY': {
