@@ -47,7 +47,7 @@ export function buildEmbeddingText(item: {
  * Returns empty string for non-HTTP URLs (chrome://, data:, etc.)
  */
 function cleanUrlForEmbedding(url: string): string {
-    if (!url) return '';
+    if (!url) {return '';}
 
     // Skip non-HTTP URLs — they have no semantic value for embeddings
     const lowerUrl = url.toLowerCase();

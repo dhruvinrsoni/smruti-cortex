@@ -262,7 +262,7 @@ async function callOllamaForKeywords(
   const onSearchAbort = () => controller.abort();
   if (searchSignal) {
     if (searchSignal.aborted) {
-      if (hasTimeout && timeoutId) clearTimeout(timeoutId);
+      if (hasTimeout && timeoutId) {clearTimeout(timeoutId);}
       throw new Error('Search aborted before Ollama call');
     }
     searchSignal.addEventListener('abort', onSearchAbort, { once: true });
@@ -300,8 +300,8 @@ async function callOllamaForKeywords(
 
     // Parse the JSON response, handling various edge cases
     const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
-    if (searchSignal) searchSignal.removeEventListener('abort', onSearchAbort);
-    if (hasTimeout && timeoutId) clearTimeout(timeoutId);
+    if (searchSignal) {searchSignal.removeEventListener('abort', onSearchAbort);}
+    if (hasTimeout && timeoutId) {clearTimeout(timeoutId);}
     return expandedKeywords;
 
   } catch (error: unknown) {
@@ -314,7 +314,7 @@ async function callOllamaForKeywords(
 
     if (error instanceof Error && error.name === 'AbortError') {
       // Could be timeout OR search abort — either way, propagate as abort so caller skips gracefully
-      throw new Error(`Aborted (timeout or search superseded)`);
+      throw new Error('Aborted (timeout or search superseded)');
     }
     throw error;
   }
