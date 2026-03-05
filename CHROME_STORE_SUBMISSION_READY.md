@@ -86,7 +86,7 @@ https://github.com/dhruvinrsoni/smruti-cortex/blob/main/CHROME_WEB_STORE.md#-har
 
 ## Step 5: Screenshots
 
-Use screenshots from `site/screenshots/`. Recommended order (most impressive first):
+Use screenshots from `docs/screenshots/`. Recommended order (most impressive first):
 
 1. AI Search in action — green keyword highlights + semantic synonym results
 2. Popup search with 'git smruti' keywords

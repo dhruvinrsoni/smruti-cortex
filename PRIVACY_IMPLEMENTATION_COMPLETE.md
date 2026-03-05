@@ -65,7 +65,7 @@
 
 #### Placeholders Added:
 
-**`site/script.js` (Lines 94-102):**
+**`docs/script.js` (Lines 94-102):**
 ```javascript
 // TODO_PLACEHOLDER: Update these URLs when extension is approved by Chrome/Edge stores
 // INSTRUCTIONS:
@@ -77,7 +77,7 @@
 // 5. Uncomment window.open() calls
 ```
 
-**`site/index.html` (Lines 145-151):**
+**`docs/index.html` (Lines 145-151):**
 ```html
 <!-- TODO_PLACEHOLDER: Add demo video tab when ready
 Instructions:
@@ -89,11 +89,11 @@ Instructions:
 -->
 ```
 
-**`site/index.html` (Lines 159-167):**
+**`docs/index.html` (Lines 159-167):**
 ```html
 <!-- TODO_PLACEHOLDER: Replace placeholder images with actual screenshots
 Instructions:
-1. Create site/screenshots/ folder
+1. Create docs/screenshots/ folder
 2. Capture real extension screenshots:
    - popup-demo.png (800x500px) - Main search interface
    - inline-demo.png (800x500px) - Inline overlay on page
@@ -104,7 +104,7 @@ Instructions:
 -->
 ```
 
-**`site/index.html` (Lines 247-263):**
+**`docs/index.html` (Lines 247-263):**
 ```html
 <!-- TODO_PLACEHOLDER: Add testimonials section here when ready
 Instructions:
@@ -127,7 +127,7 @@ Example structure:
 
 **Search for placeholders:**
 ```bash
-grep -r "TODO_PLACEHOLDER" site/
+grep -r "TODO_PLACEHOLDER" docs/
 ```
 
 ---
@@ -140,7 +140,7 @@ grep -r "TODO_PLACEHOLDER" site/
 
 #### Changes Made:
 
-**`site/index.html`:**
+**`docs/index.html`:**
 - Added privacy list item: "NO analytics - pure gift to society"
 - Footer tagline: "A gift to society. No tracking. No analytics. Pure privacy."
 
@@ -208,7 +208,7 @@ grep -r "TODO_PLACEHOLDER" site/
 - Retry logic explained
 - Verification steps documented
 
-**6. `site/README.md` (Updated)**
+**6. `docs/README.md` (Updated)**
 - Privacy protection architecture
 - TODO_PLACEHOLDER instructions
 - Zero analytics commitment
@@ -223,7 +223,7 @@ grep -r "TODO_PLACEHOLDER" site/
 | Privacy URL always live | ✅ DONE | 3-tier fallback system | PRIVACY_PROTECTION.md |
 | GitHub Actions failsafe | ✅ DONE | Dual backup + retry + verify | deploy-site.yml comments |
 | Hardcore blob backup | ✅ DONE | Full policy in CHROME_WEB_STORE.md | Section at end of file |
-| Code placeholders | ✅ DONE | TODO_PLACEHOLDER in site/ files | Inline comments with instructions |
+| Code placeholders | ✅ DONE | TODO_PLACEHOLDER in docs/ files | Inline comments with instructions |
 | No analytics commitment | ✅ DONE | Removed from all todos, added branding | "Why No Analytics?" section |
 | Comprehensive docs | ✅ DONE | 6 files created/updated | README, PRIVACY_PROTECTION, etc. |
 
@@ -260,23 +260,23 @@ grep -r "TODO_PLACEHOLDER" site/
 
 ### Later (When Ready):
 1. **Replace Screenshots**
-   - Create `site/screenshots/` folder
+   - Create `docs/screenshots/` folder
    - Capture real extension screenshots
-   - Update `site/index.html` img src URLs
+   - Update `docs/index.html` img src URLs
 
 2. **Add Store URLs**
    - Get Chrome/Edge extension IDs
-   - Update `site/script.js` lines 94-95
+   - Update `docs/script.js` lines 94-95
    - Remove alerts, uncomment window.open()
 
 3. **Add Demo Video**
    - Record 2-3 minute walkthrough
    - Upload to YouTube
-   - Add tab in `site/index.html` line 151
+   - Add tab in `docs/index.html` line 151
 
 4. **Add Testimonials**
    - Collect real user feedback
-   - Create section in `site/index.html` line 247
+   - Create section in `docs/index.html` line 247
    - NO fake reviews
 
 ---
@@ -308,8 +308,8 @@ grep -r "TODO_PLACEHOLDER" site/
 All procedures documented in:
 - **Privacy architecture:** `docs/PRIVACY_PROTECTION.md`
 - **Quick reference:** `docs/PRIVACY_PROTECTION_SUMMARY.md`
-- **Site deployment:** `site/README.md`
-- **Enhancement markers:** Search `TODO_PLACEHOLDER` in `site/`
+- **Site deployment:** `docs/README.md`
+- **Enhancement markers:** Search `TODO_PLACEHOLDER` in `docs/`
 
 **Your privacy policy is bulletproof. Your brand is clear. Your code is ready.**
 

@@ -51,7 +51,8 @@ jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -69,7 +70,6 @@ jobs:
 
       - name: Run linter
         run: npm run lint
-        continue-on-error: true  # Don't fail build on lint warnings initially
 
       - name: Run tests
         if: ${{ inputs.run_tests != 'false' }}
@@ -80,13 +80,6 @@ jobs:
 
       - name: Type check
         run: npm run tsc
-
-      - name: Run tests
-        run: npm run test --if-present
-        continue-on-error: true  # Tests are optional until fully set up
-
-      - name: Build extension
-        run: npm run build
 
       - name: Package extension
         run: |
@@ -114,7 +107,7 @@ jobs:
           echo "## 🏗️ Build & Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
-          echo "**Node Version:** 20.x" >> $GITHUB_STEP_SUMMARY
+          echo "**Node Version:** ${{ inputs.node_version || '22' }}" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Produced Artifacts" >> $GITHUB_STEP_SUMMARY
@@ -150,10 +143,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    
+    timeout-minutes: 30
+
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -161,7 +155,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies

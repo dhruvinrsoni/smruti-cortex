@@ -27,7 +27,8 @@ jobs:
   staging-build:
     name: Build Staging Extension
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,7 +65,7 @@ jobs:
           echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          npm test -- --reporter=json > test-results.json 2>&1 || true
+          npm test -- --reporter=json > test-results.json 2>&1
           
           TESTS_PASSED=$(jq '.numPassedTests // 0' test-results.json 2>/dev/null || echo "0")
           TESTS_FAILED=$(jq '.numFailedTests // 0' test-results.json 2>/dev/null || echo "0")
