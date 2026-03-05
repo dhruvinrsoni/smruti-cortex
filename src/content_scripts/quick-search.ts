@@ -26,7 +26,6 @@ import {
   parseKeyboardAction,
   renderResults as renderResultsShared,
   sortResults,
-  escapeHtml,
   tokenizeQuery,
   highlightHtml,
   renderAIStatus as renderAIStatusShared,

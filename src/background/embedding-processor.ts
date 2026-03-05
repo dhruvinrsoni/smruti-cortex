@@ -171,17 +171,17 @@ class EmbeddingProcessorImpl {
     }
 
     private calculateSpeed(): number {
-        if (this.completionTimestamps.length < 2) return 0;
+        if (this.completionTimestamps.length < 2) {return 0;}
         const oldest = this.completionTimestamps[0];
         const newest = this.completionTimestamps[this.completionTimestamps.length - 1];
         const elapsedMinutes = (newest - oldest) / 60_000;
-        if (elapsedMinutes <= 0) return 0;
+        if (elapsedMinutes <= 0) {return 0;}
         return Math.round((this.completionTimestamps.length - 1) / elapsedMinutes);
     }
 
     private calculateETA(remaining: number): number {
         const speed = this.calculateSpeed();
-        if (speed <= 0 || remaining <= 0) return 0;
+        if (speed <= 0 || remaining <= 0) {return 0;}
         return Math.round(remaining / speed);
     }
 
@@ -245,16 +245,16 @@ class EmbeddingProcessorImpl {
 
                 // Process each item in the batch
                 for (const item of batch) {
-                    if (this.state !== 'running') break;
+                    if (this.state !== 'running') {break;}
 
                     // Yield to search when active
                     while (this.searchActive && this.state === 'running') {
                         await this.sleep(300);
                     }
-                    if (this.state !== 'running') break;
+                    if (this.state !== 'running') {break;}
 
                     // Re-check circuit breaker between items
-                    if (isCircuitBreakerOpen()) break;
+                    if (isCircuitBreakerOpen()) {break;}
 
                     try {
                         const embedding = await generateItemEmbedding(item);

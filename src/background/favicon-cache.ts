@@ -36,17 +36,17 @@ const pendingFetches = new Map<string, Promise<string | null>>();
  * Check if a hostname should be skipped entirely (will never have a valid favicon)
  */
 function shouldSkipFavicon(hostname: string): boolean {
-    if (!hostname) return true;
+    if (!hostname) {return true;}
     // Localhost and loopback
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {return true;}
     // IPv4 addresses
-    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) return true;
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {return true;}
     // IPv6 addresses (bracketed or raw)
-    if (hostname.startsWith('[') || hostname.includes('::')) return true;
+    if (hostname.startsWith('[') || hostname.includes('::')) {return true;}
     // Local/internal network domains
-    if (hostname.endsWith('.local') || hostname.endsWith('.internal') || hostname.endsWith('.localhost')) return true;
+    if (hostname.endsWith('.local') || hostname.endsWith('.internal') || hostname.endsWith('.localhost')) {return true;}
     // Chrome internal pages
-    if (hostname === 'newtab' || hostname === 'extensions' || hostname.endsWith('.chrome')) return true;
+    if (hostname === 'newtab' || hostname === 'extensions' || hostname.endsWith('.chrome')) {return true;}
     return false;
 }
 
