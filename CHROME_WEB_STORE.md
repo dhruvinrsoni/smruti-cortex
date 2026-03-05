@@ -20,7 +20,7 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 - [ ] Test in clean Chrome profile
 - [ ] Verify all features work (AI search, semantic, keyword telemetry badges)
 - [ ] Check privacy compliance
-- [ ] Prepare store assets (screenshots from `site/screenshots/`)
+- [ ] Prepare store assets (screenshots from `docs/screenshots/`)
 - [ ] Review store listing content below
 
 ---
@@ -150,7 +150,7 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 ### Screenshots (Required — 1-5 images)
 **Recommended size:** 1280x800px or 640x400px
 
-**Available screenshots** (in `site/screenshots/`):
+**Available screenshots** (in `docs/screenshots/`):
 1. **AI Search — 'jira'** — `SmrutiCortex latest quick-search 'jira'...015040.png` — AI cache badge + yellow keyword + green AI-cache highlights (most impressive, use first)
 2. **Popup search — 'git smruti'** — `SmrutiCortex popup 'git smruti'...124029.png` — yellow keyword highlights, Best Match results
 3. **Quick-search overlay — 'git smruti'** — `SmrutiCortex latest quick-serach 'git smruti'...123923.png` — inline overlay with LEXICAL/NEURAL badges

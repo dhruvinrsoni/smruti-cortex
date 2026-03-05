@@ -27,7 +27,8 @@ jobs:
   performance:
     name: Bundle Analysis & Performance
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 20
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,31 +73,42 @@ jobs:
           SERVICE_WORKER_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
           POPUP_SIZE=$(ls -l dist/popup/popup.js 2>/dev/null | awk '{print $5}')
           QUICK_SEARCH_SIZE=$(ls -l dist/content_scripts/quick-search.js 2>/dev/null | awk '{print $5}')
-          
+
+          # Guard: set to 0 if file not found (prevents arithmetic errors)
+          SERVICE_WORKER_SIZE=${SERVICE_WORKER_SIZE:-0}
+          POPUP_SIZE=${POPUP_SIZE:-0}
+          QUICK_SEARCH_SIZE=${QUICK_SEARCH_SIZE:-0}
+
           echo "### Bundle Size Thresholds" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Bundle | Size | Threshold | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          
+
           # Service Worker (target: < 500KB)
           SW_SIZE_KB=$((SERVICE_WORKER_SIZE / 1024))
-          if [ $SERVICE_WORKER_SIZE -lt 512000 ]; then
+          if [ "$SERVICE_WORKER_SIZE" -eq 0 ]; then
+            echo "| Service Worker | ⚠️ not found | 500 KB | ⚠️ MISSING |" >> $GITHUB_STEP_SUMMARY
+          elif [ "$SERVICE_WORKER_SIZE" -lt 512000 ]; then
             echo "| Service Worker | ${SW_SIZE_KB} KB | 500 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Service Worker | ${SW_SIZE_KB} KB | 500 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           # Popup (target: < 300KB)
           POPUP_SIZE_KB=$((POPUP_SIZE / 1024))
-          if [ $POPUP_SIZE -lt 307200 ]; then
+          if [ "$POPUP_SIZE" -eq 0 ]; then
+            echo "| Popup | ⚠️ not found | 300 KB | ⚠️ MISSING |" >> $GITHUB_STEP_SUMMARY
+          elif [ "$POPUP_SIZE" -lt 307200 ]; then
             echo "| Popup | ${POPUP_SIZE_KB} KB | 300 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Popup | ${POPUP_SIZE_KB} KB | 300 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           # Quick Search (target: < 200KB)
           QS_SIZE_KB=$((QUICK_SEARCH_SIZE / 1024))
-          if [ $QUICK_SEARCH_SIZE -lt 204800 ]; then
+          if [ "$QUICK_SEARCH_SIZE" -eq 0 ]; then
+            echo "| Quick Search | ⚠️ not found | 200 KB | ⚠️ MISSING |" >> $GITHUB_STEP_SUMMARY
+          elif [ "$QUICK_SEARCH_SIZE" -lt 204800 ]; then
             echo "| Quick Search | ${QS_SIZE_KB} KB | 200 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Quick Search | ${QS_SIZE_KB} KB | 200 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
@@ -116,26 +128,30 @@ jobs:
           git fetch origin $BASELINE_REF
           git checkout origin/$BASELINE_REF
           
-          # Build baseline
-          npm ci > /dev/null 2>&1
-          npm run build:prod > /dev/null 2>&1
-          
+          # Build baseline (output visible for debugging)
+          npm ci
+          npm run build:prod
+
           # Get baseline sizes
-          BASELINE_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum}')
+          BASELINE_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum+0}')
           BASELINE_TOTAL_KB=$((BASELINE_TOTAL / 1024))
-          
+
           # Switch back to current ref
           git checkout -
-          npm ci > /dev/null 2>&1
-          npm run build:prod > /dev/null 2>&1
-          
+          npm ci
+          npm run build:prod
+
           # Get current sizes
-          CURRENT_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum}')
+          CURRENT_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum+0}')
           CURRENT_TOTAL_KB=$((CURRENT_TOTAL / 1024))
-          
-          # Calculate difference
+
+          # Calculate difference (guard against division by zero)
           DIFF_KB=$((CURRENT_TOTAL_KB - BASELINE_TOTAL_KB))
-          PERCENT_CHANGE=$(echo "scale=2; ($DIFF_KB * 100) / $BASELINE_TOTAL_KB" | bc)
+          if [ "$BASELINE_TOTAL_KB" -gt 0 ]; then
+            PERCENT_CHANGE=$(echo "scale=2; ($DIFF_KB * 100) / $BASELINE_TOTAL_KB" | bc)
+          else
+            PERCENT_CHANGE="N/A"
+          fi
           
           echo "| Metric | Baseline | Current | Change |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
