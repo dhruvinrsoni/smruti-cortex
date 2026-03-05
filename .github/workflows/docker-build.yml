@@ -96,16 +96,16 @@ jobs:
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: extension-dist-docker
+          name: smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-dist-docker
           path: dist/
-          retention-days: 7
-      
+          retention-days: 30
+
       - name: Upload zip package
         uses: actions/upload-artifact@v4
         with:
-          name: smruti-cortex-docker-zip
+          name: smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-installable
           path: smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip
-          retention-days: 7
+          retention-days: 30
       
       - name: Show artifact summary
         run: |
@@ -116,8 +116,8 @@ jobs:
           echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Produced Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "1. **extension-dist-docker** (7 days) - Unzipped dist/ folder" >> $GITHUB_STEP_SUMMARY
-          echo "2. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip** (7 days) - Ready-to-install zip" >> $GITHUB_STEP_SUMMARY
+          echo "1. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-dist-docker** (30 days) - Unzipped dist/ folder for inspection" >> $GITHUB_STEP_SUMMARY
+          echo "2. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-installable** (30 days) - Ready-to-install zip for Chrome/Edge" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📁 Build Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
