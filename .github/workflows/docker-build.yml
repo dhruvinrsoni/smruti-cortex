@@ -78,8 +78,8 @@ jobs:
       - name: Package extension (zip)
         run: |
           echo "📦 Creating installable zip package via centralized packager..."
-          # Docker ran as root and owns node_modules — remove before reinstalling as runner user
-          sudo rm -rf node_modules
+          # Docker ran as root and owns node_modules + dist — remove both before reinstalling as runner user
+          sudo rm -rf node_modules dist
           npm ci
           # Use package script to create release zip
           npm run package
