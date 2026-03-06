@@ -148,3 +148,15 @@ vite.config.ts.timestamp-*
 
 # Custom
 .claude
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+
+# VS Code: ignore user-specific workspace files but keep shared settings
+.vscode/launch.json
+.vscode/*.code-workspace
+
+# Build outputs
+dist/
+build/
