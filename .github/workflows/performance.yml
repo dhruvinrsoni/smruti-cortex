@@ -6,13 +6,6 @@ name: Performance Monitoring
 # Note: Does NOT require GitHub tokens - uses workflow summary only.
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'src/**'
-      - 'scripts/**'
-      - 'package.json'
-      - 'tsconfig.json'
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
