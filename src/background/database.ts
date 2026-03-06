@@ -10,6 +10,14 @@ const STORE_NAME = 'pages';
 
 let dbInstance: IDBDatabase | null = null;
 
+// In-memory cache for getAllIndexedItems() — avoids repeated IndexedDB reads during search
+let cachedItems: IndexedItem[] | null = null;
+
+/** Invalidate the in-memory item cache (call after any write operation) */
+export function invalidateItemCache(): void {
+    cachedItems = null;
+}
+
 // ------------------------------
 // IndexedDB Init
 // ------------------------------
@@ -47,6 +55,7 @@ export function openDatabase(): Promise<IDBDatabase> {
 // Add or Update Page Entry
 // ------------------------------
 export async function saveIndexedItem(item: IndexedItem): Promise<void> {
+    cachedItems = null; // Invalidate cache on write
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readwrite');
@@ -61,13 +70,17 @@ export async function saveIndexedItem(item: IndexedItem): Promise<void> {
 // Query Pages
 // ------------------------------
 export async function getAllIndexedItems(): Promise<IndexedItem[]> {
+    if (cachedItems) { return cachedItems; }
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
         const req = store.getAll();
 
-        req.onsuccess = () => resolve(req.result as IndexedItem[]);
+        req.onsuccess = () => {
+            cachedItems = req.result as IndexedItem[];
+            resolve(cachedItems);
+        };
         req.onerror = () => reject(req.error);
     });
 }
@@ -212,6 +225,7 @@ export async function getIndexedItem(url: string): Promise<IndexedItem | null> {
 
 // Delete item by URL
 export async function deleteIndexedItem(url: string): Promise<void> {
+    cachedItems = null; // Invalidate cache on write
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readwrite');
@@ -224,6 +238,7 @@ export async function deleteIndexedItem(url: string): Promise<void> {
 
 // Clear all data from IndexedDB
 export async function clearIndexedDB(): Promise<void> {
+    cachedItems = null; // Invalidate cache on write
     const db = dbInstance || await openDatabase();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readwrite');

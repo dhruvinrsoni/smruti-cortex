@@ -30,7 +30,7 @@ const crossDimensionalScorer: Scorer = {
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
-        const originalTokens = tokenize(query);
+        const originalTokens = context?.originalTokens || tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
         if (searchTokens.length < 2) {return 0;}
@@ -103,14 +103,14 @@ const crossDimensionalScorer: Scorer = {
 const multiTokenMatchScorer: Scorer = {
     name: 'multiTokenMatch',
     weight: 0.35,
-    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], _context?: ScorerContext) => {
+    score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
         const title = (item.bookmarkTitle || item.title).toLowerCase();
         const url = item.url.toLowerCase();
         const metaDescription = (item.metaDescription || '').toLowerCase();
         const bookmarkFolders = (item.bookmarkFolders?.join(' ') || '').toLowerCase();
         const haystack = `${title} ${url} ${metaDescription} ${bookmarkFolders}`;
 
-        const originalTokens = tokenize(query);
+        const originalTokens = context?.originalTokens || tokenize(query);
         if (originalTokens.length < 2) {return 0;}
 
         // ─── Graduated match score across all content ───────────────
@@ -155,24 +155,20 @@ const multiTokenMatchScorer: Scorer = {
 };
 
 // Domain familiarity scorer - learns from user behavior patterns
+// Uses pre-computed domainVisitCounts map from ScorerContext (O(1) lookup per item)
 const domainFamiliarityScorer: Scorer = {
     name: 'domainFamiliarity',
     weight: 0.05, // Small weight for subtle organic biasing
-    score: (item: IndexedItem, _query: string, allItems?: IndexedItem[]) => {
-        if (!allItems || allItems.length === 0) { return 0; }
-
+    score: (item: IndexedItem, _query: string, _allItems?: IndexedItem[], context?: ScorerContext) => {
         const hostname = item.hostname;
         if (!hostname) { return 0; }
 
-        // Count how many items from this domain are in the user's history
-        const domainItems = allItems.filter(otherItem => otherItem.hostname === hostname);
-        const domainVisitCount = domainItems.reduce((sum, it) => sum + (it.visitCount || 1), 0);
+        // Use pre-computed domain visit counts from context (O(1) lookup)
+        const domainVisitCount = context?.domainVisitCounts?.get(hostname) || 0;
+        if (domainVisitCount === 0) { return 0; }
 
         // Small boost based on domain familiarity (logarithmic scaling)
-        // This creates organic biasing - domains user visits more get slight preference
-        const familiarityScore = Math.min(0.2, Math.log(domainVisitCount + 1) / Math.log(50));
-
-        return familiarityScore;
+        return Math.min(0.2, Math.log(domainVisitCount + 1) / Math.log(50));
     },
 };
 

@@ -17,7 +17,7 @@ const metaScorer: Scorer = {
 
         if (!text.trim()) {return 0;}
 
-        const originalTokens = tokenize(query);
+        const originalTokens = context?.originalTokens || tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
         if (searchTokens.length === 0) {return 0;}
