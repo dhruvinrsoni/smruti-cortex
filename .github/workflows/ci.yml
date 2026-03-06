@@ -7,11 +7,7 @@ name: CI
 # Lint: Removed from CI — use the "Lint Report (Manual)" workflow to run on demand.
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch:  # Manual only — use build.yml for auto CI on push/PR
     inputs:
       reason:
         description: 'Reason for manual CI run'

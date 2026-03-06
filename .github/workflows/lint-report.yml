@@ -6,10 +6,6 @@ name: Lint Report (Manual)
 # Result: Never fails — informational only. Download artifacts to feed to an LLM.
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
