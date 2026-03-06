@@ -306,7 +306,7 @@ export async function safeDatabaseOperation<T>(
             RETRY_DELAY_MS,
             operationName
         );
-    } catch (error) {
+    } catch {
         logger.error('safeDatabaseOperation', `${operationName} failed after retries, using fallback`);
         return fallback;
     }

@@ -123,7 +123,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const focused = shadowRoot.querySelector(':focus') as Element | null;
         if (focused) { return focused; }
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
     return document.activeElement;
@@ -616,7 +616,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           log.debug('logLevel', `Log level set to ${currentLogLevel}`);
         }
       });
-    } catch (e) {
+    } catch {
       // Extension context may be invalid
     }
   }
@@ -634,23 +634,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           cachedSettings = settings;
           try {
             updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
-          } catch (e) { /* ignore */ }
+          } catch { /* ignore */ }
           try {
             if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
-          } catch (e) { /* ignore */ }
+          } catch { /* ignore */ }
           // Search debounce is intentionally separate from focusDelayMs
           // focusDelayMs controls auto-focus to results, not search delay
           searchDebounceMs = DEBOUNCE_MS;
           log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
           // Re-render results with updated display mode (popup parity)
           if (currentResults.length > 0) {
-            try { renderResults(currentResults); } catch (e) { /* ignore */ }
+            try { renderResults(currentResults); } catch { /* ignore */ }
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       });
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -833,7 +833,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // a closed shadow root because dataset is on the host element.
     try {
       shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus));
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
     
     // Inject styles into shadow root
     const styleEl = document.createElement('style');
@@ -1151,7 +1151,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     try {
       // Apply cached settings immediately if available
       updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
     // Then fetch latest settings asynchronously (will update badge when done)
     fetchSettings();
     
@@ -1169,7 +1169,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (document.activeElement && document.activeElement !== inputEl) {
         (document.activeElement as HTMLElement).blur();
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
     
     // Strategy 2: Immediate synchronous focus
     inputEl.focus();
@@ -1204,7 +1204,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (document.activeElement && document.activeElement !== inputEl) {
           (document.activeElement as HTMLElement).blur();
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
 
       inputEl.focus();
       inputEl.setSelectionRange(0, 0);
@@ -1218,7 +1218,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (document.activeElement && document.activeElement !== inputEl) {
               (document.activeElement as HTMLElement).blur();
             }
-          } catch (e) { /* ignore */ }
+          } catch { /* ignore */ }
           inputEl.focus();
           inputEl.setSelectionRange(0, 0);
         }
@@ -1849,7 +1849,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (selectAllOnFocus && inputEl) {
               inputEl.setSelectionRange(0, inputEl.value.length);
             }
-          } catch (e) { /* ignore */ }
+          } catch { /* ignore */ }
         }
       },
       {
@@ -2122,7 +2122,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (inputEl) {
           inputEl.focus();
           // Do not simulate typing; let native event continue. Stop propagation so page doesn't get it.
-          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch (e) { /* ignore */ }
+          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch { /* ignore */ }
         }
       }
       return;
@@ -2434,10 +2434,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
         try {
           updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         try {
           if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         // Search debounce is separate from focusDelayMs
         searchDebounceMs = DEBOUNCE_MS;
       } catch {
@@ -2458,7 +2458,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       try {
         searchPort.disconnect();
         searchPort = null;
-      } catch (e) {
+      } catch {
         // Ignore - port may already be disconnected
       }
     }
@@ -2491,7 +2491,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (chrome?.runtime?.onMessage) {
         chrome.runtime.onMessage.removeListener(handleMessage);
       }
-    } catch (e) {
+    } catch {
       // Ignore - listeners may already be removed
     }
     

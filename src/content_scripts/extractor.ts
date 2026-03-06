@@ -90,7 +90,7 @@ if (window.top !== window) {
               }
             }
           }
-        } catch (err) {
+        } catch {
           // If settings check fails, continue with extraction (fail open)
         }
       }
@@ -131,7 +131,7 @@ if (window.top !== window) {
           // optional callback; ignore errors
         });
       }
-    } catch (err) {
+    } catch {
       // swallow errors inside page
     }
   })();

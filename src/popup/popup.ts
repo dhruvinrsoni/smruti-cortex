@@ -91,7 +91,7 @@ try {
       timestamp: __popupEntryTimestamp
     });
   }
-} catch (e) {
+} catch {
   // Ignore timing errors - not critical
 }
 
@@ -265,7 +265,7 @@ function initializePopup() {
           elapsedMs
         });
       }
-    } catch (e) {
+    } catch {
       // Ignore timing errors - not critical
     }
     
@@ -348,7 +348,7 @@ function initializePopup() {
       const resp = await sendMessage({ type: 'PING' });
       serviceWorkerReady = resp && resp.status === 'ok';
       return serviceWorkerReady;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -412,7 +412,7 @@ function initializePopup() {
       // User can Tab or ArrowDown to navigate results when ready.
       activeIndex = -1;
       renderResults();
-    } catch (error) {
+    } catch {
       resultsLocal = [];
       activeIndex = -1;
       renderResults();
@@ -489,7 +489,7 @@ function initializePopup() {
           }
         }, focusDelay);
       }
-    } catch (error) {
+    } catch {
       resultsLocal = [];
       activeIndex = -1;
       aiSearchPending = false;
@@ -1428,7 +1428,7 @@ function initializePopup() {
         countEl.textContent = '-- icons';
         sizeEl.textContent = '--';
       }
-    } catch (err) {
+    } catch {
       countEl.textContent = '-- icons';
       sizeEl.textContent = '--';
     }
@@ -1949,7 +1949,7 @@ function initializePopup() {
           } else {
             showToast('Failed to clear favicon cache');
           }
-        } catch (err) {
+        } catch {
           showToast('Error clearing favicon cache');
         }
         clearFaviconCacheBtn.disabled = false;

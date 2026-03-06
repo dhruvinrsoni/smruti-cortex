@@ -31,7 +31,7 @@ export function normalizeUrl(url: string): string {
         }
         
         return normalized.toLowerCase();
-    } catch (e) {
+    } catch {
         // If URL parsing fails, fall back to simple normalization
         logger.trace('normalizeUrl', `URL parse failed, using fallback: ${url}`);
         return url.toLowerCase().split('?')[0].split('#')[0].replace(/\/$/, '');
