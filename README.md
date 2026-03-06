@@ -313,8 +313,8 @@ npm run build       # Verify build
 | Doc | Purpose |
 |-----|---------|
 | [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) | Store submission guide |
-| [TESTING_and_DEBUG_GUIDE.md](TESTING_and_DEBUG_GUIDE.md) | Build, test, debug |
-| [GENERAL_TODO.md](GENERAL_TODO.md) | Roadmap |
+| [TESTING_and_DEBUG_GUIDE.md](docs/TESTING_and_DEBUG_GUIDE.md) | Build, test, debug |
+| [ROADMAP.md](docs/ROADMAP.md) | Roadmap |
 
 ---
 

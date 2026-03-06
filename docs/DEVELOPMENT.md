@@ -35,7 +35,7 @@ Before writing any code, answer these questions:
 
 Rule of thumb: if a user who never reads changelogs would be surprised or broken, it's a major. If they get something new without losing anything, it's a minor. If they wouldn't notice except the bug is gone, it's a patch.
 
-Check `GENERAL_TODO.md` for existing backlog items before starting something new.
+Check `ROADMAP.md` for existing backlog items before starting something new.
 
 ---
 
@@ -51,8 +51,8 @@ claude          # opens interactive session
 ```
 
 Key architecture references:
-- `.github/AI_SEARCH_IMPLEMENTATION.md` — AI search pipeline
-- `.github/SETTINGS_ARCHITECTURE.md` — how settings flow through the extension
+- `.github/skills/ai-ollama/SKILL.md` — AI search pipeline
+- `.github/skills/settings/SKILL.md` — how settings flow through the extension
 - `src/background/service-worker.ts` — message handler hub (all background logic)
 - `src/core/` — shared utilities (helpers, logger, settings, scorer types)
 
@@ -173,10 +173,10 @@ Review times:
 | `README.md` | User-facing overview, installation, features |
 | `CHANGELOG.md` | Full version history |
 | `CHROME_WEB_STORE.md` | Store listing copy, privacy policy, submission guide |
-| `TESTING_and_DEBUG_GUIDE.md` | Build, test, debugging, diagnostics |
-| `GENERAL_TODO.md` | Feature backlog and ideas |
-| `.github/AI_SEARCH_IMPLEMENTATION.md` | AI pipeline architecture |
-| `.github/SETTINGS_ARCHITECTURE.md` | Settings system design |
+| `docs/TESTING_and_DEBUG_GUIDE.md` | Build, test, debugging, diagnostics |
+| `docs/ROADMAP.md` | Feature backlog and ideas |
+| `.github/skills/ai-ollama/SKILL.md` | AI pipeline architecture |
+| `.github/skills/settings/SKILL.md` | Settings system design |
 
 ---
 
