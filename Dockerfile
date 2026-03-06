@@ -1,6 +1,6 @@
 # Multi-stage build optimized for reproducible extension builds
 # Uses Node LTS (20) on Debian slim for broad compatibility
-FROM node:20-bullseye-slim AS builder
+FROM node:22-bullseye-slim AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # Final stage: expose build artifacts (dist/) and keep image lightweight
-FROM node:20-bullseye-slim AS runner
+FROM node:22-bullseye-slim AS runner
 WORKDIR /app
 
 # Copy entire app with node_modules (don't need to split them)

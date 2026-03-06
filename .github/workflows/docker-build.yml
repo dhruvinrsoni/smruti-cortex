@@ -1,9 +1,11 @@
-name: Docker Build & Verify
+name: Docker Build & Publish
 
-# Purpose: Validates that extension can be built in a clean Docker environment.
-# Produces: extension-dist-docker artifact (dist/ folder) AND smruti-cortex-docker.zip (ready-to-install).
-# Use case: Ensures reproducible builds across different host environments.
-# Note: Does NOT commit/push any changes back to repository.
+# Purpose: Builds the extension inside Docker, pushes image to GitHub Container Registry (GHCR),
+#          and produces installable zip artifact.
+# Image:   ghcr.io/dhruvinrsoni/smruti-cortex — visible in repo's Packages panel on GitHub UI.
+# Tags:    latest (main branch), <version> (from package.json), sha-<commit>
+# Note:    PRs build and verify but do NOT push to GHCR.
+#          Does NOT commit/push any source changes back to repository.
 
 on:
   push:
@@ -18,7 +20,7 @@ on:
         default: 'main'
         type: string
       docker_tag:
-        description: 'Custom Docker tag (default: auto-generated from package.json)'
+        description: 'Custom Docker tag override (default: auto from package.json)'
         required: false
         type: string
       skip_tests:
@@ -27,9 +29,13 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  packages: write   # required to push to ghcr.io
+
 jobs:
   docker-build:
-    name: Build with Docker Compose
+    name: Build, Push & Package
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -37,51 +43,74 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_branch || 'main' }}
-      
+          ref: ${{ inputs.target_branch || github.ref }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Resolve version tag
+
+      - name: Resolve version
         run: |
-          # Use custom tag if provided, otherwise use package version
           if [ -n "${{ inputs.docker_tag }}" ]; then
             echo "SMRUTI_CORTEX_VERSION=${{ inputs.docker_tag }}" >> $GITHUB_ENV
           else
             node -e "console.log('SMRUTI_CORTEX_VERSION=' + require('./package.json').version)" >> $GITHUB_ENV
           fi
 
-      - name: Build Docker image
-        run: docker build -t smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }} .
-      
-      - name: Run Docker Compose build
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ env.SMRUTI_CORTEX_VERSION }}
+            type=sha,prefix=sha-
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract dist/ from image
         env:
-          # Map container /output to workspace so dist/ appears on runner
-          DOCKER_OUTPUT_DIR: .
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          echo "🐋 Starting Docker Compose build..."
-          echo "📍 Build context: $(pwd)"
-          echo "📦 Output will be written to: ./dist/"
-          docker compose run --rm build
-      
+          PRIMARY_TAG=$(echo "$IMAGE_TAGS" | head -1)
+          echo "📂 Extracting dist/ from $PRIMARY_TAG..."
+          docker create --name extract "$PRIMARY_TAG"
+          docker cp extract:/app/dist ./dist
+          docker rm extract
+
       - name: Verify dist artifacts
         run: |
           echo "🔍 Verifying build artifacts..."
           ls -la dist/
           echo ""
-          test -f dist/manifest.json || { echo "❌ manifest.json missing"; exit 1; }
-          test -d dist/background || { echo "❌ background bundle missing"; exit 1; }
-          test -d dist/popup || { echo "❌ popup bundle missing"; exit 1; }
-          test -d dist/content_scripts || { echo "❌ content_scripts bundle missing"; exit 1; }
+          test -f dist/manifest.json     || { echo "❌ manifest.json missing"; exit 1; }
+          test -d dist/background        || { echo "❌ background bundle missing"; exit 1; }
+          test -d dist/popup             || { echo "❌ popup bundle missing"; exit 1; }
+          test -d dist/content_scripts   || { echo "❌ content_scripts bundle missing"; exit 1; }
           echo "✅ All required artifacts present"
-      
+
       - name: Package extension (zip)
         run: |
-          echo "📦 Creating installable zip package via centralized packager..."
-          # Docker ran as root and owns node_modules + dist — remove both before reinstalling as runner user
+          echo "📦 Creating installable zip package..."
+          # Docker ran as root and owns dist — remove before reinstalling as runner user
           sudo rm -rf node_modules dist
           npm ci
-          # Use package script to create release zip
           npm run package
           VERSION=$(node -e "console.log(require('./package.json').version)")
           RELEASE_ZIP=$(ls -t release/*.zip 2>/dev/null | head -n1 || true)
@@ -92,7 +121,7 @@ jobs:
           DOCKER_ZIP=smruti-cortex-v${VERSION}-docker.zip
           cp "$RELEASE_ZIP" "$DOCKER_ZIP"
           echo "✅ Created: $DOCKER_ZIP ($(du -h $DOCKER_ZIP | cut -f1))"
-      
+
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -106,37 +135,33 @@ jobs:
           name: smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-installable
           path: smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip
           retention-days: 30
-      
-      - name: Show artifact summary
+
+      - name: Build summary
         run: |
+          PUSHED=${{ github.event_name != 'pull_request' }}
           echo "## 🐋 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
-          echo "**Docker Image:** smruti-cortex:${{ env.SMRUTI_CORTEX_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ env.SMRUTI_CORTEX_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Produced Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "1. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-dist-docker** (30 days) - Unzipped dist/ folder for inspection" >> $GITHUB_STEP_SUMMARY
-          echo "2. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-installable** (30 days) - Ready-to-install zip for Chrome/Edge" >> $GITHUB_STEP_SUMMARY
+          if [ "$PUSHED" = "true" ]; then
+            echo "### 🐳 GHCR Image" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ghcr.io/${{ github.repository }}:${{ env.SMRUTI_CORTEX_VERSION }}" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "View at: https://github.com/${{ github.repository }}/pkgs/container/smruti-cortex" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ℹ️ GHCR Push Skipped (PR)" >> $GITHUB_STEP_SUMMARY
+            echo "Image was built and verified but not pushed (pull requests don't push to GHCR)." >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📁 Build Output" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts (30 days)" >> $GITHUB_STEP_SUMMARY
+          echo "1. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-dist-docker** — Unzipped dist/ for inspection" >> $GITHUB_STEP_SUMMARY
+          echo "2. **smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-installable** — Ready-to-install zip for Chrome/Edge" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 dist/ contents" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           ls -lh dist/ >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📊 Package Details" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Zip package: $(du -h smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
-          echo "Total files: $(find dist -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ℹ️ What This Workflow Does" >> $GITHUB_STEP_SUMMARY
-          echo "- Builds Docker image with all dependencies isolated" >> $GITHUB_STEP_SUMMARY
-          echo "- Runs \`npm run build\` inside container" >> $GITHUB_STEP_SUMMARY
-          echo "- Verifies all required bundles are present" >> $GITHUB_STEP_SUMMARY
-          echo "- Creates installable zip package" >> $GITHUB_STEP_SUMMARY
-          echo "- Uploads both dist/ folder and zip for download" >> $GITHUB_STEP_SUMMARY
-          echo "- **Does NOT commit or push changes**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
-          echo "Download \`smruti-cortex-v${{ env.SMRUTI_CORTEX_VERSION }}-docker.zip\` and load unpacked in Chrome/Edge." >> $GITHUB_STEP_SUMMARY
