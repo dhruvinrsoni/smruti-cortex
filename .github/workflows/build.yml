@@ -69,7 +69,21 @@ jobs:
         run: npm ci
 
       - name: Run linter
-        run: npm run lint
+        run: |
+          # Run once for JSON metrics (|| true so file is always written)
+          npm run lint -- --format json --output-file .lint-results.json || true
+          ERRORS=$(node -e "const r=require('./.lint-results.json');console.log(r.reduce((a,f)=>a+f.errorCount,0))")
+          WARNINGS=$(node -e "const r=require('./.lint-results.json');console.log(r.reduce((a,f)=>a+f.warningCount,0))")
+          # Run again with human-readable output — this exit code gates the build
+          npm run lint
+          LINT_EXIT=$?
+          if [ "$LINT_EXIT" -eq 0 ]; then
+            echo "### ✅ Lint Passed — ${ERRORS} errors, ${WARNINGS} warnings" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Lint Failed — ${ERRORS} errors, ${WARNINGS} warnings" >> $GITHUB_STEP_SUMMARY
+            echo "Run \`npm run lint\` locally to fix." >> $GITHUB_STEP_SUMMARY
+          fi
+          exit $LINT_EXIT
 
       - name: Run tests
         if: ${{ inputs.run_tests != 'false' }}
