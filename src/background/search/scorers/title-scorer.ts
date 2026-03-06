@@ -25,7 +25,7 @@ const titleScorer: Scorer = {
     weight: 0.35,
     score: (item: IndexedItem, query: string, _allItems: IndexedItem[], context?: ScorerContext) => {
         const title = ((item.bookmarkTitle || item.title) || '').toLowerCase();
-        const originalTokens = tokenize(query);
+        const originalTokens = context?.originalTokens || tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
         if (searchTokens.length === 0) {return 0;}

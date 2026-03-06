@@ -95,9 +95,6 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         logger.debug('runSearch', `📚 Synonym expansion: ${originalTokens.join(', ')} → ${synonymExpandedTokens.join(', ')}`);
     }
 
-    // Ensure SettingsManager is initialized before reading settings
-    await SettingsManager.init();
-    
     // Check if AI keyword expansion is enabled
     const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
 
@@ -194,15 +191,25 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         }
     }
 
-    // Context for scorers - pass expanded tokens and query embedding
+    // Get all indexed items
+    const items = await getAllIndexedItems();
+
+    // Pre-compute domain visit counts once (O(n)) instead of per-item (O(n^2))
+    const domainVisitCounts = new Map<string, number>();
+    for (const item of items) {
+        if (item.hostname) {
+            domainVisitCounts.set(item.hostname, (domainVisitCounts.get(item.hostname) || 0) + (item.visitCount || 1));
+        }
+    }
+
+    // Context for scorers - pass expanded tokens, query embedding, and pre-computed data
     const context: ScorerContext = {
         expandedTokens: searchTokens,
         aiExpanded: aiExpanded,
-        queryEmbedding: queryEmbedding
+        queryEmbedding: queryEmbedding,
+        originalTokens,
+        domainVisitCounts,
     };
-
-    // Get all indexed items
-    const items = await getAllIndexedItems();
 
     if (items.length === 0) {
         logger.warn('runSearch', `🔍 "${q}" - No index available, using browser history`);

@@ -6,9 +6,13 @@ export interface ScorerContext {
     // AI keyword expansion (prompting approach - RECOMMENDED)
     expandedTokens?: string[];     // Original + AI-expanded keywords
     aiExpanded?: boolean;          // True if AI expansion was successful
-    
+
     // Legacy embedding approach (deprecated - not recommended)
     queryEmbedding?: number[];     // Query embedding for cosine similarity
+
+    // Pre-computed for performance (avoid re-tokenizing in each scorer)
+    originalTokens?: string[];     // tokenize(query) result, computed once
+    domainVisitCounts?: Map<string, number>; // Pre-computed domain visit totals
 }
 
 export interface Scorer {

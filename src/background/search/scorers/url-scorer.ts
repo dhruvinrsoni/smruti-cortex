@@ -19,7 +19,7 @@ const urlScorer: Scorer = {
     score: (item, query, _allItems, context) => {
         const url = item.url.toLowerCase();
         const hostname = item.hostname.toLowerCase();
-        const originalTokens = tokenize(query);
+        const originalTokens = context?.originalTokens || tokenize(query);
         const searchTokens = context?.expandedTokens || originalTokens;
 
         if (searchTokens.length === 0) {return 0;}

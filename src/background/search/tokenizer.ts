@@ -43,6 +43,23 @@ export const MATCH_WEIGHTS: Record<MatchType, number> = {
  * - SUBSTRING: simple includes()
  * - NONE: no match
  */
+// Regex cache: avoids recompiling the same regex 3000+ times per search
+const regexCache = new Map<string, { exact: RegExp; prefix: RegExp }>();
+const consecutiveRegexCache = new Map<string, RegExp>();
+const REGEX_CACHE_MAX = 200;
+
+function getTokenRegexes(escapedToken: string): { exact: RegExp; prefix: RegExp } {
+    let cached = regexCache.get(escapedToken);
+    if (cached) { return cached; }
+    if (regexCache.size >= REGEX_CACHE_MAX) { regexCache.clear(); }
+    cached = {
+        exact: new RegExp(`(^|[^a-z0-9])${escapedToken}([^a-z0-9]|$)`),
+        prefix: new RegExp(`(^|[^a-z0-9])${escapedToken}`),
+    };
+    regexCache.set(escapedToken, cached);
+    return cached;
+}
+
 export function classifyMatch(token: string, text: string): MatchType {
     const lowerText = text.toLowerCase();
     const lowerToken = token.toLowerCase();
@@ -52,12 +69,11 @@ export function classifyMatch(token: string, text: string): MatchType {
 
     // Check exact word-boundary match (strongest signal)
     const escaped = lowerToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const exactRegex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`);
-    if (exactRegex.test(lowerText)) {return MatchType.EXACT;}
+    const { exact, prefix } = getTokenRegexes(escaped);
+    if (exact.test(lowerText)) {return MatchType.EXACT;}
 
     // Check prefix match: token appears at the start of a word
-    const prefixRegex = new RegExp(`(^|[^a-z0-9])${escaped}`);
-    if (prefixRegex.test(lowerText)) {return MatchType.PREFIX;}
+    if (prefix.test(lowerText)) {return MatchType.PREFIX;}
 
     // It matched via includes() but not at boundaries → substring
     return MatchType.SUBSTRING;
@@ -116,7 +132,13 @@ export function countConsecutiveMatches(tokens: string[], text: string): number 
         // Look for pattern: tokenA followed by non-alpha separator(s) then tokenB
         const escaped_a = a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const escaped_b = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const consecutiveRegex = new RegExp(`${escaped_a}[^a-z0-9]{0,3}${escaped_b}`);
+        const cacheKey = `${escaped_a}||${escaped_b}`;
+        let consecutiveRegex = consecutiveRegexCache.get(cacheKey);
+        if (!consecutiveRegex) {
+            if (consecutiveRegexCache.size >= REGEX_CACHE_MAX) { consecutiveRegexCache.clear(); }
+            consecutiveRegex = new RegExp(`${escaped_a}[^a-z0-9]{0,3}${escaped_b}`);
+            consecutiveRegexCache.set(cacheKey, consecutiveRegex);
+        }
         if (consecutiveRegex.test(lowerText)) {
             consecutiveCount++;
         }
