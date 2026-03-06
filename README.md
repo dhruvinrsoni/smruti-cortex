@@ -3,6 +3,7 @@
 **Ultra-fast browser history search. Find any page instantly.**
 
 [![Build](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml)
+[![NFR Quality](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/performance.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/performance.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)
@@ -123,6 +124,10 @@ npm run build:prod   # Production (minified)
 # Quality
 npm run lint         # Check code
 npm run test         # Run tests
+npm run coverage     # Run tests with coverage report
+
+# NFR report workflow (non-blocking quality indicator)
+# See GitHub Actions -> "NFR Quality Report" for shareable summary and artifacts
 
 # Pre-commit hooks (automatic)
 # Husky automatically runs builds before each commit

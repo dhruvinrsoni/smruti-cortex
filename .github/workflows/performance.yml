@@ -1,170 +1,312 @@
-name: Performance Monitoring
+name: NFR Quality Report
 
-# Purpose: Monitor bundle sizes and performance metrics on every build.
-# Produces: Performance reports and bundle size analysis (no artifacts, just logs).
-# Use case: Detect performance regressions and bundle bloat early.
-# Note: Does NOT require GitHub tokens - uses workflow summary only.
+# Purpose: Consolidated non-functional quality checks (informational only).
+# Includes: lint, tests, coverage, security audit, bundle/performance checks.
+# Result: Rich workflow summary + downloadable artifacts + PR coverage delta comment.
 
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main, develop]
+  schedule:
+    - cron: '0 9 1 * *' # Monthly: day 1 at 09:00 UTC
   workflow_dispatch:
     inputs:
       baseline_ref:
-        description: 'Baseline ref to compare against (default: main)'
+        description: 'Coverage baseline branch/ref (used for PR/manual runs)'
         required: false
         default: 'main'
         type: string
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
-  performance:
-    name: Bundle Analysis & Performance
+  nfr:
+    name: NFR Signals (Non-Blocking)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Need history for comparison
-      
+          fetch-depth: 0
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
-      - name: Build production bundle
-        run: npm run build:prod
-      
-      - name: Analyze bundle sizes
-        id: analyze
+
+      - name: Prepare report directory
+        run: mkdir -p nfr-reports
+
+      - name: Lint report
+        id: lint
+        continue-on-error: true
         run: |
-          echo "## 📦 Bundle Size Analysis" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Current Build" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          # Get sizes of all JavaScript bundles
-          find dist -name "*.js" -type f -exec ls -lh {} \; | awk '{print $9, $5}' | sort >> $GITHUB_STEP_SUMMARY
-          
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Calculate total bundle size
-          TOTAL_SIZE=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum}')
-          TOTAL_SIZE_KB=$((TOTAL_SIZE / 1024))
-          TOTAL_SIZE_MB=$(echo "scale=2; $TOTAL_SIZE / 1048576" | bc)
-          
-          echo "**Total Bundle Size:** ${TOTAL_SIZE_MB} MB (${TOTAL_SIZE_KB} KB)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Bundle size thresholds
-          SERVICE_WORKER_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
+          set +e
+          npm run lint -- --format json --output-file nfr-reports/lint-report.json > nfr-reports/lint.log 2>&1
+          LINT_EXIT=$?
+          node -e "
+          const fs=require('fs');
+          const p='nfr-reports/lint-report.json';
+          let errors=0,warnings=0;
+          if (fs.existsSync(p)) {
+            const data=JSON.parse(fs.readFileSync(p,'utf8'));
+            errors=data.reduce((s,f)=>s+(f.errorCount||0),0);
+            warnings=data.reduce((s,f)=>s+(f.warningCount||0),0);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `LINT_ERRORS=${errors}\nLINT_WARNINGS=${warnings}\n`);
+          "
+          if [ "$LINT_EXIT" -eq 0 ]; then
+            echo "LINT_STATUS=ok" >> "$GITHUB_ENV"
+          else
+            echo "LINT_STATUS=warn" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Unit tests
+        id: tests
+        continue-on-error: true
+        run: |
+          set +e
+          npm test > nfr-reports/test.log 2>&1
+          TEST_EXIT=$?
+          if [ "$TEST_EXIT" -eq 0 ]; then
+            echo "TEST_STATUS=ok" >> "$GITHUB_ENV"
+          else
+            echo "TEST_STATUS=warn" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Coverage
+        id: coverage
+        continue-on-error: true
+        run: |
+          set +e
+          npm run coverage > nfr-reports/coverage.log 2>&1
+          COVERAGE_EXIT=$?
+          node -e "
+          const fs=require('fs');
+          const p='coverage/coverage-summary.json';
+          let pct='n/a';
+          if (fs.existsSync(p)) {
+            const summary=JSON.parse(fs.readFileSync(p,'utf8'));
+            const total=summary.total || {};
+            if (typeof total.lines?.pct === 'number') pct=String(total.lines.pct);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_LINES_PCT=${pct}\n`);
+          "
+          if [ "$COVERAGE_EXIT" -eq 0 ]; then
+            echo "COVERAGE_STATUS=ok" >> "$GITHUB_ENV"
+          else
+            echo "COVERAGE_STATUS=warn" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Security audit
+        id: security
+        continue-on-error: true
+        run: |
+          set +e
+          npm audit --json > nfr-reports/audit.json 2>/dev/null
+          AUDIT_EXIT=$?
+          node -e "
+          const fs=require('fs');
+          const p='nfr-reports/audit.json';
+          let c=0,h=0,m=0,l=0,total=0;
+          if (fs.existsSync(p)) {
+            const data=JSON.parse(fs.readFileSync(p,'utf8'));
+            const v=data.metadata?.vulnerabilities || {};
+            c=v.critical||0;h=v.high||0;m=v.moderate||0;l=v.low||0;total=v.total||0;
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `AUDIT_CRITICAL=${c}\nAUDIT_HIGH=${h}\nAUDIT_MODERATE=${m}\nAUDIT_LOW=${l}\nAUDIT_TOTAL=${total}\n`);
+          "
+          if [ "$AUDIT_EXIT" -eq 0 ]; then
+            echo "SECURITY_STATUS=ok" >> "$GITHUB_ENV"
+          else
+            echo "SECURITY_STATUS=warn" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Build for performance metrics
+        id: build_perf
+        continue-on-error: true
+        run: |
+          set +e
+          npm run build:prod > nfr-reports/build-perf.log 2>&1
+          BUILD_EXIT=$?
+          SW_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
           POPUP_SIZE=$(ls -l dist/popup/popup.js 2>/dev/null | awk '{print $5}')
-          QUICK_SEARCH_SIZE=$(ls -l dist/content_scripts/quick-search.js 2>/dev/null | awk '{print $5}')
+          QS_SIZE=$(ls -l dist/content_scripts/quick-search.js 2>/dev/null | awk '{print $5}')
+          TOTAL_SIZE=$(find dist -name "*.js" -type f -exec ls -l {} \; 2>/dev/null | awk '{sum += $5} END {print sum+0}')
 
-          # Guard: set to 0 if file not found (prevents arithmetic errors)
-          SERVICE_WORKER_SIZE=${SERVICE_WORKER_SIZE:-0}
+          SW_SIZE=${SW_SIZE:-0}
           POPUP_SIZE=${POPUP_SIZE:-0}
-          QUICK_SEARCH_SIZE=${QUICK_SEARCH_SIZE:-0}
+          QS_SIZE=${QS_SIZE:-0}
+          TOTAL_SIZE=${TOTAL_SIZE:-0}
 
-          echo "### Bundle Size Thresholds" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Bundle | Size | Threshold | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "SW_SIZE_BYTES=$SW_SIZE" >> "$GITHUB_ENV"
+          echo "POPUP_SIZE_BYTES=$POPUP_SIZE" >> "$GITHUB_ENV"
+          echo "QS_SIZE_BYTES=$QS_SIZE" >> "$GITHUB_ENV"
+          echo "TOTAL_JS_SIZE_BYTES=$TOTAL_SIZE" >> "$GITHUB_ENV"
 
-          # Service Worker (target: < 500KB)
-          SW_SIZE_KB=$((SERVICE_WORKER_SIZE / 1024))
-          if [ "$SERVICE_WORKER_SIZE" -eq 0 ]; then
-            echo "| Service Worker | ⚠️ not found | 500 KB | ⚠️ MISSING |" >> $GITHUB_STEP_SUMMARY
-          elif [ "$SERVICE_WORKER_SIZE" -lt 512000 ]; then
-            echo "| Service Worker | ${SW_SIZE_KB} KB | 500 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
+          if [ "$BUILD_EXIT" -eq 0 ]; then
+            echo "PERF_STATUS=ok" >> "$GITHUB_ENV"
           else
-            echo "| Service Worker | ${SW_SIZE_KB} KB | 500 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
+            echo "PERF_STATUS=warn" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Baseline coverage for delta
+        id: baseline_coverage
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          BASE_REF="${{ inputs.baseline_ref || github.base_ref || 'main' }}"
+          echo "BASELINE_REF=$BASE_REF" >> "$GITHUB_ENV"
+
+          mkdir -p ../nfr-baseline
+          set +e
+          git worktree add ../nfr-baseline "origin/$BASE_REF" > nfr-reports/baseline.log 2>&1
+          ADD_EXIT=$?
+          if [ "$ADD_EXIT" -ne 0 ]; then
+            echo "BASELINE_COVERAGE=n/a" >> "$GITHUB_ENV"
+            exit 0
           fi
 
-          # Popup (target: < 300KB)
-          POPUP_SIZE_KB=$((POPUP_SIZE / 1024))
-          if [ "$POPUP_SIZE" -eq 0 ]; then
-            echo "| Popup | ⚠️ not found | 300 KB | ⚠️ MISSING |" >> $GITHUB_STEP_SUMMARY
-          elif [ "$POPUP_SIZE" -lt 307200 ]; then
-            echo "| Popup | ${POPUP_SIZE_KB} KB | 300 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Popup | ${POPUP_SIZE_KB} KB | 300 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
-          fi
+          pushd ../nfr-baseline > /dev/null
+          npm ci >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
+          npm run coverage >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
+          popd > /dev/null
 
-          # Quick Search (target: < 200KB)
-          QS_SIZE_KB=$((QUICK_SEARCH_SIZE / 1024))
-          if [ "$QUICK_SEARCH_SIZE" -eq 0 ]; then
-            echo "| Quick Search | ⚠️ not found | 200 KB | ⚠️ MISSING |" >> $GITHUB_STEP_SUMMARY
-          elif [ "$QUICK_SEARCH_SIZE" -lt 204800 ]; then
-            echo "| Quick Search | ${QS_SIZE_KB} KB | 200 KB | ✅ OK |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Quick Search | ${QS_SIZE_KB} KB | 200 KB | ⚠️ LARGE |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Compare with baseline (if PR or manual)
+          node -e "
+          const fs=require('fs');
+          const p='../nfr-baseline/coverage/coverage-summary.json';
+          let pct='n/a';
+          if (fs.existsSync(p)) {
+            const summary=JSON.parse(fs.readFileSync(p,'utf8'));
+            const lines=summary.total?.lines?.pct;
+            if (typeof lines === 'number') pct=String(lines);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `BASELINE_COVERAGE=${pct}\n`);
+          "
+
+          git worktree remove ../nfr-baseline --force >> nfr-reports/baseline.log 2>&1
+          exit 0
+
+      - name: Coverage delta
+        id: coverage_delta
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         run: |
-          BASELINE_REF="${{ inputs.baseline_ref || 'main' }}"
-          
-          echo "### 📊 Comparison with \`$BASELINE_REF\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Checkout baseline
-          git fetch origin $BASELINE_REF
-          git checkout origin/$BASELINE_REF
-          
-          # Build baseline (output visible for debugging)
-          npm ci
-          npm run build:prod
+          node -e "
+          const fs=require('fs');
+          const curr=process.env.COVERAGE_LINES_PCT || 'n/a';
+          const base=process.env.BASELINE_COVERAGE || 'n/a';
+          let delta='n/a';
+          if (curr !== 'n/a' && base !== 'n/a') {
+            delta=(Number(curr)-Number(base)).toFixed(2);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_DELTA=${delta}\n`);
+          "
 
-          # Get baseline sizes
-          BASELINE_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum+0}')
-          BASELINE_TOTAL_KB=$((BASELINE_TOTAL / 1024))
+      - name: Upload NFR artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfr-reports-${{ github.run_number }}
+          path: |
+            coverage
+            nfr-reports
+          retention-days: 30
 
-          # Switch back to current ref
-          git checkout -
-          npm ci
-          npm run build:prod
-
-          # Get current sizes
-          CURRENT_TOTAL=$(find dist -name "*.js" -type f -exec ls -l {} \; | awk '{sum += $5} END {print sum+0}')
-          CURRENT_TOTAL_KB=$((CURRENT_TOTAL / 1024))
-
-          # Calculate difference (guard against division by zero)
-          DIFF_KB=$((CURRENT_TOTAL_KB - BASELINE_TOTAL_KB))
-          if [ "$BASELINE_TOTAL_KB" -gt 0 ]; then
-            PERCENT_CHANGE=$(echo "scale=2; ($DIFF_KB * 100) / $BASELINE_TOTAL_KB" | bc)
-          else
-            PERCENT_CHANGE="N/A"
-          fi
-          
-          echo "| Metric | Baseline | Current | Change |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          if [ $DIFF_KB -gt 0 ]; then
-            echo "| Total Size | ${BASELINE_TOTAL_KB} KB | ${CURRENT_TOTAL_KB} KB | 📈 +${DIFF_KB} KB (+${PERCENT_CHANGE}%) |" >> $GITHUB_STEP_SUMMARY
-          elif [ $DIFF_KB -lt 0 ]; then
-            echo "| Total Size | ${BASELINE_TOTAL_KB} KB | ${CURRENT_TOTAL_KB} KB | 📉 ${DIFF_KB} KB (${PERCENT_CHANGE}%) |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Total Size | ${BASELINE_TOTAL_KB} KB | ${CURRENT_TOTAL_KB} KB | ✅ No change |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Performance Summary
+      - name: NFR summary report
+        if: always()
         run: |
-          echo "### ⚡ Performance Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Bundle analysis complete" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Size thresholds checked" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Performance monitoring active" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**No significant performance regressions detected.**" >> $GITHUB_STEP_SUMMARY
+          SW_KB=$((SW_SIZE_BYTES / 1024))
+          POPUP_KB=$((POPUP_SIZE_BYTES / 1024))
+          QS_KB=$((QS_SIZE_BYTES / 1024))
+          TOTAL_KB=$((TOTAL_JS_SIZE_BYTES / 1024))
+
+          echo "## NFR Quality Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Coverage (lines):** ${COVERAGE_LINES_PCT}%" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Area | Status | Key Signal |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|--------|------------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Lint | ${LINT_STATUS} | ${LINT_ERRORS} errors, ${LINT_WARNINGS} warnings |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tests | ${TEST_STATUS} | See test.log artifact for details |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Coverage | ${COVERAGE_STATUS} | ${COVERAGE_LINES_PCT}% lines |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Security | ${SECURITY_STATUS} | ${AUDIT_TOTAL} total (${AUDIT_CRITICAL} critical, ${AUDIT_HIGH} high) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Performance | ${PERF_STATUS} | Total JS ${TOTAL_KB} KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Bundle Sizes" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Bundle | Size | Target |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Service Worker | ${SW_KB} KB | < 500 KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Popup | ${POPUP_KB} KB | < 300 KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Quick Search | ${QS_KB} KB | < 200 KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${BASELINE_REF}" ]; then
+            echo "### Coverage Trend" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Baseline: \`${BASELINE_REF}\` = ${BASELINE_COVERAGE}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "Current: ${COVERAGE_LINES_PCT}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "Delta: ${COVERAGE_DELTA}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "### Notes" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- This workflow is informational and non-blocking by design." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Download artifact \`nfr-reports-${{ github.run_number }}\` for full shareable logs/reports." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: PR coverage comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- nfr-coverage-comment -->';
+            const body = [
+              marker,
+              '## NFR Coverage Snapshot',
+              '',
+              `- Current coverage (lines): **${process.env.COVERAGE_LINES_PCT || 'n/a'}%**`,
+              `- Baseline (${process.env.BASELINE_REF || 'main'}): **${process.env.BASELINE_COVERAGE || 'n/a'}%**`,
+              `- Delta: **${process.env.COVERAGE_DELTA || 'n/a'}%**`,
+              '',
+              'Coverage here is informational (non-blocking).'
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }
