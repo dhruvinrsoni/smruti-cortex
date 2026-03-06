@@ -1,93 +1,54 @@
-# Copilot Instructions for SmrutiCortex
+# SmrutiCortex
 
-## Project Overview
-SmrutiCortex is a Chrome Manifest V3 extension for ultra-fast, intelligent browser history search. It uses IndexedDB for local storage, a modular scorer system for ranking, and a service worker for background processing. The codebase is TypeScript-first and organized for maintainability and speed.
+Chrome Manifest V3 extension for instant browser history search with optional local AI.
+100% private, zero cloud. All data stays in IndexedDB on the user's machine.
 
-## Architecture & Key Components
-- **src/background/**: Core background logic
-  - `database.ts`: IndexedDB schema, storage quota info
-  - `indexing.ts`: Real-time history indexing, mergeMetadata
-  - `resilience.ts`: Self-healing, health monitoring, auto-recovery
-  - `messaging.ts`: Message passing between extension parts
-  - `search/`: Vivek Search modular scoring system
-    - `search-engine.ts`: Core search orchestrator with graduated post-score boosters
-    - `tokenizer.ts`: Token splitting + graduated match classification (EXACT > PREFIX > SUBSTRING > NONE)
-    - `scorer-manager.ts`: 9-scorer weighted pipeline with graduated matching
-    - `diversity-filter.ts`: URL normalization & duplicate filtering
-    - `scorers/`: Individual scoring algorithms (title, URL, recency, frequency, metadata)
-    - See `docs/VIVEK_SEARCH_ALGORITHM.md` for the full algorithm specification
-- **src/content_scripts/**: 
-  - `extractor.ts`: Page metadata extraction with sensitive-site blacklist
-  - `quick-search.ts`: Ultra-fast inline search overlay (< 50ms, no service worker wake-up)
-- **src/core/**: Shared utilities, constants, logger, settings
-- **src/popup/**: Search UI (HTML, CSS, TS) with settings modal
-- **manifest.json**: Chrome extension manifest (MV3)
+## Tech Stack
 
-## Two UI Implementations
-SmrutiCortex has **two distinct user interfaces**:
+- **Runtime:** Node 22 | TypeScript | esbuild (bundler) | Vitest (tests)
+- **Extension:** Chrome MV3 service worker + content scripts + popup
+- **Storage:** IndexedDB (pages index), chrome.storage.local (settings)
+- **AI (optional):** Ollama -- keyword expansion (llama3.2:1b) + semantic embeddings (nomic-embed-text)
 
-### 1. **Inline Overlay** (Content Script-Based)
-- **Trigger**: `Ctrl+Shift+S` keyboard shortcut on regular web pages
-- **Implementation**: Content script (`quick-search.ts`) with closed Shadow DOM
-- **Appearance**: Centered modal overlay floating on top of the current page
-- **Performance**: Ultra-fast (< 50ms) - no service worker wake-up needed
-- **Context**: Runs directly in page context, always active
-- **Use case**: Primary interface for instant search on any webpage
+## Quick Reference
 
-### 2. **Extension Popup** (Traditional Popup)
-- **Trigger**: Clicking toolbar icon OR `Ctrl+Shift+S` on special pages (chrome://, edge://, about:, extension pages)
-- **Implementation**: Standard Chrome extension popup (`popup.html`)
-- **Appearance**: Dropdown attached to toolbar icon (constrained 600x600px when popup, centered card when opened as tab)
-- **Performance**: Slower (200-800ms) due to popup attachment overhead
-- **Context**: Chrome extension context
-- **Use case**: Fallback for pages where content scripts cannot run, settings access, bookmarking
+| Command | Purpose |
+|---------|---------|
+| `npm run build:prod` | Production build to `dist/` |
+| `npm run build:dev` | Development build (no minification) |
+| `npm run lint` | ESLint check |
+| `npm test` | Vitest test suite |
+| `npm run clean` | Remove `dist/` |
+| `npm run package` | Build + zip for Chrome Web Store |
 
-**Note**: The same `popup.html` can be opened in three contexts:
-1. As a popup (attached to toolbar) - 600x600px constrained
-2. As a tab (via settings button) - centered card with backdrop
-3. Via omnibox (`sc ` in address bar) - popup mode
+## Project Structure
 
-## Performance Philosophy
-- **Content script-first**: `quick-search.ts` runs in page context for instant keyboard shortcuts (< 50ms, no service worker wake-up)
-- **Shadow DOM isolation**: Complete style isolation from page CSS
-- **Port-based messaging**: `chrome.runtime.connect()` for faster search (2-5ms vs 5-15ms one-shot)
-- **Self-healing architecture**: Auto-recovery, health monitoring every 60s
-- **Service worker pre-warming**: Ping on visibility change to eliminate cold starts
-- **requestIdleCallback**: Pre-create overlay during browser idle for instant appearance
-- **Non-blocking init**: Logger and Settings use async init to avoid blocking popup load
-- **Module-level listeners**: Command listeners registered at load time, before async init
-- **Lazy loading**: Heavy imports are loaded on-demand, not at startup
-- **Module-level listeners**: Command listeners registered at module load time, before async init
+```
+src/
+  background/       Service worker, database, indexing, search engine
+    search/         Vivek Search: scorers, tokenizer, diversity filter
+  content_scripts/  Page extractor + quick-search overlay
+  core/             Shared: logger, settings, constants, helpers
+  popup/            Extension popup UI (HTML/CSS/TS)
+```
 
-## Developer Workflow
-- **Install dependencies:** `npm install`
-- **Build extension:** `npm run build` (outputs to `dist/`)
-- **Clean build artifacts:** `npm run clean`
-- **Lint:** `npm run lint`
-- **Test:** `npm run test` (if available)
-- **Load in Chrome:** Use `chrome://extensions` > "Load unpacked" > select `dist/`
+## Skills (On-Demand Context)
 
-## Patterns & Conventions
-- **TypeScript everywhere**; avoid JS in new code
-- **Modular scoring:** Add new scorers in `src/assets/background/search/scorers/` and register in `index.ts`
-- **Message passing:** Use `messaging.ts` for communication between popup, background, and content scripts
-- **Settings/constants:** Centralized in `src/core/settings.ts` and `constants.ts`
-- **Debug logging:** Use `logger.ts`; toggle via popup UI
-- **Popup UI:** Keep UI logic in `popup.ts`, styles in `popup.css`, and structure in `popup.html`
-- **Tabbed settings:** Settings modal uses `data-tab` attributes on `.settings-section` divs. Tab bar buttons match via `data-tab`. To add a new setting to an existing tab, add `data-tab="tabname"` to the section. To create a new tab, add a `<button class="settings-tab" data-tab="newtab">` in `.settings-tabs` and tag sections with `data-tab="newtab"`.
+Load the relevant skill file from `.github/skills/<name>/SKILL.md` for detailed instructions.
 
-## Integration Points
-- **Browser APIs:** IndexedDB, chrome.history, chrome.runtime messaging
-- **No backend/server**; all data is local
+| Skill | When to load | Description |
+|-------|-------------|-------------|
+| `search-engine` | Modifying search, scoring, ranking | Vivek Search algorithm, 9-scorer pipeline, tokenizer |
+| `ai-ollama` | AI features, embeddings, Ollama | Keyword expansion, semantic search, circuit breaker |
+| `workflows-ci` | CI/CD, Docker, GitHub Actions | Build/security/performance workflows, Dockerfile |
+| `ui-components` | Popup, quick-search, UI changes | Shadow DOM overlay, two-phase search, port messaging |
+| `testing` | Writing or fixing tests | Vitest config, chrome API mocks, test patterns |
+| `settings` | Settings, storage, preferences | SettingsManager schema, validation, storage layer |
 
-## Examples
-- To add a new scoring algorithm: create a file in `scorers/`, export a scorer, and add it to `index.ts`
-- To add a new popup feature: update `popup.ts` and `popup.html`, style in `popup.css`
+## Key Conventions
 
-## References
-- See [README.md](../README.md) for features and install
-- See [TESTING_and_DEBUG_GUIDE.md](../TESTING_and_DEBUG_GUIDE.md) for build, test, and debug steps
-- See [project-structure.txt](../project-structure.txt) for file layout
-
----
-**Keep instructions concise and up-to-date. Update this file if project structure or workflows change.**
+- TypeScript everywhere; no new JS files
+- Settings: single source of truth in `SETTINGS_SCHEMA` (`src/core/settings.ts`)
+- Logging: use `Logger.forComponent('Name')`, never raw `console.log`
+- Build: `npm run build:prod` = sync-version + clean + tsc + copy-static + esbuild
+- Load in browser: `chrome://extensions` > Load unpacked > select `dist/`
