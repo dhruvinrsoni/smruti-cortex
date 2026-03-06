@@ -355,7 +355,7 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
                 used = estimate.usage || 0;
                 total = estimate.quota || 0;
                 logger.trace('getStorageQuotaInfo', 'Storage estimate retrieved', { used, total });
-            } catch (e) {
+            } catch {
                 logger.debug('getStorageQuotaInfo', 'Storage estimate not available, using fallback');
             }
         }

@@ -270,7 +270,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                         await import('../database').then(db => db.saveIndexedItem(item));
                     }
                 }
-            } catch (error) {
+            } catch {
                 // Ignore embedding errors - will use keyword matching
             }
         }

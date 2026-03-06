@@ -53,7 +53,7 @@ export class Logger {
             if (typeof savedLogLevel === 'number' && savedLogLevel >= 0 && savedLogLevel <= 4) {
                 this.currentLevel = savedLogLevel;
             }
-        } catch (error) {
+        } catch {
             // Settings not available yet, keep default INFO level
             // Don't log here to avoid recursion
         }

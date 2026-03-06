@@ -100,8 +100,7 @@ export function getBrowserCompatibility(): {
 }
 
 // Promisified wrappers for async APIs
-// eslint-disable-next-line @typescript-eslint/ban-types
-export function promisify<T>(apiCall: Function, ...args: any[]): Promise<T> { // eslint-disable-line @typescript-eslint/no-explicit-any
+export function promisify<T>(apiCall: (...args: any[]) => void, ...args: any[]): Promise<T> { // eslint-disable-line @typescript-eslint/no-explicit-any
     return new Promise((resolve, reject) => {
         try {
             apiCall(...args, (result: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
