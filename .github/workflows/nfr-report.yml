@@ -1,6 +1,6 @@
-name: NFR Quality Report
+name: Quality Report
 
-# Purpose: Consolidated non-functional quality checks (informational only).
+# Purpose: Consolidated quality checks (informational only).
 # Includes: lint, tests, coverage, security audit, bundle/performance checks.
 # Result: Rich workflow summary + downloadable artifacts + PR coverage delta comment.
 
@@ -10,6 +10,7 @@ on:
   push:
     branches: [main, develop]
     paths-ignore:
+      - 'docs/quality-report/**'
       - 'docs/reports/nfr/latest/**'
   schedule:
     - cron: '0 9 1 * *' # Monthly: day 1 at 09:00 UTC
@@ -27,7 +28,7 @@ permissions:
 
 jobs:
   nfr:
-    name: NFR Signals (Non-Blocking)
+    name: Quality Signals (Non-Blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -53,7 +54,7 @@ jobs:
         run: |
           OWNER="${GITHUB_REPOSITORY%/*}"
           REPO="${GITHUB_REPOSITORY#*/}"
-          echo "PUBLIC_NFR_URL=https://${OWNER}.github.io/${REPO}/reports/nfr/latest/" >> "$GITHUB_ENV"
+          echo "PUBLIC_REPORT_URL=https://${OWNER}.github.io/${REPO}/quality-report/" >> "$GITHUB_ENV"
 
       - name: Lint report
         id: lint
@@ -286,7 +287,7 @@ jobs:
           fs.writeFileSync('nfr-reports/summary.json', JSON.stringify(summary, null, 2));
 
           const md = [
-            '# NFR Report Bundle',
+            '# Quality Report Bundle',
             '',
             `Generated: ${summary.generatedAt}`,
             `Workflow: ${summary.workflow} (#${summary.runNumber})`,
@@ -336,7 +337,7 @@ jobs:
             '<head>',
             '  <meta charset="utf-8" />',
             '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-            '  <title>NFR Report Bundle</title>',
+            '  <title>Quality Report Bundle</title>',
             '  <style>',
             '    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1f2937; }',
             '    h1, h2 { margin: 0 0 10px; }',
@@ -348,7 +349,7 @@ jobs:
             '  </style>',
             '</head>',
             '<body>',
-            `  <h1>NFR Report Bundle</h1>`,
+            `  <h1>Quality Report Bundle</h1>`,
             `  <div class="meta">Generated: ${esc(summary.generatedAt)} | Run: #${esc(summary.runNumber)} | Ref: ${esc(summary.ref)}</div>`,
             '',
             '  <h2>Scorecard</h2>',
@@ -390,6 +391,7 @@ jobs:
       - name: Build public web report
         if: always()
         run: |
+          mkdir -p docs/quality-report
           mkdir -p docs/reports/nfr/latest
           node <<'NODE'
           const fs = require('fs');
@@ -414,7 +416,7 @@ jobs:
             totalJsKb: Math.floor(Number(process.env.TOTAL_JS_SIZE_BYTES || 0) / 1024)
           };
 
-          fs.writeFileSync('docs/reports/nfr/latest/summary.json', JSON.stringify(data, null, 2));
+          fs.writeFileSync('docs/quality-report/summary.json', JSON.stringify(data, null, 2));
 
           const html = [
             '<!doctype html>',
@@ -422,7 +424,7 @@ jobs:
             '<head>',
             '  <meta charset="utf-8" />',
             '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-            '  <title>Latest NFR Report</title>',
+            '  <title>Latest Quality Report</title>',
             '  <style>',
             '    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px auto; max-width: 960px; padding: 0 16px; color: #1f2937; }',
             '    h1, h2 { margin: 0 0 10px; }',
@@ -433,7 +435,7 @@ jobs:
             '  </style>',
             '</head>',
             '<body>',
-            '  <h1>Latest NFR Report</h1>',
+            '  <h1>Latest Quality Report</h1>',
             `  <p class="meta">Generated: ${esc(data.generatedAt)} | Run #${esc(data.runNumber)} | Ref: ${esc(data.ref)}</p>`,
             `  <p><a href="https://github.com/${esc(data.repository)}/actions/runs/${esc(data.runId)}" target="_blank" rel="noopener">Open workflow run</a></p>`,
             '',
@@ -457,7 +459,22 @@ jobs:
             '</html>'
           ].join('\n');
 
-          fs.writeFileSync('docs/reports/nfr/latest/index.html', html);
+          fs.writeFileSync('docs/quality-report/index.html', html);
+
+          const redirect = [
+            '<!doctype html>',
+            '<html lang="en">',
+            '<head>',
+            '  <meta charset="utf-8" />',
+            '  <meta http-equiv="refresh" content="0; url=/smruti-cortex/quality-report/" />',
+            '  <title>Moved: Quality Report</title>',
+            '</head>',
+            '<body>',
+            '  <p>Moved to <a href="/smruti-cortex/quality-report/">/quality-report/</a></p>',
+            '</body>',
+            '</html>'
+          ].join('\n');
+          fs.writeFileSync('docs/reports/nfr/latest/index.html', redirect);
           NODE
 
       - name: Publish public report to docs
@@ -465,22 +482,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/reports/nfr/latest
+          git add docs/quality-report docs/reports/nfr/latest
           git diff --cached --quiet && exit 0
-          git commit -m "docs: update latest NFR report [skip ci]"
+          git commit -m "docs: update latest quality report [skip ci]"
           git push
 
       - name: Upload NFR artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nfr-reports-${{ github.run_number }}
+          name: quality-report-bundle-${{ github.run_number }}
           path: |
             coverage
             nfr-reports
           retention-days: 30
 
-      - name: NFR summary report
+      - name: Quality summary report
         if: always()
         run: |
           SW_KB=$((SW_SIZE_BYTES / 1024))
@@ -488,9 +505,21 @@ jobs:
           QS_KB=$((QS_SIZE_BYTES / 1024))
           TOTAL_KB=$((TOTAL_JS_SIZE_BYTES / 1024))
 
-          echo "## NFR Quality Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Quality Report" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Coverage (lines):** ${COVERAGE_LINES_PCT}%" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Fast health snapshot for this run. Non-blocking by design." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Executive Snapshot" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Signal | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Coverage (lines) | **${COVERAGE_LINES_PCT}%** |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Lint issues | ${LINT_ERRORS} errors, ${LINT_WARNINGS} warnings |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Security | ${AUDIT_TOTAL} total, ${AUDIT_CRITICAL} critical, ${AUDIT_HIGH} high |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Bundle size | Total JS ${TOTAL_KB} KB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Quality Signals" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Area | Status | Key Signal |" >> "$GITHUB_STEP_SUMMARY"
           echo "|------|--------|------------|" >> "$GITHUB_STEP_SUMMARY"
@@ -500,6 +529,22 @@ jobs:
           echo "| Security | ${SECURITY_STATUS} | ${AUDIT_TOTAL} total (${AUDIT_CRITICAL} critical, ${AUDIT_HIGH} high) |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Performance | ${PERF_STATUS} | Total JS ${TOTAL_KB} KB |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Top 3 Actions" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$LINT_ERRORS" -gt 0 ]; then
+            echo "1. Fix lint errors first to improve stability and contributor trust." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "1. Lint errors are clean. Keep this as baseline." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$AUDIT_CRITICAL" -gt 0 ] || [ "$AUDIT_HIGH" -gt 0 ]; then
+            echo "2. Prioritize dependency security remediation for high/critical advisories." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "2. Security advisories are under control. Continue regular monitoring." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "3. Review coverage trend and add tests in recently changed modules." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
           echo "### Bundle Sizes" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Bundle | Size | Target |" >> "$GITHUB_STEP_SUMMARY"
@@ -516,12 +561,13 @@ jobs:
             echo "Delta: ${COVERAGE_DELTA}%" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "### Notes" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Quick Links" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Public latest report: ${PUBLIC_REPORT_URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Download artifact: \`quality-report-bundle-${{ github.run_number }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Internal bundle entry points: \`nfr-reports/README.md\`, \`nfr-reports/index.html\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- This workflow is informational and non-blocking by design." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Download artifact \`nfr-reports-${{ github.run_number }}\` for full shareable logs/reports." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Start with \`nfr-reports/README.md\` or \`nfr-reports/index.html\` for a directly consumable report." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Public latest report: ${PUBLIC_NFR_URL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: PR coverage comment
         if: github.event_name == 'pull_request'
@@ -531,7 +577,7 @@ jobs:
             const marker = '<!-- nfr-coverage-comment -->';
             const body = [
               marker,
-              '## NFR Coverage Snapshot',
+              '## Quality Report Coverage Snapshot',
               '',
               `- Current coverage (lines): **${process.env.COVERAGE_LINES_PCT || 'n/a'}%**`,
               `- Baseline (${process.env.BASELINE_REF || 'main'}): **${process.env.BASELINE_COVERAGE || 'n/a'}%**`,
