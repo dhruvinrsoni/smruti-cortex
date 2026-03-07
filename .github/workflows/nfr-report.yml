@@ -64,6 +64,18 @@ jobs:
           npm run lint -- --format json --output-file nfr-reports/lint-report.json > nfr-reports/lint.log 2>&1
           LINT_EXIT=$?
           node -e "
+
+          const toStatus = (raw) => {
+            const v = String(raw || 'unknown').toLowerCase();
+            if (v === 'ok') return 'pass';
+            if (v === 'warn') return 'warn';
+            return 'unknown';
+          };
+
+          const toCoverageLabel = (pct) => {
+            if (pct === 'n/a') return 'n/a';
+            return `${pct}%`;
+          };
           const fs=require('fs');
           const p='nfr-reports/lint-report.json';
           let errors=0,warnings=0;
@@ -72,17 +84,36 @@ jobs:
             errors=data.reduce((s,f)=>s+(f.errorCount||0),0);
             warnings=data.reduce((s,f)=>s+(f.warningCount||0),0);
           }
+            coverageSource: process.env.COVERAGE_SOURCE || 'none',
           fs.appendFileSync(process.env.GITHUB_ENV, `LINT_ERRORS=${errors}\nLINT_WARNINGS=${warnings}\n`);
           "
           if [ "$LINT_EXIT" -eq 0 ]; then
             echo "LINT_STATUS=ok" >> "$GITHUB_ENV"
           else
             echo "LINT_STATUS=warn" >> "$GITHUB_ENV"
+            lintStatus: toStatus(process.env.LINT_STATUS),
+            testStatus: toStatus(process.env.TEST_STATUS),
+            coverageStatus: toStatus(process.env.COVERAGE_STATUS),
+            securityStatus: toStatus(process.env.SECURITY_STATUS),
+            perfStatus: toStatus(process.env.PERF_STATUS),
           fi
           exit 0
 
       - name: Unit tests
         id: tests
+
+          const actions = [];
+          if (data.lintErrors > 0) actions.push(`Fix ${data.lintErrors} lint errors before next release.`);
+          if (data.auditCritical > 0 || data.auditHigh > 0) actions.push(`Prioritize security updates (${data.auditCritical} critical, ${data.auditHigh} high).`);
+          if (data.coverageLinesPct !== 'n/a' && Number(data.coverageLinesPct) < 75) actions.push(`Increase line coverage (current ${data.coverageLinesPct}%).`);
+          if (data.coverageLinesPct === 'n/a') actions.push('Coverage data unavailable: check coverage step output and artifacts.');
+          if (data.totalJsKb > 900) actions.push(`Reduce bundle size (current total ${data.totalJsKb} KB).`);
+          if (actions.length === 0) actions.push('No urgent action detected. Maintain current quality trend.');
+
+          const chip = (label, status) => {
+            const className = status === 'pass' ? 'chip pass' : status === 'warn' ? 'chip warn' : 'chip unknown';
+            return `<span class="${className}">${esc(label)}: ${esc(status)}</span>`;
+          };
         continue-on-error: true
         run: |
           set +e
@@ -94,24 +125,78 @@ jobs:
             echo "TEST_STATUS=warn" >> "$GITHUB_ENV"
           fi
           exit 0
-
-      - name: Coverage
-        id: coverage
-        continue-on-error: true
-        run: |
-          set +e
+            '    :root { --bg: #f6f8fb; --card: #ffffff; --ink: #0f172a; --muted: #475569; --line: #dbe3ee; --accent: #0f766e; --warn: #b45309; --pass: #166534; --unknown: #334155; }',
+            '    body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: linear-gradient(180deg, #eff4ff 0%, #f6f8fb 45%); color: var(--ink); }',
+            '    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 36px; }',
+            '    .hero { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06); }',
+            '    h1 { margin: 0; font-size: 30px; }',
+            '    h2 { margin: 0 0 10px; font-size: 20px; }',
+            '    .meta { color: var(--muted); margin-top: 8px; font-size: 14px; }',
+            '    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }',
+            '    .chip { border-radius: 999px; padding: 4px 10px; font-size: 12px; border: 1px solid transparent; }',
+            '    .chip.pass { color: var(--pass); border-color: #86efac; background: #f0fdf4; }',
+            '    .chip.warn { color: var(--warn); border-color: #fcd34d; background: #fffbeb; }',
+            '    .chip.unknown { color: var(--unknown); border-color: #cbd5e1; background: #f8fafc; }',
+            '    .grid { margin-top: 18px; display: grid; gap: 14px; grid-template-columns: 1fr; }',
+            '    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }',
+            '    table { border-collapse: collapse; width: 100%; margin-top: 8px; }',
+            '    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }',
+            '    th { background: #f8fafc; }',
+            '    ul { margin: 8px 0 0 18px; }',
+            '    a { color: var(--accent); text-decoration: none; }',
+            '    a:hover { text-decoration: underline; }',
+            '    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }',
+            '    .kpi { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }',
+            '    .kpi .label { color: var(--muted); font-size: 12px; }',
+            '    .kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; }',
+            '    @media (max-width: 680px) { .wrap { padding: 16px 12px 24px; } h1 { font-size: 24px; } }',
           npm run coverage > nfr-reports/coverage.log 2>&1
           COVERAGE_EXIT=$?
           node -e "
-          const fs=require('fs');
-          const p='coverage/coverage-summary.json';
-          let pct='n/a';
-          if (fs.existsSync(p)) {
-            const summary=JSON.parse(fs.readFileSync(p,'utf8'));
-            const total=summary.total || {};
-            if (typeof total.lines?.pct === 'number') pct=String(total.lines.pct);
+            '  <div class="wrap">',
+            '    <section class="hero">',
+            '      <h1>Latest Quality Report</h1>',
+            `      <p class="meta">Generated: ${esc(data.generatedAt)} | Run #${esc(data.runNumber)} | Ref: ${esc(data.ref)} | Coverage source: ${esc(data.coverageSource)}</p>`,
+            `      <p class="meta"><a href="https://github.com/${esc(data.repository)}/actions/runs/${esc(data.runId)}" target="_blank" rel="noopener">Open workflow run details</a></p>`,
+            `      <div class="chips">${chip('Lint', data.lintStatus)}${chip('Tests', data.testStatus)}${chip('Coverage', data.coverageStatus)}${chip('Security', data.securityStatus)}${chip('Performance', data.perfStatus)}</div>`,
+            '      <div class="kpis">',
+            `        <div class="kpi"><div class="label">Coverage</div><div class="value">${esc(toCoverageLabel(data.coverageLinesPct))}</div></div>`,
+            `        <div class="kpi"><div class="label">Lint Errors</div><div class="value">${esc(data.lintErrors)}</div></div>`,
+            `        <div class="kpi"><div class="label">Critical/High Vulns</div><div class="value">${esc(data.auditCritical + data.auditHigh)}</div></div>`,
+            `        <div class="kpi"><div class="label">Total JS Bundle</div><div class="value">${esc(data.totalJsKb)} KB</div></div>`,
+            '      </div>',
+            '    </section>',
+            '    <section class="grid">',
+            '      <article class="card">',
+            '        <h2>Signals</h2>',
+            '        <table>',
+            '          <tr><th>Area</th><th>Status</th><th>Signal</th></tr>',
+            `          <tr><td>Coverage</td><td>${esc(data.coverageStatus)}</td><td>${esc(toCoverageLabel(data.coverageLinesPct))} (delta ${esc(data.coverageDelta)}%)</td></tr>`,
+            `          <tr><td>Lint</td><td>${esc(data.lintStatus)}</td><td>${esc(data.lintErrors)} errors, ${esc(data.lintWarnings)} warnings</td></tr>`,
+            `          <tr><td>Security</td><td>${esc(data.securityStatus)}</td><td>${esc(data.auditTotal)} total, ${esc(data.auditCritical)} critical, ${esc(data.auditHigh)} high</td></tr>`,
+            `          <tr><td>Performance</td><td>${esc(data.perfStatus)}</td><td>Total JS ${esc(data.totalJsKb)} KB</td></tr>`,
+            '        </table>',
+            '      </article>',
+            '      <article class="card">',
+            '        <h2>Top Actions</h2>',
+            `        <ul>${actions.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>`,
+            '      </article>',
+            '      <article class="card">',
+            '        <h2>Bundle Sizes</h2>',
+            '        <table>',
+            '          <tr><th>Bundle</th><th>Size</th><th>Target</th></tr>',
+            `          <tr><td>Service Worker</td><td>${esc(data.swKb)} KB</td><td>&lt; 500 KB</td></tr>`,
+            `          <tr><td>Popup</td><td>${esc(data.popupKb)} KB</td><td>&lt; 300 KB</td></tr>`,
+            `          <tr><td>Quick Search</td><td>${esc(data.qsKb)} KB</td><td>&lt; 200 KB</td></tr>`,
+            '        </table>',
+            '      </article>',
+            '    </section>',
+            '  </div>',
+              pct=((lh*100)/lf).toFixed(2);
+              source='lcov';
+            }
           }
-          fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_LINES_PCT=${pct}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_LINES_PCT=${pct}\nCOVERAGE_SOURCE=${source}\n`);
           "
           if [ "$COVERAGE_EXIT" -eq 0 ]; then
             echo "COVERAGE_STATUS=ok" >> "$GITHUB_ENV"
@@ -199,11 +284,20 @@ jobs:
           node -e "
           const fs=require('fs');
           const p='../nfr-baseline/coverage/coverage-summary.json';
+          const lcov='../nfr-baseline/coverage/lcov.info';
           let pct='n/a';
           if (fs.existsSync(p)) {
             const summary=JSON.parse(fs.readFileSync(p,'utf8'));
             const lines=summary.total?.lines?.pct;
             if (typeof lines === 'number') pct=String(lines);
+          } else if (fs.existsSync(lcov)) {
+            const content=fs.readFileSync(lcov,'utf8');
+            let lf=0, lh=0;
+            for (const line of content.split(/\r?\n/)) {
+              if (line.startsWith('LF:')) lf += Number(line.slice(3)) || 0;
+              if (line.startsWith('LH:')) lh += Number(line.slice(3)) || 0;
+            }
+            if (lf > 0) pct=((lh*100)/lf).toFixed(2);
           }
           fs.appendFileSync(process.env.GITHUB_ENV, `BASELINE_COVERAGE=${pct}\n`);
           "
@@ -504,6 +598,11 @@ jobs:
           POPUP_KB=$((POPUP_SIZE_BYTES / 1024))
           QS_KB=$((QS_SIZE_BYTES / 1024))
           TOTAL_KB=$((TOTAL_JS_SIZE_BYTES / 1024))
+          if [ "$COVERAGE_LINES_PCT" = "n/a" ]; then
+            COV_DISPLAY="n/a"
+          else
+            COV_DISPLAY="${COVERAGE_LINES_PCT}%"
+          fi
 
           echo "## Quality Report" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -513,7 +612,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Signal | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Coverage (lines) | **${COVERAGE_LINES_PCT}%** |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Coverage (lines) | **${COV_DISPLAY}** (source: ${COVERAGE_SOURCE}) |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Lint issues | ${LINT_ERRORS} errors, ${LINT_WARNINGS} warnings |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Security | ${AUDIT_TOTAL} total, ${AUDIT_CRITICAL} critical, ${AUDIT_HIGH} high |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Bundle size | Total JS ${TOTAL_KB} KB |" >> "$GITHUB_STEP_SUMMARY"
@@ -525,7 +624,7 @@ jobs:
           echo "|------|--------|------------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Lint | ${LINT_STATUS} | ${LINT_ERRORS} errors, ${LINT_WARNINGS} warnings |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tests | ${TEST_STATUS} | See test.log artifact for details |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Coverage | ${COVERAGE_STATUS} | ${COVERAGE_LINES_PCT}% lines |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Coverage | ${COVERAGE_STATUS} | ${COV_DISPLAY} lines (source: ${COVERAGE_SOURCE}) |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Security | ${SECURITY_STATUS} | ${AUDIT_TOTAL} total (${AUDIT_CRITICAL} critical, ${AUDIT_HIGH} high) |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Performance | ${PERF_STATUS} | Total JS ${TOTAL_KB} KB |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
