@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-03-07T13:33:50.559Z",
+  "repository": "dhruvinrsoni/smruti-cortex",
+  "ref": "main",
+  "runId": "22799995170",
+  "runNumber": "5",
+  "coverageLinesPct": "n/a",
+  "coverageDelta": "n/a",
+  "lintErrors": 0,
+  "lintWarnings": 0,
+  "auditTotal": 0,
+  "auditCritical": 0,
+  "auditHigh": 0,
+  "swKb": 102,
+  "popupKb": 58,
+  "qsKb": 55,
+  "totalJsKb": 544
+}
