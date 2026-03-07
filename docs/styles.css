@@ -178,6 +178,27 @@ body {
     font-size: 1.1rem;
 }
 
+.nfr-report-fab {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 2100;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.nfr-report-fab:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
 /* ===== Hero Section ===== */
 .hero {
     min-height: 100vh;
@@ -1297,6 +1318,13 @@ body {
     .scroll-indicator { display: none; }
 
     .tour-card { flex: 0 0 180px; }
+
+    .nfr-report-fab {
+        right: 12px;
+        bottom: 12px;
+        padding: 8px 12px;
+        font-size: 0.8rem;
+    }
 }
 
 @media (max-width: 480px) {
