@@ -217,6 +217,166 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_DELTA=${delta}\n`);
           "
 
+      - name: Build consumable report bundle
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const status = {
+            lint: process.env.LINT_STATUS || 'n/a',
+            tests: process.env.TEST_STATUS || 'n/a',
+            coverage: process.env.COVERAGE_STATUS || 'n/a',
+            security: process.env.SECURITY_STATUS || 'n/a',
+            performance: process.env.PERF_STATUS || 'n/a'
+          };
+
+          const metrics = {
+            lintErrors: Number(process.env.LINT_ERRORS || 0),
+            lintWarnings: Number(process.env.LINT_WARNINGS || 0),
+            coverageLinesPct: process.env.COVERAGE_LINES_PCT || 'n/a',
+            coverageBaseline: process.env.BASELINE_COVERAGE || 'n/a',
+            coverageDelta: process.env.COVERAGE_DELTA || 'n/a',
+            audit: {
+              total: Number(process.env.AUDIT_TOTAL || 0),
+              critical: Number(process.env.AUDIT_CRITICAL || 0),
+              high: Number(process.env.AUDIT_HIGH || 0),
+              moderate: Number(process.env.AUDIT_MODERATE || 0),
+              low: Number(process.env.AUDIT_LOW || 0)
+            },
+            bundleKb: {
+              serviceWorker: Math.floor(Number(process.env.SW_SIZE_BYTES || 0) / 1024),
+              popup: Math.floor(Number(process.env.POPUP_SIZE_BYTES || 0) / 1024),
+              quickSearch: Math.floor(Number(process.env.QS_SIZE_BYTES || 0) / 1024),
+              totalJs: Math.floor(Number(process.env.TOTAL_JS_SIZE_BYTES || 0) / 1024)
+            }
+          };
+
+          const summary = {
+            generatedAt: new Date().toISOString(),
+            workflow: process.env.GITHUB_WORKFLOW,
+            runId: process.env.GITHUB_RUN_ID,
+            runNumber: process.env.GITHUB_RUN_NUMBER,
+            repository: process.env.GITHUB_REPOSITORY,
+            ref: process.env.GITHUB_REF_NAME,
+            status,
+            metrics,
+            links: {
+              coverageHtml: 'coverage/index.html',
+              coverageLcov: 'coverage/lcov.info',
+              lintJson: 'nfr-reports/lint-report.json',
+              logs: {
+                lint: 'nfr-reports/lint.log',
+                test: 'nfr-reports/test.log',
+                coverage: 'nfr-reports/coverage.log',
+                buildPerf: 'nfr-reports/build-perf.log',
+                baseline: 'nfr-reports/baseline.log'
+              }
+            }
+          };
+
+          fs.writeFileSync('nfr-reports/summary.json', JSON.stringify(summary, null, 2));
+
+          const md = [
+            '# NFR Report Bundle',
+            '',
+            `Generated: ${summary.generatedAt}`,
+            `Workflow: ${summary.workflow} (#${summary.runNumber})`,
+            `Repository: ${summary.repository}`,
+            `Ref: ${summary.ref}`,
+            '',
+            '## Scorecard',
+            '',
+            '| Area | Status | Signal |',
+            '|------|--------|--------|',
+            `| Lint | ${status.lint} | ${metrics.lintErrors} errors, ${metrics.lintWarnings} warnings |`,
+            `| Tests | ${status.tests} | See nfr-reports/test.log |`,
+            `| Coverage | ${status.coverage} | ${metrics.coverageLinesPct}% lines (delta ${metrics.coverageDelta}%) |`,
+            `| Security | ${status.security} | ${metrics.audit.total} total, ${metrics.audit.critical} critical, ${metrics.audit.high} high |`,
+            `| Performance | ${status.performance} | Total JS ${metrics.bundleKb.totalJs} KB |`,
+            '',
+            '## Bundle Sizes',
+            '',
+            '| Bundle | Size | Target |',
+            '|--------|------|--------|',
+            `| Service Worker | ${metrics.bundleKb.serviceWorker} KB | < 500 KB |`,
+            `| Popup | ${metrics.bundleKb.popup} KB | < 300 KB |`,
+            `| Quick Search | ${metrics.bundleKb.quickSearch} KB | < 200 KB |`,
+            '',
+            '## Direct Files',
+            '',
+            '- Human summary JSON: `nfr-reports/summary.json`',
+            '- Coverage HTML: `coverage/index.html`',
+            '- Coverage LCOV: `coverage/lcov.info`',
+            '- Lint details JSON: `nfr-reports/lint-report.json`',
+            '',
+            '## Logs',
+            '',
+            '- `nfr-reports/lint.log`',
+            '- `nfr-reports/test.log`',
+            '- `nfr-reports/coverage.log`',
+            '- `nfr-reports/build-perf.log`',
+            '- `nfr-reports/baseline.log`'
+          ].join('\n');
+
+          fs.writeFileSync('nfr-reports/README.md', md);
+
+          const esc = (v) => String(v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+          const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NFR Report Bundle</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1f2937; }
+    h1, h2 { margin: 0 0 10px; }
+    .meta { margin-bottom: 16px; color: #4b5563; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; }
+    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+    th { background: #f3f4f6; }
+    code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>NFR Report Bundle</h1>
+  <div class="meta">Generated: ${esc(summary.generatedAt)} | Run: #${esc(summary.runNumber)} | Ref: ${esc(summary.ref)}</div>
+
+  <h2>Scorecard</h2>
+  <table>
+    <thead><tr><th>Area</th><th>Status</th><th>Signal</th></tr></thead>
+    <tbody>
+      <tr><td>Lint</td><td>${esc(status.lint)}</td><td>${esc(metrics.lintErrors)} errors, ${esc(metrics.lintWarnings)} warnings</td></tr>
+      <tr><td>Tests</td><td>${esc(status.tests)}</td><td>See <code>nfr-reports/test.log</code></td></tr>
+      <tr><td>Coverage</td><td>${esc(status.coverage)}</td><td>${esc(metrics.coverageLinesPct)}% lines (delta ${esc(metrics.coverageDelta)}%)</td></tr>
+      <tr><td>Security</td><td>${esc(status.security)}</td><td>${esc(metrics.audit.total)} total, ${esc(metrics.audit.critical)} critical, ${esc(metrics.audit.high)} high</td></tr>
+      <tr><td>Performance</td><td>${esc(status.performance)}</td><td>Total JS ${esc(metrics.bundleKb.totalJs)} KB</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Bundle Sizes</h2>
+  <table>
+    <thead><tr><th>Bundle</th><th>Size</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td>Service Worker</td><td>${esc(metrics.bundleKb.serviceWorker)} KB</td><td>&lt; 500 KB</td></tr>
+      <tr><td>Popup</td><td>${esc(metrics.bundleKb.popup)} KB</td><td>&lt; 300 KB</td></tr>
+      <tr><td>Quick Search</td><td>${esc(metrics.bundleKb.quickSearch)} KB</td><td>&lt; 200 KB</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Direct Files</h2>
+  <ul>
+    <li><code>nfr-reports/summary.json</code></li>
+    <li><code>nfr-reports/README.md</code></li>
+    <li><code>coverage/index.html</code></li>
+    <li><code>coverage/lcov.info</code></li>
+  </ul>
+</body>
+</html>`;
+
+          fs.writeFileSync('nfr-reports/index.html', html);
+          NODE
+
       - name: Upload NFR artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -267,6 +427,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- This workflow is informational and non-blocking by design." >> "$GITHUB_STEP_SUMMARY"
           echo "- Download artifact \`nfr-reports-${{ github.run_number }}\` for full shareable logs/reports." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Start with \`nfr-reports/README.md\` or \`nfr-reports/index.html\` for a directly consumable report." >> "$GITHUB_STEP_SUMMARY"
 
       - name: PR coverage comment
         if: github.event_name == 'pull_request'
