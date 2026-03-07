@@ -1,4 +1,4 @@
-name: Quality Report
+﻿name: Quality Report
 
 # Purpose: Consolidated quality checks (informational only).
 # Includes: lint, tests, coverage, security audit, bundle/performance checks.
@@ -56,6 +56,29 @@ jobs:
           REPO="${GITHUB_REPOSITORY#*/}"
           echo "PUBLIC_REPORT_URL=https://${OWNER}.github.io/${REPO}/quality-report/" >> "$GITHUB_ENV"
 
+      - name: Initialize defaults
+        run: |
+          echo "LINT_STATUS=warn" >> "$GITHUB_ENV"
+          echo "TEST_STATUS=warn" >> "$GITHUB_ENV"
+          echo "COVERAGE_STATUS=warn" >> "$GITHUB_ENV"
+          echo "SECURITY_STATUS=warn" >> "$GITHUB_ENV"
+          echo "PERF_STATUS=warn" >> "$GITHUB_ENV"
+          echo "LINT_ERRORS=0" >> "$GITHUB_ENV"
+          echo "LINT_WARNINGS=0" >> "$GITHUB_ENV"
+          echo "COVERAGE_LINES_PCT=n/a" >> "$GITHUB_ENV"
+          echo "COVERAGE_SOURCE=none" >> "$GITHUB_ENV"
+          echo "BASELINE_COVERAGE=n/a" >> "$GITHUB_ENV"
+          echo "COVERAGE_DELTA=n/a" >> "$GITHUB_ENV"
+          echo "AUDIT_CRITICAL=0" >> "$GITHUB_ENV"
+          echo "AUDIT_HIGH=0" >> "$GITHUB_ENV"
+          echo "AUDIT_MODERATE=0" >> "$GITHUB_ENV"
+          echo "AUDIT_LOW=0" >> "$GITHUB_ENV"
+          echo "AUDIT_TOTAL=0" >> "$GITHUB_ENV"
+          echo "SW_SIZE_BYTES=0" >> "$GITHUB_ENV"
+          echo "POPUP_SIZE_BYTES=0" >> "$GITHUB_ENV"
+          echo "QS_SIZE_BYTES=0" >> "$GITHUB_ENV"
+          echo "TOTAL_JS_SIZE_BYTES=0" >> "$GITHUB_ENV"
+
       - name: Lint report
         id: lint
         continue-on-error: true
@@ -64,18 +87,6 @@ jobs:
           npm run lint -- --format json --output-file nfr-reports/lint-report.json > nfr-reports/lint.log 2>&1
           LINT_EXIT=$?
           node -e "
-
-          const toStatus = (raw) => {
-            const v = String(raw || 'unknown').toLowerCase();
-            if (v === 'ok') return 'pass';
-            if (v === 'warn') return 'warn';
-            return 'unknown';
-          };
-
-          const toCoverageLabel = (pct) => {
-            if (pct === 'n/a') return 'n/a';
-            return `${pct}%`;
-          };
           const fs=require('fs');
           const p='nfr-reports/lint-report.json';
           let errors=0,warnings=0;
@@ -84,36 +95,15 @@ jobs:
             errors=data.reduce((s,f)=>s+(f.errorCount||0),0);
             warnings=data.reduce((s,f)=>s+(f.warningCount||0),0);
           }
-            coverageSource: process.env.COVERAGE_SOURCE || 'none',
-          fs.appendFileSync(process.env.GITHUB_ENV, `LINT_ERRORS=${errors}\nLINT_WARNINGS=${warnings}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, 'LINT_ERRORS='+errors+'\\nLINT_WARNINGS='+warnings+'\\n');
           "
           if [ "$LINT_EXIT" -eq 0 ]; then
             echo "LINT_STATUS=ok" >> "$GITHUB_ENV"
-          else
-            echo "LINT_STATUS=warn" >> "$GITHUB_ENV"
-            lintStatus: toStatus(process.env.LINT_STATUS),
-            testStatus: toStatus(process.env.TEST_STATUS),
-            coverageStatus: toStatus(process.env.COVERAGE_STATUS),
-            securityStatus: toStatus(process.env.SECURITY_STATUS),
-            perfStatus: toStatus(process.env.PERF_STATUS),
           fi
           exit 0
 
       - name: Unit tests
         id: tests
-
-          const actions = [];
-          if (data.lintErrors > 0) actions.push(`Fix ${data.lintErrors} lint errors before next release.`);
-          if (data.auditCritical > 0 || data.auditHigh > 0) actions.push(`Prioritize security updates (${data.auditCritical} critical, ${data.auditHigh} high).`);
-          if (data.coverageLinesPct !== 'n/a' && Number(data.coverageLinesPct) < 75) actions.push(`Increase line coverage (current ${data.coverageLinesPct}%).`);
-          if (data.coverageLinesPct === 'n/a') actions.push('Coverage data unavailable: check coverage step output and artifacts.');
-          if (data.totalJsKb > 900) actions.push(`Reduce bundle size (current total ${data.totalJsKb} KB).`);
-          if (actions.length === 0) actions.push('No urgent action detected. Maintain current quality trend.');
-
-          const chip = (label, status) => {
-            const className = status === 'pass' ? 'chip pass' : status === 'warn' ? 'chip warn' : 'chip unknown';
-            return `<span class="${className}">${esc(label)}: ${esc(status)}</span>`;
-          };
         continue-on-error: true
         run: |
           set +e
@@ -121,10 +111,287 @@ jobs:
           TEST_EXIT=$?
           if [ "$TEST_EXIT" -eq 0 ]; then
             echo "TEST_STATUS=ok" >> "$GITHUB_ENV"
-          else
-            echo "TEST_STATUS=warn" >> "$GITHUB_ENV"
           fi
           exit 0
+
+      - name: Coverage
+        id: coverage
+        continue-on-error: true
+        run: |
+          set +e
+          npm run coverage > nfr-reports/coverage.log 2>&1
+          COVERAGE_EXIT=$?
+          node -e "
+          const fs=require('fs');
+          const summaryPath='coverage/coverage-summary.json';
+          const lcovPath='coverage/lcov.info';
+          let pct='n/a';
+          let source='none';
+          if (fs.existsSync(summaryPath)) {
+            const summary=JSON.parse(fs.readFileSync(summaryPath,'utf8'));
+            const lines=summary.total?.lines?.pct;
+            if (typeof lines === 'number') {
+              pct=String(lines);
+              source='summary';
+            }
+          } else if (fs.existsSync(lcovPath)) {
+            const content=fs.readFileSync(lcovPath,'utf8');
+            let lf=0, lh=0;
+            for (const line of content.split(/\\r?\\n/)) {
+              if (line.startsWith('LF:')) lf += Number(line.slice(3)) || 0;
+              if (line.startsWith('LH:')) lh += Number(line.slice(3)) || 0;
+            }
+            if (lf > 0) {
+              pct=((lh*100)/lf).toFixed(2);
+              source='lcov';
+            }
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, 'COVERAGE_LINES_PCT='+pct+'\\nCOVERAGE_SOURCE='+source+'\\n');
+          "
+          if [ "$COVERAGE_EXIT" -eq 0 ]; then
+            echo "COVERAGE_STATUS=ok" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Security audit
+        id: security
+        continue-on-error: true
+        run: |
+          set +e
+          npm audit --json > nfr-reports/audit.json 2>/dev/null
+          AUDIT_EXIT=$?
+          node -e "
+          const fs=require('fs');
+          const p='nfr-reports/audit.json';
+          let c=0,h=0,m=0,l=0,total=0;
+          if (fs.existsSync(p)) {
+            const data=JSON.parse(fs.readFileSync(p,'utf8'));
+            const v=data.metadata?.vulnerabilities || {};
+            c=v.critical||0; h=v.high||0; m=v.moderate||0; l=v.low||0; total=v.total||0;
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, 'AUDIT_CRITICAL='+c+'\\nAUDIT_HIGH='+h+'\\nAUDIT_MODERATE='+m+'\\nAUDIT_LOW='+l+'\\nAUDIT_TOTAL='+total+'\\n');
+          "
+          if [ "$AUDIT_EXIT" -eq 0 ]; then
+            echo "SECURITY_STATUS=ok" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Build for performance metrics
+        id: build_perf
+        continue-on-error: true
+        run: |
+          set +e
+          npm run build:prod > nfr-reports/build-perf.log 2>&1
+          BUILD_EXIT=$?
+          SW_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
+          POPUP_SIZE=$(ls -l dist/popup/popup.js 2>/dev/null | awk '{print $5}')
+          QS_SIZE=$(ls -l dist/content_scripts/quick-search.js 2>/dev/null | awk '{print $5}')
+          TOTAL_SIZE=$(find dist -name "*.js" -type f -exec ls -l {} \; 2>/dev/null | awk '{sum += $5} END {print sum+0}')
+          echo "SW_SIZE_BYTES=${SW_SIZE:-0}" >> "$GITHUB_ENV"
+          echo "POPUP_SIZE_BYTES=${POPUP_SIZE:-0}" >> "$GITHUB_ENV"
+          echo "QS_SIZE_BYTES=${QS_SIZE:-0}" >> "$GITHUB_ENV"
+          echo "TOTAL_JS_SIZE_BYTES=${TOTAL_SIZE:-0}" >> "$GITHUB_ENV"
+          if [ "$BUILD_EXIT" -eq 0 ]; then
+            echo "PERF_STATUS=ok" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Baseline coverage for delta
+        id: baseline_coverage
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          BASE_REF="${{ inputs.baseline_ref || github.base_ref || 'main' }}"
+          echo "BASELINE_REF=$BASE_REF" >> "$GITHUB_ENV"
+          mkdir -p ../nfr-baseline
+          set +e
+          git worktree add ../nfr-baseline "origin/$BASE_REF" > nfr-reports/baseline.log 2>&1
+          ADD_EXIT=$?
+          if [ "$ADD_EXIT" -ne 0 ]; then
+            echo "BASELINE_COVERAGE=n/a" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          pushd ../nfr-baseline > /dev/null
+          npm ci >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
+          npm run coverage >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
+          popd > /dev/null
+          node -e "
+          const fs=require('fs');
+          const summaryPath='../nfr-baseline/coverage/coverage-summary.json';
+          const lcovPath='../nfr-baseline/coverage/lcov.info';
+          let pct='n/a';
+          if (fs.existsSync(summaryPath)) {
+            const summary=JSON.parse(fs.readFileSync(summaryPath,'utf8'));
+            const lines=summary.total?.lines?.pct;
+            if (typeof lines === 'number') pct=String(lines);
+          } else if (fs.existsSync(lcovPath)) {
+            const content=fs.readFileSync(lcovPath,'utf8');
+            let lf=0, lh=0;
+            for (const line of content.split(/\\r?\\n/)) {
+              if (line.startsWith('LF:')) lf += Number(line.slice(3)) || 0;
+              if (line.startsWith('LH:')) lh += Number(line.slice(3)) || 0;
+            }
+            if (lf > 0) pct=((lh*100)/lf).toFixed(2);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, 'BASELINE_COVERAGE='+pct+'\\n');
+          "
+          git worktree remove ../nfr-baseline --force >> nfr-reports/baseline.log 2>&1
+          exit 0
+
+      - name: Coverage delta
+        id: coverage_delta
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        run: |
+          node -e "
+          const fs=require('fs');
+          const curr=process.env.COVERAGE_LINES_PCT || 'n/a';
+          const base=process.env.BASELINE_COVERAGE || 'n/a';
+          let delta='n/a';
+          if (curr !== 'n/a' && base !== 'n/a') {
+            delta=(Number(curr)-Number(base)).toFixed(2);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, 'COVERAGE_DELTA='+delta+'\\n');
+          "
+
+      - name: Build consumable report bundle
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const toPct = (v) => (v === 'n/a' ? 'n/a' : `${v}%`);
+          const status = {
+            lint: process.env.LINT_STATUS || 'n/a',
+            tests: process.env.TEST_STATUS || 'n/a',
+            coverage: process.env.COVERAGE_STATUS || 'n/a',
+            security: process.env.SECURITY_STATUS || 'n/a',
+            performance: process.env.PERF_STATUS || 'n/a'
+          };
+          const metrics = {
+            lintErrors: Number(process.env.LINT_ERRORS || 0),
+            lintWarnings: Number(process.env.LINT_WARNINGS || 0),
+            coverageLinesPct: process.env.COVERAGE_LINES_PCT || 'n/a',
+            coverageSource: process.env.COVERAGE_SOURCE || 'none',
+            coverageBaseline: process.env.BASELINE_COVERAGE || 'n/a',
+            coverageDelta: process.env.COVERAGE_DELTA || 'n/a',
+            audit: {
+              total: Number(process.env.AUDIT_TOTAL || 0),
+              critical: Number(process.env.AUDIT_CRITICAL || 0),
+              high: Number(process.env.AUDIT_HIGH || 0),
+              moderate: Number(process.env.AUDIT_MODERATE || 0),
+              low: Number(process.env.AUDIT_LOW || 0)
+            },
+            bundleKb: {
+              serviceWorker: Math.floor(Number(process.env.SW_SIZE_BYTES || 0) / 1024),
+              popup: Math.floor(Number(process.env.POPUP_SIZE_BYTES || 0) / 1024),
+              quickSearch: Math.floor(Number(process.env.QS_SIZE_BYTES || 0) / 1024),
+              totalJs: Math.floor(Number(process.env.TOTAL_JS_SIZE_BYTES || 0) / 1024)
+            }
+          };
+          const summary = {
+            generatedAt: new Date().toISOString(),
+            workflow: process.env.GITHUB_WORKFLOW,
+            runId: process.env.GITHUB_RUN_ID,
+            runNumber: process.env.GITHUB_RUN_NUMBER,
+            repository: process.env.GITHUB_REPOSITORY,
+            ref: process.env.GITHUB_REF_NAME,
+            status,
+            metrics
+          };
+          fs.writeFileSync('nfr-reports/summary.json', JSON.stringify(summary, null, 2));
+
+          const md = [
+            '# Quality Report Bundle',
+            '',
+            `Generated: ${summary.generatedAt}`,
+            `Run: #${summary.runNumber}`,
+            `Ref: ${summary.ref}`,
+            '',
+            '## Scorecard',
+            '',
+            `- Lint: ${status.lint} (${metrics.lintErrors} errors, ${metrics.lintWarnings} warnings)`,
+            `- Tests: ${status.tests}`,
+            `- Coverage: ${status.coverage} (${toPct(metrics.coverageLinesPct)}, source: ${metrics.coverageSource}, delta: ${toPct(metrics.coverageDelta)})`,
+            `- Security: ${status.security} (${metrics.audit.total} total, ${metrics.audit.critical} critical, ${metrics.audit.high} high)`,
+            `- Performance: ${status.performance} (Total JS ${metrics.bundleKb.totalJs} KB)`,
+            '',
+            '## Files',
+            '',
+            '- `nfr-reports/summary.json`',
+            '- `nfr-reports/lint.log`',
+            '- `nfr-reports/test.log`',
+            '- `nfr-reports/coverage.log`',
+            '- `nfr-reports/build-perf.log`',
+            '- `coverage/index.html`',
+            '- `coverage/lcov.info`'
+          ].join('\n');
+
+          fs.writeFileSync('nfr-reports/README.md', md);
+          NODE
+
+      - name: Build public web report
+        if: always()
+        run: |
+          mkdir -p docs/quality-report
+          mkdir -p docs/reports/nfr/latest
+          node <<'NODE'
+          const fs = require('fs');
+          const esc = (v) => String(v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+          const toStatus = (raw) => {
+            const v = String(raw || 'unknown').toLowerCase();
+            if (v === 'ok') return 'pass';
+            if (v === 'warn') return 'warn';
+            return 'unknown';
+          };
+          const toCoverageLabel = (pct) => (pct === 'n/a' ? 'n/a' : `${pct}%`);
+
+          const data = {
+            generatedAt: new Date().toISOString(),
+            repository: process.env.GITHUB_REPOSITORY,
+            ref: process.env.GITHUB_REF_NAME,
+            runId: process.env.GITHUB_RUN_ID,
+            runNumber: process.env.GITHUB_RUN_NUMBER,
+            coverageLinesPct: process.env.COVERAGE_LINES_PCT || 'n/a',
+            coverageSource: process.env.COVERAGE_SOURCE || 'none',
+            coverageDelta: process.env.COVERAGE_DELTA || 'n/a',
+            lintErrors: Number(process.env.LINT_ERRORS || 0),
+            lintWarnings: Number(process.env.LINT_WARNINGS || 0),
+            auditTotal: Number(process.env.AUDIT_TOTAL || 0),
+            auditCritical: Number(process.env.AUDIT_CRITICAL || 0),
+            auditHigh: Number(process.env.AUDIT_HIGH || 0),
+            lintStatus: toStatus(process.env.LINT_STATUS),
+            testStatus: toStatus(process.env.TEST_STATUS),
+            coverageStatus: toStatus(process.env.COVERAGE_STATUS),
+            securityStatus: toStatus(process.env.SECURITY_STATUS),
+            perfStatus: toStatus(process.env.PERF_STATUS),
+            swKb: Math.floor(Number(process.env.SW_SIZE_BYTES || 0) / 1024),
+            popupKb: Math.floor(Number(process.env.POPUP_SIZE_BYTES || 0) / 1024),
+            qsKb: Math.floor(Number(process.env.QS_SIZE_BYTES || 0) / 1024),
+            totalJsKb: Math.floor(Number(process.env.TOTAL_JS_SIZE_BYTES || 0) / 1024)
+          };
+
+          const actions = [];
+          if (data.lintErrors > 0) actions.push(`Fix ${data.lintErrors} lint errors before next release.`);
+          if (data.auditCritical > 0 || data.auditHigh > 0) actions.push(`Prioritize security updates (${data.auditCritical} critical, ${data.auditHigh} high).`);
+          if (data.coverageLinesPct !== 'n/a' && Number(data.coverageLinesPct) < 75) actions.push(`Increase line coverage (current ${data.coverageLinesPct}%).`);
+          if (data.coverageLinesPct === 'n/a') actions.push('Coverage data unavailable: inspect coverage logs/artifacts.');
+          if (data.totalJsKb > 900) actions.push(`Reduce bundle size (current total ${data.totalJsKb} KB).`);
+          if (actions.length === 0) actions.push('No urgent action detected. Maintain current quality trend.');
+
+          fs.writeFileSync('docs/quality-report/summary.json', JSON.stringify(data, null, 2));
+
+          const chip = (label, status) => {
+            const className = status === 'pass' ? 'chip pass' : status === 'warn' ? 'chip warn' : 'chip unknown';
+            return `<span class="${className}">${esc(label)}: ${esc(status)}</span>`;
+          };
+
+          const html = [
+            '<!doctype html>',
+            '<html lang="en">',
+            '<head>',
+            '  <meta charset="utf-8" />',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+            '  <title>Latest Quality Report</title>',
+            '  <style>',
             '    :root { --bg: #f6f8fb; --card: #ffffff; --ink: #0f172a; --muted: #475569; --line: #dbe3ee; --accent: #0f766e; --warn: #b45309; --pass: #166534; --unknown: #334155; }',
             '    body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: linear-gradient(180deg, #eff4ff 0%, #f6f8fb 45%); color: var(--ink); }',
             '    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 36px; }',
@@ -150,9 +417,9 @@ jobs:
             '    .kpi .label { color: var(--muted); font-size: 12px; }',
             '    .kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; }',
             '    @media (max-width: 680px) { .wrap { padding: 16px 12px 24px; } h1 { font-size: 24px; } }',
-          npm run coverage > nfr-reports/coverage.log 2>&1
-          COVERAGE_EXIT=$?
-          node -e "
+            '  </style>',
+            '</head>',
+            '<body>',
             '  <div class="wrap">',
             '    <section class="hero">',
             '      <h1>Latest Quality Report</h1>',
@@ -192,363 +459,6 @@ jobs:
             '      </article>',
             '    </section>',
             '  </div>',
-              pct=((lh*100)/lf).toFixed(2);
-              source='lcov';
-            }
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_LINES_PCT=${pct}\nCOVERAGE_SOURCE=${source}\n`);
-          "
-          if [ "$COVERAGE_EXIT" -eq 0 ]; then
-            echo "COVERAGE_STATUS=ok" >> "$GITHUB_ENV"
-          else
-            echo "COVERAGE_STATUS=warn" >> "$GITHUB_ENV"
-          fi
-          exit 0
-
-      - name: Security audit
-        id: security
-        continue-on-error: true
-        run: |
-          set +e
-          npm audit --json > nfr-reports/audit.json 2>/dev/null
-          AUDIT_EXIT=$?
-          node -e "
-          const fs=require('fs');
-          const p='nfr-reports/audit.json';
-          let c=0,h=0,m=0,l=0,total=0;
-          if (fs.existsSync(p)) {
-            const data=JSON.parse(fs.readFileSync(p,'utf8'));
-            const v=data.metadata?.vulnerabilities || {};
-            c=v.critical||0;h=v.high||0;m=v.moderate||0;l=v.low||0;total=v.total||0;
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, `AUDIT_CRITICAL=${c}\nAUDIT_HIGH=${h}\nAUDIT_MODERATE=${m}\nAUDIT_LOW=${l}\nAUDIT_TOTAL=${total}\n`);
-          "
-          if [ "$AUDIT_EXIT" -eq 0 ]; then
-            echo "SECURITY_STATUS=ok" >> "$GITHUB_ENV"
-          else
-            echo "SECURITY_STATUS=warn" >> "$GITHUB_ENV"
-          fi
-          exit 0
-
-      - name: Build for performance metrics
-        id: build_perf
-        continue-on-error: true
-        run: |
-          set +e
-          npm run build:prod > nfr-reports/build-perf.log 2>&1
-          BUILD_EXIT=$?
-          SW_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
-          POPUP_SIZE=$(ls -l dist/popup/popup.js 2>/dev/null | awk '{print $5}')
-          QS_SIZE=$(ls -l dist/content_scripts/quick-search.js 2>/dev/null | awk '{print $5}')
-          TOTAL_SIZE=$(find dist -name "*.js" -type f -exec ls -l {} \; 2>/dev/null | awk '{sum += $5} END {print sum+0}')
-
-          SW_SIZE=${SW_SIZE:-0}
-          POPUP_SIZE=${POPUP_SIZE:-0}
-          QS_SIZE=${QS_SIZE:-0}
-          TOTAL_SIZE=${TOTAL_SIZE:-0}
-
-          echo "SW_SIZE_BYTES=$SW_SIZE" >> "$GITHUB_ENV"
-          echo "POPUP_SIZE_BYTES=$POPUP_SIZE" >> "$GITHUB_ENV"
-          echo "QS_SIZE_BYTES=$QS_SIZE" >> "$GITHUB_ENV"
-          echo "TOTAL_JS_SIZE_BYTES=$TOTAL_SIZE" >> "$GITHUB_ENV"
-
-          if [ "$BUILD_EXIT" -eq 0 ]; then
-            echo "PERF_STATUS=ok" >> "$GITHUB_ENV"
-          else
-            echo "PERF_STATUS=warn" >> "$GITHUB_ENV"
-          fi
-          exit 0
-
-      - name: Baseline coverage for delta
-        id: baseline_coverage
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-        continue-on-error: true
-        run: |
-          BASE_REF="${{ inputs.baseline_ref || github.base_ref || 'main' }}"
-          echo "BASELINE_REF=$BASE_REF" >> "$GITHUB_ENV"
-
-          mkdir -p ../nfr-baseline
-          set +e
-          git worktree add ../nfr-baseline "origin/$BASE_REF" > nfr-reports/baseline.log 2>&1
-          ADD_EXIT=$?
-          if [ "$ADD_EXIT" -ne 0 ]; then
-            echo "BASELINE_COVERAGE=n/a" >> "$GITHUB_ENV"
-            exit 0
-          fi
-
-          pushd ../nfr-baseline > /dev/null
-          npm ci >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
-          npm run coverage >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
-          popd > /dev/null
-
-          node -e "
-          const fs=require('fs');
-          const p='../nfr-baseline/coverage/coverage-summary.json';
-          const lcov='../nfr-baseline/coverage/lcov.info';
-          let pct='n/a';
-          if (fs.existsSync(p)) {
-            const summary=JSON.parse(fs.readFileSync(p,'utf8'));
-            const lines=summary.total?.lines?.pct;
-            if (typeof lines === 'number') pct=String(lines);
-          } else if (fs.existsSync(lcov)) {
-            const content=fs.readFileSync(lcov,'utf8');
-            let lf=0, lh=0;
-            for (const line of content.split(/\r?\n/)) {
-              if (line.startsWith('LF:')) lf += Number(line.slice(3)) || 0;
-              if (line.startsWith('LH:')) lh += Number(line.slice(3)) || 0;
-            }
-            if (lf > 0) pct=((lh*100)/lf).toFixed(2);
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, `BASELINE_COVERAGE=${pct}\n`);
-          "
-
-          git worktree remove ../nfr-baseline --force >> nfr-reports/baseline.log 2>&1
-          exit 0
-
-      - name: Coverage delta
-        id: coverage_delta
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-        run: |
-          node -e "
-          const fs=require('fs');
-          const curr=process.env.COVERAGE_LINES_PCT || 'n/a';
-          const base=process.env.BASELINE_COVERAGE || 'n/a';
-          let delta='n/a';
-          if (curr !== 'n/a' && base !== 'n/a') {
-            delta=(Number(curr)-Number(base)).toFixed(2);
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, `COVERAGE_DELTA=${delta}\n`);
-          "
-
-      - name: Build consumable report bundle
-        if: always()
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-
-          const status = {
-            lint: process.env.LINT_STATUS || 'n/a',
-            tests: process.env.TEST_STATUS || 'n/a',
-            coverage: process.env.COVERAGE_STATUS || 'n/a',
-            security: process.env.SECURITY_STATUS || 'n/a',
-            performance: process.env.PERF_STATUS || 'n/a'
-          };
-
-          const metrics = {
-            lintErrors: Number(process.env.LINT_ERRORS || 0),
-            lintWarnings: Number(process.env.LINT_WARNINGS || 0),
-            coverageLinesPct: process.env.COVERAGE_LINES_PCT || 'n/a',
-            coverageBaseline: process.env.BASELINE_COVERAGE || 'n/a',
-            coverageDelta: process.env.COVERAGE_DELTA || 'n/a',
-            audit: {
-              total: Number(process.env.AUDIT_TOTAL || 0),
-              critical: Number(process.env.AUDIT_CRITICAL || 0),
-              high: Number(process.env.AUDIT_HIGH || 0),
-              moderate: Number(process.env.AUDIT_MODERATE || 0),
-              low: Number(process.env.AUDIT_LOW || 0)
-            },
-            bundleKb: {
-              serviceWorker: Math.floor(Number(process.env.SW_SIZE_BYTES || 0) / 1024),
-              popup: Math.floor(Number(process.env.POPUP_SIZE_BYTES || 0) / 1024),
-              quickSearch: Math.floor(Number(process.env.QS_SIZE_BYTES || 0) / 1024),
-              totalJs: Math.floor(Number(process.env.TOTAL_JS_SIZE_BYTES || 0) / 1024)
-            }
-          };
-
-          const summary = {
-            generatedAt: new Date().toISOString(),
-            workflow: process.env.GITHUB_WORKFLOW,
-            runId: process.env.GITHUB_RUN_ID,
-            runNumber: process.env.GITHUB_RUN_NUMBER,
-            repository: process.env.GITHUB_REPOSITORY,
-            ref: process.env.GITHUB_REF_NAME,
-            status,
-            metrics,
-            links: {
-              coverageHtml: 'coverage/index.html',
-              coverageLcov: 'coverage/lcov.info',
-              lintJson: 'nfr-reports/lint-report.json',
-              logs: {
-                lint: 'nfr-reports/lint.log',
-                test: 'nfr-reports/test.log',
-                coverage: 'nfr-reports/coverage.log',
-                buildPerf: 'nfr-reports/build-perf.log',
-                baseline: 'nfr-reports/baseline.log'
-              }
-            }
-          };
-
-          fs.writeFileSync('nfr-reports/summary.json', JSON.stringify(summary, null, 2));
-
-          const md = [
-            '# Quality Report Bundle',
-            '',
-            `Generated: ${summary.generatedAt}`,
-            `Workflow: ${summary.workflow} (#${summary.runNumber})`,
-            `Repository: ${summary.repository}`,
-            `Ref: ${summary.ref}`,
-            '',
-            '## Scorecard',
-            '',
-            '| Area | Status | Signal |',
-            '|------|--------|--------|',
-            `| Lint | ${status.lint} | ${metrics.lintErrors} errors, ${metrics.lintWarnings} warnings |`,
-            `| Tests | ${status.tests} | See nfr-reports/test.log |`,
-            `| Coverage | ${status.coverage} | ${metrics.coverageLinesPct}% lines (delta ${metrics.coverageDelta}%) |`,
-            `| Security | ${status.security} | ${metrics.audit.total} total, ${metrics.audit.critical} critical, ${metrics.audit.high} high |`,
-            `| Performance | ${status.performance} | Total JS ${metrics.bundleKb.totalJs} KB |`,
-            '',
-            '## Bundle Sizes',
-            '',
-            '| Bundle | Size | Target |',
-            '|--------|------|--------|',
-            `| Service Worker | ${metrics.bundleKb.serviceWorker} KB | < 500 KB |`,
-            `| Popup | ${metrics.bundleKb.popup} KB | < 300 KB |`,
-            `| Quick Search | ${metrics.bundleKb.quickSearch} KB | < 200 KB |`,
-            '',
-            '## Direct Files',
-            '',
-            '- Human summary JSON: `nfr-reports/summary.json`',
-            '- Coverage HTML: `coverage/index.html`',
-            '- Coverage LCOV: `coverage/lcov.info`',
-            '- Lint details JSON: `nfr-reports/lint-report.json`',
-            '',
-            '## Logs',
-            '',
-            '- `nfr-reports/lint.log`',
-            '- `nfr-reports/test.log`',
-            '- `nfr-reports/coverage.log`',
-            '- `nfr-reports/build-perf.log`',
-            '- `nfr-reports/baseline.log`'
-          ].join('\n');
-
-          fs.writeFileSync('nfr-reports/README.md', md);
-
-          const esc = (v) => String(v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-          const html = [
-            '<!doctype html>',
-            '<html lang="en">',
-            '<head>',
-            '  <meta charset="utf-8" />',
-            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-            '  <title>Quality Report Bundle</title>',
-            '  <style>',
-            '    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1f2937; }',
-            '    h1, h2 { margin: 0 0 10px; }',
-            '    .meta { margin-bottom: 16px; color: #4b5563; }',
-            '    table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; }',
-            '    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }',
-            '    th { background: #f3f4f6; }',
-            '    code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }',
-            '  </style>',
-            '</head>',
-            '<body>',
-            `  <h1>Quality Report Bundle</h1>`,
-            `  <div class="meta">Generated: ${esc(summary.generatedAt)} | Run: #${esc(summary.runNumber)} | Ref: ${esc(summary.ref)}</div>`,
-            '',
-            '  <h2>Scorecard</h2>',
-            '  <table>',
-            '    <thead><tr><th>Area</th><th>Status</th><th>Signal</th></tr></thead>',
-            '    <tbody>',
-            `      <tr><td>Lint</td><td>${esc(status.lint)}</td><td>${esc(metrics.lintErrors)} errors, ${esc(metrics.lintWarnings)} warnings</td></tr>`,
-            `      <tr><td>Tests</td><td>${esc(status.tests)}</td><td>See <code>nfr-reports/test.log</code></td></tr>`,
-            `      <tr><td>Coverage</td><td>${esc(status.coverage)}</td><td>${esc(metrics.coverageLinesPct)}% lines (delta ${esc(metrics.coverageDelta)}%)</td></tr>`,
-            `      <tr><td>Security</td><td>${esc(status.security)}</td><td>${esc(metrics.audit.total)} total, ${esc(metrics.audit.critical)} critical, ${esc(metrics.audit.high)} high</td></tr>`,
-            `      <tr><td>Performance</td><td>${esc(status.performance)}</td><td>Total JS ${esc(metrics.bundleKb.totalJs)} KB</td></tr>`,
-            '    </tbody>',
-            '  </table>',
-            '',
-            '  <h2>Bundle Sizes</h2>',
-            '  <table>',
-            '    <thead><tr><th>Bundle</th><th>Size</th><th>Target</th></tr></thead>',
-            '    <tbody>',
-            `      <tr><td>Service Worker</td><td>${esc(metrics.bundleKb.serviceWorker)} KB</td><td>&lt; 500 KB</td></tr>`,
-            `      <tr><td>Popup</td><td>${esc(metrics.bundleKb.popup)} KB</td><td>&lt; 300 KB</td></tr>`,
-            `      <tr><td>Quick Search</td><td>${esc(metrics.bundleKb.quickSearch)} KB</td><td>&lt; 200 KB</td></tr>`,
-            '    </tbody>',
-            '  </table>',
-            '',
-            '  <h2>Direct Files</h2>',
-            '  <ul>',
-            '    <li><code>nfr-reports/summary.json</code></li>',
-            '    <li><code>nfr-reports/README.md</code></li>',
-            '    <li><code>coverage/index.html</code></li>',
-            '    <li><code>coverage/lcov.info</code></li>',
-            '  </ul>',
-            '</body>',
-            '</html>'
-          ].join('\n');
-
-          fs.writeFileSync('nfr-reports/index.html', html);
-          NODE
-
-      - name: Build public web report
-        if: always()
-        run: |
-          mkdir -p docs/quality-report
-          mkdir -p docs/reports/nfr/latest
-          node <<'NODE'
-          const fs = require('fs');
-          const esc = (v) => String(v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-
-          const data = {
-            generatedAt: new Date().toISOString(),
-            repository: process.env.GITHUB_REPOSITORY,
-            ref: process.env.GITHUB_REF_NAME,
-            runId: process.env.GITHUB_RUN_ID,
-            runNumber: process.env.GITHUB_RUN_NUMBER,
-            coverageLinesPct: process.env.COVERAGE_LINES_PCT || 'n/a',
-            coverageDelta: process.env.COVERAGE_DELTA || 'n/a',
-            lintErrors: Number(process.env.LINT_ERRORS || 0),
-            lintWarnings: Number(process.env.LINT_WARNINGS || 0),
-            auditTotal: Number(process.env.AUDIT_TOTAL || 0),
-            auditCritical: Number(process.env.AUDIT_CRITICAL || 0),
-            auditHigh: Number(process.env.AUDIT_HIGH || 0),
-            swKb: Math.floor(Number(process.env.SW_SIZE_BYTES || 0) / 1024),
-            popupKb: Math.floor(Number(process.env.POPUP_SIZE_BYTES || 0) / 1024),
-            qsKb: Math.floor(Number(process.env.QS_SIZE_BYTES || 0) / 1024),
-            totalJsKb: Math.floor(Number(process.env.TOTAL_JS_SIZE_BYTES || 0) / 1024)
-          };
-
-          fs.writeFileSync('docs/quality-report/summary.json', JSON.stringify(data, null, 2));
-
-          const html = [
-            '<!doctype html>',
-            '<html lang="en">',
-            '<head>',
-            '  <meta charset="utf-8" />',
-            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-            '  <title>Latest Quality Report</title>',
-            '  <style>',
-            '    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px auto; max-width: 960px; padding: 0 16px; color: #1f2937; }',
-            '    h1, h2 { margin: 0 0 10px; }',
-            '    .meta { color: #4b5563; margin-bottom: 12px; }',
-            '    table { border-collapse: collapse; width: 100%; margin: 12px 0 20px; }',
-            '    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }',
-            '    th { background: #f3f4f6; }',
-            '  </style>',
-            '</head>',
-            '<body>',
-            '  <h1>Latest Quality Report</h1>',
-            `  <p class="meta">Generated: ${esc(data.generatedAt)} | Run #${esc(data.runNumber)} | Ref: ${esc(data.ref)}</p>`,
-            `  <p><a href="https://github.com/${esc(data.repository)}/actions/runs/${esc(data.runId)}" target="_blank" rel="noopener">Open workflow run</a></p>`,
-            '',
-            '  <h2>Scorecard</h2>',
-            '  <table>',
-            '    <tr><th>Area</th><th>Signal</th></tr>',
-            `    <tr><td>Coverage</td><td>${esc(data.coverageLinesPct)}% (delta ${esc(data.coverageDelta)}%)</td></tr>`,
-            `    <tr><td>Lint</td><td>${esc(data.lintErrors)} errors, ${esc(data.lintWarnings)} warnings</td></tr>`,
-            `    <tr><td>Security</td><td>${esc(data.auditTotal)} total, ${esc(data.auditCritical)} critical, ${esc(data.auditHigh)} high</td></tr>`,
-            `    <tr><td>Performance</td><td>Total JS ${esc(data.totalJsKb)} KB</td></tr>`,
-            '  </table>',
-            '',
-            '  <h2>Bundle Sizes</h2>',
-            '  <table>',
-            '    <tr><th>Bundle</th><th>Size</th><th>Target</th></tr>',
-            `    <tr><td>Service Worker</td><td>${esc(data.swKb)} KB</td><td>&lt; 500 KB</td></tr>`,
-            `    <tr><td>Popup</td><td>${esc(data.popupKb)} KB</td><td>&lt; 300 KB</td></tr>`,
-            `    <tr><td>Quick Search</td><td>${esc(data.qsKb)} KB</td><td>&lt; 200 KB</td></tr>`,
-            '  </table>',
             '</body>',
             '</html>'
           ].join('\n');
@@ -652,12 +562,13 @@ jobs:
           echo "| Popup | ${POPUP_KB} KB | < 300 KB |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Quick Search | ${QS_KB} KB | < 200 KB |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+
           if [ -n "${BASELINE_REF}" ]; then
             echo "### Coverage Trend" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "Baseline: \`${BASELINE_REF}\` = ${BASELINE_COVERAGE}%" >> "$GITHUB_STEP_SUMMARY"
-            echo "Current: ${COVERAGE_LINES_PCT}%" >> "$GITHUB_STEP_SUMMARY"
-            echo "Delta: ${COVERAGE_DELTA}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "Baseline: \`${BASELINE_REF}\` = ${BASELINE_COVERAGE}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Current: ${COVERAGE_LINES_PCT}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Delta: ${COVERAGE_DELTA}" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -665,7 +576,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Public latest report: ${PUBLIC_REPORT_URL}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Download artifact: \`quality-report-bundle-${{ github.run_number }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Internal bundle entry points: \`nfr-reports/README.md\`, \`nfr-reports/index.html\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Internal bundle entry points: \`nfr-reports/README.md\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- This workflow is informational and non-blocking by design." >> "$GITHUB_STEP_SUMMARY"
 
       - name: PR coverage comment
@@ -674,13 +585,24 @@ jobs:
         with:
           script: |
             const marker = '<!-- nfr-coverage-comment -->';
+            const current = process.env.COVERAGE_LINES_PCT === 'n/a'
+              ? 'n/a'
+              : `${process.env.COVERAGE_LINES_PCT}%`;
+            const baseline = process.env.BASELINE_COVERAGE === 'n/a'
+              ? 'n/a'
+              : `${process.env.BASELINE_COVERAGE}%`;
+            const delta = process.env.COVERAGE_DELTA === 'n/a'
+              ? 'n/a'
+              : `${process.env.COVERAGE_DELTA}%`;
+
             const body = [
               marker,
               '## Quality Report Coverage Snapshot',
               '',
-              `- Current coverage (lines): **${process.env.COVERAGE_LINES_PCT || 'n/a'}%**`,
-              `- Baseline (${process.env.BASELINE_REF || 'main'}): **${process.env.BASELINE_COVERAGE || 'n/a'}%**`,
-              `- Delta: **${process.env.COVERAGE_DELTA || 'n/a'}%**`,
+              `- Current coverage (lines): **${current}**`,
+              `- Baseline (${process.env.BASELINE_REF || 'main'}): **${baseline}**`,
+              `- Delta: **${delta}**`,
+              `- Source: **${process.env.COVERAGE_SOURCE || 'none'}**`,
               '',
               'Coverage here is informational (non-blocking).'
             ].join('\n');
@@ -694,7 +616,7 @@ jobs:
               per_page: 100
             });
 
-            const existing = comments.find(c => c.body && c.body.includes(marker));
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
             if (existing) {
               await github.rest.issues.updateComment({
                 owner,
