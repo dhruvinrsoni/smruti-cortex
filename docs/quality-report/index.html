@@ -5,34 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Latest Quality Report</title>
   <style>
-    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px auto; max-width: 960px; padding: 0 16px; color: #1f2937; }
-    h1, h2 { margin: 0 0 10px; }
-    .meta { color: #4b5563; margin-bottom: 12px; }
-    table { border-collapse: collapse; width: 100%; margin: 12px 0 20px; }
-    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
-    th { background: #f3f4f6; }
+    :root { --bg: #f6f8fb; --card: #ffffff; --ink: #0f172a; --muted: #475569; --line: #dbe3ee; --accent: #0f766e; --warn: #b45309; --pass: #166534; --unknown: #334155; }
+    body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: linear-gradient(180deg, #eff4ff 0%, #f6f8fb 45%); color: var(--ink); }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 36px; }
+    .hero { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06); }
+    h1 { margin: 0; font-size: 30px; }
+    h2 { margin: 0 0 10px; font-size: 20px; }
+    .meta { color: var(--muted); margin-top: 8px; font-size: 14px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .chip { border-radius: 999px; padding: 4px 10px; font-size: 12px; border: 1px solid transparent; }
+    .chip.pass { color: var(--pass); border-color: #86efac; background: #f0fdf4; }
+    .chip.warn { color: var(--warn); border-color: #fcd34d; background: #fffbeb; }
+    .chip.unknown { color: var(--unknown); border-color: #cbd5e1; background: #f8fafc; }
+    .grid { margin-top: 18px; display: grid; gap: 14px; grid-template-columns: 1fr; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+    th { background: #f8fafc; }
+    ul { margin: 8px 0 0 18px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }
+    .kpi { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    @media (max-width: 680px) { .wrap { padding: 16px 12px 24px; } h1 { font-size: 24px; } }
   </style>
 </head>
 <body>
-  <h1>Latest Quality Report</h1>
-  <p class="meta">Generated: 2026-03-07T20:13:09.903Z | Run #6 | Ref: main</p>
-  <p><a href="https://github.com/dhruvinrsoni/smruti-cortex/actions/runs/22806386627" target="_blank" rel="noopener">Open workflow run</a></p>
-
-  <h2>Scorecard</h2>
-  <table>
-    <tr><th>Area</th><th>Signal</th></tr>
-    <tr><td>Coverage</td><td>n/a% (delta n/a%)</td></tr>
-    <tr><td>Lint</td><td>0 errors, 0 warnings</td></tr>
-    <tr><td>Security</td><td>0 total, 0 critical, 0 high</td></tr>
-    <tr><td>Performance</td><td>Total JS 544 KB</td></tr>
-  </table>
-
-  <h2>Bundle Sizes</h2>
-  <table>
-    <tr><th>Bundle</th><th>Size</th><th>Target</th></tr>
-    <tr><td>Service Worker</td><td>102 KB</td><td>&lt; 500 KB</td></tr>
-    <tr><td>Popup</td><td>58 KB</td><td>&lt; 300 KB</td></tr>
-    <tr><td>Quick Search</td><td>55 KB</td><td>&lt; 200 KB</td></tr>
-  </table>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Latest Quality Report</h1>
+      <p class="meta">Generated: 2026-03-07T20:45:58.842Z | Run #8 | Ref: main | Coverage source: none</p>
+      <p class="meta"><a href="https://github.com/dhruvinrsoni/smruti-cortex/actions/runs/22806905502" target="_blank" rel="noopener">Open workflow run details</a></p>
+      <div class="chips"><span class="chip pass">Lint: pass</span><span class="chip pass">Tests: pass</span><span class="chip pass">Coverage: pass</span><span class="chip pass">Security: pass</span><span class="chip pass">Performance: pass</span></div>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Coverage</div><div class="value">n/a</div></div>
+        <div class="kpi"><div class="label">Lint Errors</div><div class="value">0</div></div>
+        <div class="kpi"><div class="label">Critical/High Vulns</div><div class="value">0</div></div>
+        <div class="kpi"><div class="label">Total JS Bundle</div><div class="value">544 KB</div></div>
+      </div>
+    </section>
+    <section class="grid">
+      <article class="card">
+        <h2>Signals</h2>
+        <table>
+          <tr><th>Area</th><th>Status</th><th>Signal</th></tr>
+          <tr><td>Coverage</td><td>pass</td><td>n/a (delta n/a%)</td></tr>
+          <tr><td>Lint</td><td>pass</td><td>0 errors, 0 warnings</td></tr>
+          <tr><td>Security</td><td>pass</td><td>0 total, 0 critical, 0 high</td></tr>
+          <tr><td>Performance</td><td>pass</td><td>Total JS 544 KB</td></tr>
+        </table>
+      </article>
+      <article class="card">
+        <h2>Top Actions</h2>
+        <ul><li>Coverage data unavailable: inspect coverage logs/artifacts.</li></ul>
+      </article>
+      <article class="card">
+        <h2>Bundle Sizes</h2>
+        <table>
+          <tr><th>Bundle</th><th>Size</th><th>Target</th></tr>
+          <tr><td>Service Worker</td><td>102 KB</td><td>&lt; 500 KB</td></tr>
+          <tr><td>Popup</td><td>58 KB</td><td>&lt; 300 KB</td></tr>
+          <tr><td>Quick Search</td><td>55 KB</td><td>&lt; 200 KB</td></tr>
+        </table>
+      </article>
+    </section>
+  </div>
 </body>
 </html>
