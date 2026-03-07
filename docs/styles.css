@@ -178,29 +178,6 @@ body {
     font-size: 1.1rem;
 }
 
-.nfr-report-fab {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    z-index: 2100;
-    background: linear-gradient(135deg, #0ea5e9, #2563eb);
-    color: #fff;
-    text-decoration: none;
-    border-radius: 999px;
-    padding: 10px 16px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    box-shadow: var(--shadow-lg);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.nfr-report-fab:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.35);
-}
-
 /* ===== Hero Section ===== */
 .hero {
     min-height: 100vh;
@@ -1321,12 +1298,6 @@ body {
 
     .tour-card { flex: 0 0 180px; }
 
-    .nfr-report-fab {
-        right: 12px;
-        bottom: 12px;
-        padding: 8px 12px;
-        font-size: 0.76rem;
-    }
 }
 
 @media (max-width: 480px) {
