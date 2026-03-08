@@ -40,6 +40,12 @@ All notable changes to SmrutiCortex are documented here.
 - **Apache-2.0 license** — Project relicensed to Apache-2.0; all references updated across docs and package metadata
 - **CONTRIBUTING.md** — Contribution guidelines added (contributions currently closed pending CLA)
 
+### AI Feedback & Quality
+- **AI status bar** — Overlay shows colored badges after search: `ai-expanded` (purple), `cache-hit` (blue), `semantic` (teal), `skipped` (grey), `error` (red); `ExpansionSource` tracking piped from background to UI
+- **AI loading spinner** — Inline overlay shows a spinner while AI processes the query
+- **Cache invalidation on settings change** — Toggling any setting immediately clears stale search cache; next query always runs fresh
+- **ESLint clean** — All 76 ESLint issues resolved (52 auto-fixed, 24 manual); `npm run lint` exits with 0 issues; `lint-report.yml` calls the same npm script
+
 ---
 
 ## [7.0.0] — 2026-01-01
