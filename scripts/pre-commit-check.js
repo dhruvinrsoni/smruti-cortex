@@ -2,6 +2,34 @@
 
 const { execSync } = require('child_process');
 const readline = require('readline');
+const path = require('path');
+
+// Use local node_modules/.bin binaries directly — no npm needed in PATH.
+// This works in any environment (Husky, CI, broken global npm) because the
+// binaries are always present after `npm install`.
+const cwd = process.cwd();
+const isWin = process.platform === 'win32';
+const bin = (name) => path.join(cwd, 'node_modules', '.bin', name + (isWin ? '.cmd' : ''));
+
+// Mirror the build chains from package.json without calling npm.
+// Update here if package.json "build" or "build:prod" scripts change.
+const buildDevCmd = [
+  'node ./scripts/sync-version.mjs',
+  `"${bin('rimraf')}" dist`,
+  `"${bin('tsc')}" --project tsconfig.json`,
+  'node ./scripts/copy-static.mjs',
+  'node ./scripts/esbuild-dev.mjs',
+].join(' && ');
+
+const buildProdCmd = [
+  'node ./scripts/sync-version.mjs',
+  `"${bin('rimraf')}" dist`,
+  `"${bin('tsc')}" --project tsconfig.json`,
+  'node ./scripts/copy-static.mjs',
+  'node ./scripts/esbuild-prod.mjs',
+].join(' && ');
+
+const testCmd = `"${bin('vitest')}" run`;
 
 function runCommand(command, description) {
   console.log(`\n🔨 RUNNING: ${description.toUpperCase()}`);
@@ -12,6 +40,7 @@ function runCommand(command, description) {
     const startTime = Date.now();
     execSync(command, {
       stdio: 'inherit',
+      shell: true,
       timeout: 300000, // 5 minute timeout
       maxBuffer: 1024 * 1024 * 10 // 10MB buffer
     });
@@ -79,19 +108,19 @@ async function main() {
 
   // Run build (blocking) — fail commit if this fails
   console.log('\n🏗️  PHASE 1: Build (blocking)');
-  const buildResult = runCommand('npm run build', 'Build (dev)');
+  const buildResult = runCommand(buildDevCmd, 'Build (dev)');
   results.push({ name: 'Build (dev)', passed: buildResult });
   if (!buildResult) allPassed = false;
 
   // Run production build (blocking) — fail commit if this fails
   console.log('\n🏗️  PHASE 1b: Build:prod (blocking)');
-  const buildProdResult = runCommand('npm run build:prod', 'Build (prod)');
+  const buildProdResult = runCommand(buildProdCmd, 'Build (prod)');
   results.push({ name: 'Build (prod)', passed: buildProdResult });
   if (!buildProdResult) allPassed = false;
 
-  // Run tests (non-blocking) — report failures but do not block commits
+  // Run tests (non-blocking) via local vitest binary
   console.log('\n🧪 PHASE 3: Test Suite (non-blocking)');
-  const testResult = runCommand('npm test', 'Vitest test suite');
+  const testResult = runCommand(testCmd, 'Vitest test suite');
   results.push({ name: 'Tests (non-blocking)', passed: testResult });
 
   // Summary
