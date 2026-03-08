@@ -44,6 +44,17 @@ Load the relevant skill file from `.github/skills/<name>/SKILL.md` for detailed 
 | `ui-components` | Popup, quick-search, UI changes | Shadow DOM overlay, two-phase search, port messaging |
 | `testing` | Writing or fixing tests | Vitest config, chrome API mocks, test patterns |
 | `settings` | Settings, storage, preferences | SettingsManager schema, validation, storage layer |
+| `test-generation` | Generating tests for any file | Full test rules, mock patterns, coverage table |
+
+Test generation instructions: `.github/copilot/test-generation-instructions.md`
+
+## Copilot Agents
+
+| Agent | Usage | Description |
+|-------|-------|-------------|
+| `test-coverage-agent` | `@test-coverage-agent create tests for <path>` | Generates Vitest tests following test-generation instructions |
+
+Agent definitions: `.github/copilot/agents/`
 
 ## Key Conventions
 

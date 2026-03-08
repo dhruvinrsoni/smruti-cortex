@@ -81,3 +81,8 @@ import 'fake-indexeddb/auto';  // Auto-polyfills indexedDB in jsdom
 ## Current Test Count
 
 131 tests across 7 test files (as of v8.0).
+
+## Full Test Generation Guide
+
+For comprehensive test generation rules, mock pattern catalog, and coverage priority table,
+see `.github/copilot/test-generation-instructions.md`.

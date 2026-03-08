@@ -1,0 +1,68 @@
+name: Test Coverage Request
+description: Request test generation for specific files or areas
+title: "[Tests]: "
+labels: ["testing", "coverage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Test Coverage Request
+        Use this template to request test generation for untested or under-tested source files.
+        The `@test-coverage-agent` can be used to implement these requests.
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Generation Mode
+      description: What scope of test generation is needed?
+      options:
+        - Single file (one source file)
+        - Folder (all files in a directory)
+        - Area (e.g., all scorers, all core utilities)
+        - Update (improve coverage of existing tests)
+    validations:
+      required: true
+
+  - type: textarea
+    id: target-files
+    attributes:
+      label: Target File(s)
+      description: List the source file paths that need tests.
+      placeholder: |
+        src/background/search/tokenizer.ts
+        src/background/search/search-cache.ts
+        src/core/settings.ts
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How critical is coverage for these files?
+      options:
+        - High (core logic, frequently changing, blocks release)
+        - Medium (important but stable code)
+        - Low (nice to have, rarely changes)
+    validations:
+      required: true
+
+  - type: textarea
+    id: coverage-notes
+    attributes:
+      label: Notes
+      description: Any specific functions, branches, edge cases, or scenarios to prioritize?
+      placeholder: |
+        Focus on:
+        - Error handling paths in tokenize()
+        - Edge cases with empty input strings
+        - The classifyMatch() function with all MatchType variants
+
+  - type: checkboxes
+    id: agent
+    attributes:
+      label: Agent Eligibility
+      description: Can this be handled by the automated test coverage agent?
+      options:
+        - label: This request can be handled by `@test-coverage-agent`
