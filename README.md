@@ -12,6 +12,20 @@
 
 ---
 
+## 🧬 Three Layers of Memory
+
+SmrutiCortex is built on three complementary ideas from neuroscience and computing:
+
+| Layer | Concept | What It Does |
+|-------|---------|--------------|
+| **Engram** | A memory trace — the physical record of an experience stored in the brain | Your browsing history, captured and indexed locally in IndexedDB. Every page you visit leaves an engram. |
+| **Lexical** | Word-based recall — finding memories by their literal text signatures | The Vivek Search algorithm: tokenizes your query, scores results by exact match → prefix → substring across title, URL, and metadata |
+| **Neural** | Pattern-based recall — finding memories by meaning, not just words | Optional semantic search via local Ollama embeddings: converts text to 768-dimensional vectors, finds conceptually related results even when the exact words don't match |
+
+Together they form a complete memory system: **engrams** are stored, **lexical** search finds what you remember, **neural** search finds what you meant.
+
+---
+
 ## ✨ Why SmrutiCortex?
 
 Browser history search is slow. SmrutiCortex indexes everything locally and retrieves any URL in milliseconds. Like "Everything" for Windows, but for your browser.
