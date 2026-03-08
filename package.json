@@ -28,6 +28,7 @@
     "build": "npm run sync-version && npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",
     "build:prod": "npm run sync-version && npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-prod.mjs",
     "package": "npm run build:prod && node ./scripts/package.mjs",
+    "benchmark": "node ./scripts/benchmark-performance.mjs",
     "generate-screenshots-index": "node ./scripts/generate-screenshots-index.mjs",
     "tsc": "tsc --project tsconfig.json",
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives",
