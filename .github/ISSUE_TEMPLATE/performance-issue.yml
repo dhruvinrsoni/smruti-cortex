@@ -1,0 +1,82 @@
+name: Performance Issue
+description: Report a performance regression or bottleneck
+title: "[Perf]: "
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Performance Issue
+        Report slow behavior, memory issues, or performance regressions.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Performance Area
+      description: What type of performance issue?
+      options:
+        - Search latency (results slow to appear)
+        - Memory usage (RAM growth, potential memory leak)
+        - Startup time (extension takes long to initialize)
+        - Indexing (history/bookmark indexing is slow)
+        - Bundle size (extension package too large)
+        - AI / Embedding processing (Ollama calls slow)
+        - UI rendering (janky scrolling, slow DOM updates)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is slow and when does it happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: measurements
+    attributes:
+      label: Measurements
+      description: Include timing numbers, memory usage, or DevTools Performance tab screenshots.
+      placeholder: |
+        - Search for "example" takes ~2 seconds (expected: <50ms)
+        - Service worker memory: 450MB after 10 minutes (expected: <100MB)
+        - First search after startup: 800ms
+        - Subsequent searches: ~300ms
+
+  - type: input
+    id: history-size
+    attributes:
+      label: Approximate History Size
+      description: "How many items indexed? Check the popup footer or diagnostics."
+      placeholder: "~5,000 indexed items"
+
+  - type: dropdown
+    id: ai-enabled
+    attributes:
+      label: AI Features Enabled?
+      description: What AI/semantic settings are active?
+      options:
+        - Both disabled (keyword search only)
+        - AI keyword expansion only
+        - Semantic embeddings only
+        - Both enabled
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System Info
+      description: Browser version, OS, RAM, CPU if relevant.
+      placeholder: "Chrome 122 / Windows 11 / 16GB RAM / Ryzen 5 5600X"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues for duplicates
+          required: true
+        - label: This is a regression (worked fine in a previous version)
+        - label: I have checked DevTools Performance tab

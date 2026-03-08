@@ -1,5 +1,10 @@
-# CODEOWNERS — Protect critical files from accidental deletion
+# CODEOWNERS — Protect critical files from accidental changes
 
-# The privacy policy URL is linked from Chrome Web Store and must never be deleted.
-# Any PR that modifies docs/privacy.html requires review from the repo owner.
+# Privacy policy (linked from Chrome Web Store, must never be deleted)
 docs/privacy.html @dhruvinrsoni
+
+# GitHub configuration (templates, agents, workflows, labels)
+.github/ @dhruvinrsoni
+
+# Test configuration
+vitest.config.ts @dhruvinrsoni

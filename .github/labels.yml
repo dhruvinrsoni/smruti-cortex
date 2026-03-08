@@ -1,0 +1,75 @@
+# Type labels
+- name: bug
+  color: "d73a4a"
+  description: "Something isn't working"
+- name: enhancement
+  color: "a2eeef"
+  description: "New feature or request"
+- name: testing
+  color: "0e8a16"
+  description: "Test creation or improvement"
+- name: coverage
+  color: "1d76db"
+  description: "Test coverage related"
+- name: performance
+  color: "f9d0c4"
+  description: "Performance issue or improvement"
+- name: security
+  color: "b60205"
+  description: "Security vulnerability or hardening"
+- name: documentation
+  color: "0075ca"
+  description: "Documentation updates"
+- name: refactor
+  color: "d4c5f9"
+  description: "Code improvement without behavior change"
+
+# Area labels
+- name: "area: search"
+  color: "0075ca"
+  description: "Search engine, scorers, tokenizer, ranking"
+- name: "area: ai"
+  color: "7057ff"
+  description: "AI keyword expansion, embeddings, Ollama"
+- name: "area: ui"
+  color: "008672"
+  description: "Popup, quick-search overlay, settings modal"
+- name: "area: core"
+  color: "fbca04"
+  description: "Logger, settings, helpers, constants"
+- name: "area: ci"
+  color: "bfdadc"
+  description: "GitHub Actions, Docker, build system"
+- name: "area: indexing"
+  color: "c5def5"
+  description: "History indexing, database, metadata extraction"
+
+# Priority labels
+- name: "priority: high"
+  color: "b60205"
+  description: "High priority"
+- name: "priority: medium"
+  color: "fbca04"
+  description: "Medium priority"
+- name: "priority: low"
+  color: "0e8a16"
+  description: "Low priority"
+
+# Status labels
+- name: needs-triage
+  color: "e4e669"
+  description: "Needs maintainer review and labeling"
+- name: "status: in-progress"
+  color: "ededed"
+  description: "Work is actively underway"
+- name: "status: blocked"
+  color: "000000"
+  description: "Blocked by dependency or decision"
+- name: "status: ready-for-review"
+  color: "0e8a16"
+  description: "PR is ready for review"
+
+# Agent labels
+- name: "agent: test-coverage"
+  color: "7057ff"
+  description: "Can be handled by the test-coverage agent"
