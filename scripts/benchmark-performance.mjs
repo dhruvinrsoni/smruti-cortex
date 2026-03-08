@@ -5,7 +5,7 @@
  */
 
 import { performance } from 'perf_hooks';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 const results = {
@@ -37,33 +37,40 @@ for (const file of distFiles) {
   }
 }
 
-// 2. Module Import Performance
-console.log('\n2. Testing module import speed...');
-const importTests = [
-  'src/core/logger.ts',
-  'src/core/settings.ts',
-  'src/core/helpers.ts'
+// 2. Dist integrity check — verify all required build outputs exist
+console.log('\n2. Verifying dist output integrity...');
+const requiredDistFiles = [
+  'dist/manifest.json',
+  'dist/background/service-worker.js',
+  'dist/content_scripts/extractor.js',
+  'dist/content_scripts/quick-search.js',
+  'dist/popup/popup.js',
+  'dist/popup/popup.html',
+  'dist/popup/popup.css',
 ];
 
-for (const module of importTests) {
-  const start = performance.now();
-  try {
-    await import(resolve(process.cwd(), module));
-    const duration = (performance.now() - start).toFixed(2);
-    results.timing[`import_${module}`] = duration;
-    console.log(`   ${module}: ${duration}ms`);
-  } catch (e) {
-    console.warn(`   ⚠️  ${module}: Failed to import`);
+let allPresent = true;
+for (const file of requiredDistFiles) {
+  const exists = existsSync(resolve(process.cwd(), file));
+  const icon = exists ? '✅' : '❌';
+  console.log(`   ${icon} ${file}`);
+  if (!exists) {
+    allPresent = false;
+    results.status = 'warn';
   }
 }
+results.timing['distIntegrity'] = allPresent ? 'pass' : 'fail';
 
 // 3. Threshold Checks
 console.log('\n3. Checking performance thresholds...');
 
+// Thresholds set at ~150% of current actual sizes (v8.0.0: 102, 1.8, 55, 58 KB).
+// Tighten when sizes are stable; loosen only with explicit justification.
 const thresholds = {
-  'background/service-worker.js': 500,  // 500 KB max
-  'content_scripts/quick-search.js': 200, // 200 KB max
-  'popup/popup.js': 300 // 300 KB max
+  'background/service-worker.js': 150,  // actual ~102 KB
+  'content_scripts/extractor.js': 5,    // actual ~1.8 KB
+  'content_scripts/quick-search.js': 80, // actual ~55 KB
+  'popup/popup.js': 85,                  // actual ~58 KB
 };
 
 for (const [file, maxSize] of Object.entries(thresholds)) {

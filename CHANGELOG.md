@@ -42,6 +42,44 @@ All notable changes to SmrutiCortex are documented here.
 
 ---
 
-## [7.0.0] and earlier
+## [7.0.0] — 2026-01-01
 
-See git tags for previous release history.
+- Chrome Web Store compliance: revised permissions manifest, deployed landing page, added privacy policy
+- Manual history indexing on demand from settings
+- Multi-token search ranking improvements (intent-priority ordering)
+- Quick search: improved focus handling, tab navigation, overlay robustness
+- Semantic search with AI embeddings integration
+- Bug fixes: localStorage in sandboxed pages, overlay keybinding isolation, extension context invalidation
+
+## [6.0.0] — 2026-01-01
+
+- Bookmark indexing with favicon caching in IndexedDB
+- Query expansion with synonym matching for smarter search
+- Performance monitoring singleton and tracking infrastructure
+- Advanced diagnostics module (open-closed design)
+- Settings additions: `indexBookmarks` and `selectAllOnFocus` toggles
+
+## [5.0.0] — 2025-12-31
+
+- Strict matching and diversity filter for cleaner, less redundant results
+- Popup UI: reduced header padding, bookmark button moved to settings modal
+- Chrome Web Store submission preparation and documentation
+
+## [4.0.0] — 2025-12-28
+
+- Ollama-based semantic search: AI keyword expansion and embeddings support
+- Privacy controls: favicon loading toggle and sensitive-site URL blacklist
+- Self-healing resilience module for extension reliability
+- Settings architecture: schema-driven validation following SOLID principles
+- v11 "Neural S" icon redesign
+
+## [3.0.0] — 2025-12-27
+
+- Comprehensive CI/CD pipeline and packaging infrastructure
+- Automated testing, linting, and documentation standards
+- Developer tooling and build process foundation
+
+## [2.0.0–2.2.0]
+
+See `docs/RELEASE_NOTES_v2.md` for detailed notes covering the Vivek Search algorithm
+introduction, graduated match classification, tabbed settings modal, and UX overhaul.
