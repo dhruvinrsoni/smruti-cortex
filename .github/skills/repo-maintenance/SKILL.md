@@ -108,6 +108,39 @@ git status --short
 
 ---
 
+## Adaptive Strategy — Evolving Beyond "Fewer Files"
+
+The first pass of any cleanup starts with a simple rule: *fewer files*. It's easy to measure, hard to argue with. But as you explore, the real goal emerges:
+
+> **Maximize value per file.** A well-trimmed doc with unique content is better than no doc at all.
+
+### The Greedy Insight
+
+At each decision point, ask: *"Is this content available somewhere better?"*
+- **Yes** → merge the unique parts upstream, then delete
+- **No** → trim it to its essentials and keep it
+
+Don't confuse *file count* with *value*. Three bloated docs is worse than one crisp doc. One doc with unique branding narrative is better than zero docs.
+
+### Strategy Adapts as You Explore
+
+Start with the simple rule. As you discover what's actually unique, pivot:
+
+| Starting assumption | What exploration reveals | Better action |
+|---------------------|--------------------------|---------------|
+| "It's all in CHANGELOG.md" | Algorithm narrative + etymology exist nowhere else | Recover, trim, keep |
+| "The SKILL.md covers it" | SKILL.md is internal; this is the public-facing story | Recover, trim, keep |
+| "Icons are archived" | 750 lines of AI prompts — irreplaceable if rebrand needed | Archive, don't delete |
+
+### Example: RECOVERED `docs/VIVEK_SEARCH_ALGORITHM.md`
+
+**Situation:** Deleted in Round 2 audit under "fewer docs" mandate.
+**Discovery:** It was the only document explaining the Vivek Search *philosophy* (Sanskrit naming, why graduated matching beats binary, the full algorithm story) in a public-facing narrative form. CLAUDE.md and SKILL.md are internal developer refs — not the same thing.
+**Decision:** RECOVER, trim verbose AI deep-dives to 2-line summaries (pointing to ai-ollama SKILL.md), fix sensitive example data. Result: 250 lines (from 408).
+**Lesson:** Branding and narrative docs can't be replaced by developer-facing references. Ask "who reads this?" before deleting.
+
+---
+
 ## Cleanup Commit Pattern
 
 Group changes by intent, not by file:
