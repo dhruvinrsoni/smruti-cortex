@@ -11,7 +11,7 @@ export function tokenize(text: string): string[] {
 
 // ─── Vivek Search Match Classification ───────────────────────────────────────
 // Graduated match types, ordered from strongest to weakest signal:
-//   EXACT    (1.0) — Token matches at word boundaries: "rar" in "RAR-My-All"
+//   EXACT    (1.0) — Token matches at word boundaries: "app" in "App-My-Hub"
 //   PREFIX   (0.75) — Token matches the start of a word: "iss" in "Issue"
 //   SUBSTRING(0.4) — Token appears inside a word: "aviga" in "Navigator"
 //   NONE     (0.0) — No match
@@ -117,7 +117,7 @@ export function matchPosition(token: string, text: string): number {
 /**
  * Check if tokens appear consecutively in text (phrase match).
  * Returns the count of consecutive pair matches.
- * Example: tokens ["rar","my","all"] in "RAR-My-All" → 2 consecutive pairs found.
+ * Example: tokens ["app","my","hub"] in "App-My-Hub" → 2 consecutive pairs found.
  */
 export function countConsecutiveMatches(tokens: string[], text: string): number {
     if (tokens.length < 2) {return 0;}

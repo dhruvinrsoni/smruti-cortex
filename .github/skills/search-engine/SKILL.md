@@ -54,7 +54,7 @@ User query
 
 Graduated system replaces binary `includes()`:
 
-- **EXACT** (1.0) -- word-boundary match: "rar" in "RAR-My-All"
+- **EXACT** (1.0) -- word-boundary match: "app" in "App-My-Hub"
 - **PREFIX** (0.75) -- start of word: "iss" in "Issue"
 - **SUBSTRING** (0.4) -- inside word: "aviga" in "Navigator"
 - **NONE** (0.0) -- no match

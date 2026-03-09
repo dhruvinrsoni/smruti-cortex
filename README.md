@@ -116,7 +116,7 @@ npm run build
 
 **Search Quality Controls (Vivek Search):**
 - **Graduated Match Classification**: Exact keyword > prefix > substring matching (not binary)
-  - `rar my iss` finds "[RAR-My-All] Issue Navigator" because "rar" and "my" are exact, "iss" is a prefix of "Issue"
+  - `app my iss` finds "[App-My-Hub] Issue Navigator" because "app" and "my" are exact, "iss" is a prefix of "Issue"
 - **9-Scorer Pipeline**: Title, URL, recency, frequency, cross-dimensional, meta, domain familiarity, multi-token, AI embedding
 - **Strict Matching** (default ON): Only shows results containing your search terms
   - Toggle OFF: Settings → "Show non-matching results"
@@ -333,6 +333,8 @@ npm run build       # Verify build
 |-----|---------|
 | [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) | Store submission guide + privacy policy |
 | [CHANGELOG.md](CHANGELOG.md) | Full version history |
+| [docs/VIVEK_SEARCH_ALGORITHM.md](docs/VIVEK_SEARCH_ALGORITHM.md) | How Vivek Search works — algorithm, scoring, AI |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Contributor workflow — lifecycle, smoke tests, semver |
 
 ---
 
