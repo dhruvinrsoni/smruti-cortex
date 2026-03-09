@@ -4,6 +4,36 @@ const { execSync } = require('child_process');
 const readline = require('readline');
 const path = require('path');
 
+// === Smart Skip: Non-product file patterns ===
+// If ALL staged files match these patterns, skip builds entirely.
+// Product files are "everything NOT in this list" — safe by default.
+const SKIP_PATTERNS = [
+  /^docs\//,              // Website, screenshots, docs
+  /^\.github\//,          // Workflows, skills, copilot instructions
+  /^\.claude\//,          // Claude Code config
+  /^README\.md$/,
+  /^CHANGELOG\.md$/,
+  /^CONTRIBUTING\.md$/,
+  /^LICENSE$/,
+  /^CHROME_WEB_STORE\.md$/,
+  /^\.gitignore$/,
+  /^\.editorconfig$/,
+  /^\.vscode\//,          // VS Code settings
+];
+
+function getStagedFiles() {
+  try {
+    const output = execSync('git diff --cached --name-only', {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    return output.trim().split('\n').filter(Boolean);
+  } catch {
+    return null; // Fallback: can't determine → run builds (safe default)
+  }
+}
+
 // Use local node_modules/.bin binaries directly — no npm needed in PATH.
 // This works in any environment (Husky, CI, broken global npm) because the
 // binaries are always present after `npm install`.
@@ -102,6 +132,24 @@ async function main() {
   console.log(`🔧 Is TTY: stdout=${process.stdout.isTTY}, stdin=${process.stdin.isTTY}`);
   console.log(`🤖 CI Environment: ${process.env.CI ? 'YES' : 'NO'}`);
   console.log('='.repeat(50));
+
+  // === Smart skip: only run builds if product files are staged ===
+  const stagedFiles = getStagedFiles();
+  if (stagedFiles !== null && stagedFiles.length > 0 && !process.env.FORCE_PRE_COMMIT) {
+    const productFiles = stagedFiles.filter(f => !SKIP_PATTERNS.some(p => p.test(f)));
+    if (productFiles.length === 0) {
+      console.log('📂 Only non-product files staged:');
+      stagedFiles.forEach(f => console.log(`   ✅ ${f}`));
+      console.log('\n⏭️  Skipping build checks — no product code changed.');
+      console.log('💡 To force checks: FORCE_PRE_COMMIT=1 git commit ...');
+      console.log('='.repeat(50));
+      return; // Exit successfully, skip builds
+    }
+    console.log(`📂 ${stagedFiles.length} file(s) staged, ${productFiles.length} product file(s) — running full checks`);
+    productFiles.forEach(f => console.log(`   🔧 ${f}`));
+  } else if (process.env.FORCE_PRE_COMMIT) {
+    console.log('🔒 FORCE_PRE_COMMIT set — running all checks regardless of file types');
+  }
 
   let allPassed = true;
   const results = [];
