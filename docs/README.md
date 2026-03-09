@@ -1,6 +1,6 @@
 # SmrutiCortex Landing Page
 
-**Live URL:** https://dhruvinrsoni.github.io/smruti-cortex/
+**Live URL:** <https://dhruvinrsoni.github.io/smruti-cortex/>
 
 This directory (`docs/`) is the **single source of truth** for the SmrutiCortex landing page. Edit files here directly — GitHub Pages serves this folder from the `main` branch automatically. No build step, no sync workflow needed.
 
