@@ -1,14 +1,17 @@
-# SmrutiCortex 🧠
+<div align="center">
+  <img src="docs/assets/icon-128.png" alt="SmrutiCortex" width="80">
+  <h1>SmrutiCortex</h1>
+  <p><strong>Ultra-fast browser history search. Find any page instantly.</strong></p>
+  <p><em>Smruti (स्मृति)</em> — Sanskrit for "memory" · <em>Cortex</em> — The brain's intelligence center</p>
 
-**Ultra-fast browser history search. Find any page instantly.**
+  [![Build](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml)
+  [![Quality Report](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/nfr-report.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/nfr-report.yml)
+  [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+  [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
+  [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)
 
-[![Build](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml)
-[![Quality Report](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/nfr-report.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/nfr-report.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
-[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)
-
-> **Smruti (स्मृति)** — Sanskrit for "memory" | **Cortex** — The brain's intelligence center
+  <br>
+</div>
 
 ---
 
@@ -158,7 +161,9 @@ npm run docker-validate       # Validate Docker setup (auto-cleanup)
 npm run docker-clean          # Manual cleanup volumes/containers
 ```
 
-**Docker Build (Optional):**
+<details>
+<summary><strong>Docker Build (Optional)</strong></summary>
+
 Build without installing Node.js locally:
 ```bash
 # Prerequisites: Docker Desktop or Docker Engine
@@ -173,10 +178,9 @@ npm run docker-clean
 # Or use docker-compose directly
 docker-compose run --rm build
 ```
+</details>
 
-See [docs/DOCKER.md](docs/DOCKER.md) for full Docker workflow including devcontainer and CI.
-
-**Project Structure:****
+**Project Structure:**
 ```
 src/
 ├── background/      # Service worker, indexing, search engine
@@ -239,8 +243,6 @@ ollama pull nomic-embed-text:latest
 - Search with cached embeddings: ~50ms
 - Storage: ~4KB per page
 
-**📖 Full guide:** See [SEMANTIC_SEARCH.md](docs/SEMANTIC_SEARCH.md)
-
 ### 🛡️ AI Safety Architecture
 
 Production-grade safety layers protect your browser — every AI feature degrades gracefully:
@@ -292,17 +294,19 @@ Production-grade safety layers protect your browser — every AI feature degrade
 | `🔒 Request rejected: 1/1 slots in use` | Another Ollama request is already in progress. This one was skipped (not an error — normal queuing). |
 | `🔴 MEMORY PRESSURE: NMB used (limit: 512MB)` | Extension memory is high. AI features paused to keep browser responsive. |
 
-#### What These Terms Mean (Plain Language)
+<details>
+<summary><strong>What These Terms Mean (Plain Language)</strong></summary>
 
-- **Circuit Breaker** — If Ollama fails 3 times in a row, SmrutiCortex stops calling it for 60 seconds to avoid wasting resources. After 60 seconds, it tries again. If the next call succeeds, everything resets to normal. This prevents the extension from endlessly hammering a broken or offline Ollama instance.
+- **Circuit Breaker** — If Ollama fails 3 times in a row, SmrutiCortex stops calling it for 60 seconds to avoid wasting resources. After 60 seconds, it tries again. If the next call succeeds, everything resets to normal.
 
-- **Memory Guard** — Chrome extensions share your computer's memory. If SmrutiCortex uses more than 512MB (rare, but possible with very large histories), AI features pause automatically to keep your browser responsive. Normal search always works.
+- **Memory Guard** — If SmrutiCortex uses more than 512MB, AI features pause automatically to keep your browser responsive. Normal search always works.
 
-- **Concurrent Limiter (Semaphore)** — Ollama processes one request at a time internally. Sending multiple requests simultaneously just wastes memory. SmrutiCortex enforces one-at-a-time to keep things fast and efficient.
+- **Concurrent Limiter** — Ollama processes one request at a time internally. SmrutiCortex enforces one-at-a-time to keep things fast and efficient.
 
-- **Background Embedding Processor** — When semantic search is enabled, SmrutiCortex generates embeddings for all your indexed pages in the background. You can see progress, pause, or resume from Settings → AI → Embedding Management. When you search, the processor automatically pauses to give search priority, then resumes when your search is done.
+- **Background Embedding Processor** — Generates embeddings for all indexed pages in the background. Pause/resume from Settings → AI → Embedding Management. Search always gets priority.
 
-- **Graceful Degradation** — If Ollama isn't running, isn't installed, or any AI feature fails, SmrutiCortex seamlessly falls back to keyword-only search. The extension always works — AI just makes it smarter when available.
+- **Graceful Degradation** — If Ollama isn't running or fails, SmrutiCortex falls back to keyword-only search. The extension always works — AI just makes it smarter when available.
+</details>
 
 #### Required Models
 
@@ -313,13 +317,11 @@ Production-grade safety layers protect your browser — every AI feature degrade
 
 > **Important:** You must manually pull models before enabling features. SmrutiCortex cannot download models — Ollama manages model downloads.
 
-**📖 Full architecture:** See [AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md)
-
 ### 🔍 Quality Checks
 
 ```bash
 npm run lint        # ESLint code quality
-npm run test        # Run 44 unit tests
+npm run test        # Run all tests
 npm run build       # Verify build
 ```
 
@@ -372,5 +374,5 @@ Apache-2.0 — See [LICENSE](LICENSE)
 
 **Made for power users who remember everything... except where they put it.**
 
-[Report Bug](https://github.com/dhruvinrsoni/SmrutiCortex/issues) · [Request Feature](https://github.com/dhruvinrsoni/SmrutiCortex/issues)
+[Report Bug](https://github.com/dhruvinrsoni/smruti-cortex/issues) · [Request Feature](https://github.com/dhruvinrsoni/smruti-cortex/issues)
 
