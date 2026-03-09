@@ -52,8 +52,8 @@ const TOUR_STEPS = [
         id: 'semantic',
         title: 'Semantic Search',
         subtitle: 'Find pages by meaning, not just keywords. Search "ML tutorials" and find "machine learning guides". Uses local embedding models.',
-        screenshot: './screenshots/SmrutiCortex latest quick-search \'jira\' keyword yellow non-ai and green ai cache combined results Screenshot 2026-03-03 015040.png',
-        highlight: { x: '5%', y: '55%', w: '90%', h: '25%' },
+        screenshot: './screenshots/SmrutiCortex quick-search \'github\' keyword AI matches ranked high with \'repository\' keyword match with green highlight Screenshot 2026-03-10 002321.png',
+        highlight: { x: '2%', y: '12%', w: '96%', h: '75%' },
         category: 'ai'
     },
     {
@@ -100,8 +100,8 @@ const TOUR_STEPS = [
         id: 'highlighting',
         title: 'Match Highlighting',
         subtitle: 'Matching text is highlighted in titles and URLs so you can see exactly why each result matched your query.',
-        screenshot: './screenshots/SmrutiCortex extension page \'spy\' keyword highlighted results with AI Search in action network tab generate symantic results of \'agent\' keyword via ollama Screenshot 2026-03-02 021737.png',
-        highlight: { x: '5%', y: '15%', w: '90%', h: '20%' },
+        screenshot: './screenshots/SmrutiCortex quick-serach \'youtube\' keyword AI matches \'video\' keywords also in green highlighted with top rank Screenshot 2026-03-10 003004.png',
+        highlight: { x: '2%', y: '12%', w: '96%', h: '75%' },
         category: 'core'
     },
     {
@@ -162,6 +162,42 @@ function updateThemeIcon(theme) {
     icon.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 
+// ===== Highlight Offset for object-fit: contain =====
+// When object-fit: contain is used, the image may be letterboxed inside its container.
+// The highlight is positioned relative to the container, so we need to compensate
+// for the offset between the container and the actual rendered image content.
+function applyHighlightOffset() {
+    const wrap = document.getElementById('screenshotWrap');
+    if (!screenshot.naturalWidth || !wrap) return;
+
+    const wrapW = wrap.clientWidth;
+    const wrapH = wrap.clientHeight;
+    if (wrapW === 0 || wrapH === 0) return;
+
+    const imgAspect = screenshot.naturalWidth / screenshot.naturalHeight;
+    const wrapAspect = wrapW / wrapH;
+
+    let scaleX, scaleY, offsetX, offsetY;
+    if (imgAspect > wrapAspect) {
+        // Image wider than container — letterboxed top/bottom
+        const imgHeight = wrapW / imgAspect;
+        scaleX = 1;
+        scaleY = imgHeight / wrapH;
+        offsetX = 0;
+        offsetY = (wrapH - imgHeight) / 2;
+    } else {
+        // Image taller — letterboxed left/right
+        const imgWidth = wrapH * imgAspect;
+        scaleX = imgWidth / wrapW;
+        scaleY = 1;
+        offsetX = (wrapW - imgWidth) / 2;
+        offsetY = 0;
+    }
+
+    highlight.style.transformOrigin = 'top left';
+    highlight.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scaleX}, ${scaleY})`;
+}
+
 // ===== Render Step =====
 function renderStep() {
     const step = filteredSteps[currentStep];
@@ -183,8 +219,13 @@ function renderStep() {
         highlight.style.width = step.highlight.w;
         highlight.style.height = step.highlight.h;
         highlight.classList.add('visible');
+        // Apply offset after image loads (natural dimensions needed)
+        if (screenshot.complete && screenshot.naturalWidth) {
+            applyHighlightOffset();
+        }
     } else {
         highlight.classList.remove('visible');
+        highlight.style.transform = '';
     }
 
     // Update text
@@ -205,6 +246,10 @@ function renderStep() {
         dot.classList.toggle('active', i === currentStep);
     });
 }
+
+// Recalculate highlight offset when image loads or window resizes
+screenshot.addEventListener('load', applyHighlightOffset);
+window.addEventListener('resize', applyHighlightOffset);
 
 // ===== Build Dots =====
 function buildDots() {
