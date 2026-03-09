@@ -26,7 +26,7 @@ Highlights
 - **Position-aware Scoring** — Tokens matching earlier in the title score higher.
 - **Phrase Matching** — Consecutive token detection rewards query terms appearing together in the text.
 - **New Tokenizer Utilities** — `classifyMatch()`, `classifyTokenMatches()`, `graduatedMatchScore()`, `matchPosition()`, `countConsecutiveMatches()` — exported for all scorers and future extensions.
-- **Vivek Search Documentation** — Comprehensive algorithm documentation at `docs/VIVEK_SEARCH_ALGORITHM.md` with collapsible sections, formulas, examples, and future roadmap.
+- **Vivek Search Documentation** — Algorithm reference in `.github/skills/search-engine/SKILL.md`.
 - **Branding** — "Vivek Search" added to popup subtitle, README feature table, and Chrome Web Store listing.
 
 Bug Fixes & Improvements
