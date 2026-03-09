@@ -85,7 +85,25 @@ All notable changes to SmrutiCortex are documented here.
 - Automated testing, linting, and documentation standards
 - Developer tooling and build process foundation
 
-## [2.0.0–2.2.0]
+## [2.2.0] — Vivek Search Algorithm
 
-See `docs/RELEASE_NOTES_v2.md` for detailed notes covering the Vivek Search algorithm
-introduction, graduated match classification, tabbed settings modal, and UX overhaul.
+- **Graduated Match Classification** — 4-tier system: EXACT (1.0), PREFIX (0.75), SUBSTRING (0.4), NONE (0.0) — replaces binary `includes()` in all scorers
+- **Intent-Priority Ranking** — Multi-token queries sort by title+URL coverage before score (Tier 3: split-field, Tier 2: same-field, Tier 1: ≥75%, Tier 0: partial)
+- **Post-Score Boosters** — ×1.60 strong split-field, ×1.45 all-exact-title, ×1.40 strong same-field, ×1.15 moderate; stack multiplicatively
+- **Enhanced Title Scorer** — 6 signals: graduated quality, position, consecutive, composition, starts-with, original-token priority
+- **New Tokenizer Exports** — `classifyMatch()`, `graduatedMatchScore()`, `matchPosition()`, `countConsecutiveMatches()`
+- See `docs/VIVEK_SEARCH_ALGORITHM.md` for full algorithm detail
+
+## [2.1.0] — Settings UX
+
+- **Tabbed Settings Modal** — 6 themed tabs (General, Search, AI, Privacy, Data, Advanced); replaces single long-scroll layout
+- **Favicon sizing fix** — Requests at native display size (16px list / 32px cards) instead of oversized 64px
+- **Bookmark indicator cleanup** — Inline styles moved to CSS classes; overlay now has matching bookmark/favicon rules
+- **License** — Changed from MIT to Apache-2.0; CONTRIBUTING.md added
+
+## [2.0.0] — Inline Overlay
+
+- Ultra-fast inline overlay (content-script) with closed Shadow DOM for keyboard-triggered search (<50ms)
+- SOLID/DRY refactor: shared `search-ui-base.ts` abstraction across popup and overlay
+- Precise popup performance instrumentation via `POPUP_PERF_LOG` messages
+- Fixed result-skipping bug during keyboard navigation
