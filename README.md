@@ -124,7 +124,7 @@ npm run build
   - Toggle OFF: Settings → "Show duplicate URLs"
 - **Literal Substring Boost**: Results with exact query string get 50% score boost
 - **Phrase Matching**: Consecutive token detection rewards query terms appearing together
-- See [Vivek Search Algorithm docs](docs/VIVEK_SEARCH_ALGORITHM.md) for full details
+- See [`.github/skills/search-engine/SKILL.md`](.github/skills/search-engine/SKILL.md) for full algorithm details
 
 ---
 
@@ -331,9 +331,8 @@ npm run build       # Verify build
 
 | Doc | Purpose |
 |-----|---------|
-| [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) | Store submission guide |
-| [TESTING_and_DEBUG_GUIDE.md](docs/TESTING_and_DEBUG_GUIDE.md) | Build, test, debug |
-| [ROADMAP.md](docs/ROADMAP.md) | Roadmap |
+| [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) | Store submission guide + privacy policy |
+| [CHANGELOG.md](CHANGELOG.md) | Full version history |
 
 ---
 

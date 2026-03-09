@@ -257,6 +257,32 @@ Chrome requires explaining why each permission is needed:
 | `alarms` | **Required** to keep service worker alive and schedule background indexing updates |
 | `<all_urls>` (optional) | **Optional permission** - Users can optionally grant this to enable metadata extraction (page titles, keywords) for improved search relevance. This feature is OFF by default and must be enabled in Settings. The extension works fully without this permission. |
 
+### Single Purpose Justification
+
+If Chrome asks for single purpose justification, paste this:
+
+```
+SINGLE PURPOSE:
+
+SmrutiCortex has ONE purpose: Search your browser history instantly.
+
+Core Functionality:
+1. Index browser history in local IndexedDB
+2. Search indexed history via keyboard shortcut (Ctrl+Shift+S) or extension popup
+3. Display results with smart ranking (recency, frequency, exact match)
+4. Open results in tabs
+
+All features serve this single purpose:
+• Bookmark search — extends search to bookmarks (same search interface)
+• Inline overlay — alternative UI for the same search functionality
+• Metadata extraction (optional) — improves search relevance locally
+• AI search (optional) — enhances queries with synonym expansion via local Ollama
+
+Everything serves ONE goal: Find pages in your history faster.
+```
+
+---
+
 ### 🆕 Optional Host Permissions Strategy
 
 **Important:** To comply with Chrome Web Store policies and minimize review time, `<all_urls>` is now an **optional_host_permission** instead of a required permission.
