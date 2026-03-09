@@ -257,7 +257,9 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         if (searchAbort.signal.aborted) { return []; }
 
         // On-demand embedding generation for semantic search — HEAVILY GUARDED
-        if (embeddingsEnabled && !item.embedding
+        // Skip in Phase 1 when Phase 2 will run (avoids Ollama slot contention and
+        // spurious abort failures when Phase 2 cancels Phase 1's in-flight embeddings)
+        if (embeddingsEnabled && !skipEmbeddingThisPhase && !item.embedding
             && embeddingsGenerated < MAX_EMBEDDINGS_PER_SEARCH
             && embeddingTimeSpent < EMBEDDING_TIME_BUDGET_MS) {
             try {
