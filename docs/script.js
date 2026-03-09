@@ -361,86 +361,25 @@ function autoType(input, text, callback) {
     window.addEventListener('touchend', () => { isDragging = false; });
 })();
 
-// ===== Tour Preview Strip =====
-const TOUR_STEPS = [
-    { id: 'search-speed',  title: 'Lightning Search',      screenshot: "./screenshots/SmrutiCortex popup 'git smruti' keyword search yellow highlight best match results Screenshot 2026-03-03 124029.png",                                                              category: 'core' },
-    { id: 'vivek-search',   title: 'Vivek Search Scoring',   screenshot: './screenshots/SmrutiCortex Settings Search Tab Screenshot 2026-03-02 205823.png',                                                                                                                       category: 'core' },
-    { id: 'keyboard',      title: 'Keyboard Shortcuts',    screenshot: "./screenshots/SmrutiCortex latest quick-serach 'git smruti' keyword search yellow highlight Screenshot 2026-03-03 123923.png",                                                                          category: 'core' },
-    { id: 'overlay',       title: 'Quick-Search Overlay',  screenshot: './screenshots/SmrutiCortex quick-search open default bookmarks listed along with some recent Screenshot 2026-03-03 123214.png',                                                                          category: 'core' },
-    { id: 'display-modes', title: 'Display Modes',         screenshot: './screenshots/SmrutiCortex settings page via popup html of extension in new tab Screenshot 2026-02-12 200431.png',                                                                                       category: 'core' },
-    { id: 'ai-search',     title: 'AI Search — Dual-Phase',screenshot: "./screenshots/SmrutiCortex quick-search 'github' keyword AI matches ranked high with 'repository' keyword match with green highlight Screenshot 2026-03-10 002321.png",                              category: 'ai' },
-    { id: 'semantic',      title: 'Semantic Search',       screenshot: './screenshots/SmrutiCortex Settings AI Tab enable ai search with ollama endpoint models and enable semantic serach with ollama embedding model Screenshot 2026-03-02 204945.png',                          category: 'ai' },
-    { id: 'bookmarks',     title: 'Bookmark Search',       screenshot: './screenshots/SmrutiCortex popup opened all bookmarks listed by default with recent Screenshot 2026-03-03 123606.png',                                                                                   category: 'ai' },
-    { id: 'privacy',       title: 'Privacy Controls',      screenshot: './screenshots/SmrutiCortex Settings Privacy Tab Screenshot 2026-03-02 204959.png',                                                                                                                       category: 'privacy' },
-    { id: 'data',          title: 'Data Management',       screenshot: './screenshots/SmrutiCortex Settings Data tab Data Management indexing health indication Screenshot 2026-03-03 124703.png',                                                                                category: 'privacy' },
-    { id: 'performance',   title: 'Performance Monitor',   screenshot: './screenshots/SmrutiCortex Settings Advance tab Performance Monitor Statistics Screenshot 2026-03-03 124220.png',                                                                                        category: 'advanced' },
-    { id: 'analytics',     title: 'Search Analytics',      screenshot: './screenshots/SmrutiCortex Settings Advanced Tab Screenshot 2026-03-02 205030.png',                                                                                                                      category: 'advanced' },
-    { id: 'highlighting',  title: 'AI Green Highlights',   screenshot: "./screenshots/SmrutiCortex quick-serach 'youtube' keyword AI matches 'video' keywords also in green highlighted with top rank Screenshot 2026-03-10 003004.png",                                      category: 'core' },
-    { id: 'settings',      title: '35+ Settings',          screenshot: './screenshots/SmrutiCortex Settings General Tab Screenshot 2026-03-02 204909.png',                                                                                                                       category: 'advanced' },
-    { id: 'omnibox',       title: 'Omnibox Search',        screenshot: './screenshots/SmrutiCortex popup opened all bookmarks listed by default with recent Screenshot 2026-03-03 123606.png',                                                                                   category: 'core' },
-];
-
-(function initTourStrip() {
-    const strip = document.getElementById('tourStrip');
-    if (!strip) return;
-
-    TOUR_STEPS.forEach((step, i) => {
-        const card = document.createElement('a');
-        card.href = `feature-tour.html#step/${i + 1}`;
-        card.className = 'tour-card';
-        card.innerHTML = `
-            <img src="${step.screenshot}" alt="${step.title}" class="tour-card-img" loading="lazy">
-            <div class="tour-card-title">${step.title}</div>
-            <div class="tour-card-step">Step ${i + 1} of ${TOUR_STEPS.length}</div>
-        `;
-        strip.appendChild(card);
-    });
-})();
+// ===== Tour Preview Strip (reads from manifest.json via ScreenshotLoader) =====
+if (window.ScreenshotLoader) {
+    ScreenshotLoader.buildTourStrip('tourStrip');
+}
 
 // ===== Scroll to Top on Page Load =====
-window.addEventListener('load', () => {
+window.addEventListener('DOMContentLoaded', () => {
     window.scrollTo(0, 0);
 });
 
-// ===== Screenshot Film Strip =====
+// ===== Screenshot Film Strip (reads from manifest.json via ScreenshotLoader) =====
 async function initScreenshotStrip() {
     const container = document.getElementById('screenshot-strip');
-    if (!container) return;
+    if (!container || !window.ScreenshotLoader) return;
     const track = container.querySelector('.screenshot-track');
     const emptyMsg = container.querySelector('.screenshot-empty');
     try {
-        const res = await fetch('./screenshots/list.json', { cache: 'no-store' });
-        if (!res.ok) throw new Error('No list');
-        const list = await res.json();
-        if (!Array.isArray(list) || list.length === 0) {
-            emptyMsg.style.display = 'block';
-            return;
-        }
-        const items = [];
-        for (const name of list) {
-            if (typeof name !== 'string' || name.includes('..') || name.includes('/')) continue;
-            const img = document.createElement('img');
-            img.className = 'screenshot-item';
-            img.loading = 'lazy';
-            img.alt = `Screenshot: ${name}`;
-            img.src = './screenshots/' + encodeURIComponent(name).replace(/%2F/g, '/');
-            img.onerror = () => { img.remove(); };
-            track.appendChild(img);
-            items.push(img);
-        }
+        const items = await ScreenshotLoader.buildFilmstrip(track);
         if (items.length === 0) { emptyMsg.style.display = 'block'; return; }
-
-        // Duplicate for seamless loop
-        for (const it of items) {
-            const clone = it.cloneNode(true);
-            track.appendChild(clone);
-        }
-
-        items.forEach((el, idx) => {
-            el.tabIndex = 0;
-            el.dataset.index = String(idx);
-            if (!el.alt || el.alt === '') el.alt = `Screenshot ${idx + 1}`;
-        });
 
         // Lightbox
         const lightbox = document.getElementById('lightbox');
@@ -545,13 +484,17 @@ async function initScreenshotStrip() {
         window.addEventListener('mousemove', (e) => { if (!isDown) return; e.preventDefault(); const x = e.pageX - container.offsetLeft; container.scrollLeft = scrollStart - (x - startX); });
     } catch (err) {
         emptyMsg.style.display = 'block';
-        if (typeof console !== 'undefined' && console.debug) {
-            console.debug('[screenshot-strip] no screenshots available or failed to load list.json');
-        }
     }
 }
 
-window.addEventListener('load', () => { initScreenshotStrip(); });
+// ===== Initialize all manifest-driven components =====
+window.addEventListener('load', async () => {
+    if (!window.ScreenshotLoader) return;
+    await ScreenshotLoader.resolveScreenshots();
+    await ScreenshotLoader.buildHeroCarousel('heroScreenshots');
+    await ScreenshotLoader.buildMiniCarousel('aiSearchCarousel', 'ai-carousel');
+    initScreenshotStrip();
+});
 
 // ===== Console Branding =====
 console.log('%c SmrutiCortex ', 'background: #667eea; color: white; font-size: 20px; font-weight: bold; padding: 10px;');
