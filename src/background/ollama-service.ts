@@ -370,11 +370,14 @@ export class OllamaService {
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      const isTimeout = errorMsg.includes('abort');
+      const isAbort = errorMsg.includes('abort') || errorMsg.includes('AbortError');
 
-      circuitBreaker.recordFailure();
-      
-      if (isTimeout) {
+      // Only count real Ollama failures toward circuit breaker — NOT search-cancelled aborts
+      if (!isAbort) {
+        circuitBreaker.recordFailure();
+      }
+
+      if (isAbort) {
         logger.warn('generateEmbedding', `⏱️ REQUEST TIMEOUT after ${duration}ms (limit: ${this.config.timeout}ms)`);
         logger.info('generateEmbedding', '💡 First embedding may take 5-10s for model loading. Try increasing timeout in settings.');
         logger.debug('generateEmbedding', 'Timeout details', {
@@ -385,7 +388,7 @@ export class OllamaService {
       } else {
         logger.debug('generateEmbedding', '❌ Embedding generation failed', {
           error: errorMsg,
-          isTimeout,
+          isAbort,
           durationMs: duration,
           configuredTimeout: this.config.timeout
         });
