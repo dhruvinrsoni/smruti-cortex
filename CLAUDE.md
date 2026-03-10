@@ -59,6 +59,7 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | `settings` | Changing any setting key, default, or validation |
 | `workflows-ci` | Modifying GitHub Actions or Docker |
 | `test-generation` | Generating new test files (full rules + mock patterns) |
+| `maintenance` | Bug fixes, releases, Chrome Web Store submissions |
 
 Full test generation agent: `.github/copilot/agents/test-coverage-agent.md`
 
@@ -107,3 +108,39 @@ Run in parallel when independent:
 - **Logger pattern** — `const log = Logger.forComponent('MyModule');`
 - **Test location** — `src/<area>/__tests__/<filename>.test.ts` (co-located)
 - **No hardcoded versions** — `scripts/sync-version.mjs` syncs `package.json` → `manifest.json`
+- **Commit convention** — `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `test:` prefixes (used by release script for changelog)
+
+---
+
+## Maintenance Workflows
+
+Load `.github/skills/maintenance/SKILL.md` for full checklists. Quick reference:
+
+### Bug Fix
+```
+1. Reproduce → find root cause → fix in src/
+2. npm test && npm run build
+3. git commit -m "fix: <description>"
+4. If shipping: node scripts/release.mjs patch
+```
+
+### New Feature
+```
+1. Load relevant domain skill → plan → implement
+2. npm test && npm run build
+3. git commit -m "feat: <description>"
+4. If shipping: node scripts/release.mjs minor
+```
+
+### Release
+```
+node scripts/release.mjs <patch|minor|major>   # bump, changelog, tag, push, GitHub Release
+npm run package                                  # zip for store
+node scripts/store-prep.mjs                      # print store submission text
+# Upload zip to Chrome Web Store dashboard
+```
+
+### Semver
+- `patch` — bug fixes, no API change
+- `minor` — new features, backward compatible
+- `major` — breaking changes
