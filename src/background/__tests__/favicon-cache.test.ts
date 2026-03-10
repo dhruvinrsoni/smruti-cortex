@@ -44,8 +44,10 @@ vi.stubGlobal('indexedDB', {
 // Patch mockObjectStore.get to simulate cache miss (result = undefined)
 beforeEach(() => {
   vi.clearAllMocks();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockObjectStore.get.mockImplementation(() => {
-    const req: Record<string, unknown> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const req: any = {};
     setTimeout(() => {
       req.result = undefined;
       if (typeof req.onsuccess === 'function') {

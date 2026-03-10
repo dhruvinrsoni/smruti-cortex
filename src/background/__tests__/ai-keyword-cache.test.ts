@@ -1,6 +1,6 @@
 // Tests for ai-keyword-cache.ts — loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion, clearAIKeywordCache, getCacheStats
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Must use vi.resetModules() for module-level state isolation (cache, loaded, saveTimer, dirty are module globals)
 // All imports must be dynamic inside each test
@@ -26,7 +26,7 @@ describe('ai-keyword-cache module', () => {
       browserAPI: {
         storage: {
           local: {
-            get: vi.fn((_keys: string[], cb: (r: Record<string, unknown>) => void) => cb({})),
+            get: vi.fn((_keys: string | string[] | Record<string, unknown> | null, cb: (r: Record<string, unknown>) => void) => cb({})),
             set: vi.fn((_items: unknown, cb?: () => void) => cb?.()),
             remove: vi.fn((_key: string, cb?: () => void) => cb?.()),
           },
@@ -43,7 +43,7 @@ describe('ai-keyword-cache module', () => {
     it('loads cache from storage', async () => {
       const { browserAPI } = await import('../../core/helpers');
       vi.mocked(browserAPI.storage.local.get).mockImplementationOnce(
-        (_keys: string[], cb: (r: Record<string, unknown>) => void) => {
+        (_keys: string | string[] | Record<string, unknown> | null, cb: (r: Record<string, unknown>) => void) => {
           cb({ [STORAGE_KEY]: { 'react': { k: ['js', 'ui'], t: Date.now(), h: 0 } } });
         }
       );
