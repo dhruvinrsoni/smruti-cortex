@@ -81,14 +81,14 @@ describe('diagnostics module', () => {
 
   describe('initSearchDebugState', () => {
     it('reads from chrome.storage.local', async () => {
-      vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({ searchDebugEnabled: true });
+      vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({ searchDebugEnabled: true } as unknown as void);
       const { initSearchDebugState, isSearchDebugEnabled } = await import('../diagnostics');
       await initSearchDebugState();
       expect(isSearchDebugEnabled()).toBe(true);
     });
 
     it('defaults to false if not in storage', async () => {
-      vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({});
+      vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({} as unknown as void);
       const { initSearchDebugState, isSearchDebugEnabled } = await import('../diagnostics');
       await initSearchDebugState();
       expect(isSearchDebugEnabled()).toBe(false);
