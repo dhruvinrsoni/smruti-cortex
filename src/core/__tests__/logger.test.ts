@@ -205,5 +205,72 @@ describe('Logger', () => {
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
+
+    it('should call Logger.error when ComponentLogger.error is called with error object', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      const comp = Logger.forComponent('MyComp');
+      comp.error('myMethod', 'error occurred', { detail: 'data' }, new Error('test err'));
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should call Logger.warn via ComponentLogger.warn', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.WARN);
+      const comp = Logger.forComponent('WarningComp');
+      comp.warn('method', 'warning here');
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should log debug via ComponentLogger.debug at DEBUG level', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.DEBUG);
+      const comp = Logger.forComponent('DebugComp');
+      comp.debug('method', 'debug info');
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should log trace via ComponentLogger.trace at TRACE level', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.TRACE);
+      const comp = Logger.forComponent('TraceComp');
+      comp.trace('method', 'trace detail');
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('setLevel (async, persists to settings)', () => {
+    it('should update level and call SettingsManager.setSetting', async () => {
+      const { Logger, LogLevel } = await import('../logger');
+      const { SettingsManager } = await import('../settings');
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      await Logger.setLevel(LogLevel.DEBUG);
+      expect(Logger.getLevel()).toBe(LogLevel.DEBUG);
+      expect(SettingsManager.setSetting).toHaveBeenCalledWith('logLevel', LogLevel.DEBUG);
+    });
+
+    it('handles setSetting error gracefully', async () => {
+      const { Logger, LogLevel } = await import('../logger');
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.setSetting).mockRejectedValueOnce(new Error('storage full'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await expect(Logger.setLevel(LogLevel.WARN)).resolves.not.toThrow();
+    });
+  });
+
+  describe('createContextLogger (legacy)', () => {
+    it('should return a ComponentLogger', async () => {
+      const { createContextLogger } = await import('../logger');
+      const logger = createContextLogger('LegacyComp');
+      expect(typeof logger.info).toBe('function');
+    });
   });
 });
