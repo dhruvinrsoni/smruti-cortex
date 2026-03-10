@@ -1,0 +1,191 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../../core/logger', () => ({
+  Logger: {
+    info: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    forComponent: () => ({
+      info: vi.fn(),
+      debug: vi.fn(),
+      trace: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    }),
+  },
+}));
+
+import { performanceTracker, getPerformanceMetrics } from '../performance-monitor';
+
+describe('performanceTracker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    performanceTracker.reset();
+  });
+
+  describe('initial state', () => {
+    it('should start with zero searchCount', () => {
+      expect(performanceTracker.getMetrics().searchCount).toBe(0);
+    });
+
+    it('should start with zero restarts', () => {
+      expect(performanceTracker.getMetrics().serviceWorkerRestarts).toBe(0);
+    });
+
+    it('should start with zero healthCheckCount', () => {
+      expect(performanceTracker.getMetrics().healthCheckCount).toBe(0);
+    });
+
+    it('should start with zero selfHealCount', () => {
+      expect(performanceTracker.getMetrics().selfHealCount).toBe(0);
+    });
+
+    it('should start with null lastRestartTime', () => {
+      expect(performanceTracker.getMetrics().lastRestartTime).toBeNull();
+    });
+
+    it('should have a non-zero startTime', () => {
+      expect(performanceTracker.getMetrics().startTime).toBeGreaterThan(0);
+    });
+  });
+
+  describe('recordSearch', () => {
+    it('should increment searchCount', () => {
+      performanceTracker.recordSearch(100);
+      expect(performanceTracker.getMetrics().searchCount).toBe(1);
+    });
+
+    it('should track multiple searches', () => {
+      performanceTracker.recordSearch(100);
+      performanceTracker.recordSearch(200);
+      performanceTracker.recordSearch(300);
+      expect(performanceTracker.getMetrics().searchCount).toBe(3);
+    });
+
+    it('should compute average search time', () => {
+      performanceTracker.recordSearch(100);
+      performanceTracker.recordSearch(200);
+      expect(performanceTracker.getMetrics().averageSearchTimeMs).toBeCloseTo(150, 1);
+    });
+
+    it('should track min search time', () => {
+      performanceTracker.recordSearch(300);
+      performanceTracker.recordSearch(100);
+      performanceTracker.recordSearch(200);
+      expect(performanceTracker.getMetrics().minSearchTimeMs).toBe(100);
+    });
+
+    it('should track max search time', () => {
+      performanceTracker.recordSearch(100);
+      performanceTracker.recordSearch(500);
+      performanceTracker.recordSearch(200);
+      expect(performanceTracker.getMetrics().maxSearchTimeMs).toBe(500);
+    });
+
+    it('should track last search time', () => {
+      performanceTracker.recordSearch(100);
+      performanceTracker.recordSearch(250);
+      expect(performanceTracker.getMetrics().lastSearchTimeMs).toBe(250);
+    });
+
+    it('should keep only last 100 searches', () => {
+      for (let i = 0; i < 110; i++) {
+        performanceTracker.recordSearch(i);
+      }
+      expect(performanceTracker.getMetrics().searchCount).toBe(100);
+    });
+  });
+
+  describe('recordIndexing', () => {
+    it('should update lastIndexDurationMs', () => {
+      performanceTracker.recordIndexing(500, 1000);
+      expect(performanceTracker.getMetrics().lastIndexDurationMs).toBe(500);
+    });
+
+    it('should update totalItemsIndexed', () => {
+      performanceTracker.recordIndexing(200, 500);
+      expect(performanceTracker.getMetrics().totalItemsIndexed).toBe(500);
+    });
+  });
+
+  describe('recordRestart', () => {
+    it('should increment serviceWorkerRestarts', () => {
+      performanceTracker.recordRestart();
+      expect(performanceTracker.getMetrics().serviceWorkerRestarts).toBe(1);
+    });
+
+    it('should record lastRestartTime', () => {
+      const before = Date.now();
+      performanceTracker.recordRestart();
+      const after = Date.now();
+      const restartTime = performanceTracker.getMetrics().lastRestartTime;
+      expect(restartTime).not.toBeNull();
+      expect(restartTime!).toBeGreaterThanOrEqual(before);
+      expect(restartTime!).toBeLessThanOrEqual(after);
+    });
+
+    it('should count multiple restarts', () => {
+      performanceTracker.recordRestart();
+      performanceTracker.recordRestart();
+      expect(performanceTracker.getMetrics().serviceWorkerRestarts).toBe(2);
+    });
+  });
+
+  describe('recordHealthCheck', () => {
+    it('should increment healthCheckCount', () => {
+      performanceTracker.recordHealthCheck();
+      performanceTracker.recordHealthCheck();
+      expect(performanceTracker.getMetrics().healthCheckCount).toBe(2);
+    });
+  });
+
+  describe('recordSelfHeal', () => {
+    it('should increment selfHealCount', () => {
+      performanceTracker.recordSelfHeal();
+      expect(performanceTracker.getMetrics().selfHealCount).toBe(1);
+    });
+  });
+
+  describe('reset', () => {
+    it('should reset all metrics to zero', () => {
+      performanceTracker.recordSearch(100);
+      performanceTracker.recordRestart();
+      performanceTracker.recordHealthCheck();
+      performanceTracker.recordSelfHeal();
+      performanceTracker.recordIndexing(1000, 500);
+
+      performanceTracker.reset();
+
+      const metrics = performanceTracker.getMetrics();
+      expect(metrics.searchCount).toBe(0);
+      expect(metrics.serviceWorkerRestarts).toBe(0);
+      expect(metrics.healthCheckCount).toBe(0);
+      expect(metrics.selfHealCount).toBe(0);
+      expect(metrics.lastIndexDurationMs).toBe(0);
+      expect(metrics.lastRestartTime).toBeNull();
+    });
+  });
+
+  describe('getMetrics', () => {
+    it('should return uptimeMs greater than 0', () => {
+      const metrics = performanceTracker.getMetrics();
+      expect(metrics.uptimeMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return zero averageSearchTimeMs with no searches', () => {
+      expect(performanceTracker.getMetrics().averageSearchTimeMs).toBe(0);
+    });
+  });
+
+  describe('getPerformanceMetrics (exported function)', () => {
+    it('should return the same data as performanceTracker.getMetrics()', () => {
+      performanceTracker.recordSearch(42);
+      const fromFunction = getPerformanceMetrics();
+      const fromTracker = performanceTracker.getMetrics();
+      expect(fromFunction.searchCount).toBe(fromTracker.searchCount);
+      expect(fromFunction.lastSearchTimeMs).toBe(fromTracker.lastSearchTimeMs);
+    });
+  });
+});
