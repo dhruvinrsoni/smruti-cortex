@@ -189,3 +189,66 @@ describe('performanceTracker', () => {
     });
   });
 });
+
+import { formatUptime, formatMetricsForDisplay } from '../performance-monitor';
+import type { PerformanceMetrics } from '../performance-monitor';
+
+describe('formatUptime', () => {
+  it('returns seconds format for < 1 minute', () => {
+    expect(formatUptime(45000)).toBe('45s');
+  });
+
+  it('returns minutes format for < 1 hour', () => {
+    expect(formatUptime(3 * 60 * 1000 + 30 * 1000)).toBe('3m 30s');
+  });
+
+  it('returns hours format for < 1 day', () => {
+    expect(formatUptime(2 * 3600 * 1000 + 5 * 60 * 1000)).toBe('2h 5m 0s');
+  });
+
+  it('returns days format for >= 1 day', () => {
+    expect(formatUptime(25 * 3600 * 1000)).toBe('1d 1h 0m');
+  });
+
+  it('returns 0s for zero uptime', () => {
+    expect(formatUptime(0)).toBe('0s');
+  });
+});
+
+describe('formatMetricsForDisplay', () => {
+  function makeMetrics(): PerformanceMetrics {
+    return {
+      searchCount: 42,
+      averageSearchTimeMs: 12.5,
+      minSearchTimeMs: 5.0,
+      maxSearchTimeMs: 30.0,
+      lastSearchTimeMs: 10.0,
+      totalItemsIndexed: 1000,
+      lastIndexDurationMs: 500,
+      memoryUsedMB: 64,
+      memoryTotalMB: 128,
+      serviceWorkerRestarts: 2,
+      lastRestartTime: null,
+      healthCheckCount: 5,
+      selfHealCount: 1,
+      uptimeMs: 60 * 1000,
+      startTime: Date.now() - 60 * 1000,
+    };
+  }
+
+  it('returns an object with expected string keys', () => {
+    const display = formatMetricsForDisplay(makeMetrics());
+    expect(display['Search Count']).toBe('42');
+    expect(display['Avg Search Time']).toContain('ms');
+  });
+
+  it('formats min/max search time', () => {
+    const display = formatMetricsForDisplay(makeMetrics());
+    expect(display['Min/Max Search']).toContain('/');
+  });
+
+  it('includes SW Restarts', () => {
+    const display = formatMetricsForDisplay(makeMetrics());
+    expect(display['SW Restarts']).toBe('2');
+  });
+});

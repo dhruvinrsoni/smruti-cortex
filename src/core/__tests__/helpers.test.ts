@@ -137,3 +137,63 @@ describe('getBrowserCompatibility', () => {
     expect(result.supportsOmnibox).toBe(false);
   });
 });
+
+describe('isFirefox', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns false in chrome-like environment (no browser global)', async () => {
+    const { isFirefox } = await import('../helpers');
+    // In jsdom environment, there is no `browser` global
+    expect(isFirefox()).toBe(false);
+  });
+});
+
+describe('isChromium', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns true when chrome is defined', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: null, getManifest: () => ({ manifest_version: 3, version: '1.0' }) },
+    });
+    const { isChromium } = await import('../helpers');
+    expect(isChromium()).toBe(true);
+  });
+});
+
+describe('promisify', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('resolves with the result when no lastError', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: null, getManifest: () => ({ manifest_version: 3, version: '1.0' }) },
+    });
+    const { promisify } = await import('../helpers');
+    const mockApi = vi.fn((_arg: string, cb: (result: string) => void) => cb('success'));
+    const result = await promisify<string>(mockApi, 'test');
+    expect(result).toBe('success');
+  });
+
+  it('rejects when chrome.runtime.lastError is set', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: { message: 'API error' }, getManifest: () => ({ manifest_version: 3, version: '1.0' }) },
+    });
+    const { promisify } = await import('../helpers');
+    const mockApi = vi.fn((_arg: string, cb: (result: null) => void) => cb(null));
+    await expect(promisify<null>(mockApi, 'test')).rejects.toBeDefined();
+  });
+
+  it('rejects when apiCall throws', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { lastError: null, getManifest: () => ({ manifest_version: 3, version: '1.0' }) },
+    });
+    const { promisify } = await import('../helpers');
+    const throwingApi = vi.fn(() => { throw new Error('sync error'); });
+    await expect(promisify(throwingApi)).rejects.toThrow('sync error');
+  });
+});

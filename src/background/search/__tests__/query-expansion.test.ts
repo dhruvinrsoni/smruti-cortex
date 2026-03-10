@@ -149,4 +149,37 @@ describe('matchesExpandedQuery', () => {
   it('should match substring in text', () => {
     expect(matchesExpandedQuery('reactdocs', ['react'])).toBe(true);
   });
+
+  it('returns false when no term matches', () => {
+    expect(matchesExpandedQuery('python guide', ['javascript', 'node'])).toBe(false);
+  });
+
+  it('returns false for empty terms', () => {
+    expect(matchesExpandedQuery('something', [])).toBe(false);
+  });
+});
+
+import { addCustomSynonym } from '../query-expansion';
+
+describe('addCustomSynonym', () => {
+  it('adds a new synonym mapping', () => {
+    addCustomSynonym('mycustomword', ['mcsw', 'mcw2']);
+    const expanded = expandTerm('mycustomword');
+    expect(expanded).toContain('mcsw');
+    expect(expanded).toContain('mcw2');
+  });
+
+  it('adds reverse mapping (synonym expands to original)', () => {
+    addCustomSynonym('uniqueterm123', ['ut123']);
+    const expanded = expandTerm('ut123');
+    expect(expanded).toContain('uniqueterm123');
+  });
+
+  it('does not add duplicate synonyms', () => {
+    addCustomSynonym('dedupterm', ['syn1']);
+    addCustomSynonym('dedupterm', ['syn1']); // duplicate
+    const expanded = expandTerm('dedupterm');
+    const count = expanded.filter(s => s === 'syn1').length;
+    expect(count).toBe(1);
+  });
 });
