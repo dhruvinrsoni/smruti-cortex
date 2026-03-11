@@ -93,7 +93,7 @@ async function getCachedEntry(hostname: string): Promise<{ dataUrl: string | nul
     try {
         const db = await openFaviconDatabase();
 
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const txn = db.transaction(FAVICON_STORE_NAME, 'readonly');
             const store = txn.objectStore(FAVICON_STORE_NAME);
             const request = store.get(hostname);
@@ -153,7 +153,7 @@ async function storeNegativeEntry(hostname: string): Promise<void> {
     try {
         const db = await openFaviconDatabase();
 
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const txn = db.transaction(FAVICON_STORE_NAME, 'readwrite');
             const store = txn.objectStore(FAVICON_STORE_NAME);
 
@@ -218,7 +218,7 @@ export async function cacheFavicon(hostname: string): Promise<string | null> {
         // Store in cache
         const db = await openFaviconDatabase();
 
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const txn = db.transaction(FAVICON_STORE_NAME, 'readwrite');
             const store = txn.objectStore(FAVICON_STORE_NAME);
 
@@ -296,7 +296,7 @@ export async function clearFaviconCache(): Promise<{ cleared: number; freedBytes
         // First count what we're clearing
         const stats = await getFaviconCacheStats();
 
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const txn = db.transaction(FAVICON_STORE_NAME, 'readwrite');
             const store = txn.objectStore(FAVICON_STORE_NAME);
             const request = store.clear();
@@ -328,7 +328,7 @@ export async function clearExpiredFavicons(): Promise<number> {
         const now = Date.now();
         let cleared = 0;
 
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const txn = db.transaction(FAVICON_STORE_NAME, 'readwrite');
             const store = txn.objectStore(FAVICON_STORE_NAME);
             const cursorRequest = store.openCursor();
@@ -369,7 +369,7 @@ export async function getFaviconCacheStats(): Promise<{ count: number; totalSize
     try {
         const db = await openFaviconDatabase();
 
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
             const txn = db.transaction(FAVICON_STORE_NAME, 'readonly');
             const store = txn.objectStore(FAVICON_STORE_NAME);
             const request = store.getAll();
