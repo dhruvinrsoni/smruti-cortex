@@ -189,4 +189,93 @@ describe('diagnostics module', () => {
       expect(() => registerCollector(collector)).not.toThrow();
     });
   });
+
+  describe('generateDiagnosticReport', () => {
+    it('returns a report with all built-in collectors', async () => {
+      const { generateDiagnosticReport } = await import('../diagnostics');
+      const report = await generateDiagnosticReport();
+      expect(report).toHaveProperty('generatedAt');
+      expect(report).toHaveProperty('version');
+      expect(report).toHaveProperty('collectors');
+      // Built-in collectors: system, storage, settings, health, performance
+      expect(report.collectors).toHaveProperty('system');
+      expect(report.collectors).toHaveProperty('storage');
+      expect(report.collectors).toHaveProperty('settings');
+      expect(report.collectors).toHaveProperty('health');
+      expect(report.collectors).toHaveProperty('performance');
+    });
+
+    it('handles collector errors gracefully', async () => {
+      const { generateDiagnosticReport, registerCollector } = await import('../diagnostics');
+      registerCollector({
+        name: 'failing',
+        collect: async () => { throw new Error('test error'); },
+      });
+      const report = await generateDiagnosticReport();
+      expect(report.collectors.failing).toEqual({ error: 'test error' });
+    });
+  });
+
+  describe('exportDiagnosticsAsJson', () => {
+    it('returns valid JSON string', async () => {
+      const { exportDiagnosticsAsJson } = await import('../diagnostics');
+      const json = await exportDiagnosticsAsJson();
+      const parsed = JSON.parse(json);
+      expect(parsed).toHaveProperty('generatedAt');
+      expect(parsed).toHaveProperty('collectors');
+    });
+  });
+
+  describe('exportDiagnosticsAsText', () => {
+    it('returns formatted text with section headers', async () => {
+      const { exportDiagnosticsAsText } = await import('../diagnostics');
+      const text = await exportDiagnosticsAsText();
+      expect(text).toContain('SmrutiCortex Diagnostic Report');
+      expect(text).toContain('SYSTEM');
+      expect(text).toContain('STORAGE');
+      expect(text).toContain('SETTINGS');
+      expect(text).toContain('HEALTH');
+      expect(text).toContain('PERFORMANCE');
+    });
+  });
+
+  describe('built-in collectors', () => {
+    it('system collector returns extension and browser info', async () => {
+      const { generateDiagnosticReport } = await import('../diagnostics');
+      const report = await generateDiagnosticReport();
+      const system = report.collectors.system as Record<string, unknown>;
+      expect(system).toHaveProperty('extension');
+      expect(system).toHaveProperty('browser');
+      expect(system).toHaveProperty('timestamp');
+    });
+
+    it('storage collector returns quota and index stats', async () => {
+      const { generateDiagnosticReport } = await import('../diagnostics');
+      const report = await generateDiagnosticReport();
+      const storage = report.collectors.storage as Record<string, unknown>;
+      expect(storage).toHaveProperty('quota');
+      expect(storage).toHaveProperty('indexStats');
+    });
+
+    it('settings collector returns sanitized settings', async () => {
+      const { generateDiagnosticReport } = await import('../diagnostics');
+      const report = await generateDiagnosticReport();
+      // Settings collector should return settings object
+      expect(report.collectors.settings).toBeDefined();
+    });
+
+    it('health collector returns health status', async () => {
+      const { generateDiagnosticReport } = await import('../diagnostics');
+      const report = await generateDiagnosticReport();
+      expect(report.collectors.health).toEqual({ status: 'healthy' });
+    });
+
+    it('performance collector returns timing info', async () => {
+      const { generateDiagnosticReport } = await import('../diagnostics');
+      const report = await generateDiagnosticReport();
+      const perf = report.collectors.performance as Record<string, unknown>;
+      expect(perf).toHaveProperty('timing');
+      expect(perf).toHaveProperty('memory');
+    });
+  });
 });
