@@ -15,6 +15,7 @@ vi.mock('../database', () => ({
   getRecentIndexedItems: vi.fn(async () => []),
   getAllIndexedItems: vi.fn(async () => []),
   getBatchHelper: vi.fn(() => ({ add: vi.fn(), flush: vi.fn() })),
+  saveIndexedItem: vi.fn(async () => {}),
 }));
 
 vi.mock('../indexing', () => ({
@@ -47,6 +48,8 @@ vi.mock('../embedding-processor', () => ({
   embeddingProcessor: {
     start: vi.fn(),
     stop: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
     setSearchActive: vi.fn(),
     getProgress: vi.fn(() => ({ state: 'idle', processed: 0, total: 0, withEmbeddings: 0, remaining: 0, speed: 0, estimatedMinutes: 0 })),
   },
@@ -156,7 +159,16 @@ vi.mock('../ollama-service', () => ({
   isCircuitBreakerOpen: vi.fn(() => false),
   checkMemoryPressure: vi.fn(() => ({ ok: true })),
   getOllamaConfigFromSettings: vi.fn(async () => ({})),
-  getOllamaService: vi.fn(() => ({ checkStatus: vi.fn(async () => ({ available: false })) })),
+  getOllamaService: vi.fn(() => ({ checkStatus: vi.fn(async () => ({ available: false })), warmup: vi.fn(async () => true) })),
+}));
+
+vi.mock('../ai-keyword-cache', () => ({
+  loadCache: vi.fn(async () => {}),
+  getCacheStats: vi.fn(() => ({ size: 5, maxSize: 1000, estimatedBytes: 512 })),
+  clearAIKeywordCache: vi.fn(async () => ({ cleared: 5 })),
+  getCachedExpansion: vi.fn(() => null),
+  getPrefixMatch: vi.fn(() => null),
+  cacheExpansion: vi.fn(),
 }));
 
 const mocks = vi.hoisted(() => {
@@ -329,13 +341,410 @@ describe('service-worker message handler', () => {
     // Either returns results (init completed) or error (not ready)
     expect(response).toBeDefined();
   });
+
+  it('should respond to SET_LOG_LEVEL', async () => {
+    const response = await sendMessage({ type: 'SET_LOG_LEVEL', level: 3 });
+    expect(response).toEqual({ status: 'ok' });
+  });
+});
+
+describe('service-worker post-init message handlers', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Wait for async init to complete so post-init handlers are available
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('should respond to REBUILD_INDEX', async () => {
+    const response = await sendMessage({ type: 'REBUILD_INDEX' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.message).toBe('Index rebuilt successfully');
+  });
+
+  it('should respond to CLEAR_ALL_DATA', async () => {
+    const response = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('itemCount');
+  });
+
+  it('should respond to GET_RECENT_HISTORY', async () => {
+    const response = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: 10 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res).toHaveProperty('results');
+    expect(Array.isArray(res.results)).toBe(true);
+  });
+
+  it('should respond to GET_RECENT_HISTORY with default limit', async () => {
+    const response = await sendMessage({ type: 'GET_RECENT_HISTORY' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res).toHaveProperty('results');
+    expect(Array.isArray(res.results)).toBe(true);
+  });
+
+  it('should respond to GET_STORAGE_QUOTA', async () => {
+    const response = await sendMessage({ type: 'GET_STORAGE_QUOTA' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('data');
+    expect(res.data).toHaveProperty('usage');
+    expect(res.data).toHaveProperty('quota');
+  });
+
+  it('should respond to CLEAR_FAVICON_CACHE', async () => {
+    const response = await sendMessage({ type: 'CLEAR_FAVICON_CACHE' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('cleared');
+    expect(res).toHaveProperty('freedBytes');
+  });
+
+  it('should respond to GET_FAVICON_CACHE_STATS', async () => {
+    const response = await sendMessage({ type: 'GET_FAVICON_CACHE_STATS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('count');
+    expect(res).toHaveProperty('totalSize');
+  });
+
+  it('should respond to GET_FAVICON', async () => {
+    const response = await sendMessage({ type: 'GET_FAVICON', hostname: 'example.com' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res).toHaveProperty('dataUrl');
+  });
+
+  it('should respond to GET_EMBEDDING_PROGRESS', async () => {
+    const response = await sendMessage({ type: 'GET_EMBEDDING_PROGRESS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('progress');
+    expect(res.progress).toHaveProperty('state', 'idle');
+  });
+
+  it('should respond to SEARCH_QUERY with results', async () => {
+    const response = await sendMessage({ type: 'SEARCH_QUERY', query: 'test search' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res).toHaveProperty('results');
+    expect(res).toHaveProperty('query', 'test search');
+    expect(Array.isArray(res.results)).toBe(true);
+  });
+
+  it('should respond to SEARCH_QUERY with skipAI flag', async () => {
+    const response = await sendMessage({ type: 'SEARCH_QUERY', query: 'hello', skipAI: true });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res).toHaveProperty('results');
+    expect(res).toHaveProperty('skipAI', true);
+  });
+
+  it('should respond to GET_HEALTH_STATUS', async () => {
+    const response = await sendMessage({ type: 'GET_HEALTH_STATUS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('data');
+    expect(res.data).toHaveProperty('healthy', true);
+  });
+
+  it('should respond to SELF_HEAL', async () => {
+    const response = await sendMessage({ type: 'SELF_HEAL' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    // selfHeal mock returns undefined (not explicitly true), so status may be PARTIAL
+    expect(['OK', 'PARTIAL']).toContain(res.status);
+    expect(res).toHaveProperty('message');
+    expect(res).toHaveProperty('data');
+  });
+
+  it('should respond to GET_EMBEDDING_STATS', async () => {
+    const response = await sendMessage({ type: 'GET_EMBEDDING_STATS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('total');
+    expect(res).toHaveProperty('withEmbeddings');
+    expect(res).toHaveProperty('estimatedBytes');
+  });
+
+  it('should respond to INDEX_BOOKMARKS', async () => {
+    const response = await sendMessage({ type: 'INDEX_BOOKMARKS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('indexed');
+    expect(res).toHaveProperty('updated');
+  });
+
+  it('should respond to MANUAL_INDEX', async () => {
+    const response = await sendMessage({ type: 'MANUAL_INDEX' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('added');
+    expect(res).toHaveProperty('updated');
+  });
+
+  it('should respond to START_EMBEDDING_PROCESSOR', async () => {
+    const response = await sendMessage({ type: 'START_EMBEDDING_PROCESSOR' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('progress');
+  });
+
+  it('should respond to PAUSE_EMBEDDING_PROCESSOR', async () => {
+    const response = await sendMessage({ type: 'PAUSE_EMBEDDING_PROCESSOR' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('progress');
+  });
+
+  it('should respond to RESUME_EMBEDDING_PROCESSOR', async () => {
+    const response = await sendMessage({ type: 'RESUME_EMBEDDING_PROCESSOR' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('progress');
+  });
+
+  it('should respond to GET_AI_CACHE_STATS', async () => {
+    const response = await sendMessage({ type: 'GET_AI_CACHE_STATS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('size');
+    expect(res).toHaveProperty('maxSize');
+    expect(res).toHaveProperty('estimatedBytes');
+  });
+
+  it('should respond to CLEAR_AI_CACHE', async () => {
+    const response = await sendMessage({ type: 'CLEAR_AI_CACHE' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('cleared');
+  });
+
+  it('should respond to METADATA_CAPTURE', async () => {
+    const response = await sendMessage({
+      type: 'METADATA_CAPTURE',
+      payload: { url: 'https://example.com', metaDescription: 'A test page', metaKeywords: 'test,page' },
+    });
+    expect(response).toEqual({ status: 'ok' });
+  });
+
+  it('should respond to CLEAR_ALL_EMBEDDINGS', async () => {
+    const response = await sendMessage({ type: 'CLEAR_ALL_EMBEDDINGS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res).toHaveProperty('cleared');
+  });
+
+  it('should return error for unknown message type', async () => {
+    const response = await sendMessage({ type: 'TOTALLY_UNKNOWN_MESSAGE_TYPE_XYZ' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res).toHaveProperty('error', 'Unknown message type');
+  });
+});
+
+describe('service-worker error paths', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('should return ERROR when REBUILD_INDEX throws', async () => {
+    const { performFullRebuild } = await import('../indexing');
+    (performFullRebuild as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Rebuild failed'));
+    const response = await sendMessage({ type: 'REBUILD_INDEX' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('Rebuild failed');
+  });
+
+  it('should return ERROR when GET_STORAGE_QUOTA throws', async () => {
+    const { getStorageQuotaInfo } = await import('../database');
+    (getStorageQuotaInfo as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Quota check failed'));
+    const response = await sendMessage({ type: 'GET_STORAGE_QUOTA' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('Quota check failed');
+  });
+
+  it('should return ERROR when CLEAR_FAVICON_CACHE throws', async () => {
+    const { clearFaviconCache } = await import('../favicon-cache');
+    (clearFaviconCache as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Cache clear failed'));
+    const response = await sendMessage({ type: 'CLEAR_FAVICON_CACHE' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('Cache clear failed');
+  });
+
+  it('should return empty results when GET_RECENT_HISTORY throws', async () => {
+    const { getRecentIndexedItems } = await import('../database');
+    (getRecentIndexedItems as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('DB read failed'));
+    const response = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: 10 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    // The handler catches the error and returns empty results
+    expect(res).toHaveProperty('results');
+    expect(res.results).toEqual([]);
+  });
+
+  it('should return ERROR when GET_HEALTH_STATUS throws', async () => {
+    const { checkHealth } = await import('../resilience');
+    (checkHealth as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Health check failed'));
+    const response = await sendMessage({ type: 'GET_HEALTH_STATUS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('Health check failed');
+  });
 });
 
 describe('service-worker port-based messaging', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
   it('should accept quick-search port connection', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const portHandler = (globalThis as any).__swTestPortHandler;
     expect(portHandler).toBeDefined();
     expect(typeof portHandler).toBe('function');
+  });
+
+  it('should handle SEARCH_QUERY through quick-search port', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const portHandler = (globalThis as any).__swTestPortHandler;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageListeners: ((msg: any) => void)[] = [];
+    const disconnectListeners: (() => void)[] = [];
+    const postMessage = vi.fn();
+
+    const mockPort = {
+      name: 'quick-search',
+      postMessage,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: { addListener: (cb: (msg: any) => void) => { messageListeners.push(cb); } },
+      onDisconnect: { addListener: (cb: () => void) => { disconnectListeners.push(cb); } },
+    };
+
+    portHandler(mockPort);
+
+    // Simulate sending a search query through the port
+    for (const listener of messageListeners) {
+      listener({ type: 'SEARCH_QUERY', query: 'port search test' });
+    }
+
+    // Allow async processing to complete
+    await new Promise(r => setTimeout(r, 100));
+
+    expect(postMessage).toHaveBeenCalled();
+    const call = postMessage.mock.calls[0][0];
+    expect(call).toHaveProperty('results');
+    expect(call).toHaveProperty('query', 'port search test');
+  });
+
+  it('should ignore non-quick-search port connections', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const portHandler = (globalThis as any).__swTestPortHandler;
+
+    const messageListeners: (() => void)[] = [];
+    const mockPort = {
+      name: 'some-other-port',
+      postMessage: vi.fn(),
+      onMessage: { addListener: (cb: () => void) => { messageListeners.push(cb); } },
+      onDisconnect: { addListener: vi.fn() },
+    };
+
+    portHandler(mockPort);
+
+    // No message listeners should be registered for non-quick-search ports
+    expect(messageListeners.length).toBe(0);
+  });
+
+  it('should handle port disconnect gracefully', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const portHandler = (globalThis as any).__swTestPortHandler;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageListeners: ((msg: any) => void)[] = [];
+    const disconnectListeners: (() => void)[] = [];
+    const postMessage = vi.fn();
+
+    const mockPort = {
+      name: 'quick-search',
+      postMessage,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: { addListener: (cb: (msg: any) => void) => { messageListeners.push(cb); } },
+      onDisconnect: { addListener: (cb: () => void) => { disconnectListeners.push(cb); } },
+    };
+
+    portHandler(mockPort);
+
+    // Trigger disconnect
+    for (const listener of disconnectListeners) {
+      listener();
+    }
+
+    // Now send a search query — the port is disconnected, so postMessage should not be called
+    // (it might still be called because the mock doesn't throw, but the code checks portDisconnected)
+    for (const listener of messageListeners) {
+      listener({ type: 'SEARCH_QUERY', query: 'after disconnect' });
+    }
+
+    await new Promise(r => setTimeout(r, 100));
+
+    // After disconnect, the handler sets portDisconnected = true, so no postMessage calls
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('should send skipAI flag through port response', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const portHandler = (globalThis as any).__swTestPortHandler;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageListeners: ((msg: any) => void)[] = [];
+    const postMessage = vi.fn();
+
+    const mockPort = {
+      name: 'quick-search',
+      postMessage,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: { addListener: (cb: (msg: any) => void) => { messageListeners.push(cb); } },
+      onDisconnect: { addListener: vi.fn() },
+    };
+
+    portHandler(mockPort);
+
+    for (const listener of messageListeners) {
+      listener({ type: 'SEARCH_QUERY', query: 'test', skipAI: true });
+    }
+
+    await new Promise(r => setTimeout(r, 100));
+
+    expect(postMessage).toHaveBeenCalled();
+    const call = postMessage.mock.calls[0][0];
+    expect(call).toHaveProperty('skipAI', true);
   });
 });
