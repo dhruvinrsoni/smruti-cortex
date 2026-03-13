@@ -19,17 +19,50 @@ metadata:
 
 ```
 src/background/__tests__/
-  indexing.test.ts                    # History indexing, mergeMetadata
+  ai-keyword-cache.test.ts            # AI keyword cache (storage, expiry)
+  ai-keyword-expander.test.ts         # AI keyword expansion (Ollama)
+  database.test.ts                    # IndexedDB operations
+  diagnostics.test.ts                 # Diagnostics export
   diversity-filter.test.ts            # URL normalization, duplicate filtering
+  embedding-processor.test.ts         # Background embedding pipeline
   embedding-text.test.ts              # Embedding text builder
+  favicon-cache.test.ts               # Favicon fetch + IDB caching
+  indexing.test.ts                    # History indexing, mergeMetadata
   ollama-service.test.ts              # Ollama client, circuit breaker
   open-inline-search.integration.test.ts  # Extension command integration
+  performance-monitor.test.ts         # Performance tracking
+  resilience.test.ts                  # Health checks, self-heal, recovery
+  search-debug.test.ts                # Search debug analytics
+  service-worker.test.ts              # Message handler dispatch
+
+src/background/search/__tests__/
+  diversity-filter.test.ts            # Search diversity filter
+  query-expansion.test.ts             # Query expansion rules
+  scorer-manager.test.ts              # Scorer orchestration
+  search-cache.test.ts                # LRU search cache
+  search-engine.test.ts               # Search pipeline integration
+  tokenizer.test.ts                   # Text tokenization
 
 src/background/search/scorers/__tests__/
+  ai-scorer-placeholder.test.ts       # AI scorer placeholder (weight=0)
   embedding-scorer.test.ts            # Cosine similarity scorer
+  meta-scorer.test.ts                 # Meta description scorer
+  recency-scorer.test.ts              # Recency scorer
+  title-scorer.test.ts                # Title scorer (Vivek Search)
+  url-scorer.test.ts                  # URL scorer
+  visitcount-scorer.test.ts           # Visit count scorer
+
+src/content_scripts/__tests__/
+  extractor.test.ts                   # Metadata extractor + sensitive URL detection
+
+src/core/__tests__/
+  constants.test.ts                   # Constants and enums
+  helpers.test.ts                     # Utility helpers
+  logger.test.ts                      # Logger component
+  settings.test.ts                    # Settings schema + validation
 
 src/shared/__tests__/
-  search-ui-base.test.ts              # Shared UI rendering, HTML escaping
+  search-ui-base.test.ts              # Shared UI utilities (16 functions)
 ```
 
 ## Chrome API Mocks
@@ -80,7 +113,7 @@ import 'fake-indexeddb/auto';  // Auto-polyfills indexedDB in jsdom
 
 ## Current Test Count
 
-131 tests across 7 test files (as of v8.0).
+980+ tests across 34 test files (as of v8.1). 90%+ line coverage.
 
 ## Full Test Generation Guide
 
