@@ -143,4 +143,36 @@ describe('isSensitiveUrl patterns (tested via pattern logic)', () => {
   it('checks oauth pattern', () => {
     expect(isSensitiveUrl('https://example.com/oauth/authorize')).toBe(true);
   });
+
+  // New edge case tests
+  it('detects SSO pattern', () => {
+    expect(isSensitiveUrl('https://accounts.example.com/sso/login')).toBe(true);
+  });
+
+  it('detects authenticate pattern', () => {
+    expect(isSensitiveUrl('https://api.example.com/authenticate')).toBe(true);
+  });
+
+  it('detects creditcard and debitcard patterns', () => {
+    expect(isSensitiveUrl('https://example.com/creditcard/apply')).toBe(true);
+    expect(isSensitiveUrl('https://example.com/debitcard/manage')).toBe(true);
+  });
+
+  it('detects account/security and account/password paths', () => {
+    expect(isSensitiveUrl('https://example.com/account/security')).toBe(true);
+    expect(isSensitiveUrl('https://example.com/account/password')).toBe(true);
+  });
+
+  it('detects keepass and dashlane patterns', () => {
+    expect(isSensitiveUrl('https://keepass.info/download')).toBe(true);
+    expect(isSensitiveUrl('https://dashlane.com/features')).toBe(true);
+  });
+
+  it('detects kraken crypto domain', () => {
+    expect(isSensitiveUrl('https://kraken.com/trade')).toBe(true);
+  });
+
+  it('returns false for invalid URLs', () => {
+    expect(isSensitiveUrl('not-a-url')).toBe(false);
+  });
 });
