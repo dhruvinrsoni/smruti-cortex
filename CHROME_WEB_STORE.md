@@ -16,7 +16,7 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 
 ## 📋 Pre-Submission Checklist
 
-- [ ] Build production zip: `npm run package` → `release/smruti-cortex-v8.0.0.zip`
+- [ ] Build production zip: `npm run package` → `release/smruti-cortex-vX.Y.Z.zip`
 - [ ] Test in clean Chrome profile
 - [ ] Verify all features work (AI search, semantic, keyword telemetry badges)
 - [ ] Check privacy compliance
@@ -311,7 +311,7 @@ Everything serves ONE goal: Find pages in your history faster.
 
 ### Before Upload:
 1. Build production package: `npm run package`
-2. Verify zip file: `release/smruti-cortex-v6.0.0.zip`
+2. Verify zip file: `release/smruti-cortex-vX.Y.Z.zip`
 3. Test in Chrome/Edge incognito mode
 4. Prepare 128x128 store icon PNG
 5. Create 3-5 screenshots (1280x800px)
@@ -320,7 +320,7 @@ Everything serves ONE goal: Find pages in your history faster.
 ### Chrome Upload Steps:
 1. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devcenter/dashboard)
 2. Click "New Item"
-3. Upload `release/smruti-cortex-v3.0.0.zip`
+3. Upload `release/smruti-cortex-vX.Y.Z.zip`
 4. Fill in store listing (copy from this doc)
 5. Upload icons and screenshots
 6. Add privacy policy URL
@@ -344,7 +344,7 @@ SmrutiCortex works natively on Edge with the same package!
 1. Go to [Microsoft Partner Center](https://partner.microsoft.com/en-us/dashboard/microsoftedge/overview)
 2. Sign in with Microsoft account (one-time setup)
 3. Click "Create new extension"
-4. Upload `release/smruti-cortex-v6.0.0.zip` (same as Chrome!)
+4. Upload `release/smruti-cortex-vX.Y.Z.zip` (same as Chrome!)
 5. Fill store listing (copy from Chrome content above)
 6. Upload icons and screenshots (same assets work)
 7. Add privacy policy URL
