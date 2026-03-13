@@ -14,14 +14,10 @@ export default defineConfig({
         'src/**/*.test.ts',
         'src/**/*.spec.ts',
         'src/**/index.ts',
-        'src/popup/popup.ts',
-        'src/content_scripts/quick-search.ts',
-        'src/shared/search-ui-base.ts',
-        'src/core/scorer-types.ts',
-        'src/background/schema.ts',
-        'src/background/search/scorers/ai-scorer-placeholder.ts',
-        'src/background/service-worker.ts',
-        'src/content_scripts/extractor.ts',
+        'src/popup/popup.ts',                // monolithic UI IIFE, no exports
+        'src/content_scripts/quick-search.ts', // Shadow DOM IIFE, no exports
+        'src/core/scorer-types.ts',           // type definitions only
+        'src/background/schema.ts',           // type definitions only
       ],
     },
   },
