@@ -94,8 +94,8 @@ describe('embedding-processor', () => {
       const { embeddingProcessor } = await importFreshModule();
       await embeddingProcessor.start();
       // After empty batch, state should be 'completed'
-      // Give the async loop time to finish
-      await new Promise(r => setTimeout(r, 50));
+      // Give the async loop time to finish (loop has internal sleeps)
+      await new Promise(r => setTimeout(r, 500));
       expect(embeddingProcessor.getProgress().state).toBe('completed');
     });
 
@@ -111,8 +111,8 @@ describe('embedding-processor', () => {
 
       const { embeddingProcessor } = await importFreshModule();
       await embeddingProcessor.start();
-      // Wait for async processing
-      await new Promise(r => setTimeout(r, 300));
+      // Wait for async processing (each item has sleep(50) + save overhead)
+      await new Promise(r => setTimeout(r, 1000));
       const progress = embeddingProcessor.getProgress();
       expect(progress.processed).toBe(2);
       expect(progress.state).toBe('completed');
