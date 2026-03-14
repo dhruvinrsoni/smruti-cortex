@@ -277,4 +277,184 @@ describe('ai-keyword-expander', () => {
       expect(getLastExpansionSource()).toBe('disabled');
     });
   });
+
+  describe('parseKeywordResponse — object format (legacy)', () => {
+    // The object format path is reached when the response contains { } with original/expanded arrays
+    // but the substring from first '[' to last ']' is NOT valid JSON (multiple arrays confuse it),
+    // so array parse fails and falls through to object parse.
+
+    it('should parse object format with original and expanded arrays', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      // Response has two arrays → first '[' to last ']' extracts invalid JSON → object path taken
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '{ "original": ["cat"], "expanded": ["feline", "kitten"] }' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('cat');
+      expect(result).toContain('cat');
+      expect(result).toContain('feline');
+      expect(result).toContain('kitten');
+    });
+
+    it('should split multi-word synonyms in expanded array into individual tokens', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '{ "original": ["cat"], "expanded": ["big cat"] }' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('cat');
+      // "big cat" should be split → both "big" and "cat" present
+      expect(result).toContain('big');
+      expect(result).toContain('cat');
+    });
+
+    it('should filter short words (< 2 chars) from expanded array', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '{ "original": ["be"], "expanded": ["a", "be"] }' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('be');
+      // "a" is 1 char → filtered out; "be" is 2 chars → kept
+      expect(result).not.toContain('a');
+      expect(result).toContain('be');
+    });
+
+    it('should clean non-alphanumeric characters from expanded keywords', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '{ "original": ["test"], "expanded": ["hello!!", "wo--rld"] }' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('test');
+      // Non-alpha chars stripped: "hello!!" → "hello", "wo--rld" → "world"
+      expect(result).toContain('hello');
+      expect(result).toContain('world');
+      expect(result).not.toContain('hello!!');
+      expect(result).not.toContain('wo--rld');
+    });
+
+    it('should fall through to regex when JSON inside braces is invalid', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      // Malformed JSON inside braces: object parse will throw, regex fallback runs
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '{ invalid json here, "expanded": broken }' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('test');
+      // Should still return at least the original token (regex fallback)
+      expect(result).toContain('test');
+    });
+  });
+
+  describe('parseKeywordResponse — regex fallback', () => {
+    // Regex fallback is reached when no valid [ ] or { } JSON is found.
+    // It extracts quoted alphanumeric strings matching /"([a-zA-Z0-9]+)"/g.
+
+    it('should extract quoted alphanumeric strings when no JSON structure is found', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      // Plain text response with no brackets or braces → regex fallback
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: 'Here are keywords: "python" "code" "programming"' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('python');
+      expect(result).toContain('python');
+      expect(result).toContain('code');
+      expect(result).toContain('programming');
+    });
+
+    it('should filter quoted strings shorter than 2 chars in regex fallback', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: 'Keywords: "python" "a" "code"' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('python');
+      expect(result).toContain('python');
+      expect(result).toContain('code');
+      // "a" is 1 char → filtered
+      expect(result).not.toContain('a');
+    });
+
+    it('should return only original tokens when no quoted strings are in the response', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      // No brackets, no braces, no quoted strings → regex finds nothing
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: 'Sorry I cannot help with that.' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('test');
+      expect(result).toContain('test');
+      // Only the original token — no extras added
+      expect(result).toHaveLength(1);
+    });
+
+    it('should fall through to regex when response has no valid JSON array or object', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      // Has no [ ] or { } → both JSON paths skipped, regex runs
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: 'The synonyms are "search" and "query" and "find"' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('search');
+      expect(result).toContain('search');
+      expect(result).toContain('query');
+      expect(result).toContain('find');
+    });
+  });
 });
