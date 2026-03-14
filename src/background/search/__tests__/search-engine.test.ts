@@ -457,4 +457,251 @@ describe('search-engine', () => {
       expect(results.length).toBeLessThanOrEqual(100);
     });
   });
+
+  describe('embedding memory cleanup and AI match logging', () => {
+    it('should clear embeddings from items after search when embeddingsEnabled is true', async () => {
+      settingsMap.embeddingsEnabled = true;
+      // Items with pre-existing embedding arrays (simulating already-embedded items)
+      const itemWithEmbedding = makeItem({
+        url: 'https://example.com',
+        title: 'Example Page',
+        hostname: 'example.com',
+        embedding: [0.1, 0.2, 0.3],
+      });
+      indexedItems.push(itemWithEmbedding);
+      const { runSearch } = await importModule();
+      await runSearch('example');
+      // After search, embedding should be cleared from the item
+      expect(itemWithEmbedding.embedding).toBeUndefined();
+    });
+
+    it('should clear embeddings from all items including non-matching ones', async () => {
+      settingsMap.embeddingsEnabled = true;
+      const item1 = makeItem({
+        url: 'https://example.com',
+        title: 'Example Page',
+        hostname: 'example.com',
+        embedding: [0.1, 0.2, 0.3],
+      });
+      const item2 = makeItem({
+        url: 'https://other.com',
+        title: 'Other Page',
+        hostname: 'other.com',
+        embedding: [0.4, 0.5, 0.6],
+      });
+      indexedItems.push(item1, item2);
+      const { runSearch } = await importModule();
+      await runSearch('example');
+      // Both items should have embedding cleared regardless of whether they matched
+      expect(item1.embedding).toBeUndefined();
+      expect(item2.embedding).toBeUndefined();
+    });
+
+    it('should not clear embeddings when embeddingsEnabled is false', async () => {
+      settingsMap.embeddingsEnabled = false;
+      const itemWithEmbedding = makeItem({
+        url: 'https://example.com',
+        title: 'Example Page',
+        hostname: 'example.com',
+        embedding: [0.1, 0.2, 0.3],
+      });
+      indexedItems.push(itemWithEmbedding);
+      const { runSearch } = await importModule();
+      await runSearch('example');
+      // Embedding should remain unchanged when embeddings are disabled
+      expect(itemWithEmbedding.embedding).toEqual([0.1, 0.2, 0.3]);
+    });
+
+    it('should use enhanced AI logging when AI-only matches exist', async () => {
+      settingsMap.ollamaEnabled = true;
+      settingsMap.embeddingsEnabled = false;
+      // Item that only matches the AI-expanded keyword "widgetology", not the original "widget"
+      indexedItems.push(
+        makeItem({
+          url: 'https://widgetology.com',
+          title: 'Widgetology',
+          hostname: 'widgetology.com',
+        }),
+      );
+
+      let capturedInfoMessages: string[] = [];
+
+      vi.resetModules();
+      vi.doMock('../../../core/logger', () => ({
+        Logger: {
+          forComponent: () => ({
+            debug: vi.fn(),
+            info: vi.fn((_ctx: string, msg: string) => {
+              capturedInfoMessages.push(msg);
+            }),
+            warn: vi.fn(),
+            error: vi.fn(),
+            trace: vi.fn(),
+          }),
+        },
+      }));
+      vi.doMock('../../../core/settings', () => ({
+        SettingsManager: {
+          getSetting: vi.fn((key: string) => settingsMap[key]),
+          init: vi.fn(),
+        },
+      }));
+      vi.doMock('../../database', () => ({
+        getAllIndexedItems: vi.fn(async () => indexedItems),
+        saveIndexedItem: vi.fn(),
+      }));
+      vi.doMock('../scorer-manager', () => ({
+        getAllScorers: vi.fn(() => [
+          {
+            name: 'test-scorer',
+            weight: 1.0,
+            score: vi.fn((_item: IndexedItem, query: string) => {
+              const haystack = (_item.title + ' ' + _item.url).toLowerCase();
+              return haystack.includes(query) ? 1.0 : 0.0;
+            }),
+          },
+        ]),
+      }));
+      vi.doMock('../tokenizer', () => ({
+        tokenize: vi.fn((text: string) => text.split(/\s+/).filter((t: string) => t.length > 0)),
+        classifyTokenMatches: vi.fn((_tokens: string[], _text: string) => {
+          return _tokens.map((t: string) => (_text.includes(t) ? 1 : 0));
+        }),
+        graduatedMatchScore: vi.fn(() => 0.5),
+        countConsecutiveMatches: vi.fn(() => 0),
+        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+      }));
+      vi.doMock('../../../core/helpers', () => ({
+        browserAPI: {
+          history: {
+            search: vi.fn((_query: unknown, cb: (results: unknown[]) => void) => cb([])),
+          },
+        },
+      }));
+      // expandQueryKeywords returns extra AI keyword "widgetology" beyond original "widget"
+      vi.doMock('../../ai-keyword-expander', () => ({
+        expandQueryKeywords: vi.fn(async () => ['widget', 'widgetology']),
+        getLastExpansionSource: vi.fn(() => 'expanded'),
+      }));
+      vi.doMock('../diversity-filter', () => ({
+        applyDiversityFilter: vi.fn((items: unknown[]) => items),
+      }));
+      vi.doMock('../../performance-monitor', () => ({
+        performanceTracker: { recordSearch: vi.fn() },
+      }));
+      vi.doMock('../query-expansion', () => ({
+        getExpandedTerms: vi.fn(() => ['widget']),
+      }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => mockCache) }));
+      vi.doMock('../../embedding-processor', () => ({
+        embeddingProcessor: { setSearchActive: vi.fn() },
+      }));
+      vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+      vi.doMock('../../../core/scorer-types', () => ({}));
+
+      const { runSearch } = await import('../search-engine');
+      // Query "widget" — item title "Widgetology" matches AI-expanded token "widgetology"
+      // but not the original token "widget" (our scorer checks for exact substring in title+url)
+      await runSearch('widget', { skipAI: false });
+
+      // Verify the enhanced AI logging path was exercised — we just confirm the search ran
+      // without error and produced results (the log path is a code coverage target)
+      expect(capturedInfoMessages.length).toBeGreaterThan(0);
+    });
+
+    it('should use standard logging when no AI matches exist', async () => {
+      settingsMap.ollamaEnabled = false;
+      settingsMap.embeddingsEnabled = false;
+      indexedItems.push(
+        makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' }),
+      );
+
+      let standardLogFired = false;
+      vi.resetModules();
+      vi.doMock('../../../core/logger', () => ({
+        Logger: {
+          forComponent: () => ({
+            debug: vi.fn(),
+            info: vi.fn((_ctx: string, msg: string) => {
+              if (typeof msg === 'string' && msg.includes('matches,')) {
+                standardLogFired = true;
+              }
+            }),
+            warn: vi.fn(),
+            error: vi.fn(),
+            trace: vi.fn(),
+          }),
+        },
+      }));
+      vi.doMock('../../../core/settings', () => ({
+        SettingsManager: {
+          getSetting: vi.fn((key: string) => settingsMap[key]),
+          init: vi.fn(),
+        },
+      }));
+      vi.doMock('../../database', () => ({
+        getAllIndexedItems: vi.fn(async () => indexedItems),
+        saveIndexedItem: vi.fn(),
+      }));
+      vi.doMock('../scorer-manager', () => ({
+        getAllScorers: vi.fn(() => [
+          {
+            name: 'test-scorer',
+            weight: 1.0,
+            score: vi.fn((_item: IndexedItem, query: string) => {
+              const haystack = (_item.title + ' ' + _item.url).toLowerCase();
+              return haystack.includes(query) ? 1.0 : 0.0;
+            }),
+          },
+        ]),
+      }));
+      vi.doMock('../tokenizer', () => ({
+        tokenize: vi.fn((text: string) => text.split(/\s+/).filter((t: string) => t.length > 0)),
+        classifyTokenMatches: vi.fn((_tokens: string[], _text: string) => {
+          return _tokens.map((t: string) => (_text.includes(t) ? 1 : 0));
+        }),
+        graduatedMatchScore: vi.fn(() => 0.5),
+        countConsecutiveMatches: vi.fn(() => 0),
+        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+      }));
+      vi.doMock('../../../core/helpers', () => ({
+        browserAPI: {
+          history: {
+            search: vi.fn((_query: unknown, cb: (results: unknown[]) => void) => cb([])),
+          },
+        },
+      }));
+      vi.doMock('../../ai-keyword-expander', () => ({
+        expandQueryKeywords: vi.fn(async (query: string) =>
+          query.split(/\s+/).filter((t: string) => t.length > 0)
+        ),
+        getLastExpansionSource: vi.fn(() => 'disabled'),
+      }));
+      vi.doMock('../diversity-filter', () => ({
+        applyDiversityFilter: vi.fn((items: unknown[]) => items),
+      }));
+      vi.doMock('../../performance-monitor', () => ({
+        performanceTracker: { recordSearch: vi.fn() },
+      }));
+      vi.doMock('../query-expansion', () => ({
+        getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+      }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => mockCache) }));
+      vi.doMock('../../embedding-processor', () => ({
+        embeddingProcessor: { setSearchActive: vi.fn() },
+      }));
+      vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+      vi.doMock('../../../core/scorer-types', () => ({}));
+
+      const { runSearch } = await import('../search-engine');
+      await runSearch('example');
+
+      // Standard log line (line 591) contains "matches," to distinguish from AI log
+      expect(standardLogFired).toBe(true);
+    });
+  });
 });

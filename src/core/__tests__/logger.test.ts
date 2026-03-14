@@ -273,4 +273,98 @@ describe('Logger', () => {
       expect(typeof logger.info).toBe('function');
     });
   });
+
+  describe('old-pattern fallback paths (fewer than 3 args or non-string first args)', () => {
+    it('Logger.error with 1 string arg uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      expect(() => Logger.error('just a message')).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.error with 2 args uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      expect(() => Logger.error('msg', { data: 1 })).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.warn with 1 string arg uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.WARN);
+      expect(() => Logger.warn('just a message')).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.warn with 2 args uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.WARN);
+      expect(() => Logger.warn('msg', { data: 1 })).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.debug with 1 string arg uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.DEBUG);
+      consoleSpy.mockClear(); // discard the setLevelInternal log call
+      expect(() => Logger.debug('just a message')).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.debug with 2 args uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.DEBUG);
+      consoleSpy.mockClear(); // discard the setLevelInternal log call
+      expect(() => Logger.debug('msg', { data: 1 })).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.trace with 1 string arg uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.TRACE);
+      consoleSpy.mockClear(); // discard the setLevelInternal log call
+      expect(() => Logger.trace('just a message')).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+
+    it('Logger.trace with 2 args uses Unknown.unknown and does not throw', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.TRACE);
+      consoleSpy.mockClear(); // discard the setLevelInternal log call
+      expect(() => Logger.trace('msg', { data: 1 })).not.toThrow();
+      expect(consoleSpy).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls[0].join(' ');
+      expect(output).toContain('[Unknown.unknown]');
+      consoleSpy.mockRestore();
+    });
+  });
 });
