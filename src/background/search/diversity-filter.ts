@@ -50,6 +50,7 @@ export interface ScoredItem {
     titleUrlCoverage?: number;
     titleUrlQuality?: number;
     splitFieldCoverage?: number;
+    originalMatchCount?: number;
 }
 
 /**

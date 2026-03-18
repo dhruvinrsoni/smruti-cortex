@@ -704,4 +704,128 @@ describe('search-engine', () => {
       expect(standardLogFired).toBe(true);
     });
   });
+
+  describe('original token match count ranking', () => {
+    it('should rank items matching ALL original tokens above items matching SOME', async () => {
+      vi.resetModules();
+
+      // Scorer that checks individual tokens against the haystack (not the full query string)
+      vi.doMock('../scorer-manager', () => ({
+        getAllScorers: vi.fn(() => [
+          {
+            name: 'test-scorer',
+            weight: 1.0,
+            score: (_item: IndexedItem) => {
+              const h = (_item.title + ' ' + _item.url).toLowerCase();
+              // Return score based on how many of the query tokens match
+              const tokens = ['confluence', 'cost'];
+              const matched = tokens.filter(t => h.includes(t)).length;
+              return matched > 0 ? 0.3 + matched * 0.1 : 0.0;
+            },
+          },
+        ]),
+      }));
+      vi.doMock('../../database', () => ({
+        getAllIndexedItems: vi.fn(async () => [
+          makeItem({ url: 'https://a.com', title: 'Confluence Dashboard', tokens: ['confluence', 'dashboard'] }),
+          makeItem({ url: 'https://b.com', title: 'Confluence Cost Report', tokens: ['confluence', 'cost', 'report'] }),
+          makeItem({ url: 'https://c.com', title: 'Cost Analysis', tokens: ['cost', 'analysis'] }),
+        ]),
+        saveIndexedItem: vi.fn(),
+      }));
+      vi.doMock('../tokenizer', () => ({
+        tokenize: vi.fn((text: string) => text.toLowerCase().split(/\s+/).filter((t: string) => t.length > 0)),
+        classifyTokenMatches: vi.fn((tokens: string[], text: string) => {
+          return tokens.map((t: string) => (text.includes(t) ? 1 : 0));
+        }),
+        graduatedMatchScore: vi.fn(() => 0.5),
+        countConsecutiveMatches: vi.fn(() => 0),
+        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+      }));
+      vi.doMock('../../ai-keyword-expander', () => ({
+        expandQueryKeywords: vi.fn(async (q: string) => q.toLowerCase().split(/\s+/)),
+      }));
+      vi.doMock('../query-expansion', () => ({
+        expandQuerySynonyms: vi.fn((tokens: string[]) => tokens),
+        getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+      }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
+      vi.doMock('../../embedding-processor', () => ({
+        embeddingProcessor: { setSearchActive: vi.fn() },
+      }));
+      vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+      vi.doMock('../../../core/scorer-types', () => ({}));
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('confluence cost');
+
+      // Item matching BOTH tokens should be first
+      expect(results.length).toBeGreaterThanOrEqual(2);
+      expect(results[0].title).toBe('Confluence Cost Report');
+    });
+
+    it('should rank items matching SOME tokens above items matching NONE when showNonMatchingResults is true', async () => {
+      vi.resetModules();
+
+      settingsMap.showNonMatchingResults = true;
+
+      vi.doMock('../scorer-manager', () => ({
+        getAllScorers: vi.fn(() => [
+          {
+            name: 'test-scorer',
+            weight: 1.0,
+            // Non-matching item gets HIGHER base score (simulating high recency/visit count)
+            score: (_item: IndexedItem) => {
+              return _item.title === 'Recent Workflow Page' ? 0.9 : 0.3;
+            },
+          },
+        ]),
+      }));
+      vi.doMock('../../database', () => ({
+        getAllIndexedItems: vi.fn(async () => [
+          makeItem({ url: 'https://a.com', title: 'Recent Workflow Page', tokens: ['recent', 'workflow'] }),
+          makeItem({ url: 'https://b.com', title: 'Confluence Dashboard', tokens: ['confluence', 'dashboard'] }),
+        ]),
+        saveIndexedItem: vi.fn(),
+      }));
+      vi.doMock('../tokenizer', () => ({
+        tokenize: vi.fn((text: string) => text.toLowerCase().split(/\s+/).filter((t: string) => t.length > 0)),
+        classifyTokenMatches: vi.fn((tokens: string[], text: string) => {
+          return tokens.map((t: string) => (text.includes(t) ? 1 : 0));
+        }),
+        graduatedMatchScore: vi.fn(() => 0.5),
+        countConsecutiveMatches: vi.fn(() => 0),
+        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+      }));
+      vi.doMock('../../ai-keyword-expander', () => ({
+        expandQueryKeywords: vi.fn(async (q: string) => q.toLowerCase().split(/\s+/)),
+      }));
+      vi.doMock('../query-expansion', () => ({
+        expandQuerySynonyms: vi.fn((tokens: string[]) => tokens),
+        getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+      }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
+      vi.doMock('../../embedding-processor', () => ({
+        embeddingProcessor: { setSearchActive: vi.fn() },
+      }));
+      vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+      vi.doMock('../../../core/scorer-types', () => ({}));
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('confluence');
+
+      // Even though "Recent Workflow Page" has higher score (0.9 vs 0.3),
+      // "Confluence Dashboard" should rank first because it matches the query token
+      expect(results.length).toBe(2);
+      expect(results[0].title).toBe('Confluence Dashboard');
+      expect(results[1].title).toBe('Recent Workflow Page');
+
+      // Reset setting
+      settingsMap.showNonMatchingResults = false;
+    });
+  });
 });

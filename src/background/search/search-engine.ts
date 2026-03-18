@@ -293,6 +293,10 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
         const hasTokenMatch = matchedTokens.length > 0;
 
+        // Count how many ORIGINAL tokens match anywhere in the item (not expanded tokens)
+        // Used as the primary sort criterion so items matching more query terms always rank higher
+        const originalMatchedInHaystack = originalTokens.filter(token => haystack.includes(token)).length;
+
         const titleText = ((item.bookmarkTitle || item.title) || '').toLowerCase();
         const urlText = (item.url || '').toLowerCase();
         const titleUrlText = `${titleText} ${urlText}`;
@@ -489,6 +493,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 titleUrlCoverage,
                 titleUrlQuality,
                 splitFieldCoverage,
+                originalMatchCount: originalMatchedInHaystack,
             });
         }
     }
@@ -508,6 +513,10 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     // Sort by user intent first, then by score.
     // This ensures deliberate multi-token title+url matches rank above incidental high-recency matches.
     results.sort((a, b) => {
+        // TIER 0: Original token match count — items matching more query terms always rank higher
+        const matchCountDelta = (b.originalMatchCount || 0) - (a.originalMatchCount || 0);
+        if (matchCountDelta !== 0) { return matchCountDelta; }
+
         const intentDelta = (b.intentPriority || 0) - (a.intentPriority || 0);
         if (intentDelta !== 0) { return intentDelta; }
 
