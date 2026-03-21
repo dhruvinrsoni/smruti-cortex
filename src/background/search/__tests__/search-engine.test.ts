@@ -119,6 +119,17 @@ vi.mock('../../embedding-text', () => ({
   buildEmbeddingText: vi.fn(() => 'test text'),
 }));
 
+vi.mock('../../ollama-service', () => ({
+  isCircuitBreakerOpen: vi.fn(() => true),
+  checkMemoryPressure: vi.fn(() => ({ ok: true })),
+  getOllamaConfigFromSettings: vi.fn(async () => ({})),
+  getOllamaService: vi.fn(() => ({
+    generateEmbedding: vi.fn(async () => ({ success: false, embedding: [], error: 'mocked' })),
+  })),
+  acquireOllamaSlot: vi.fn(() => true),
+  releaseOllamaSlot: vi.fn(),
+}));
+
 vi.mock('../../../core/scorer-types', () => ({}));
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -203,6 +214,16 @@ describe('search-engine', () => {
       embeddingProcessor: { setSearchActive: vi.fn() },
     }));
     vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+    vi.doMock('../../ollama-service', () => ({
+      isCircuitBreakerOpen: vi.fn(() => true),
+      checkMemoryPressure: vi.fn(() => ({ ok: true })),
+      getOllamaConfigFromSettings: vi.fn(async () => ({})),
+      getOllamaService: vi.fn(() => ({
+        generateEmbedding: vi.fn(async () => ({ success: false, embedding: [], error: 'mocked' })),
+      })),
+      acquireOllamaSlot: vi.fn(() => true),
+      releaseOllamaSlot: vi.fn(),
+    }));
     vi.doMock('../../../core/scorer-types', () => ({}));
     return import('../search-engine');
   }
