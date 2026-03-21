@@ -1116,10 +1116,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       log.debug('focus', 'Input blurred. relatedTarget:', (e as FocusEvent).relatedTarget);
     });
 
-    // Append to document
-    document.documentElement.appendChild(shadowHost);
-
-    perfLog('Overlay created with Shadow DOM', t0);
+    perfLog('Overlay created with Shadow DOM (in-memory, not yet attached)', t0);
     // Fetch settings now to configure debounce and focus behavior
     fetchSettings();
   }
@@ -1136,6 +1133,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     
     if (!shadowHost || !overlayEl || !inputEl) {return;}
+
+    // Attach to DOM only when showing (prevents leak into MHTML/print saves)
+    if (!shadowHost.isConnected) {
+      document.documentElement.appendChild(shadowHost);
+    }
 
     // Cancel any pending port close from a previous hideOverlay
     if (hidePortCloseTimer) {
@@ -1238,6 +1240,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     log.debug('overlay', 'Hiding overlay');
     shadowHost.classList.remove('visible');
     overlayEl.classList.remove('visible');
+
+    // Detach from DOM so the overlay is never serialized into MHTML/print saves.
+    // JS references (shadowHost, shadowRoot, inputEl, etc.) are kept for instant re-show.
+    if (shadowHost.parentNode) {
+      shadowHost.parentNode.removeChild(shadowHost);
+    }
 
     if (inputEl) {inputEl.blur();}
     aiSearchPending = false;
