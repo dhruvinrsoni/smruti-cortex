@@ -31,25 +31,34 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 **SmrutiCortex**
 
 ### Short Description (132 chars max)
-Instant browser history search. Local AI via Ollama: live synonym expansion, per-keyword cache. 100% private. Zero cloud.
+Never lose a page again. Instant history search with smart ranking. Optional local AI. 100% private. Zero cloud.
 
 ### Detailed Description (16,000 chars max)
 
 **SmrutiCortex** — Your private, lightning-fast browser memory search engine.
 
-Tired of losing important pages in your browser history? SmrutiCortex indexes everything you visit and retrieves any URL in milliseconds. Think "Everything" search for Windows, but for your browser.
+You read an article last week. You remember it was useful. You can't find it. SmrutiCortex fixes this.
+
+SmrutiCortex indexes everything you visit and retrieves any page in milliseconds — by title, URL, or keywords. Think "Everything" search for Windows, but for your browser.
+
+**HOW IS THIS DIFFERENT FROM Ctrl+H?**
+
+Chrome's built-in history (Ctrl+H) reloads a whole page, only searches by title/URL, and shows results chronologically. SmrutiCortex is:
+• **Instant** — results appear as you type, no page reload
+• **Multi-signal** — searches across title, URL, metadata, and bookmarks simultaneously
+• **Smart-ranked** — results scored by relevance (recency, frequency, match quality), not just date
+• **Optional AI** — local synonym expansion and semantic search via Ollama
 
 **KEY FEATURES:**
 
 ⚡ **Ultra-Fast Search** — Results appear as you type (< 50ms)
 🎯 **Vivek Search Ranking** — Graduated multi-parameter scoring (exact > prefix > substring)
-🎯 **Strict Matching** — Only shows results containing your search terms (default ON, configurable)
-🎲 **Diverse Results** — Filters duplicate URLs automatically for variety (default ON, configurable)
-⭐ **Bookmark Search** — Search bookmarks alongside history with ★ indicator (v6.0)
-🔍 **Query Expansion** — Find related terms with synonym matching (v6.0)
-🖼️ **Favicon Caching** — Local cache for fast icon loading (v6.0)
-📊 **Performance Monitor** — Real-time search metrics and timing (v6.0)
-🔧 **Advanced Diagnostics** — Export system info for bug reports (v6.0)
+🎯 **Strict Matching** — Only shows results containing your search terms (configurable)
+🎲 **Diverse Results** — Filters duplicate URLs automatically for variety (configurable)
+⭐ **Bookmark Search** — Search bookmarks alongside history with ★ indicator
+🔍 **Query Expansion** — Find related terms with synonym matching
+🌙 **Dark Mode** — Auto, light, or dark theme to match your system
+📥 **Export / Import** — Transfer your index between browsers or machines
 🔐 **100% Private** — All data stays local in IndexedDB
 🛡️ **Self-Healing** — Auto-recovery from errors with retry logic
 🔧 **Privacy Controls** — Favicon toggle, sensitive-site blacklist
@@ -57,8 +66,8 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 ⌨️ **Keyboard-First** — Ctrl+Shift+S instant access, full arrow key navigation
 🎨 **Clean UI** — Minimal, distraction-free interface
 🤖 **AI Search** — Local keyword expansion via Ollama. 100% private, zero cloud
-🔄 **Dual-Phase Search** — Keyword results appear instantly; AI synonym expansion runs in parallel. You never wait.
-🏷️ **Search Telemetry** — Every result shows how it was found: Keyword Match [LEXICAL], AI Recalled [ENGRAM], or AI Expanded [NEURAL]
+🔄 **Dual-Phase Search** — Keyword results appear instantly; AI expansion runs in parallel
+🏷️ **Search Telemetry** — Every result shows how it was found: Keyword Match, AI Recalled, or AI Expanded
 🌐 **Cross-Browser** — Works on Chrome, Edge, and Firefox
 
 **PRIVACY GUARANTEE:**
@@ -89,29 +98,14 @@ Tired of losing important pages in your browser history? SmrutiCortex indexes ev
 • Esc: Clear search
 • Type "sc " in address bar for quick access
 
-**SEARCH STATUS BADGES (what the labels mean):**
+**AI FEATURES (optional — requires local Ollama):**
 
-• "Keyword Match [LEXICAL]" (green) — Standard keyword search results
-• "AI Expanded +N [NEURAL]" (blue) — Live AI synonym expansion via Ollama
-• "AI Recalled +N [ENGRAM]" (yellow) — Cached AI synonyms from previous searches (instant)
-• "AI Offline [OLLAMA]" (red) — Ollama not running — keyword search still works
-• "Semantic active" (purple) — Semantic search comparing page meanings via embeddings
-• "Circuit breaker open" (red) — Too many Ollama failures, AI paused 60s then auto-retries
-
-**EMBEDDING PROCESSOR (Settings → AI → Embedding Management):**
-
-• "Running" (green) — Generating embeddings in background
-• "Paused" (yellow) — User paused, click Resume to continue
-• "Completed" (blue) — All pages embedded, semantic search at full power
-• "Idle" — Not started, click Generate All to begin
-
-**AI SAFETY (built-in protections):**
-
-• Circuit Breaker — If Ollama fails 3 times in a row, AI pauses for 60 seconds and retries automatically. Prevents wasting resources on a broken connection.
-• Memory Guard — AI features pause if extension memory exceeds 512MB, keeping your browser fast.
-• Concurrent Limiter — One AI request at a time. No resource contention.
-• Background Embedding Processor — Generates semantic embeddings in the background with pause/resume controls. Search always gets priority.
-• Graceful Degradation — If Ollama isn't running, extension falls back to keyword search seamlessly. Always works without AI.
+• **Keyword Expansion** — AI suggests synonyms to broaden your search
+• **Semantic Search** — Find pages by meaning, not just keywords, using local embeddings
+• **Search Badges** — Every result shows its source: Keyword [LEXICAL], AI Cache [ENGRAM], or AI Live [NEURAL]
+• **Background Embeddings** — Processes your index in the background with pause/resume controls
+• **Circuit Breaker** — Auto-pauses on failure, retries after 60s. Always falls back to keyword search.
+• **Memory Guard** — AI pauses if memory exceeds 512MB, keeping your browser fast
 
 **TECHNICAL DETAILS:**
 
