@@ -2222,6 +2222,110 @@ function initializePopup() {
       });
     }
 
+    // Export Index button
+    const exportBtn = modal.querySelector('#export-index-btn') as HTMLButtonElement;
+    const exportImportFeedback = modal.querySelector('#export-import-feedback') as HTMLSpanElement;
+    if (exportBtn) {
+      exportBtn.addEventListener('click', async () => {
+        exportBtn.disabled = true;
+        exportBtn.textContent = '⏳ Exporting...';
+        if (exportImportFeedback) {
+          exportImportFeedback.textContent = '';
+          exportImportFeedback.className = 'index-feedback';
+        }
+        try {
+          const resp = await sendMessage({ type: 'EXPORT_INDEX' });
+          if (resp?.status === 'OK' && resp.data) {
+            const blob = new Blob([JSON.stringify(resp.data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `smruti-cortex-export-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            if (exportImportFeedback) {
+              exportImportFeedback.textContent = `✓ Exported ${resp.data.itemCount} items`;
+              exportImportFeedback.className = 'index-feedback success';
+            }
+          } else {
+            if (exportImportFeedback) {
+              exportImportFeedback.textContent = '✗ Export failed: ' + (resp?.message || 'Unknown error');
+              exportImportFeedback.className = 'index-feedback error';
+            }
+          }
+        } catch (error) {
+          console.error('Export error:', error);
+          if (exportImportFeedback) {
+            exportImportFeedback.textContent = '✗ Export failed';
+            exportImportFeedback.className = 'index-feedback error';
+          }
+        } finally {
+          exportBtn.disabled = false;
+          exportBtn.textContent = '📥 Export Index';
+          setTimeout(() => {
+            if (exportImportFeedback) {
+              exportImportFeedback.textContent = '';
+              exportImportFeedback.className = 'index-feedback';
+            }
+          }, 5000);
+        }
+      });
+    }
+
+    // Import Index button
+    const importBtn = modal.querySelector('#import-index-btn') as HTMLButtonElement;
+    const importFileInput = modal.querySelector('#import-index-file') as HTMLInputElement;
+    if (importBtn && importFileInput) {
+      importBtn.addEventListener('click', () => importFileInput.click());
+      importFileInput.addEventListener('change', async () => {
+        const file = importFileInput.files?.[0];
+        if (!file) return;
+        importFileInput.value = '';
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          if (!data.items || !Array.isArray(data.items)) {
+            showToast('Invalid file: missing items array', true);
+            return;
+          }
+          if (!confirm(`Import ${data.items.length} items into your index?\n\nExisting items with the same URL will be updated.`)) {
+            return;
+          }
+          importBtn.disabled = true;
+          importBtn.textContent = '⏳ Importing...';
+          if (exportImportFeedback) {
+            exportImportFeedback.textContent = '';
+            exportImportFeedback.className = 'index-feedback';
+          }
+          const resp = await sendMessage({ type: 'IMPORT_INDEX', items: data.items });
+          if (resp?.status === 'OK') {
+            if (exportImportFeedback) {
+              exportImportFeedback.textContent = `✓ Imported ${resp.imported} items` + (resp.skipped > 0 ? ` (${resp.skipped} skipped)` : '');
+              exportImportFeedback.className = 'index-feedback success';
+            }
+            await fetchStorageQuotaInfo();
+          } else {
+            if (exportImportFeedback) {
+              exportImportFeedback.textContent = '✗ Import failed: ' + (resp?.message || 'Unknown error');
+              exportImportFeedback.className = 'index-feedback error';
+            }
+          }
+        } catch (error) {
+          console.error('Import error:', error);
+          showToast('Import failed: invalid JSON file', true);
+        } finally {
+          importBtn.disabled = false;
+          importBtn.textContent = '📤 Import Index';
+          setTimeout(() => {
+            if (exportImportFeedback) {
+              exportImportFeedback.textContent = '';
+              exportImportFeedback.className = 'index-feedback';
+            }
+          }, 5000);
+        }
+      });
+    }
+
     // Clear data button
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {

@@ -495,6 +495,28 @@ describe('service-worker post-init message handlers', () => {
     expect(res).toHaveProperty('updated');
   });
 
+  it('should respond to EXPORT_INDEX', async () => {
+    const response = await sendMessage({ type: 'EXPORT_INDEX' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.data).toHaveProperty('items');
+    expect(res.data).toHaveProperty('version');
+    expect(res.data).toHaveProperty('exportDate');
+    expect(res.data).toHaveProperty('itemCount');
+  });
+
+  it('should respond to IMPORT_INDEX', async () => {
+    const response = await sendMessage({ type: 'IMPORT_INDEX', items: [
+      { url: 'https://example.com', title: 'Example', lastVisit: Date.now(), hostname: 'example.com', visitCount: 1, tokens: [] },
+    ] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.imported).toBe(1);
+    expect(res.skipped).toBe(0);
+  });
+
   it('should respond to START_EMBEDDING_PROCESSOR', async () => {
     const response = await sendMessage({ type: 'START_EMBEDDING_PROCESSOR' });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
