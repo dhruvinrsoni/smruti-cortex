@@ -967,6 +967,12 @@ function initializePopup() {
     const currentHighlight = SettingsManager.getSetting('highlightMatches') ?? true;
     const currentFocusDelay = SettingsManager.getSetting('focusDelayMs') ?? 450;
 
+    const currentTheme = SettingsManager.getSetting('theme') ?? 'auto';
+    const themeInputs = modal.querySelectorAll('input[name="modal-theme"]');
+    themeInputs.forEach(input => {
+      (input as HTMLInputElement).checked = (input as HTMLInputElement).value === currentTheme;
+    });
+
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
 
@@ -1688,6 +1694,20 @@ function initializePopup() {
       btn.addEventListener('click', () => {
         const tab = (btn as HTMLElement).dataset.tab;
         if (tab) {switchSettingsTab(tab);}
+      });
+    });
+
+    // Theme changes
+    const themeInputs = modal.querySelectorAll('input[name="modal-theme"]');
+    themeInputs.forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+          const value = target.value as 'light' | 'dark' | 'auto';
+          await SettingsManager.setSetting('theme', value);
+          applyTheme(value);
+          showToast(`Theme set to ${value}`);
+        }
       });
     });
 
@@ -2490,6 +2510,17 @@ function initializePopup() {
     const el = document.getElementById(id);
     if (el) {el.textContent = value;}
   }
+
+  function applyTheme(theme: 'light' | 'dark' | 'auto') {
+    if (theme === 'auto') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }
+
+  // Apply theme immediately from stored setting
+  applyTheme((SettingsManager.getSetting('theme') ?? 'auto') as 'light' | 'dark' | 'auto');
 
   // Assign global
   openSettingsPage = openSettingsPageLocal;

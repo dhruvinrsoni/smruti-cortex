@@ -20,6 +20,56 @@
   --bookmark: #f59e0b;
 }
 
+/* Dark theme variables (applied by data-theme="dark" or auto via media query) */
+[data-theme="dark"],
+:root:not([data-theme="light"]):not([data-theme="dark"]) {
+  /* Auto mode: only apply when system prefers dark */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1e2e;
+    --card: #181825;
+    --muted: #a6adc8;
+    --accent: #89b4fa;
+    --text: #cdd6f4;
+    --chip: #313244;
+    --hover: #313244;
+    --border: #313244;
+    --error-light: #45171a;
+    --error-dark: #f38ba8;
+    --info-light: #1a2744;
+    --info-dark: #89b4fa;
+    --debug-light: #1a3324;
+    --debug-dark: #a6e3a1;
+    --trace-light: #3b2e14;
+    --trace-dark: #f9e2af;
+    --bookmark: #f9e2af;
+    color-scheme: dark;
+  }
+}
+
+[data-theme="dark"] {
+  --bg: #1e1e2e;
+  --card: #181825;
+  --muted: #a6adc8;
+  --accent: #89b4fa;
+  --text: #cdd6f4;
+  --chip: #313244;
+  --hover: #313244;
+  --border: #313244;
+  --error-light: #45171a;
+  --error-dark: #f38ba8;
+  --info-light: #1a2744;
+  --info-dark: #89b4fa;
+  --debug-light: #1a3324;
+  --debug-dark: #a6e3a1;
+  --trace-light: #3b2e14;
+  --trace-dark: #f9e2af;
+  --bookmark: #f9e2af;
+  color-scheme: dark;
+}
+
 /* Bookmark indicator star */
 .bookmark-indicator {
   color: var(--bookmark);
@@ -124,7 +174,7 @@ html,body { margin:0; padding:0; width:800px; height:400px; min-height:0; color:
 .subtitle { font-size:11px; color:var(--muted); margin-top:2px; }
 
 .main { flex:1; display:flex; flex-direction:column; gap:8px; }
-.search-input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #12202a; background:var(--card); color:var(--text); font-size:14px; outline:none; }
+.search-input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:14px; outline:none; }
 .search-input::placeholder { color:var(--muted); }
 
 /* Sort dropdown */
@@ -1043,4 +1093,4 @@ input[type="checkbox"] {
 }
 .action-btn.secondary:hover { background: var(--card); }
 .action-btn.danger { background: var(--bg); color: #ef4444; border-color: #ef4444; }
-.action-btn.danger:hover { background: #fef2f2; }
+.action-btn.danger:hover { background: var(--error-light); }
