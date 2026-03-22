@@ -1,6 +1,6 @@
 // service-worker.ts — Core brain of SmrutiCortex
 
-import { openDatabase, getStorageQuotaInfo, setForceRebuildFlag, getForceRebuildFlag } from './database';
+import { openDatabase, getStorageQuotaInfo, setForceRebuildFlag, getForceRebuildFlag, getAllIndexedItems, saveIndexedItem } from './database';
 import { ingestHistory, performFullRebuild } from './indexing';
 import { runSearch } from './search/search-engine';
 import { mergeMetadata } from './indexing';
@@ -456,6 +456,51 @@ setupPortBasedMessaging();
                   sendResponse({ status: 'OK', data: quotaInfo });
                 } catch (error) {
                   logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'EXPORT_INDEX': {
+                logger.info('onMessage', '📥 EXPORT_INDEX requested');
+                try {
+                  const items = await getAllIndexedItems();
+                  const exportData = {
+                    version: chrome.runtime.getManifest().version,
+                    exportDate: new Date().toISOString(),
+                    itemCount: items.length,
+                    items,
+                  };
+                  sendResponse({ status: 'OK', data: exportData });
+                } catch (error) {
+                  logger.error('onMessage', '❌ EXPORT_INDEX failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'IMPORT_INDEX': {
+                logger.info('onMessage', '📤 IMPORT_INDEX requested', { count: msg.items?.length });
+                try {
+                  const items = msg.items as Array<Record<string, unknown>>;
+                  if (!Array.isArray(items)) {
+                    sendResponse({ status: 'ERROR', message: 'Invalid import data: items must be an array' });
+                    break;
+                  }
+                  let imported = 0;
+                  let skipped = 0;
+                  for (const item of items) {
+                    if (typeof item.url === 'string' && typeof item.title === 'string' && typeof item.lastVisit === 'number') {
+                      await saveIndexedItem(item as unknown as import('./schema').IndexedItem);
+                      imported++;
+                    } else {
+                      skipped++;
+                    }
+                  }
+                  logger.info('onMessage', '✅ IMPORT_INDEX completed', { imported, skipped });
+                  sendResponse({ status: 'OK', imported, skipped });
+                } catch (error) {
+                  logger.error('onMessage', '❌ IMPORT_INDEX failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;

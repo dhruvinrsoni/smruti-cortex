@@ -494,6 +494,16 @@ ollama pull nomic-embed-text:latest
             <button class="action-btn primary" id="manual-index-btn" title="Index recently visited URLs">⚡ Index Now</button>
             <span id="manual-index-feedback" class="index-feedback"></span>
           </div>
+          <div class="export-import-section">
+            <h4>Export / Import</h4>
+            <p>Transfer your index between browsers or machines. Exports as a JSON file.</p>
+            <div class="setting-actions">
+              <button class="action-btn secondary" id="export-index-btn" title="Download your index as a JSON file">📥 Export Index</button>
+              <button class="action-btn secondary" id="import-index-btn" title="Import a previously exported JSON index">📤 Import Index</button>
+              <input type="file" id="import-index-file" accept=".json" style="display:none">
+            </div>
+            <span id="export-import-feedback" class="index-feedback"></span>
+          </div>
           <div class="setting-actions">
             <button class="action-btn primary" id="modal-rebuild" title="Re-index all browser history">🔄 Rebuild Index</button>
             <button class="action-btn secondary" id="modal-reset" title="Reset settings to defaults — keeps your browsing index intact">↺ Reset Settings</button>
