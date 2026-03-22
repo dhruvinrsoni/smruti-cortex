@@ -33,6 +33,7 @@ import {
 
 import { type AppSettings, DisplayMode } from '../core/settings';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
+import { runTour, type TourStep } from '../shared/tour';
 
 // Extend window interface for our extension
 declare global {
@@ -185,6 +186,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     return sanitized;
   }
+
+  const QUICK_SEARCH_TOUR_STEPS: TourStep[] = [
+    { target: '.search-input', title: 'Search', description: 'Type anything — title, URL, or keywords. Results appear instantly.', position: 'bottom' },
+    { target: '.sort-btn', title: 'Sort', description: 'Switch between Best Match, Most Recent, Most Visited, or Alphabetical.', position: 'bottom' },
+    { target: '.ai-status-bar', title: 'AI Status', description: 'When Ollama AI is enabled in Settings, a status bar appears here showing search sources: Keyword [LEXICAL], AI Cache [ENGRAM], or AI Live [NEURAL].', position: 'bottom' },
+    { target: '.footer', title: 'Keyboard Shortcuts', description: 'Enter opens in new tab. Shift+Enter opens in background. Use arrow keys to navigate results. Esc closes the overlay.', position: 'top' },
+    { target: '.help-link', title: 'Help', description: 'Click "?" anytime to replay this tour. Press Ctrl+Shift+S to open/close the overlay.', position: 'top' },
+  ];
 
   // ===== STYLES (inlined for instant loading, with CSS containment) =====
   // Supports both light and dark themes via prefers-color-scheme
@@ -518,12 +527,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       width: 20px;
       height: 20px;
       border-radius: 50%;
+      border: none;
       background: var(--bg-kbd);
       color: var(--text-secondary);
-      text-decoration: none;
       font-size: 12px;
       font-weight: 600;
       margin-left: auto;
+      cursor: pointer;
       transition: all 0.15s ease;
     }
     .help-link:hover {
@@ -1072,14 +1082,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       footer.appendChild(span);
     });
 
-    // Help/tour link
-    const helpLink = document.createElement('a');
-    helpLink.href = 'https://dhruvinrsoni.github.io/smruti-cortex/feature-tour.html';
-    helpLink.target = '_blank';
-    helpLink.rel = 'noopener';
+    // Help/tour button — triggers in-extension tour
+    const helpLink = document.createElement('button');
     helpLink.textContent = '?';
     helpLink.title = 'Feature tour & help';
     helpLink.className = 'help-link';
+    helpLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (shadowRoot) {
+        runTour(QUICK_SEARCH_TOUR_STEPS, shadowRoot, (sel) => shadowRoot!.querySelector(sel));
+      }
+    });
     footer.appendChild(helpLink);
 
     container.appendChild(header);
@@ -1323,6 +1337,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SEARCH =====
   function handleInput(): void {
+    // Typing "?" triggers the feature tour
+    const raw = inputEl?.value?.trim();
+    if (raw === '?' && shadowRoot) {
+      if (inputEl) { inputEl.value = ''; }
+      runTour(QUICK_SEARCH_TOUR_STEPS, shadowRoot, (sel) => shadowRoot!.querySelector(sel));
+      return;
+    }
+
     if (debounceTimer) {clearTimeout(debounceTimer);}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
     if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;} // Cancel pending focus shift

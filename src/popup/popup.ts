@@ -9,6 +9,7 @@ import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
+import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import {
   type SearchResult,
   type FocusableGroup,
@@ -157,11 +158,11 @@ function setupEventListeners() {
     settingsButton.addEventListener('click', openSettingsPage);
   }
 
-  // Tour/Help button — opens feature tour page
+  // Tour/Help button — runs in-extension tour
   const tourButton = $('tour-button') as HTMLButtonElement;
   if (tourButton) {
     tourButton.addEventListener('click', () => {
-      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/feature-tour.html' });
+      runTour(POPUP_TOUR_STEPS, document);
     });
   }
 
@@ -358,6 +359,14 @@ function initializePopup() {
   // Two-phase: Phase 1 (150ms) = instant non-AI results, Phase 2 (500ms) = AI expansion
   // Note: This is intentionally separate from focusDelayMs (which controls result auto-focus)
   function debounceSearchLocal(q: string) {
+    // Typing "?" triggers the feature tour
+    if (q.trim() === '?') {
+      const input = $('search-input') as HTMLInputElement;
+      if (input) { input.value = ''; }
+      runTour(POPUP_TOUR_STEPS, document);
+      return;
+    }
+
     if (debounceTimer) {clearTimeout(debounceTimer);}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined;}
     if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;} // Cancel pending focus shift
@@ -432,6 +441,9 @@ function initializePopup() {
 
   // Load default view (shown when popup opens or query is cleared)
   async function loadRecentHistory() {
+    // Ensure settings are fully loaded from storage before reading toggles
+    await SettingsManager.init();
+
     const isServiceWorkerReady = await checkServiceWorkerStatus();
     if (!isServiceWorkerReady) {
       resultsLocal = [];
@@ -2753,6 +2765,13 @@ function initializePopup() {
           <span>Enter: open in new tab · Shift+Enter: background tab · Ctrl+C: copy HTML · Ctrl+M: copy markdown</span>
           <span>↑↓: navigate · ←→: move columns (cards) · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
         `;
+      }
+    });
+
+    // Auto-show tour on first install
+    isTourCompleted().then(completed => {
+      if (!completed) {
+        setTimeout(() => runTour(POPUP_TOUR_STEPS, document), 500);
       }
     });
   });

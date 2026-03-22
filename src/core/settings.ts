@@ -192,6 +192,7 @@ export class SettingsManager {
     private static settings: AppSettings = SettingsManager.getDefaults();
 
     private static initialized = false;
+    private static _initPromise: Promise<void> | null = null;
     private static _logger: ComponentLogger | null = null;
 
     /**
@@ -213,38 +214,37 @@ export class SettingsManager {
 
     /**
      * Initialize settings from storage
-     * PERFORMANCE: This is designed to be non-blocking - uses defaults immediately
+     * PERFORMANCE: This is designed to be non-blocking - uses defaults immediately.
+     * Callers can await init() to wait for stored settings to be fully loaded.
      */
-    static async init(): Promise<void> {
-        // Already initialized - skip
-        if (this.initialized) {return;}
+    static init(): Promise<void> {
+        if (this._initPromise) {return this._initPromise;}
 
-        // Mark as initialized immediately with defaults
-        // Settings can be used right away with defaults
         this.initialized = true;
 
-        try {
-            this.logger.info('init', '🔄 Loading settings from storage...');
-            // Load stored settings in background (non-blocking for UI)
-            const stored = await this.loadFromStorage();
-            this.logger.info('init', '📦 Loaded from storage:', stored || 'null');
-            
-            if (stored) {
-                this.logger.info('init', '🔀 Merging with defaults...');
-                this.settings = { ...this.settings, ...stored };
-                this.logger.info('init', '✅ Merged settings:', this.settings);
-            } else {
-                this.logger.info('init', '⚠️ No stored settings, using defaults:', this.settings);
-            }
+        this._initPromise = (async () => {
+            try {
+                this.logger.info('init', '🔄 Loading settings from storage...');
+                const stored = await this.loadFromStorage();
+                this.logger.info('init', '📦 Loaded from storage:', stored || 'null');
+                
+                if (stored) {
+                    this.logger.info('init', '🔀 Merging with defaults...');
+                    this.settings = { ...this.settings, ...stored };
+                    this.logger.info('init', '✅ Merged settings:', this.settings);
+                } else {
+                    this.logger.info('init', '⚠️ No stored settings, using defaults:', this.settings);
+                }
 
-            // Apply current settings (non-critical)
-            await this.applySettings();
-            this.logger.info('init', '✅ Settings initialized and applied');
-        } catch (error) {
-            // Already using defaults, just log the error
-            this.logger.error('init', '❌ Settings initialization failed:', error);
-            this.logger.info('init', '📋 Using defaults:', this.settings);
-        }
+                await this.applySettings();
+                this.logger.info('init', '✅ Settings initialized and applied');
+            } catch (error) {
+                this.logger.error('init', '❌ Settings initialization failed:', error);
+                this.logger.info('init', '📋 Using defaults:', this.settings);
+            }
+        })();
+
+        return this._initPromise;
     }
 
     /**
