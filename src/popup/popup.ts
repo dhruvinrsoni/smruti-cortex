@@ -8,6 +8,7 @@ import { Logger, LogLevel, ComponentLogger } from '../core/logger'; // eslint-di
 import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
+import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import {
   type SearchResult,
   type FocusableGroup,
@@ -386,7 +387,50 @@ function initializePopup() {
   // Assign global
   debounceSearch = debounceSearchLocal;
 
-  // Load recent history (shown by default when popup opens)
+  function renderRecentSearches(entries: Array<{ query: string; timestamp: number; selectedUrl?: string }>) {
+    const container = document.createElement('div');
+    container.className = 'recent-searches-section';
+
+    const header = document.createElement('div');
+    header.className = 'recent-searches-header';
+    header.innerHTML = '<span class="recent-searches-title">🕐 Recent Searches</span>';
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'recent-searches-clear';
+    clearBtn.textContent = 'Clear';
+    clearBtn.title = 'Clear recent searches';
+    clearBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await clearRecentSearches();
+      container.remove();
+    });
+    header.appendChild(clearBtn);
+    container.appendChild(header);
+
+    for (const entry of entries) {
+      const item = document.createElement('div');
+      item.className = 'recent-search-item';
+      item.tabIndex = 0;
+      item.title = entry.selectedUrl ? `Search: "${entry.query}" → ${entry.selectedUrl}` : `Search: "${entry.query}"`;
+      item.innerHTML = `<span class="recent-search-icon">🔍</span><span class="recent-search-query">${entry.query}</span>`;
+      item.addEventListener('click', () => {
+        const input = $('search-input') as HTMLInputElement;
+        if (input) {
+          input.value = entry.query;
+          input.focus();
+          debounceSearch(entry.query);
+        }
+      });
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          item.click();
+        }
+      });
+      container.appendChild(item);
+    }
+    return container;
+  }
+
+  // Load default view (shown when popup opens or query is cleared)
   async function loadRecentHistory() {
     const isServiceWorkerReady = await checkServiceWorkerStatus();
     if (!isServiceWorkerReady) {
@@ -397,21 +441,39 @@ function initializePopup() {
       return;
     }
 
+    const showHistory = SettingsManager.getSetting('showRecentHistory') ?? true;
+    const showSearches = SettingsManager.getSetting('showRecentSearches') ?? true;
+
     try {
-      const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
-      const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
-      resultsLocal = (resp && resp.results) ? resp.results : [];
+      // Load recent browsing history if enabled
+      if (showHistory) {
+        const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
+        const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
+        resultsLocal = (resp && resp.results) ? resp.results : [];
+        const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
+        sortResults(resultsLocal, sortBy);
+      } else {
+        resultsLocal = [];
+      }
+
       currentAIExpandedKeywords = [];
       renderAIStatus(null);
-
-      // Apply current sort setting
-      const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
-      sortResults(resultsLocal, sortBy);
-
-      // Don't auto-select first result — keep focus on input so user can retype.
-      // User can Tab or ArrowDown to navigate results when ready.
       activeIndex = -1;
       renderResults();
+
+      // Show recent searches above results when enabled
+      if (showSearches) {
+        const recentEntries = await getRecentSearches();
+        if (recentEntries.length > 0) {
+          const section = renderRecentSearches(recentEntries.slice(0, 8));
+          resultsNode.insertBefore(section, resultsNode.firstChild);
+        }
+      }
+
+      // Update result count text
+      if (!showHistory && !showSearches) {
+        resultCountNode.textContent = 'Type to search';
+      }
     } catch {
       resultsLocal = [];
       activeIndex = -1;
@@ -634,6 +696,11 @@ function initializePopup() {
   function openResult(index: number, event?: MouseEvent | KeyboardEvent) {
     const item = resultsLocal[index];
     if (!item) {return;}
+
+    // Record recent search (fire-and-forget)
+    if (currentQuery?.trim()) {
+      addRecentSearch(currentQuery, item.url).catch(() => {});
+    }
 
     const isCtrl = (event && (event as MouseEvent).ctrlKey) || (event instanceof KeyboardEvent && event.ctrlKey);
     const isShift = (event && (event as MouseEvent).shiftKey) || (event instanceof KeyboardEvent && event.shiftKey);
@@ -997,6 +1064,16 @@ function initializePopup() {
     const selectAllOnFocusInput = modal.querySelector('#modal-selectAllOnFocus') as HTMLInputElement;
     if (selectAllOnFocusInput) {
       selectAllOnFocusInput.checked = SettingsManager.getSetting('selectAllOnFocus') ?? false;
+    }
+
+    const showRecentHistoryInput = modal.querySelector('#modal-showRecentHistory') as HTMLInputElement;
+    if (showRecentHistoryInput) {
+      showRecentHistoryInput.checked = SettingsManager.getSetting('showRecentHistory') ?? true;
+    }
+
+    const showRecentSearchesInput = modal.querySelector('#modal-showRecentSearches') as HTMLInputElement;
+    if (showRecentSearchesInput) {
+      showRecentSearchesInput.checked = SettingsManager.getSetting('showRecentSearches') ?? true;
     }
 
     // Ollama settings
@@ -1769,6 +1846,28 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('selectAllOnFocus', target.checked);
         showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end');
+      });
+    }
+
+    // Recent history toggle
+    const showRecentHistoryInput2 = modal.querySelector('#modal-showRecentHistory') as HTMLInputElement;
+    if (showRecentHistoryInput2) {
+      showRecentHistoryInput2.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('showRecentHistory', target.checked);
+        showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled');
+        if (!currentQuery?.trim()) { loadRecentHistory(); }
+      });
+    }
+
+    // Recent searches toggle
+    const showRecentSearchesInput2 = modal.querySelector('#modal-showRecentSearches') as HTMLInputElement;
+    if (showRecentSearchesInput2) {
+      showRecentSearchesInput2.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        await SettingsManager.setSetting('showRecentSearches', target.checked);
+        showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled');
+        if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
     }
 
