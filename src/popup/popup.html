@@ -468,6 +468,28 @@ ollama pull nomic-embed-text:latest
             </label>
           </div>
         </div>
+        <div class="settings-section" data-tab="search">
+          <h3>Empty-Input Defaults</h3>
+          <p>What to show when you open SmrutiCortex or clear the search input.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-showRecentHistory">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Show recent browsing history</strong>
+                <small>List your most recently visited pages. Controlled by the "Default result count" setting above.</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="checkbox" id="modal-showRecentSearches">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Show recent searches</strong>
+                <small>Display your last search queries so you can re-run them with one click. Up to 20 queries are remembered.</small>
+              </div>
+            </label>
+          </div>
+        </div>
         <div class="settings-section" data-tab="data">
           <h3>Data Management</h3>
           <p>Manage your indexed history and extension data.</p>

@@ -32,6 +32,7 @@ import {
 } from '../shared/search-ui-base';
 
 import { type AppSettings, DisplayMode } from '../core/settings';
+import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 
 // Extend window interface for our extension
 declare global {
@@ -596,6 +597,62 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     .ai-status-bar .ai-time {
       margin-left: auto;
       opacity: 0.7;
+    }
+    .recent-searches-section {
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--bg-hover);
+      padding-bottom: 6px;
+    }
+    .recent-searches-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 8px;
+    }
+    .recent-searches-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .recent-searches-clear {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: inherit;
+    }
+    .recent-searches-clear:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .recent-search-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .recent-search-item:hover,
+    .recent-search-item:focus {
+      background: var(--bg-hover);
+      outline: none;
+    }
+    .recent-search-icon {
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .recent-search-query {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   `;
 
@@ -1378,6 +1435,59 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     renderAIStatusShared(aiStatusBarEl, aiStatus);
   }
 
+  function buildRecentSearchesSection(entries: Array<{ query: string; timestamp: number; selectedUrl?: string }>): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'recent-searches-section';
+
+    const header = document.createElement('div');
+    header.className = 'recent-searches-header';
+    const title = document.createElement('span');
+    title.className = 'recent-searches-title';
+    title.textContent = '🕐 Recent Searches';
+    header.appendChild(title);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'recent-searches-clear';
+    clearBtn.textContent = 'Clear';
+    clearBtn.title = 'Clear recent searches';
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearRecentSearches().then(() => container.remove()).catch(() => {});
+    });
+    header.appendChild(clearBtn);
+    container.appendChild(header);
+
+    for (const entry of entries) {
+      const item = document.createElement('div');
+      item.className = 'recent-search-item';
+      item.tabIndex = 0;
+      item.title = entry.selectedUrl ? `Search: "${entry.query}" → ${entry.selectedUrl}` : `Search: "${entry.query}"`;
+
+      const icon = document.createElement('span');
+      icon.className = 'recent-search-icon';
+      icon.textContent = '🔍';
+      item.appendChild(icon);
+
+      const querySpan = document.createElement('span');
+      querySpan.className = 'recent-search-query';
+      querySpan.textContent = entry.query;
+      item.appendChild(querySpan);
+
+      item.addEventListener('click', () => {
+        if (inputEl) {
+          inputEl.value = entry.query;
+          inputEl.focus();
+          performSearch(entry.query, true);
+        }
+      });
+      item.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') item.click();
+      });
+      container.appendChild(item);
+    }
+    return container;
+  }
+
   // Load recent history (smart default results when query is empty)
   async function loadRecentHistory(): Promise<void> {
     const t0 = performance.now();
@@ -1395,38 +1505,49 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     try {
-      // Get default result count from cached settings (or use 50 as fallback)
-      const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
-      
-      // Request recent history from service worker
-      const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
-          (resp) => {
-            if (chrome.runtime.lastError) {
-              perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
-              resolve({ results: [] });
-            } else {
-              resolve(resp || { results: [] });
-            }
-          }
-        );
-      });
+      const showHistory = cachedSettings?.showRecentHistory ?? true;
+      const showSearches = cachedSettings?.showRecentSearches ?? true;
 
-      let recentItems: SearchResult[] = response.results || [];
-      
-      // Apply current sort setting (if available from cached settings)
-      const sortBy = cachedSettings?.sortBy || 'most-recent';
-      recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-      
-      currentResults = recentItems;
-      // Don't auto-select first result — keep focus on input so user can retype.
-      // User can Tab or ArrowDown to navigate results when ready.
+      // Load recent browsing history if enabled
+      if (showHistory) {
+        const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
+        const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
+            (resp) => {
+              if (chrome.runtime.lastError) {
+                perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
+                resolve({ results: [] });
+              } else {
+                resolve(resp || { results: [] });
+              }
+            }
+          );
+        });
+
+        let recentItems: SearchResult[] = response.results || [];
+        const sortBy = cachedSettings?.sortBy || 'most-recent';
+        recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        currentResults = recentItems;
+      } else {
+        currentResults = [];
+      }
+
       selectedIndex = -1;
-      renderResults(recentItems);
+      renderResults(currentResults);
+
+      // Show recent searches above results when enabled
+      if (showSearches && resultsEl) {
+        getRecentSearches().then(entries => {
+          if (entries.length > 0 && resultsEl) {
+            const section = buildRecentSearchesSection(entries.slice(0, 8));
+            resultsEl.insertBefore(section, resultsEl.firstChild);
+          }
+        }).catch(() => {});
+      }
       
       perfLog('loadRecentHistory completed', t0);
-      perfLog(`Loaded ${recentItems.length} recent items`);
+      perfLog(`Loaded ${currentResults.length} recent items`);
     } catch (error) {
       log.warn('loadRecentHistory', 'Failed to load recent history:', (error as Error).message);
       currentResults = [];
@@ -2067,9 +2188,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const result = currentResults[index];
     if (!result?.url) {return;}
 
+    // Record recent search (fire-and-forget)
+    const query = inputEl?.value?.trim();
+    if (query) {
+      addRecentSearch(query, result.url).catch(() => {});
+    }
+
     hideOverlay();
 
-    // Use shared openUrl utility - but inline overlay runs in page context, so use window APIs
     if (newTab) {
       window.open(result.url, '_blank');
     } else {

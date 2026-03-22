@@ -38,6 +38,8 @@ export interface AppSettings {
     showNonMatchingResults?: boolean; // Show results that don't match the query (default: false = strict matching)
     sortBy?: string;  // Sort order for results: 'best-match', 'most-recent', 'most-visited', 'alphabetical' (default: 'best-match')
     defaultResultCount?: number;  // Number of recent results to show when popup opens with no query (default: 50)
+    showRecentHistory?: boolean;   // Show recent browsing history when input is empty (default: true)
+    showRecentSearches?: boolean;  // Show recent search queries when input is empty (default: true)
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -153,6 +155,15 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'boolean',
     },
     
+    showRecentHistory: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    showRecentSearches: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+
     // Future settings (placeholders)
     theme: {
         default: 'auto' as const,
