@@ -1017,7 +1017,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Help/tour link
     const helpLink = document.createElement('a');
-    helpLink.href = 'https://dhruvinrsoni.github.io/smruti-cortex/tour.html';
+    helpLink.href = 'https://dhruvinrsoni.github.io/smruti-cortex/feature-tour.html';
     helpLink.target = '_blank';
     helpLink.rel = 'noopener';
     helpLink.textContent = '?';

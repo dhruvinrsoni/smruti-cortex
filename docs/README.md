@@ -11,7 +11,7 @@ docs/
   ├── index.html              ← Landing page
   ├── styles.css              ← Styling & animations
   ├── script.js               ← Interactivity & theme toggle
-  ├── tour.html               ← Feature tour page
+  ├── feature-tour.html       ← Feature tour page
   ├── tour.js                 ← Tour interactivity
   ├── tour.css                ← Tour styling
   ├── demo.html               ← Interactive demo
@@ -54,7 +54,7 @@ Protection mechanisms:
 - **Dark/Light Theme Toggle** — Persists via localStorage
 - **Typing Animation** — Live search demo in hero section
 - **Interactive Demo** — `demo.html` with live walkthrough
-- **Feature Tour** — `tour.html` with step-by-step guide
+- **Feature Tour** — `feature-tour.html` with step-by-step guide
 - **Smooth Animations** — Fade-in effects on scroll
 - **Responsive Design** — Mobile-first with 768px breakpoint
 - **SEO Optimized** — Meta tags, Open Graph, structured data

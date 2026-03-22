@@ -160,7 +160,7 @@ function setupEventListeners() {
   const tourButton = $('tour-button') as HTMLButtonElement;
   if (tourButton) {
     tourButton.addEventListener('click', () => {
-      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/tour.html' });
+      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/feature-tour.html' });
     });
   }
 
@@ -169,7 +169,7 @@ function setupEventListeners() {
   if (settingsTourLink) {
     settingsTourLink.addEventListener('click', (e) => {
       e.preventDefault();
-      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/tour.html' });
+      chrome.tabs.create({ url: 'https://dhruvinrsoni.github.io/smruti-cortex/feature-tour.html' });
     });
   }
 
