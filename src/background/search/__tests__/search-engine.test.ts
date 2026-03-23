@@ -849,4 +849,175 @@ describe('search-engine', () => {
       settingsMap.showNonMatchingResults = false;
     });
   });
+
+  describe('ranking regression tests', () => {
+    function setupMocksForRanking(items: IndexedItem[], queryTokens: string[]) {
+      vi.resetModules();
+      vi.doMock('../../../core/logger', () => ({
+        Logger: {
+          forComponent: () => ({
+            debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          }),
+        },
+      }));
+      vi.doMock('../../../core/settings', () => ({
+        SettingsManager: {
+          getSetting: vi.fn((key: string) => settingsMap[key]),
+          init: vi.fn(),
+        },
+      }));
+      vi.doMock('../scorer-manager', () => ({
+        getAllScorers: vi.fn(() => [
+          {
+            name: 'test-scorer',
+            weight: 1.0,
+            score: (_item: IndexedItem) => {
+              const h = (_item.title + ' ' + _item.url).toLowerCase();
+              const matched = queryTokens.filter(t => h.includes(t)).length;
+              return matched > 0 ? 0.3 + matched * 0.1 : 0.2;
+            },
+          },
+        ]),
+      }));
+      vi.doMock('../../database', () => ({
+        getAllIndexedItems: vi.fn(async () => items),
+        saveIndexedItem: vi.fn(),
+      }));
+      vi.doMock('../tokenizer', () => ({
+        tokenize: vi.fn((text: string) => text.toLowerCase().split(/\s+/).filter((t: string) => t.length > 0)),
+        classifyTokenMatches: vi.fn((tokens: string[], text: string) => {
+          return tokens.map((t: string) => (text.includes(t) ? 1 : 0));
+        }),
+        graduatedMatchScore: vi.fn(() => 0.5),
+        countConsecutiveMatches: vi.fn(() => 0),
+        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+      }));
+      vi.doMock('../../ai-keyword-expander', () => ({
+        expandQueryKeywords: vi.fn(async (q: string) => q.toLowerCase().split(/\s+/)),
+      }));
+      vi.doMock('../diversity-filter', () => ({
+        applyDiversityFilter: vi.fn((i: unknown[]) => i),
+      }));
+      vi.doMock('../../performance-monitor', () => ({
+        performanceTracker: { recordSearch: vi.fn() },
+      }));
+      vi.doMock('../query-expansion', () => ({
+        getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+      }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
+      vi.doMock('../../embedding-processor', () => ({
+        embeddingProcessor: { setSearchActive: vi.fn() },
+      }));
+      vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+      vi.doMock('../../ollama-service', () => ({
+        isCircuitBreakerOpen: vi.fn(() => true),
+        checkMemoryPressure: vi.fn(() => ({ ok: true })),
+        getOllamaConfigFromSettings: vi.fn(async () => ({})),
+        getOllamaService: vi.fn(() => ({
+          generateEmbedding: vi.fn(async () => ({ success: false, embedding: [], error: 'mocked' })),
+        })),
+        acquireOllamaSlot: vi.fn(() => true),
+        releaseOllamaSlot: vi.fn(),
+      }));
+      vi.doMock('../../../core/scorer-types', () => ({}));
+      vi.doMock('../../../core/helpers', () => ({
+        browserAPI: {
+          history: {
+            search: vi.fn((_query: unknown, cb: (results: unknown[]) => void) => cb([])),
+          },
+        },
+      }));
+    }
+
+    it('should exclude items matching ONLY via synonym tokens (not original)', async () => {
+      const items = [
+        makeItem({ url: 'https://a.com', title: 'Pricing Breakdown', tokens: ['pricing', 'breakdown'] }),
+        makeItem({ url: 'https://b.com', title: 'Shipping Fee Details', tokens: ['shipping', 'fee', 'details'] }),
+      ];
+      setupMocksForRanking(items, ['price']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('price');
+
+      expect(results.length).toBe(0);
+    });
+
+    it('should include items matching original tokens even when synonym tokens also match', async () => {
+      const items = [
+        makeItem({ url: 'https://a.com', title: 'Price Comparison Tool', tokens: ['price', 'comparison'] }),
+        makeItem({ url: 'https://b.com', title: 'Unrelated Fee Page', tokens: ['unrelated', 'fee'] }),
+      ];
+      setupMocksForRanking(items, ['price']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('price');
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('Price Comparison Tool');
+    });
+
+    it('should rank 2-of-2 token matches above 1-of-2 token matches despite higher base score', async () => {
+      const items = [
+        makeItem({
+          url: 'https://workflows.com/run',
+          title: 'GitHub Workflow Run',
+          tokens: ['github', 'workflow', 'run'],
+          visitCount: 100,
+          lastVisit: Date.now(),
+        }),
+        makeItem({
+          url: 'https://confluence.com/cost-report',
+          title: 'Confluence Cost Report',
+          tokens: ['confluence', 'cost', 'report'],
+          visitCount: 2,
+          lastVisit: Date.now() - 86400000 * 30,
+        }),
+      ];
+      setupMocksForRanking(items, ['confluence', 'cost']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('confluence cost');
+
+      expect(results[0].title).toBe('Confluence Cost Report');
+    });
+
+    it('should apply match-count dampener: partial matches get lower final scores', async () => {
+      const items = [
+        makeItem({
+          url: 'https://a.com',
+          title: 'React Tutorial Guide',
+          tokens: ['react', 'tutorial', 'guide'],
+        }),
+        makeItem({
+          url: 'https://b.com',
+          title: 'React Performance Optimization',
+          tokens: ['react', 'performance', 'optimization'],
+        }),
+      ];
+      setupMocksForRanking(items, ['react', 'tutorial']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('react tutorial');
+
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].title).toBe('React Tutorial Guide');
+    });
+
+    it('should not include synonym-only matches even with showNonMatchingResults disabled', async () => {
+      settingsMap.showNonMatchingResults = false;
+      const items = [
+        makeItem({ url: 'https://a.com', title: 'Bug Tracker Dashboard', tokens: ['bug', 'tracker'] }),
+        makeItem({ url: 'https://b.com', title: 'Error Log Viewer', tokens: ['error', 'log', 'viewer'] }),
+      ];
+      setupMocksForRanking(items, ['error']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('error');
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('Error Log Viewer');
+    });
+  });
 });
