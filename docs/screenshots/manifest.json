@@ -208,5 +208,125 @@
     "file": "SmrutiCortex quick serach in action with keywords 'smruti git' Screenshot 2026-02-12 200309.png",
     "alt": "Quick-search overlay showing Vivek Search scoring in action",
     "sections": []
+  },
+  {
+    "id": "popup-onboarding-search",
+    "file": "SmrutiCortex popup onboarding 1 Search Screenshot 2026-03-23 023240.png",
+    "alt": "Popup onboarding tour — search input highlighted with tooltip",
+    "sections": [],
+    "tour": {
+      "title": "Popup Tour: Search",
+      "subtitle": "The in-extension tour highlights each feature. Type anything in the search bar — results appear instantly as you type.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "popup-onboarding-sort",
+    "file": "SmrutiCortex popup onboarding 2 Sort Results Screenshot 2026-03-23 023356.png",
+    "alt": "Popup onboarding tour — sort dropdown highlighted with tooltip",
+    "sections": [],
+    "tour": {
+      "title": "Popup Tour: Sort",
+      "subtitle": "Switch between Best Match, Most Recent, Most Visited, or Alphabetical sorting with the dropdown.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "popup-onboarding-ai",
+    "file": "SmrutiCortex popup onboarding 3 AI Status Screenshot 2026-03-23 023703.png",
+    "alt": "Popup onboarding tour — AI status bar tooltip shown centered (AI not active)",
+    "sections": [],
+    "tour": {
+      "title": "Popup Tour: AI Status",
+      "subtitle": "When Ollama AI is enabled, a status bar appears showing search sources: Keyword, AI Cache, or AI Live.",
+      "highlight": null,
+      "category": "ai"
+    }
+  },
+  {
+    "id": "popup-onboarding-settings",
+    "file": "SmrutiCortex popup onboarding 4 Settings Screenshot 2026-03-23 023812.png",
+    "alt": "Popup onboarding tour — settings gear button highlighted",
+    "sections": [],
+    "tour": {
+      "title": "Popup Tour: Settings",
+      "subtitle": "Access all configuration: theme, search options, AI config, privacy controls, data management, and more.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "popup-onboarding-shortcuts",
+    "file": "SmrutiCortex popup onboarding 5 Keyboard Shortcuts Screenshot 2026-03-23 023853.png",
+    "alt": "Popup onboarding tour — keyboard shortcuts footer highlighted",
+    "sections": [],
+    "tour": {
+      "title": "Popup Tour: Shortcuts",
+      "subtitle": "Enter opens in new tab. Ctrl+Shift+S opens the quick-search overlay. Type \"sc \" in the address bar for omnibox access.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "qs-onboarding-search",
+    "file": "SmrutiCortex quick-search onboarding 1 Serach Screenshot 2026-03-23 024224.png",
+    "alt": "Quick-search onboarding tour — search input highlighted with tooltip",
+    "sections": [],
+    "tour": {
+      "title": "Quick-Search Tour: Search",
+      "subtitle": "Press Ctrl+Shift+S on any page. Type to search your browsing history without leaving the current page.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "qs-onboarding-sort",
+    "file": "SmrutiCortex quick-search onboarding 2 Sort Screenshot 2026-03-23 025513.png",
+    "alt": "Quick-search onboarding tour — sort button highlighted with tooltip",
+    "sections": [],
+    "tour": {
+      "title": "Quick-Search Tour: Sort",
+      "subtitle": "Click the sort button to switch between Best Match, Most Recent, Most Visited, or Alphabetical results.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "qs-onboarding-ai",
+    "file": "SmrutiCortex quick-search onboarding 3 AI Status Screenshot 2026-03-23 024320.png",
+    "alt": "Quick-search onboarding tour — AI status tooltip shown below overlay",
+    "sections": [],
+    "tour": {
+      "title": "Quick-Search Tour: AI Status",
+      "subtitle": "When Ollama AI is enabled, search source badges appear: Keyword [LEXICAL], AI Cache [ENGRAM], or AI Live [NEURAL].",
+      "highlight": null,
+      "category": "ai"
+    }
+  },
+  {
+    "id": "qs-onboarding-shortcuts",
+    "file": "SmrutiCortex quick-search onboarding 4 Keyboard Shortcuts Screenshot 2026-03-23 024506.png",
+    "alt": "Quick-search onboarding tour — keyboard shortcuts footer bar highlighted",
+    "sections": [],
+    "tour": {
+      "title": "Quick-Search Tour: Shortcuts",
+      "subtitle": "Enter opens in new tab. Shift+Enter opens in background. Arrow keys navigate results. Esc closes the overlay.",
+      "highlight": null,
+      "category": "core"
+    }
+  },
+  {
+    "id": "qs-onboarding-help",
+    "file": "SmrutiCortex quick-search onboarding 5 Help Screenshot 2026-03-23 030851.png",
+    "alt": "Quick-search onboarding tour — help button highlighted with tooltip",
+    "sections": [],
+    "tour": {
+      "title": "Quick-Search Tour: Help",
+      "subtitle": "Click the \"?\" button anytime to replay the feature tour. Press Ctrl+Shift+S to open or close the overlay.",
+      "highlight": null,
+      "category": "core"
+    }
   }
 ]
