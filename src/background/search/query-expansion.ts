@@ -9,7 +9,7 @@ const logger = Logger.forComponent('QueryExpansion');
  * Format: { term: [synonyms/related words] }
  */
 const SYNONYM_MAP: { [key: string]: string[] } = {
-    // Tech terms
+    // Tech terms — abbreviations & alternative names
     'javascript': ['js', 'ecmascript', 'node', 'nodejs'],
     'typescript': ['ts'],
     'python': ['py', 'python3'],
@@ -19,51 +19,46 @@ const SYNONYM_MAP: { [key: string]: string[] } = {
     'github': ['gh', 'git'],
     'stackoverflow': ['so', 'stack overflow'],
     'documentation': ['docs', 'doc', 'reference', 'manual'],
-    'tutorial': ['guide', 'howto', 'how-to', 'learn'],
+    'tutorial': ['guide', 'howto', 'how-to'],
     'example': ['sample', 'demo', 'snippet'],
-    'error': ['bug', 'issue', 'problem', 'exception', 'failure'],
+    'error': ['bug', 'exception', 'failure'],
     'fix': ['solve', 'solution', 'resolve', 'patch'],
     'install': ['setup', 'configure', 'installation'],
-    'api': ['endpoint', 'interface', 'rest', 'graphql'],
-    'database': ['db', 'sql', 'nosql', 'storage'],
-    'config': ['configuration', 'settings', 'options'],
+    'api': ['endpoint', 'rest', 'graphql'],
+    'database': ['db', 'sql', 'nosql'],
+    'config': ['configuration', 'settings'],
     'auth': ['authentication', 'login', 'signin', 'authorization'],
-    'deploy': ['deployment', 'release', 'publish', 'ship'],
-    
+    'deploy': ['deployment', 'publish'],
+
     // Common abbreviations
     'repo': ['repository'],
     'pr': ['pull request', 'pullrequest'],
     'mr': ['merge request'],
     'ci': ['continuous integration', 'pipeline'],
     'cd': ['continuous deployment', 'continuous delivery'],
-    
-    // Media
-    'video': ['youtube', 'vimeo', 'watch'],
-    'image': ['img', 'picture', 'photo', 'graphic'],
+
+    // Media — only brand-specific synonyms, no generic words
+    'video': ['youtube', 'vimeo'],
+    'image': ['img', 'picture', 'photo'],
     'music': ['song', 'audio', 'spotify', 'soundcloud'],
-    'movie': ['film', 'cinema', 'netflix', 'stream'],
-    
+    'movie': ['film', 'cinema', 'netflix'],
+
     // Shopping/Commerce
-    'buy': ['purchase', 'order', 'shop', 'cart'],
-    'price': ['cost', 'pricing', 'rate', 'fee'],
-    'discount': ['sale', 'deal', 'offer', 'coupon'],
-    
+    'buy': ['purchase', 'shop', 'cart'],
+    'price': ['cost', 'pricing', 'fee'],
+    'discount': ['sale', 'deal', 'coupon'],
+
     // Social
-    'post': ['article', 'blog', 'tweet', 'message'],
-    'share': ['send', 'forward', 'repost'],
-    'comment': ['reply', 'response', 'feedback'],
-    
-    // Search/Navigation
-    'find': ['search', 'locate', 'discover', 'lookup'],
-    'home': ['main', 'index', 'landing'],
+    'post': ['article', 'blog', 'tweet'],
+    'comment': ['reply', 'feedback'],
+
+    // Search/Navigation — removed 'search' (too common in URLs)
+    'find': ['locate', 'discover', 'lookup'],
     'about': ['info', 'information', 'contact'],
-    
-    // Actions
-    'download': ['save', 'get', 'fetch'],
-    'upload': ['submit', 'send', 'post'],
-    'delete': ['remove', 'clear', 'erase'],
-    'edit': ['modify', 'change', 'update'],
-    'create': ['new', 'add', 'make'],
+
+    // Actions — removed entries with overly generic synonyms
+    'download': ['fetch'],
+    'delete': ['remove', 'erase'],
 };
 
 /**
