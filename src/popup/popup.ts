@@ -1634,6 +1634,8 @@ function initializePopup() {
       modal.classList.add('hidden');
       // Stop embedding progress polling
       stopEmbeddingProgressPolling();
+      // Refresh toggle bar in case configuration changed
+      renderToggleBar();
       // Re-focus search input
       const input = $('search-input') as HTMLInputElement;
       if (input) {
@@ -2375,6 +2377,38 @@ function initializePopup() {
         await SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist);
         showToast(`Blacklist updated (${blacklist.length} entries)`);
       });
+    }
+
+    // --- Toolbar tab: populate toggle checkboxes ---
+    const toolbarOptionsContainer = modal.querySelector('#toolbar-toggle-options') as HTMLDivElement;
+    if (toolbarOptionsContainer) {
+      const currentToggles = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
+      toolbarOptionsContainer.innerHTML = '';
+
+      for (const def of TOOLBAR_TOGGLE_DEFS) {
+        const isChecked = currentToggles.includes(def.key as string);
+        const label = document.createElement('label');
+        label.className = 'setting-option';
+        label.innerHTML = `
+          <input type="checkbox" data-toolbar-key="${def.key}" ${isChecked ? 'checked' : ''}>
+          <span class="option-indicator"></span>
+          <div class="option-content">
+            <strong>${def.icon} ${def.label}</strong>
+            <small>${def.tooltipOn}</small>
+          </div>
+        `;
+        const checkbox = label.querySelector('input') as HTMLInputElement;
+        checkbox.addEventListener('change', async () => {
+          const allChecked: string[] = [];
+          toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
+            if (cb.checked) allChecked.push(cb.dataset.toolbarKey!);
+          });
+          await SettingsManager.setSetting('toolbarToggles', allChecked);
+          renderToggleBar();
+          showToast(`Toolbar updated (${allChecked.length} toggle${allChecked.length !== 1 ? 's' : ''})`);
+        });
+        toolbarOptionsContainer.appendChild(label);
+      }
     }
 
     // Reset button — settings only, keep browsing index

@@ -125,6 +125,7 @@
         <button class="settings-tab" data-tab="ai" role="tab" aria-selected="false">🤖 AI</button>
         <button class="settings-tab" data-tab="privacy" role="tab" aria-selected="false">🔒 Privacy</button>
         <button class="settings-tab" data-tab="data" role="tab" aria-selected="false">💾 Data</button>
+        <button class="settings-tab" data-tab="toolbar" role="tab" aria-selected="false">🔧 Toolbar</button>
         <button class="settings-tab" data-tab="advanced" role="tab" aria-selected="false">🛠️ Advanced</button>
       </div>
       <div class="settings-content">
@@ -555,6 +556,11 @@ ollama pull nomic-embed-text:latest
               <span id="bookmark-btn-text">Bookmark This Page</span>
             </button>
           </div>
+        </div>
+        <div class="settings-section" data-tab="toolbar">
+          <h3>Quick Toggle Bar</h3>
+          <p>Choose which toggles appear in the toolbar above the search input. Check to show, uncheck to hide.</p>
+          <div class="setting-options" id="toolbar-toggle-options"></div>
         </div>
         <div class="settings-section" data-tab="advanced">
           <h3>Diagnostics & Performance</h3>
