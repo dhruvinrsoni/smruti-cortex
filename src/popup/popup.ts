@@ -477,7 +477,7 @@ function initializePopup() {
       if (showSearches) {
         const recentEntries = await getRecentSearches();
         if (recentEntries.length > 0) {
-          const section = renderRecentSearches(recentEntries.slice(0, 8));
+          const section = renderRecentSearches(recentEntries.slice(0, 5));
           resultsNode.insertBefore(section, resultsNode.firstChild);
         }
       }

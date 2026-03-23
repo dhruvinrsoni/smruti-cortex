@@ -1558,7 +1558,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (showSearches && resultsEl) {
         getRecentSearches().then(entries => {
           if (entries.length > 0 && resultsEl) {
-            const section = buildRecentSearchesSection(entries.slice(0, 8));
+            const section = buildRecentSearchesSection(entries.slice(0, 5));
             resultsEl.insertBefore(section, resultsEl.firstChild);
           }
         }).catch(() => {});
