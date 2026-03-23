@@ -33,6 +33,7 @@ import {
 
 import { type AppSettings, DisplayMode } from '../core/settings';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
+import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
 
 // Extend window interface for our extension
@@ -1506,6 +1507,56 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     return container;
   }
 
+  function buildRecentInteractionsSection(entries: Array<{ url: string; title: string; timestamp: number; action: string }>): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'recent-searches-section';
+
+    const header = document.createElement('div');
+    header.className = 'recent-searches-header';
+    const title = document.createElement('span');
+    title.className = 'recent-searches-title';
+    title.textContent = '⚡ Recently Visited';
+    header.appendChild(title);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'recent-searches-clear';
+    clearBtn.textContent = 'Clear';
+    clearBtn.title = 'Clear recently visited';
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearRecentInteractions().then(() => container.remove()).catch(() => {});
+    });
+    header.appendChild(clearBtn);
+    container.appendChild(header);
+
+    for (const entry of entries) {
+      const item = document.createElement('div');
+      item.className = 'recent-search-item';
+      item.tabIndex = 0;
+      item.title = entry.title || entry.url;
+
+      const icon = document.createElement('span');
+      icon.className = 'recent-search-icon';
+      icon.textContent = entry.action === 'copy' ? '📋' : '🔗';
+      item.appendChild(icon);
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'recent-search-query';
+      labelSpan.textContent = entry.title || entry.url;
+      item.appendChild(labelSpan);
+
+      item.addEventListener('click', () => {
+        hideOverlay();
+        window.open(entry.url, '_blank');
+      });
+      item.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') item.click();
+      });
+      container.appendChild(item);
+    }
+    return container;
+  }
+
   // Load recent history (smart default results when query is empty)
   async function loadRecentHistory(): Promise<void> {
     const t0 = performance.now();
@@ -1553,6 +1604,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       selectedIndex = -1;
       renderResults(currentResults);
+
+      // Show recently visited entries (gated by showRecentHistory)
+      if (showHistory && resultsEl) {
+        getRecentInteractions().then(entries => {
+          if (entries.length > 0 && resultsEl) {
+            const section = buildRecentInteractionsSection(entries.slice(0, 5));
+            resultsEl.insertBefore(section, resultsEl.firstChild);
+          }
+        }).catch(() => {});
+      }
 
       // Show recent searches above results when enabled
       if (showSearches && resultsEl) {
@@ -1964,6 +2025,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }).catch(() => {
       showToast('Failed to copy');
     });
+    addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
   }
 
   function copyHtmlLink(index: number): void {
@@ -1975,6 +2037,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }).catch(() => {
       showToast('Copied (text only)');
     });
+    addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
   }
 
   // ===== TAB NAVIGATION =====
@@ -2202,15 +2265,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  function openResult(index: number, newTab: boolean, _background: boolean = false): void {
+  function openResult(index: number, newTab: boolean, background: boolean = false): void {
     const result = currentResults[index];
     if (!result?.url) {return;}
 
-    // Record recent search (fire-and-forget)
     const query = inputEl?.value?.trim();
     if (query) {
       addRecentSearch(query, result.url).catch(() => {});
     }
+
+    const action = background ? 'background-tab' : 'click';
+    addRecentInteraction(result.url, result.title || '', action).catch(() => {});
 
     hideOverlay();
 

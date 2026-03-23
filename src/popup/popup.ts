@@ -9,6 +9,7 @@ import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
+import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import {
   type SearchResult,
@@ -439,6 +440,44 @@ function initializePopup() {
     return container;
   }
 
+  function renderRecentInteractionsSection(entries: Array<{ url: string; title: string; timestamp: number; action: string }>) {
+    const container = document.createElement('div');
+    container.className = 'recent-searches-section';
+
+    const header = document.createElement('div');
+    header.className = 'recent-searches-header';
+    header.innerHTML = '<span class="recent-searches-title">⚡ Recently Visited</span>';
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'recent-searches-clear';
+    clearBtn.textContent = 'Clear';
+    clearBtn.title = 'Clear recently visited';
+    clearBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await clearRecentInteractions();
+      container.remove();
+    });
+    header.appendChild(clearBtn);
+    container.appendChild(header);
+
+    for (const entry of entries) {
+      const item = document.createElement('div');
+      item.className = 'recent-search-item';
+      item.tabIndex = 0;
+      item.title = entry.title || entry.url;
+
+      const icon = entry.action === 'copy' ? '📋' : '🔗';
+      item.innerHTML = `<span class="recent-search-icon">${icon}</span><span class="recent-search-query">${entry.title || entry.url}</span>`;
+      item.addEventListener('click', () => {
+        openUrl(entry.url, true, false);
+      });
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') item.click();
+      });
+      container.appendChild(item);
+    }
+    return container;
+  }
+
   // Load default view (shown when popup opens or query is cleared)
   async function loadRecentHistory() {
     // Ensure settings are fully loaded from storage before reading toggles
@@ -473,6 +512,15 @@ function initializePopup() {
       activeIndex = -1;
       renderResults();
 
+      // Show recently visited entries (gated by showRecentHistory)
+      if (showHistory) {
+        const interactions = await getRecentInteractions();
+        if (interactions.length > 0) {
+          const section = renderRecentInteractionsSection(interactions.slice(0, 5));
+          resultsNode.insertBefore(section, resultsNode.firstChild);
+        }
+      }
+
       // Show recent searches above results when enabled
       if (showSearches) {
         const recentEntries = await getRecentSearches();
@@ -482,7 +530,6 @@ function initializePopup() {
         }
       }
 
-      // Update result count text
       if (!showHistory && !showSearches) {
         resultCountNode.textContent = 'Type to search';
       }
@@ -717,11 +764,10 @@ function initializePopup() {
     const isCtrl = (event && (event as MouseEvent).ctrlKey) || (event instanceof KeyboardEvent && event.ctrlKey);
     const isShift = (event && (event as MouseEvent).shiftKey) || (event instanceof KeyboardEvent && event.shiftKey);
 
-    // POPUP-SPECIFIC BEHAVIOR: Always open in new tab to avoid breaking current page
-    // - Plain Enter: New tab (active)
-    // - Ctrl+Enter: New tab (active) - explicit
-    // - Shift+Enter: New tab (background)
     const openInBackground = isShift && !isCtrl;
+    const action = openInBackground ? 'background-tab' : 'click';
+    addRecentInteraction(item.url, item.title || '', action).catch(() => {});
+
     openUrl(item.url, true, openInBackground);
   }
 
@@ -944,13 +990,13 @@ function initializePopup() {
       if (resultsLocal.length === 0 || currentIndex === -1) {return;}
       const item = resultsLocal[currentIndex];
       if (item) {
-        // Use shared createMarkdownLink utility
         const markdown = createMarkdownLink(item as SearchResult);
         navigator.clipboard.writeText(markdown).then(() => {
           const prev = resultCountNode.textContent;
           resultCountNode.textContent = 'Copied!';
           setTimeout(() => resultCountNode.textContent = prev, 900);
         });
+        addRecentInteraction(item.url, item.title || '', 'copy').catch(() => {});
       }
       return;
     }
@@ -960,17 +1006,16 @@ function initializePopup() {
       if (resultsLocal.length === 0 || currentIndex === -1) {return;}
       const item = resultsLocal[currentIndex];
       if (item) {
-        // Copy as rich HTML link (like MS Teams/Edge)
         copyHtmlLinkToClipboard(item as SearchResult).then(() => {
           const prev = resultCountNode.textContent;
           resultCountNode.textContent = 'Copied HTML!';
           setTimeout(() => resultCountNode.textContent = prev, 900);
         }).catch(() => {
-          // Fallback message if rich text failed but plain text succeeded
           const prev = resultCountNode.textContent;
           resultCountNode.textContent = 'Copied (text only)';
           setTimeout(() => resultCountNode.textContent = prev, 900);
         });
+        addRecentInteraction(item.url, item.title || '', 'copy').catch(() => {});
       }
       return;
     }
