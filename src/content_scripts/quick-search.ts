@@ -2349,70 +2349,104 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== GLOBAL KEYBOARD LISTENER =====
+  /**
+   * Returns true for key combos the overlay explicitly handles.
+   * Everything else (browser shortcuts, other extension shortcuts, F-keys,
+   * Alt combos, unknown Ctrl combos) passes through untouched.
+   */
+  function isOverlayKey(e: KeyboardEvent): boolean {
+    const key = e.key;
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (key === 'Escape' || key === 'Tab') return true;
+
+    // F-keys → browser (F5 reload, F12 devtools, etc.)
+    if (/^F\d{1,2}$/.test(key)) return false;
+
+    // Alt combos → browser (Alt+Left/Right = back/forward, etc.)
+    if (e.altKey) return false;
+
+    if (mod) {
+      const lk = key.toLowerCase();
+      // Ctrl+Shift+S = toggle overlay
+      if (e.shiftKey && lk === 's') return true;
+      // Ctrl+Shift+Z = redo
+      if (e.shiftKey && lk === 'z') return true;
+      // Our text-editing Ctrl shortcuts
+      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) return true;
+      // Ctrl+Backspace/Delete (word delete), Ctrl+Arrow (word jump), Ctrl+Home/End
+      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return true;
+      // Any other Ctrl/Cmd combo (Ctrl+R, Ctrl+K, Ctrl+L, Ctrl+T, Ctrl+W,
+      // Ctrl+N, Ctrl+E, Ctrl+H, Ctrl+J, Ctrl+D, Ctrl+P, Ctrl+F, Ctrl+G,
+      // Ctrl+Shift+K, Ctrl+Shift+T, Ctrl+Tab, etc.) → pass to browser
+      return false;
+    }
+
+    // Non-modifier navigation & editing keys
+    if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+         'Backspace', 'Delete', 'Home', 'End'].includes(key)) return true;
+
+    // Printable character (single char, no Ctrl/Alt/Meta)
+    if (key.length === 1) return true;
+
+    // Modifier-only presses (Shift, Control, CapsLock, etc.) — ignore
+    return false;
+  }
+
   function handleGlobalKeydown(e: KeyboardEvent): void {
-    // COMPLETE KEYBOARD TAKEOVER when overlay is visible
-    if (isOverlayVisible()) {
-      // Intercept Tab/Shift+Tab to keep focus cycling inside the overlay
-      if (e.key === 'Tab') {
-        // Prevent the browser from moving focus outside the overlay
+    if (!isOverlayVisible()) {
+      // Only handle Ctrl+Shift+S to open the overlay
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        // Route to our Tab navigation handler (Shift+Tab => backward)
-        handleTabNavigation(e.shiftKey);
-        return;
-      }
-
-      // Always handle Escape to close overlay regardless of focused element
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        hideOverlay();
-        return;
-      }
-      // Route keys based on currently focused element within the overlay
-      const focusedElement = getFocusedElement();
-
-
-      // If the input is focused, we must still prevent the underlying page from
-      // receiving the key but we need to preserve (or emulate) native input shortcuts
-      // like Ctrl+A/C/V. Prevent the event from reaching the page and route to
-      // our controlled input handler which will emulate native behaviour.
-      if (focusedElement === inputEl) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (inputEl) { handleKeyInput(e); }
-        return;
-      }
-
-      // For other overlay-focused elements (results, settings) we should intercept
-      // the key and prevent the page from handling it.
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
-      if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement.classList?.contains('result-card') || focusedElement === settingsBtn)) {
-        // Results or settings button is focused - handle navigation/action keys
-        handleKeydown(e);
-      } else {
-        // Nothing specific focused - focus input and allow typing behavior
-        if (inputEl) {
-          inputEl.focus();
-          // Do not simulate typing; let native event continue. Stop propagation so page doesn't get it.
-          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch { /* ignore */ }
-        }
+        showOverlay();
       }
       return;
     }
 
-    // Handle shortcut to open overlay
+    // Overlay is visible — only intercept keys we explicitly handle.
+    // All browser shortcuts (Ctrl+R, Ctrl+K, F5, Alt+Left, etc.) pass through.
+    if (!isOverlayKey(e)) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    if (e.key === 'Tab') {
+      handleTabNavigation(e.shiftKey);
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      hideOverlay();
+      return;
+    }
+
+    // Ctrl+Shift+S toggles overlay closed
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      showOverlay(); // showOverlay now handles all focus attempts
+      hideOverlay();
+      return;
+    }
+
+    const focusedElement = getFocusedElement();
+
+    if (focusedElement === inputEl) {
+      if (inputEl) { handleKeyInput(e); }
+      return;
+    }
+
+    if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement.classList?.contains('result-card') || focusedElement === settingsBtn)) {
+      handleKeydown(e);
+      return;
+    }
+
+    // Nothing specific focused — focus input and handle the key there
+    if (inputEl) {
+      inputEl.focus();
+      handleKeyInput(e);
     }
   }
 
