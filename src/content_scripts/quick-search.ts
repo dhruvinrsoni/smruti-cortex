@@ -35,6 +35,7 @@ import { type AppSettings, DisplayMode } from '../core/settings';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
+import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
 
 // Extend window interface for our extension
 declare global {
@@ -117,6 +118,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let spinnerEl: HTMLDivElement | null = null;
   let clearBtnEl: HTMLButtonElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
+  let toggleBarEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
   const SPINNER_TIMEOUT_MS = 15_000; // Hide spinner after 15s if no response
@@ -641,6 +643,47 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       margin-left: auto;
       opacity: 0.7;
     }
+    /* Toggle chip bar */
+    .toggle-bar {
+      display: flex;
+      gap: 6px;
+      padding: 4px 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-height: 0;
+    }
+    .toggle-bar:empty {
+      display: none;
+    }
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--bg-hover);
+      background: transparent;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+      user-select: none;
+      white-space: nowrap;
+      font-family: inherit;
+      line-height: 1.6;
+    }
+    .toggle-chip.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .toggle-chip:hover {
+      opacity: 0.85;
+    }
+    .toggle-chip .chip-icon {
+      font-size: 12px;
+    }
     .recent-searches-section {
       margin-bottom: 8px;
       border-bottom: 1px solid var(--bg-hover);
@@ -1150,7 +1193,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     });
     footer.appendChild(helpLink);
 
+    toggleBarEl = document.createElement('div');
+    toggleBarEl.className = 'toggle-bar';
+
     container.appendChild(header);
+    container.appendChild(toggleBarEl);
     container.appendChild(aiStatusBarEl);
     container.appendChild(resultsEl);
     container.appendChild(footer);
@@ -1286,7 +1333,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     selectedIndex = 0;
     
     // Await fresh settings before loading defaults so toggles are respected
-    fetchSettings().then(() => loadRecentHistory()).catch(() => loadRecentHistory());
+    fetchSettings().then(() => { renderQSToggleBar(); loadRecentHistory(); }).catch(() => loadRecentHistory());
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
     // Strategy 1: Blur active element (likely the omnibox with selected text)
@@ -1617,6 +1664,78 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       container.appendChild(item);
     }
     return container;
+  }
+
+  // --- Toggle Chip Bar for Quick-Search ---
+  function renderQSToggleBar() {
+    if (!toggleBarEl) return;
+    toggleBarEl.innerHTML = '';
+    const visibleKeys = cachedSettings?.toolbarToggles ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
+    for (const key of visibleKeys) {
+      const def = getToggleDef(key);
+      if (!def) continue;
+
+      const chip = document.createElement('button');
+      chip.className = 'toggle-chip';
+      chip.dataset.toggleKey = key;
+      chip.type = 'button';
+
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const s = cachedSettings as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (def.type === 'boolean') {
+          const cur = s?.[def.key] as boolean ?? false;
+          const next = !cur;
+          if (s) { s[def.key] = next; }
+          try {
+            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
+          } catch { /* context invalidated */ }
+        } else if (def.type === 'cycle') {
+          const cur = s?.[def.key];
+          const next = getNextCycleValue(def, cur);
+          if (s) { s[def.key] = next; }
+          try {
+            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
+          } catch { /* context invalidated */ }
+        }
+        syncQSToggleBar();
+        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
+          renderResults(currentResults);
+        } else if (inputEl?.value?.trim()) {
+          handleInput();
+        } else {
+          loadRecentHistory();
+        }
+      });
+
+      toggleBarEl.appendChild(chip);
+    }
+    syncQSToggleBar();
+  }
+
+  function syncQSToggleBar() {
+    if (!toggleBarEl) return;
+    const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
+    chips.forEach(chip => {
+      const key = chip.dataset.toggleKey;
+      if (!key) return;
+      const def = getToggleDef(key);
+      if (!def) return;
+
+      const val = (cachedSettings as any)?.[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      if (def.type === 'boolean') {
+        const isActive = Boolean(val);
+        chip.classList.toggle('active', isActive);
+        chip.title = isActive ? def.tooltipOn : def.tooltipOff;
+        chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
+      } else if (def.type === 'cycle') {
+        const cs = getCycleState(def, val);
+        chip.classList.add('active');
+        chip.title = `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
+        chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
+      }
+    });
   }
 
   // Load recent history (smart default results when query is empty)
@@ -2753,6 +2872,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         } catch { /* ignore */ }
         // Search debounce is separate from focusDelayMs
         searchDebounceMs = DEBOUNCE_MS;
+        syncQSToggleBar();
       } catch {
         // ignore
       }
