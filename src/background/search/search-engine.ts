@@ -462,6 +462,13 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             }
         }
 
+        // Dampen score for items matching fewer original tokens in title+url.
+        // Items matching 0 of N original tokens get 0.3×, 1 of 2 get 0.65×, etc.
+        if (originalTokens.length >= 2 && originalMatchedInHaystack < originalTokens.length) {
+            const matchRatio = originalMatchedInHaystack / originalTokens.length;
+            score *= 0.3 + matchRatio * 0.7;
+        }
+
         // Boost score for AI-expanded keyword matches
         if (hasAiMatch && score > 0) {
             score *= 1.2; // 20% boost for AI-discovered matches
