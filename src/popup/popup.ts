@@ -11,6 +11,8 @@ import { IndexedItem } from '../background/schema';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
+import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import type { AppSettings } from '../core/settings';
 import {
   type SearchResult,
   type FocusableGroup,
@@ -297,9 +299,80 @@ function initializePopup() {
     }, 150);
   }
 
+  // --- Toggle Chip Bar ---
+  const toggleBarEl = $local('toggle-bar') as HTMLDivElement | null;
+
+  function renderToggleBar() {
+    if (!toggleBarEl) return;
+    toggleBarEl.innerHTML = '';
+    const visibleKeys = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
+    for (const key of visibleKeys) {
+      const def = getToggleDef(key);
+      if (!def) continue;
+
+      const chip = document.createElement('button');
+      chip.className = 'toggle-chip';
+      chip.dataset.toggleKey = key;
+      chip.type = 'button';
+
+      chip.addEventListener('click', async () => {
+        if (def.type === 'boolean') {
+          const cur = SettingsManager.getSetting(def.key) as boolean;
+          await SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]);
+        } else if (def.type === 'cycle') {
+          const cur = SettingsManager.getSetting(def.key);
+          const next = getNextCycleValue(def, cur);
+          await SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]);
+          if (def.key === 'theme') {
+            applyTheme(next as 'light' | 'dark' | 'auto');
+          }
+        }
+        syncToggleBar();
+        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
+          renderResults();
+        } else if (currentQuery?.trim()) {
+          debounceSearch(currentQuery);
+        } else {
+          loadRecentHistory();
+        }
+      });
+
+      toggleBarEl.appendChild(chip);
+    }
+    syncToggleBar();
+  }
+
+  function syncToggleBar() {
+    if (!toggleBarEl) return;
+    const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
+    chips.forEach(chip => {
+      const key = chip.dataset.toggleKey as keyof AppSettings;
+      if (!key) return;
+      const def = getToggleDef(key);
+      if (!def) return;
+
+      const val = SettingsManager.getSetting(key);
+
+      if (def.type === 'boolean') {
+        const isActive = Boolean(val);
+        chip.classList.toggle('active', isActive);
+        chip.title = isActive ? def.tooltipOn : def.tooltipOff;
+        chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
+      } else if (def.type === 'cycle') {
+        const cs = getCycleState(def, val);
+        chip.classList.add('active');
+        chip.title = `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
+        chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
+      }
+    });
+  }
+
   // Pre-render empty state immediately
   renderResults();
   
+  // Render toggle bar after settings init
+  SettingsManager.init().then(() => renderToggleBar());
+
   // Load recent history on popup open (show default results)
   loadRecentHistory();
   
@@ -2863,6 +2936,7 @@ function initializePopup() {
           // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
           SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
         }
+        syncToggleBar();
         renderResults();
         sendResponse({ status: 'ok' });
       }
@@ -2879,6 +2953,7 @@ function initializePopup() {
           // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
           SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
         }
+        syncToggleBar();
         renderResults();
         sendResponse({ status: 'ok' });
       }
