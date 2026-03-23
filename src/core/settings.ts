@@ -40,6 +40,8 @@ export interface AppSettings {
     defaultResultCount?: number;  // Number of recent results to show when popup opens with no query (default: 50)
     showRecentHistory?: boolean;   // Show recent browsing history when input is empty (default: true)
     showRecentSearches?: boolean;  // Show recent search queries when input is empty (default: true)
+    // Toolbar toggle chip bar — which toggles are visible on the main screen
+    toolbarToggles?: string[];
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -162,6 +164,11 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     showRecentSearches: {
         default: true,
         validate: (val) => typeof val === 'boolean',
+    },
+
+    toolbarToggles: {
+        default: ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'],
+        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'), // eslint-disable-line @typescript-eslint/no-explicit-any
     },
 
     // Future settings (placeholders)
