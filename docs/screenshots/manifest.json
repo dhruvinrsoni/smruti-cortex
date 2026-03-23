@@ -7,7 +7,7 @@
     "tour": {
       "title": "Semantic Search",
       "subtitle": "Find pages by meaning, not just keywords. Search \"ML tutorials\" and find \"machine learning guides\". Uses local embedding models.",
-      "highlight": { "x": "2%", "y": "12%", "w": "96%", "h": "75%" },
+      "highlight": { "x": "1%", "y": "13%", "w": "97%", "h": "76%" },
       "category": "ai"
     }
   },
@@ -37,7 +37,7 @@
     "tour": {
       "title": "Match Highlighting",
       "subtitle": "Matching text is highlighted in titles and URLs so you can see exactly why each result matched your query.",
-      "highlight": { "x": "2%", "y": "12%", "w": "96%", "h": "75%" },
+      "highlight": { "x": "1%", "y": "13%", "w": "97%", "h": "76%" },
       "category": "core"
     }
   },
@@ -49,7 +49,7 @@
     "tour": {
       "title": "Lightning Search",
       "subtitle": "Results appear in under 50ms as you type. No loading spinners, no waiting.",
-      "highlight": { "x": "3%", "y": "8%", "w": "70%", "h": "10%" },
+      "highlight": { "x": "2%", "y": "12%", "w": "76%", "h": "8%" },
       "category": "core"
     }
   },
@@ -61,7 +61,7 @@
     "tour": {
       "title": "Quick-Search Overlay",
       "subtitle": "Press Ctrl+Shift+S on any webpage to search your history without leaving the page. Powered by Shadow DOM for zero style conflicts.",
-      "highlight": { "x": "5%", "y": "5%", "w": "90%", "h": "90%" },
+      "highlight": { "x": "2%", "y": "3%", "w": "96%", "h": "93%" },
       "category": "core"
     }
   },
@@ -73,7 +73,7 @@
     "tour": {
       "title": "Keyboard Shortcuts",
       "subtitle": "Navigate results with arrow keys, open with Enter, copy links with Ctrl+C or Ctrl+M. Zero mouse needed.",
-      "highlight": { "x": "3%", "y": "82%", "w": "94%", "h": "14%" },
+      "highlight": { "x": "2%", "y": "89%", "w": "96%", "h": "8%" },
       "category": "core"
     }
   },
@@ -91,7 +91,7 @@
     "tour": {
       "title": "Bookmark Search",
       "subtitle": "Search bookmarks alongside browser history. Bookmarks show a star indicator and folder path breadcrumbs.",
-      "highlight": { "x": "5%", "y": "70%", "w": "90%", "h": "15%" },
+      "highlight": { "x": "3%", "y": "22%", "w": "94%", "h": "70%" },
       "category": "ai"
     }
   },
@@ -103,7 +103,7 @@
     "tour": {
       "title": "35+ Settings",
       "subtitle": "6 settings tabs: General, Search, AI, Privacy, Data, Advanced. Customize every aspect of search behavior, display, and diagnostics.",
-      "highlight": { "x": "50%", "y": "5%", "w": "48%", "h": "90%" },
+      "highlight": { "x": "3%", "y": "8%", "w": "94%", "h": "7%" },
       "category": "advanced"
     }
   },
@@ -115,7 +115,7 @@
     "tour": {
       "title": "Vivek Search Scoring",
       "subtitle": "9-scorer ranking algorithm: recency, frequency, substring match, multi-token coverage, and more. Highlighted matches show exactly why each result ranked.",
-      "highlight": { "x": "3%", "y": "20%", "w": "94%", "h": "55%" },
+      "highlight": { "x": "3%", "y": "13%", "w": "94%", "h": "82%" },
       "category": "core"
     }
   },
@@ -127,7 +127,7 @@
     "tour": {
       "title": "AI Search (Ollama)",
       "subtitle": "Connect to your local Ollama instance for AI-powered keyword expansion. \"war\" becomes [\"war\", \"battle\", \"combat\"]. Entirely local, zero cloud calls.",
-      "highlight": { "x": "5%", "y": "40%", "w": "90%", "h": "35%" },
+      "highlight": { "x": "3%", "y": "14%", "w": "94%", "h": "48%" },
       "category": "ai"
     }
   },
@@ -139,7 +139,7 @@
     "tour": {
       "title": "Privacy Controls",
       "subtitle": "Built-in sensitive URL blacklist covers banks, password managers, and payment sites. Add your own patterns. Toggle favicon loading for full privacy.",
-      "highlight": { "x": "5%", "y": "15%", "w": "90%", "h": "50%" },
+      "highlight": { "x": "3%", "y": "14%", "w": "94%", "h": "78%" },
       "category": "privacy"
     }
   },
@@ -151,7 +151,7 @@
     "tour": {
       "title": "Data Management",
       "subtitle": "Visual storage quota bar, one-click rebuild, reset settings, clear & rebuild, or full factory reset. You own your data.",
-      "highlight": { "x": "5%", "y": "15%", "w": "90%", "h": "70%" },
+      "highlight": { "x": "3%", "y": "13%", "w": "94%", "h": "80%" },
       "category": "privacy"
     }
   },
@@ -163,7 +163,7 @@
     "tour": {
       "title": "Performance Monitor",
       "subtitle": "Real-time metrics: search count, average timing, min/max response, cache hit rate, memory usage, service worker health.",
-      "highlight": { "x": "5%", "y": "20%", "w": "90%", "h": "40%" },
+      "highlight": { "x": "12%", "y": "3%", "w": "75%", "h": "93%" },
       "category": "advanced"
     }
   },
@@ -175,7 +175,7 @@
     "tour": {
       "title": "Search Analytics",
       "subtitle": "Debug mode tracks every query. See top searches, query length distribution, scoring breakdowns. Export as JSON for bug reports.",
-      "highlight": { "x": "5%", "y": "40%", "w": "90%", "h": "45%" },
+      "highlight": { "x": "3%", "y": "48%", "w": "94%", "h": "48%" },
       "category": "advanced"
     }
   },
@@ -187,7 +187,7 @@
     "tour": {
       "title": "Display Modes",
       "subtitle": "Switch between compact list view and horizontal card view. Full tab mode for when you want the widest search experience.",
-      "highlight": { "x": "50%", "y": "15%", "w": "45%", "h": "12%" },
+      "highlight": { "x": "48%", "y": "16%", "w": "50%", "h": "14%" },
       "category": "core"
     }
   },
@@ -199,7 +199,7 @@
     "tour": {
       "title": "Omnibox Search",
       "subtitle": "Type \"sc \" in the address bar for quick search without even opening the extension. Results appear right in the browser suggestions.",
-      "highlight": { "x": "10%", "y": "5%", "w": "80%", "h": "12%" },
+      "highlight": { "x": "30%", "y": "7%", "w": "52%", "h": "8%" },
       "category": "core"
     }
   },
@@ -217,7 +217,7 @@
     "tour": {
       "title": "Popup Tour: Search",
       "subtitle": "The in-extension tour highlights each feature. Type anything in the search bar — results appear instantly as you type.",
-      "highlight": null,
+      "highlight": { "x": "1%", "y": "16%", "w": "78%", "h": "9%" },
       "category": "core"
     }
   },
@@ -229,7 +229,7 @@
     "tour": {
       "title": "Popup Tour: Sort",
       "subtitle": "Switch between Best Match, Most Recent, Most Visited, or Alphabetical sorting with the dropdown.",
-      "highlight": null,
+      "highlight": { "x": "82%", "y": "16%", "w": "17%", "h": "9%" },
       "category": "core"
     }
   },
@@ -253,7 +253,7 @@
     "tour": {
       "title": "Popup Tour: Settings",
       "subtitle": "Access all configuration: theme, search options, AI config, privacy controls, data management, and more.",
-      "highlight": null,
+      "highlight": { "x": "93%", "y": "4%", "w": "6%", "h": "8%" },
       "category": "core"
     }
   },
@@ -265,7 +265,7 @@
     "tour": {
       "title": "Popup Tour: Shortcuts",
       "subtitle": "Enter opens in new tab. Ctrl+Shift+S opens the quick-search overlay. Type \"sc \" in the address bar for omnibox access.",
-      "highlight": null,
+      "highlight": { "x": "1%", "y": "85%", "w": "98%", "h": "14%" },
       "category": "core"
     }
   },
@@ -277,7 +277,7 @@
     "tour": {
       "title": "Quick-Search Tour: Search",
       "subtitle": "Press Ctrl+Shift+S on any page. Type to search your browsing history without leaving the current page.",
-      "highlight": null,
+      "highlight": { "x": "5%", "y": "6%", "w": "70%", "h": "28%" },
       "category": "core"
     }
   },
@@ -289,7 +289,7 @@
     "tour": {
       "title": "Quick-Search Tour: Sort",
       "subtitle": "Click the sort button to switch between Best Match, Most Recent, Most Visited, or Alphabetical results.",
-      "highlight": null,
+      "highlight": { "x": "58%", "y": "12%", "w": "7%", "h": "28%" },
       "category": "core"
     }
   },
@@ -313,7 +313,7 @@
     "tour": {
       "title": "Quick-Search Tour: Shortcuts",
       "subtitle": "Enter opens in new tab. Shift+Enter opens in background. Arrow keys navigate results. Esc closes the overlay.",
-      "highlight": null,
+      "highlight": { "x": "1%", "y": "73%", "w": "98%", "h": "24%" },
       "category": "core"
     }
   },
@@ -325,7 +325,7 @@
     "tour": {
       "title": "Quick-Search Tour: Help",
       "subtitle": "Click the \"?\" button anytime to replay the feature tour. Press Ctrl+Shift+S to open or close the overlay.",
-      "highlight": null,
+      "highlight": { "x": "62%", "y": "78%", "w": "5%", "h": "18%" },
       "category": "core"
     }
   }
