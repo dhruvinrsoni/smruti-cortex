@@ -133,9 +133,24 @@ function setupEventListeners() {
   // Make results container focusable for keyboard navigation
   // Removed - individual result items should be focusable instead
 
+  const clearBtn = $('clear-input') as HTMLButtonElement | null;
+
   if (input) {
-    input.addEventListener('input', (ev) => debounceSearch((ev.target as HTMLInputElement).value));
+    input.addEventListener('input', (ev) => {
+      const val = (ev.target as HTMLInputElement).value;
+      if (clearBtn) { clearBtn.classList.toggle('visible', val.length > 0); }
+      debounceSearch(val);
+    });
     input.addEventListener('keydown', handleKeydown);
+  }
+
+  if (clearBtn && input) {
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      clearBtn.classList.remove('visible');
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    });
   }
   
   // Note: Sort dropdown handler is initialized in initializePopup() where resultsLocal is in scope
@@ -864,6 +879,8 @@ function initializePopup() {
       if (e.key === 'Escape') {
         // Don't prevent default - let Escape bubble up to close the popup
         input.value = '';
+        const clr = $('clear-input');
+        if (clr) { clr.classList.remove('visible'); }
         currentQuery = '';
         resultsLocal = [];
         activeIndex = -1;
@@ -975,6 +992,8 @@ function initializePopup() {
       if (e.key === 'Escape') {
         // Don't prevent default - let Escape bubble up to close the popup
         input.value = '';
+        const clr = $('clear-input');
+        if (clr) { clr.classList.remove('visible'); }
         currentQuery = '';
         resultsLocal = [];
         activeIndex = -1;

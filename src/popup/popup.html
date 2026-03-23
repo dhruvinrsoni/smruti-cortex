@@ -20,8 +20,12 @@
     .controls{display:flex;gap:8px;align-items:center}
     .settings-button{width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s ease;outline:none}
     .main{flex:1;display:flex;flex-direction:column;gap:8px}
-    .search-input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #12202a;background:var(--card);color:var(--text);font-size:14px;outline:none}
+    .search-input-wrapper{position:relative;flex:1;display:flex;align-items:center}
+    .search-input{width:100%;padding:10px 30px 10px 12px;border-radius:8px;border:1px solid #12202a;background:var(--card);color:var(--text);font-size:14px;outline:none}
     .search-input::placeholder{color:var(--muted)}
+    .clear-input-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:none;background:var(--muted);color:var(--card);border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:none;align-items:center;justify-content:center;padding:0;opacity:0.6;transition:opacity 0.15s}
+    .clear-input-btn:hover{opacity:1}
+    .clear-input-btn.visible{display:flex}
     .result-count-row{display:flex;align-items:center;gap:6px;min-height:18px}
     .result-count{font-size:12px;color:var(--muted)}
     .search-spinner{width:12px;height:12px;border:2px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:pop-spin 0.7s linear infinite;display:none;flex-shrink:0}
@@ -70,7 +74,10 @@
 
     <main class="main">
       <div style="display: flex; gap: 8px; align-items: center;">
-        <input id="search-input" class="search-input" placeholder="Type to search (press Esc to clear)" autofocus style="flex: 1;" />
+        <div class="search-input-wrapper">
+          <input id="search-input" class="search-input" placeholder="Type to search..." autofocus />
+          <button id="clear-input" class="clear-input-btn" type="button" title="Clear search" aria-label="Clear search">&times;</button>
+        </div>
         <select id="sort-by" class="sort-by" title="Sort results">
           <option value="best-match">Best Match</option>
           <option value="most-recent">Most Recent</option>

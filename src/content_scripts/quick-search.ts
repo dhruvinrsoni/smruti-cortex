@@ -115,6 +115,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let aiSearchPending = false; // True from handleInput until Phase 2 response arrives (or AI disabled)
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
+  let clearBtnEl: HTMLButtonElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
@@ -296,6 +297,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       flex-shrink: 0;
       object-fit: contain;
     }
+    .search-input-wrapper {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
     .search-input {
       flex: 1;
       background: transparent;
@@ -304,9 +311,35 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       font-size: 18px;
       color: var(--text-primary);
       caret-color: var(--accent-color);
+      padding-right: 24px;
     }
     .search-input::placeholder {
       color: var(--text-secondary);
+    }
+    .clear-input-btn {
+      position: absolute;
+      right: 0;
+      width: 20px;
+      height: 20px;
+      border: none;
+      background: var(--text-secondary);
+      color: var(--bg-container);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      opacity: 0.5;
+      transition: opacity 0.15s;
+    }
+    .clear-input-btn:hover {
+      opacity: 1;
+    }
+    .clear-input-btn.visible {
+      display: flex;
     }
     .sort-btn {
       background: var(--bg-kbd);
@@ -930,8 +963,30 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.placeholder = 'Search your browsing history...';
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
-    inputEl.tabIndex = 0; // Ensure focusable
-    
+    inputEl.tabIndex = 0;
+
+    clearBtnEl = document.createElement('button');
+    clearBtnEl.className = 'clear-input-btn';
+    clearBtnEl.type = 'button';
+    clearBtnEl.title = 'Clear search';
+    clearBtnEl.setAttribute('aria-label', 'Clear search');
+    clearBtnEl.textContent = '\u00d7';
+    clearBtnEl.tabIndex = -1;
+    clearBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (inputEl) {
+        inputEl.value = '';
+        clearBtnEl?.classList.remove('visible');
+        inputEl.dispatchEvent(new Event('input'));
+        inputEl.focus();
+      }
+    });
+
+    const inputWrapper = document.createElement('div');
+    inputWrapper.className = 'search-input-wrapper';
+    inputWrapper.appendChild(inputEl);
+    inputWrapper.appendChild(clearBtnEl);
+
     // Sort button (cycles through options on click)
     const sortBtn = document.createElement('button');
     sortBtn.className = 'sort-btn';
@@ -1030,7 +1085,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     spinnerEl.className = 'search-spinner';
 
     header.appendChild(logo);
-    header.appendChild(inputEl);
+    header.appendChild(inputWrapper);
     header.appendChild(spinnerEl);
     header.appendChild(sortBtn);
     header.appendChild(selectAllBadge);
@@ -1227,6 +1282,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Reset state
     inputEl.value = '';
+    if (clearBtnEl) { clearBtnEl.classList.remove('visible'); }
     currentResults = [];
     selectedIndex = 0;
     
@@ -1334,6 +1390,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== SEARCH =====
   function handleInput(): void {
+    // Toggle clear button visibility
+    if (clearBtnEl) { clearBtnEl.classList.toggle('visible', (inputEl?.value?.length ?? 0) > 0); }
+
     // Typing "?" triggers the feature tour
     const raw = inputEl?.value?.trim();
     if (raw === '?' && shadowRoot) {
