@@ -66,46 +66,18 @@ const SYNONYM_MAP: { [key: string]: string[] } = {
     'create': ['new', 'add', 'make'],
 };
 
-// Reverse map for bidirectional lookup
-const REVERSE_SYNONYM_MAP: { [key: string]: string[] } = {};
-
-// Build reverse map
-for (const [term, synonyms] of Object.entries(SYNONYM_MAP)) {
-    for (const syn of synonyms) {
-        const synLower = syn.toLowerCase();
-        if (!REVERSE_SYNONYM_MAP[synLower]) {
-            REVERSE_SYNONYM_MAP[synLower] = [];
-        }
-        if (!REVERSE_SYNONYM_MAP[synLower].includes(term)) {
-            REVERSE_SYNONYM_MAP[synLower].push(term);
-        }
-    }
-}
-
 /**
- * Expand a single term with synonyms
+ * Expand a single term with synonyms (forward-only lookup).
+ * Reverse mapping is intentionally omitted — searching "cost" should NOT
+ * expand to "price/rate/fee". That direction is the LLM's job with context.
  */
 export function expandTerm(term: string): string[] {
     const termLower = term.toLowerCase();
     const expanded: Set<string> = new Set([termLower]);
     
-    // Check forward map
     if (SYNONYM_MAP[termLower]) {
         for (const syn of SYNONYM_MAP[termLower]) {
             expanded.add(syn.toLowerCase());
-        }
-    }
-    
-    // Check reverse map
-    if (REVERSE_SYNONYM_MAP[termLower]) {
-        for (const primary of REVERSE_SYNONYM_MAP[termLower]) {
-            expanded.add(primary);
-            // Also add other synonyms of the primary term
-            if (SYNONYM_MAP[primary]) {
-                for (const syn of SYNONYM_MAP[primary]) {
-                    expanded.add(syn.toLowerCase());
-                }
-            }
         }
     }
     
@@ -170,14 +142,6 @@ export function addCustomSynonym(term: string, synonyms: string[]): void {
         const synLower = syn.toLowerCase();
         if (!SYNONYM_MAP[termLower].includes(synLower)) {
             SYNONYM_MAP[termLower].push(synLower);
-        }
-        
-        // Update reverse map
-        if (!REVERSE_SYNONYM_MAP[synLower]) {
-            REVERSE_SYNONYM_MAP[synLower] = [];
-        }
-        if (!REVERSE_SYNONYM_MAP[synLower].includes(termLower)) {
-            REVERSE_SYNONYM_MAP[synLower].push(termLower);
         }
     }
     

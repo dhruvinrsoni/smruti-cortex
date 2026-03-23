@@ -284,14 +284,16 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             }
         }
 
-        // Match against expanded tokens (includes AI-generated synonyms)
         // Include bookmark folders in searchable content
         const bookmarkFolders = item.bookmarkFolders?.join(' ') || '';
         // Use bookmark title if available, otherwise use page title
         const searchTitle = item.bookmarkTitle || item.title;
         const haystack = (searchTitle + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
+
+        // Gate inclusion on ORIGINAL tokens only — synonym/AI expansions boost score but don't gate inclusion
+        const originalTokenMatch = originalTokens.some(token => haystack.includes(token));
         const matchedTokens = searchTokens.filter(token => haystack.includes(token));
-        const hasTokenMatch = matchedTokens.length > 0;
+        const hasTokenMatch = originalTokenMatch;
 
         // Count how many ORIGINAL tokens match anywhere in the item (not expanded tokens)
         // Used as the primary sort criterion so items matching more query terms always rank higher

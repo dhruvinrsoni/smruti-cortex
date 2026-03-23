@@ -35,9 +35,10 @@ describe('expandTerm', () => {
     expect(result).toContain('ecmascript');
   });
 
-  it('should expand js (reverse map) to include javascript', () => {
+  it('should NOT reverse-expand js to javascript (forward-only lookup)', () => {
     const result = expandTerm('js');
-    expect(result).toContain('javascript');
+    expect(result).not.toContain('javascript');
+    expect(result).toContain('js');
   });
 
   it('should return array with at least the term itself for unknown words', () => {
@@ -81,9 +82,10 @@ describe('expandQuery', () => {
     expect(result[0].original).toBe('javascript');
   });
 
-  it('should expand each word via expandTerm', () => {
-    const result = expandQuery('js');
-    expect(result[0].expanded).toContain('javascript');
+  it('should expand each word via expandTerm (forward-only)', () => {
+    const result = expandQuery('javascript');
+    expect(result[0].expanded).toContain('js');
+    expect(result[0].expanded).toContain('ecmascript');
   });
 
   it('should return empty array for empty query', () => {
@@ -169,10 +171,11 @@ describe('addCustomSynonym', () => {
     expect(expanded).toContain('mcw2');
   });
 
-  it('adds reverse mapping (synonym expands to original)', () => {
+  it('does NOT add reverse mapping (forward-only by design)', () => {
     addCustomSynonym('uniqueterm123', ['ut123']);
     const expanded = expandTerm('ut123');
-    expect(expanded).toContain('uniqueterm123');
+    expect(expanded).not.toContain('uniqueterm123');
+    expect(expanded).toContain('ut123');
   });
 
   it('does not add duplicate synonyms', () => {
