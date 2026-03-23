@@ -318,25 +318,24 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     .clear-input-btn {
       position: absolute;
-      right: 0;
-      width: 20px;
-      height: 20px;
+      right: 2px;
       border: none;
-      background: var(--text-secondary);
-      color: var(--bg-container);
-      border-radius: 50%;
+      background: transparent;
+      color: #e05252;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 18px;
+      font-weight: 700;
       line-height: 1;
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 0;
-      opacity: 0.5;
-      transition: opacity 0.15s;
+      padding: 2px;
+      opacity: 0.7;
+      transition: opacity 0.15s, color 0.15s;
     }
     .clear-input-btn:hover {
       opacity: 1;
+      color: #d32f2f;
     }
     .clear-input-btn.visible {
       display: flex;
@@ -970,13 +969,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     clearBtnEl.type = 'button';
     clearBtnEl.title = 'Clear search';
     clearBtnEl.setAttribute('aria-label', 'Clear search');
-    clearBtnEl.textContent = '\u00d7';
+    clearBtnEl.textContent = '✕';
     clearBtnEl.tabIndex = -1;
     clearBtnEl.addEventListener('click', (e) => {
       e.stopPropagation();
       if (inputEl) {
         inputEl.value = '';
-        clearBtnEl?.classList.remove('visible');
+        syncClearButton();
         inputEl.dispatchEvent(new Event('input'));
         inputEl.focus();
       }
@@ -1282,7 +1281,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Reset state
     inputEl.value = '';
-    if (clearBtnEl) { clearBtnEl.classList.remove('visible'); }
+    syncClearButton();
     currentResults = [];
     selectedIndex = 0;
     
@@ -1389,9 +1388,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== SEARCH =====
-  function handleInput(): void {
-    // Toggle clear button visibility
+  function syncClearButton() {
     if (clearBtnEl) { clearBtnEl.classList.toggle('visible', (inputEl?.value?.length ?? 0) > 0); }
+  }
+
+  function handleInput(): void {
+    syncClearButton();
 
     // Typing "?" triggers the feature tour
     const raw = inputEl?.value?.trim();
@@ -1554,6 +1556,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       item.addEventListener('click', () => {
         if (inputEl) {
           inputEl.value = entry.query;
+          syncClearButton();
           inputEl.focus();
           performSearch(entry.query, true);
         }

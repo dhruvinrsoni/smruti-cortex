@@ -133,21 +133,15 @@ function setupEventListeners() {
   // Make results container focusable for keyboard navigation
   // Removed - individual result items should be focusable instead
 
-  const clearBtn = $('clear-input') as HTMLButtonElement | null;
-
   if (input) {
-    input.addEventListener('input', (ev) => {
-      const val = (ev.target as HTMLInputElement).value;
-      if (clearBtn) { clearBtn.classList.toggle('visible', val.length > 0); }
-      debounceSearch(val);
-    });
+    input.addEventListener('input', (ev) => debounceSearch((ev.target as HTMLInputElement).value));
     input.addEventListener('keydown', handleKeydown);
   }
 
+  const clearBtn = $('clear-input') as HTMLButtonElement | null;
   if (clearBtn && input) {
     clearBtn.addEventListener('click', () => {
       input.value = '';
-      clearBtn.classList.remove('visible');
       input.dispatchEvent(new Event('input'));
       input.focus();
     });
@@ -374,11 +368,20 @@ function initializePopup() {
   // Smart debounce - wait for user to stop typing before searching
   // Two-phase: Phase 1 (150ms) = instant non-AI results, Phase 2 (500ms) = AI expansion
   // Note: This is intentionally separate from focusDelayMs (which controls result auto-focus)
+  function syncClearButton() {
+    const btn = $('clear-input');
+    const inp = $('search-input') as HTMLInputElement | null;
+    if (btn) { btn.classList.toggle('visible', (inp?.value?.length ?? 0) > 0); }
+  }
+
   function debounceSearchLocal(q: string) {
+    syncClearButton();
+
     // Typing "?" triggers the feature tour
     if (q.trim() === '?') {
       const input = $('search-input') as HTMLInputElement;
       if (input) { input.value = ''; }
+      syncClearButton();
       runTour(POPUP_TOUR_STEPS, document);
       return;
     }
@@ -879,8 +882,7 @@ function initializePopup() {
       if (e.key === 'Escape') {
         // Don't prevent default - let Escape bubble up to close the popup
         input.value = '';
-        const clr = $('clear-input');
-        if (clr) { clr.classList.remove('visible'); }
+        syncClearButton();
         currentQuery = '';
         resultsLocal = [];
         activeIndex = -1;
@@ -992,8 +994,7 @@ function initializePopup() {
       if (e.key === 'Escape') {
         // Don't prevent default - let Escape bubble up to close the popup
         input.value = '';
-        const clr = $('clear-input');
-        if (clr) { clr.classList.remove('visible'); }
+        syncClearButton();
         currentQuery = '';
         resultsLocal = [];
         activeIndex = -1;
