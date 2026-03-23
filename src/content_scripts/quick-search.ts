@@ -1087,7 +1087,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     header.appendChild(inputWrapper);
     header.appendChild(spinnerEl);
     header.appendChild(sortBtn);
-    header.appendChild(selectAllBadge);
+    // header.appendChild(selectAllBadge); // hidden to reduce UI clutter for LTS
     header.appendChild(settingsBtn);
 
     // AI status bar (below header, shows AI feedback)
