@@ -688,38 +688,37 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // Fetch settings (non-blocking). This populates `cachedSettings` and adjusts debounce.
-  function fetchSettings(): void {
+  // Fetch settings from background. Returns a promise so callers can await fresh settings.
+  function fetchSettings(): Promise<void> {
     if (!chrome.runtime?.id) {
-      // Extension context invalidated
-      return;
+      return Promise.resolve();
     }
-    try {
-      chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
-        try {
-          const settings = resp?.settings || {};
-          cachedSettings = settings;
+    return new Promise<void>((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
           try {
-            updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
-          } catch { /* ignore */ }
-          try {
-            if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
-          } catch { /* ignore */ }
-          // Search debounce is intentionally separate from focusDelayMs
-          // focusDelayMs controls auto-focus to results, not search delay
-          searchDebounceMs = DEBOUNCE_MS;
-          log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
-          // Re-render results with updated display mode (popup parity)
-          if (currentResults.length > 0) {
-            try { renderResults(currentResults); } catch { /* ignore */ }
+            const settings = resp?.settings || {};
+            cachedSettings = settings;
+            try {
+              updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
+            } catch { /* ignore */ }
+            try {
+              if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
+            } catch { /* ignore */ }
+            searchDebounceMs = DEBOUNCE_MS;
+            log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
+            if (currentResults.length > 0) {
+              try { renderResults(currentResults); } catch { /* ignore */ }
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
-        }
-      });
-    } catch {
-      // ignore
-    }
+          resolve();
+        });
+      } catch {
+        resolve();
+      }
+    });
   }
 
   // ===== SERVICE WORKER PRE-WARMING =====
@@ -1222,19 +1221,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Refresh settings each time overlay is shown so UI (badge, focus behavior)
     // reflects the most recent user preferences even if the overlay was pre-created
     try {
-      // Apply cached settings immediately if available
       updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
     } catch { /* ignore */ }
-    // Then fetch latest settings asynchronously (will update badge when done)
-    fetchSettings();
     
     // Reset state
     inputEl.value = '';
     currentResults = [];
     selectedIndex = 0;
     
-    // Load recent history as smart default (instead of empty state)
-    loadRecentHistory();
+    // Await fresh settings before loading defaults so toggles are respected
+    fetchSettings().then(() => loadRecentHistory()).catch(() => loadRecentHistory());
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
     // Strategy 1: Blur active element (likely the omnibox with selected text)
