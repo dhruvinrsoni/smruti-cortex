@@ -54,8 +54,15 @@ async function getClearIndexedDB(): Promise<() => Promise<void>> { // eslint-dis
 
 declare const browser: typeof chrome | undefined;
 
-// Simple toast notification
-function showToast(message: string, isError = false, durationMs = 2000) {
+type ToastType = 'success' | 'error' | 'warning' | 'info';
+const TOAST_COLORS: Record<ToastType, string> = {
+  success: '#10b981',
+  error:   '#ef4444',
+  warning: '#f59e0b',
+  info:    '#3b82f6',
+};
+
+function showToast(message: string, type: ToastType = 'success', durationMs = 2000) {
   const toast = document.createElement('div');
   toast.textContent = message;
   toast.style.cssText = `
@@ -63,7 +70,7 @@ function showToast(message: string, isError = false, durationMs = 2000) {
     top: 12px;
     left: 50%;
     transform: translateX(-50%) translateY(-8px);
-    background: ${isError ? '#ef4444' : '#10b981'};
+    background: ${TOAST_COLORS[type]};
     color: white;
     padding: 8px 20px;
     border-radius: 8px;
@@ -1095,7 +1102,7 @@ function initializePopup() {
         navigator.clipboard.writeText(markdown).then(() => {
           showToast('📋 Copied markdown link!');
         }).catch(() => {
-          showToast('❌ Copy failed', true);
+          showToast('❌ Copy failed', 'error');
         });
         addRecentInteraction(item.url, item.title || '', 'copy').catch(() => {});
       }
@@ -1110,7 +1117,7 @@ function initializePopup() {
         copyHtmlLinkToClipboard(item as SearchResult).then(() => {
           showToast('📋 Copied HTML link!');
         }).catch(() => {
-          showToast('📋 Copied (text only)');
+          showToast('📋 Copied (text only)', 'info');
         });
         addRecentInteraction(item.url, item.title || '', 'copy').catch(() => {});
       }
@@ -1607,7 +1614,7 @@ function initializePopup() {
         navigator.clipboard.writeText(extensionURL).then(() => {
           showToast(`📋 Link copied — paste it into ${browserName} to add bookmark.`);
         }).catch(() => {
-          showToast('❌ Failed to copy URL', true);
+          showToast('❌ Failed to copy URL', 'error');
         });
       });
 
@@ -1626,7 +1633,7 @@ function initializePopup() {
 
       // Visual feedback on drag end
       bookmarkBtn.addEventListener('dragend', () => {
-        showToast(`✅ Drop it on your ${barName} to save!`);
+        showToast(`✅ Drop it on your ${barName} to save!`, 'info');
       });
     }
   }
@@ -1889,7 +1896,7 @@ function initializePopup() {
         navigator.clipboard.writeText(debugUrl).then(() => {
           showToast(`📋 Copied: ${debugUrl}\nPaste in address bar to inspect storage.`);
         }).catch(() => {
-          showToast('Open chrome://indexeddb-internals in a new tab to inspect storage');
+          showToast('Open chrome://indexeddb-internals in a new tab to inspect storage', 'info');
         });
       });
     }
@@ -1939,7 +1946,7 @@ function initializePopup() {
           const value = target.value as 'light' | 'dark' | 'auto';
           await SettingsManager.setSetting('theme', value);
           applyTheme(value);
-          showToast(`Theme set to ${value}`);
+          showToast(`Theme set to ${value}`, 'info');
         }
       });
     });
@@ -1952,7 +1959,7 @@ function initializePopup() {
         if (target.checked) {
           await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
           renderResults(); // Re-render results with new display mode
-          showToast('Display mode updated');
+          showToast('Display mode updated', 'info');
         }
       });
     });
@@ -1966,7 +1973,7 @@ function initializePopup() {
           const level = parseInt(target.value);
           await SettingsManager.setSetting('logLevel', level);
           await Logger.setLevel(level);
-          showToast('Log level updated');
+          showToast('Log level updated', 'info');
         }
       });
     });
@@ -1978,7 +1985,7 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('highlightMatches', target.checked);
         renderResults(); // Re-render results with/without highlighting
-        showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'));
+        showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
 
@@ -1991,7 +1998,7 @@ function initializePopup() {
         if (val > 2000) {val = 2000;}
         await SettingsManager.setSetting('focusDelayMs', val);
         focusDelayInput.value = String(val);
-        showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`);
+        showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`, 'info');
       });
     }
 
@@ -2001,7 +2008,7 @@ function initializePopup() {
       selectAllOnFocusInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('selectAllOnFocus', target.checked);
-        showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end');
+        showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end', 'info');
       });
     }
 
@@ -2011,7 +2018,7 @@ function initializePopup() {
       showRecentHistoryInput2.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showRecentHistory', target.checked);
-        showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled');
+        showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
     }
@@ -2022,7 +2029,7 @@ function initializePopup() {
       showRecentSearchesInput2.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showRecentSearches', target.checked);
-        showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled');
+        showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
     }
@@ -2034,7 +2041,7 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('ollamaEnabled', target.checked);
         console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
-        showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'));
+        showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
 
@@ -2045,7 +2052,7 @@ function initializePopup() {
         const val = ollamaEndpointInput.value.trim();
         if (val) {
           await SettingsManager.setSetting('ollamaEndpoint', val);
-          showToast('Ollama endpoint updated');
+          showToast('Ollama endpoint updated', 'info');
         }
       });
     }
@@ -2057,7 +2064,7 @@ function initializePopup() {
         const val = ollamaModelInput.value.trim();
         if (val) {
           await SettingsManager.setSetting('ollamaModel', val);
-          showToast(`Model set to: ${val}`);
+          showToast(`Model set to: ${val}`, 'info');
         }
       });
     }
@@ -2087,16 +2094,16 @@ function initializePopup() {
           if (models.length > 0) {
             modelSelectOptions = models.map((m: { name: string }) => ({ value: m.name }));
             if (renderModelSelectList) {renderModelSelectList();}
-            showToast(`Found ${models.length} models`);
+            showToast(`Found ${models.length} models`, 'info');
           } else {
-            showToast('No models found');
+            showToast('No models found', 'warning');
           }
         } catch (error) {
           clearTimeout(timeoutId);
           const msg = error instanceof Error && error.name === 'AbortError'
             ? 'Timed out after 5s. Is Ollama running?'
             : 'Failed to fetch models. Is Ollama running?';
-          showToast(msg);
+          showToast(msg, 'error');
           console.error('Fetch models error:', error);
         } finally {
           refreshModelsBtn.disabled = false;
@@ -2116,7 +2123,7 @@ function initializePopup() {
           // Infinite timeout (no timeout)
           await SettingsManager.setSetting('ollamaTimeout', -1);
           ollamaTimeoutInput.value = '-1';
-          showToast('Timeout disabled (infinite wait)');
+          showToast('Timeout disabled (infinite wait)', 'info');
           return;
         }
         
@@ -2125,7 +2132,7 @@ function initializePopup() {
         if (val > 120000) {val = 120000;}  // Maximum 2min
         await SettingsManager.setSetting('ollamaTimeout', val);
         ollamaTimeoutInput.value = String(val);
-        showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`);
+        showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`, 'info');
       });
     }
 
@@ -2136,9 +2143,9 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('embeddingsEnabled', target.checked);
         console.info(`[Settings] Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
-        showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'));
+        showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
         if (target.checked) {
-          showToast('⚠️ Rebuild index to generate embeddings for existing pages', true);
+          showToast('⚠️ Rebuild index to generate embeddings for existing pages', 'warning');
         }
       });
     }
@@ -2149,7 +2156,7 @@ function initializePopup() {
         const val = embeddingModelHidden.value.trim();
         if (val) {
           await SettingsManager.setSetting('embeddingModel', val);
-          showToast(`Embedding model set to: ${val}`);
+          showToast(`Embedding model set to: ${val}`, 'info');
         }
       });
     }
@@ -2177,18 +2184,18 @@ function initializePopup() {
           if (embedModels.length > 0) {
             embedSelectOptions = embedModels.map(m => ({ value: m.name }));
             if (renderEmbedSelectList) {renderEmbedSelectList();}
-            showToast(`Found ${embedModels.length} embedding model${embedModels.length > 1 ? 's' : ''}`);
+            showToast(`Found ${embedModels.length} embedding model${embedModels.length > 1 ? 's' : ''}`, 'info');
           } else if (allModels.length > 0) {
-            showToast('No embedding models found. Try: ollama pull nomic-embed-text');
+            showToast('No embedding models found. Try: ollama pull nomic-embed-text', 'warning');
           } else {
-            showToast('No models found. Is Ollama running?');
+            showToast('No models found. Is Ollama running?', 'warning');
           }
         } catch (error) {
           clearTimeout(timeoutId);
           const msg = error instanceof Error && error.name === 'AbortError'
             ? 'Timed out after 5s. Is Ollama running?'
             : 'Failed to fetch models. Is Ollama running?';
-          showToast(msg);
+          showToast(msg, 'error');
         } finally {
           refreshEmbedModelsBtn.disabled = false;
           refreshEmbedModelsBtn.textContent = '🔄';
@@ -2202,7 +2209,7 @@ function initializePopup() {
       loadFaviconsInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('loadFavicons', target.checked);
-        showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`);
+        showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`, 'info');
         renderResults(); // Re-render to apply changes immediately
       });
     }
@@ -2222,10 +2229,10 @@ function initializePopup() {
             showToast(`Cleared ${response.cleared} favicons, freed ${formatBytes(response.freedBytes)}`);
             loadFaviconCacheStats();
           } else {
-            showToast('Failed to clear favicon cache');
+            showToast('Failed to clear favicon cache', 'error');
           }
         } catch {
-          showToast('Error clearing favicon cache');
+          showToast('Error clearing favicon cache', 'error');
         }
         clearFaviconCacheBtn.disabled = false;
         clearFaviconCacheBtn.textContent = 'Clear Cache';
@@ -2252,9 +2259,9 @@ function initializePopup() {
             showToast(`Cleared embeddings from ${resp.cleared} pages`);
             loadEmbeddingStats();
           } else {
-            showToast('Failed to clear embeddings');
+            showToast('Failed to clear embeddings', 'error');
           }
-        } catch { showToast('Error clearing embeddings'); }
+        } catch { showToast('Error clearing embeddings', 'error'); }
         embeddingClearBtn.disabled = false;
         embeddingClearBtn.textContent = '🗑️ Clear Embeddings';
       });
@@ -2319,9 +2326,9 @@ function initializePopup() {
             showToast(`Cleared ${resp.cleared} cached expansions`);
             loadAICacheStats();
           } else {
-            showToast('Failed to clear AI cache');
+            showToast('Failed to clear AI cache', 'error');
           }
-        } catch { showToast('Error clearing AI cache'); }
+        } catch { showToast('Error clearing AI cache', 'error'); }
         clearAICacheBtn.disabled = false;
       });
     }
@@ -2333,11 +2340,11 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('indexBookmarks', target.checked);
         if (target.checked) {
-          showToast('Bookmarks indexing enabled. Rebuilding index...');
+          showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
           // Trigger bookmark indexing via service worker
           chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' });
         } else {
-          showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.');
+          showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.', 'info');
         }
       });
     }
@@ -2348,7 +2355,7 @@ function initializePopup() {
       showDuplicateUrlsInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showDuplicateUrls', target.checked);
-        showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`);
+        showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`, 'info');
         // Trigger re-search to apply diversity filter
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
@@ -2363,7 +2370,7 @@ function initializePopup() {
       showNonMatchingResultsInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showNonMatchingResults', target.checked);
-        showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`);
+        showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`, 'info');
         // Trigger re-search to apply strict matching
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
@@ -2379,7 +2386,7 @@ function initializePopup() {
         const val = sensitiveUrlBlacklistInput.value.trim();
         const blacklist = val ? val.split('\n').map(s => s.trim()).filter(Boolean) : [];
         await SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist);
-        showToast(`Blacklist updated (${blacklist.length} entries)`);
+        showToast(`Blacklist updated (${blacklist.length} entries)`, 'info');
       });
     }
 
@@ -2409,7 +2416,7 @@ function initializePopup() {
           });
           await SettingsManager.setSetting('toolbarToggles', allChecked);
           renderToggleBar();
-          showToast(`Toolbar updated (${allChecked.length} toggle${allChecked.length !== 1 ? 's' : ''})`);
+          showToast(`Toolbar updated (${allChecked.length} toggle${allChecked.length !== 1 ? 's' : ''})`, 'info');
         });
         toolbarOptionsContainer.appendChild(label);
       }
@@ -2441,7 +2448,7 @@ function initializePopup() {
         
         rebuildBtn.disabled = true;
         rebuildBtn.textContent = '⏳ Rebuilding...';
-        showToast('🔄 Rebuilding index... This may take a while.');
+        showToast('🔄 Rebuilding index... This may take a while.', 'info');
         
         try {
           const resp = await sendMessage({ type: 'REBUILD_INDEX' });
@@ -2450,10 +2457,10 @@ function initializePopup() {
             // Refresh storage quota display
             await fetchStorageQuotaInfo();
           } else {
-            showToast('❌ Rebuild failed: ' + (resp?.message || 'Unknown error'), true);
+            showToast('❌ Rebuild failed: ' + (resp?.message || 'Unknown error'), 'error');
           }
         } catch (error) {
-          showToast('❌ Rebuild failed', true);
+          showToast('❌ Rebuild failed', 'error');
           console.error('Rebuild error:', error);
         } finally {
           rebuildBtn.disabled = false;
@@ -2572,7 +2579,7 @@ function initializePopup() {
           const text = await file.text();
           const data = JSON.parse(text);
           if (!data.items || !Array.isArray(data.items)) {
-            showToast('Invalid file: missing items array', true);
+            showToast('Invalid file: missing items array', 'error');
             return;
           }
           if (!confirm(`Import ${data.items.length} items into your index?\n\nExisting items with the same URL will be updated.`)) {
@@ -2599,7 +2606,7 @@ function initializePopup() {
           }
         } catch (error) {
           console.error('Import error:', error);
-          showToast('Import failed: invalid JSON file', true);
+          showToast('Import failed: invalid JSON file', 'error');
         } finally {
           importBtn.disabled = false;
           importBtn.textContent = '📤 Import Index';
@@ -2623,7 +2630,7 @@ function initializePopup() {
         
         clearBtn.disabled = true;
         clearBtn.textContent = '⏳ Clearing & Rebuilding...';
-        showToast('🔄 Clearing data and rebuilding index...');
+        showToast('🔄 Clearing data and rebuilding index...', 'info');
         
         try {
           const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
@@ -2637,10 +2644,10 @@ function initializePopup() {
             activeIndex = -1;
             renderResults();
           } else {
-            showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), true);
+            showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), 'error');
           }
         } catch (error) {
-          showToast('❌ Failed to clear data', true);
+          showToast('❌ Failed to clear data', 'error');
           console.error('Clear data error:', error);
         } finally {
           clearBtn.disabled = false;
@@ -2659,7 +2666,7 @@ function initializePopup() {
 
         factoryResetBtn.disabled = true;
         factoryResetBtn.textContent = '⏳ Resetting...';
-        showToast('⚙️ Factory resetting...');
+        showToast('⚙️ Factory resetting...', 'info');
 
         try {
           // Reset settings first
@@ -2681,10 +2688,10 @@ function initializePopup() {
             renderResults();
             closeSettingsModal();
           } else {
-            showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), true);
+            showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), 'error');
           }
         } catch (error) {
-          showToast('❌ Factory reset failed', true);
+          showToast('❌ Factory reset failed', 'error');
           console.error('Factory reset error:', error);
         } finally {
           factoryResetBtn.disabled = false;
@@ -2793,10 +2800,10 @@ function initializePopup() {
             URL.revokeObjectURL(url);
             showToast('✅ Diagnostics exported!');
           } else {
-            showToast('❌ Failed to export diagnostics');
+            showToast('❌ Failed to export diagnostics', 'error');
           }
         } catch (err) {
-          showToast('❌ Error exporting diagnostics');
+          showToast('❌ Error exporting diagnostics', 'error');
           console.error('Diagnostics export error:', err);
         }
         diagBtn.disabled = false;
@@ -2852,10 +2859,10 @@ function initializePopup() {
             URL.revokeObjectURL(url);
             showToast('✅ Debug data exported!');
           } else {
-            showToast('❌ No debug data available');
+            showToast('❌ No debug data available', 'warning');
           }
         } catch (err) {
-          showToast('❌ Error exporting debug data');
+          showToast('❌ Error exporting debug data', 'error');
           console.error('Debug export error:', err);
         }
         exportDebugBtn.disabled = false;

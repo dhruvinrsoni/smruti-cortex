@@ -206,7 +206,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         loadRecentHistory();
       }
     } else {
-      showToast('Extension context not available yet — press the shortcut again to trigger re-injection.');
+      showToast('Extension context not available yet — press the shortcut again to trigger re-injection.', 'warning');
     }
   }
 
@@ -555,21 +555,29 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     .toast {
       position: fixed;
-      bottom: 20px;
+      top: 12px;
       left: 50%;
-      transform: translateX(-50%);
-      background: var(--bg-hover);
-      color: var(--text-primary);
-      padding: 8px 16px;
-      border-radius: 6px;
+      transform: translateX(-50%) translateY(-8px);
+      color: #fff;
+      padding: 8px 20px;
+      border-radius: 8px;
       font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       opacity: 0;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, transform 0.2s;
       pointer-events: none;
+      white-space: nowrap;
+      z-index: 999999;
+      background: #10b981;
     }
     .toast.show {
       opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
+    .toast.toast-error   { background: #ef4444; }
+    .toast.toast-warning { background: #f59e0b; }
+    .toast.toast-info    { background: #3b82f6; }
     .footer {
       display: flex;
       flex-wrap: wrap;
@@ -966,14 +974,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let toastTimeout: number | null = null;
   let selectAllBadge: HTMLElement | null = null;
   
-  function showToast(message: string): void {
+  function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success'): void {
     if (!toastEl) {return;}
     toastEl.textContent = message;
-    toastEl.classList.add('show');
+    toastEl.className = 'toast show' + (type !== 'success' ? ` toast-${type}` : '');
     if (toastTimeout) {clearTimeout(toastTimeout);}
     toastTimeout = window.setTimeout(() => {
-      toastEl?.classList.remove('show');
-    }, 1500);
+      if (toastEl) {
+        toastEl.classList.remove('show');
+      }
+    }, 2000);
   }
 
   function updateSelectAllBadge(enabled: boolean): void {
@@ -1880,7 +1890,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       attemptContextRecovery().then(recovered => {
         if (recovered) {
           log.info('performSearch', 'Context recovered — retrying search');
-          showToast('Extension reconnected');
+          showToast('Extension reconnected', 'success');
           performSearch(query);
         } else {
           log.error('performSearch', 'Context recovery failed after all attempts');
@@ -2013,9 +2023,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             // Attempt to reconnect
             if (isExtensionContextValid()) {
               openSearchPort();
-              showToast('Attempting reconnect...');
+              showToast('Attempting reconnect...', 'info');
             } else {
-              showToast('Extension context lost. Press the shortcut again to reconnect.');
+              showToast('Extension context lost. Press the shortcut again to reconnect.', 'error');
             }
           }
         );
@@ -2242,9 +2252,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const markdown = createMarkdownLink(result);
     
     navigator.clipboard.writeText(markdown).then(() => {
-      showToast('Copied markdown link!');
+      showToast('📋 Copied markdown link!');
     }).catch(() => {
-      showToast('Failed to copy');
+      showToast('❌ Copy failed', 'error');
     });
     addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
   }
@@ -2254,9 +2264,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (!result?.url) {return;}
     
     copyHtmlLinkToClipboard(result).then(() => {
-      showToast('Copied HTML link!');
+      showToast('📋 Copied HTML link!');
     }).catch(() => {
-      showToast('Copied (text only)');
+      showToast('📋 Copied (text only)', 'info');
     });
     addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
   }
@@ -2665,7 +2675,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (lk === 'c') {
         const sel = val.substring(start, end);
         if (sel.length > 0) {
-          try { navigator.clipboard.writeText(sel); showToast('Copied'); } catch { showToast('Copy failed'); }
+          try { navigator.clipboard.writeText(sel); showToast('📋 Copied'); } catch { showToast('Copy failed', 'error'); }
         } else if (currentResults.length > 0) {
           copyHtmlLink(selectedIndex >= 0 ? selectedIndex : 0);
         }
@@ -2695,7 +2705,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           inputEl.value = inputEl.value.substring(0, s) + text + inputEl.value.substring(ep);
           inputEl.setSelectionRange(s + text.length, s + text.length);
           triggerInputEvent();
-        }).catch(() => { showToast('Paste failed'); });
+        }).catch(() => { showToast('Paste failed', 'error'); });
         return;
       }
 
