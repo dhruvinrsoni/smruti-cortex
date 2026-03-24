@@ -190,6 +190,26 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     return false;
   }
 
+  // No-reload reconnect: re-establish port and retry search without reloading
+  // the page. After an extension update, the service worker re-injects this
+  // content script automatically (via chrome.scripting). This function handles
+  // the content-script side: reset recovery state, reopen the port, and
+  // retry the current query so the user never loses their underlying page.
+  function attemptNoReloadReconnect(): void {
+    contextRecoveryAttempts = 0;
+    if (isExtensionContextValid()) {
+      openSearchPort();
+      const query = inputEl?.value?.trim() || '';
+      if (query.length > 0) {
+        performSearch(query, true);
+      } else {
+        loadRecentHistory();
+      }
+    } else {
+      showToast('Extension context not available yet — press the shortcut again to trigger re-injection.');
+    }
+  }
+
   // Helper: Sanitize query string to prevent issues with special characters or malformed URLs
   function sanitizeQuery(query: string): string {
     if (!query) {return '';}
@@ -1485,16 +1505,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             performSearch(query, true);
           }
         } else {
-          // Show error after failed recovery attempts
           renderErrorResults(
-            '🔄 Extension was updated. Please reload this page to continue searching.',
-            () => window.location.reload()
+            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+            attemptNoReloadReconnect
           );
         }
       }).catch(() => {
         renderErrorResults(
-          '🔄 Extension was updated. Please reload this page to continue searching.',
-          () => window.location.reload()
+          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+          attemptNoReloadReconnect
         );
       });
       return;
@@ -1767,8 +1786,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('Extension context invalid - showing error');
       currentResults = [];
       renderErrorResults(
-        '🔄 Extension was updated. Please reload this page to continue.',
-        () => window.location.reload()
+        '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+        attemptNoReloadReconnect
       );
       return;
     }
@@ -1862,20 +1881,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (recovered) {
           log.info('performSearch', 'Context recovered — retrying search');
           showToast('Extension reconnected');
-          // Retry the search
           performSearch(query);
         } else {
           log.error('performSearch', 'Context recovery failed after all attempts');
           renderErrorResults(
-            '🔄 Extension was updated. Please reload this page to continue searching.',
-            () => window.location.reload()
+            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+            attemptNoReloadReconnect
           );
         }
       }).catch(() => {
         log.error('performSearch', 'Context recovery threw an error');
         renderErrorResults(
-          '🔄 Extension was updated. Please reload this page to continue searching.',
-          () => window.location.reload()
+          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+          attemptNoReloadReconnect
         );
       });
       return;
@@ -1997,7 +2015,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               openSearchPort();
               showToast('Attempting reconnect...');
             } else {
-              showToast('Extension context lost. Please reload the page.');
+              showToast('Extension context lost. Press the shortcut again to reconnect.');
             }
           }
         );
@@ -2209,7 +2227,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       tipDiv.style.marginTop = '16px';
       tipDiv.style.fontSize = '12px';
       tipDiv.style.color = 'var(--text-secondary, #666)';
-      tipDiv.textContent = 'Tip: If this persists, try reloading the page (F5) or reinstalling the extension.';
+      tipDiv.textContent = 'Tip: If this persists, press the keyboard shortcut (Ctrl+Shift+S) to trigger automatic re-injection.';
       wrapper.appendChild(tipDiv);
     }
 

@@ -108,6 +108,7 @@
         <li><strong>tabs:</strong> Query active tab and send messages to content scripts for inline overlay</li>
         <li><strong>alarms:</strong> Keep service worker alive and schedule background indexing updates</li>
         <li><strong>scripting:</strong> Re-inject the quick-search overlay into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. Used ONLY for our own content script (content_scripts/quick-search.js), never to run arbitrary code. No user data is read, collected, or sent.</li>
+        <li><strong>activeTab:</strong> Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut. Required by chrome.scripting to re-inject the content script. No background access — strictly user-initiated.</li>
         <li><strong>&lt;all_urls&gt;:</strong> (Optional) Extract metadata from pages user visits (local processing only)</li>
     </ul>
 

@@ -93,6 +93,7 @@ Use `--dry-run` to preview without making changes.
 | `tabs` | Opens results in new tabs; reads active tab URL for context |
 | `alarms` | Schedules periodic background re-indexing when browser is idle |
 | `scripting` | Re-injects our own content script (`content_scripts/quick-search.js`) into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. NEVER runs arbitrary code, NEVER reads page content. |
+| `activeTab` | Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut. Required by `chrome.scripting` to re-inject the content script. No background access — strictly user-initiated. |
 | `<all_urls>` | Optional: fetches favicons from Google API for display (no user data sent) |
 
 ### Common Rejection Reasons

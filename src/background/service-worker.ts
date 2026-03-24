@@ -48,10 +48,13 @@ function sendMessageWithTimeout<T = unknown>(tabId: number, message: unknown, ti
   });
 }
 
-// Re-inject content script into a single tab (used after extension update)
+// Re-inject content script into a single tab (used after extension update).
+// Requires "scripting" + "activeTab" permissions. activeTab is granted
+// automatically when the user presses the registered keyboard shortcut,
+// so Tier 2 re-injection works on both Chrome and Edge without broad host_permissions.
 async function reinjectContentScript(tabId: number): Promise<boolean> {
   try {
-    await chrome.scripting.executeScript({
+    await (browserAPI as typeof chrome).scripting.executeScript({
       target: { tabId },
       files: ['content_scripts/quick-search.js'],
     });

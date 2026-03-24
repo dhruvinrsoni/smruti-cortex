@@ -216,6 +216,7 @@ You have full control to:
 - `tabs`: Query active tab and send messages to content scripts
 - `alarms`: Keep service worker alive for background indexing
 - `scripting`: Re-inject the quick-search overlay into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. Used ONLY for our own content script (`content_scripts/quick-search.js`), never to run arbitrary code. No user data is read, collected, or sent.
+- `activeTab`: Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut. Required by `chrome.scripting` to re-inject the content script after an extension update. No background access — strictly user-initiated.
 
 **8. Open Source**
 
@@ -251,6 +252,7 @@ Chrome requires explaining why each permission is needed:
 | `tabs` | **Required** to query active tab and send messages to content scripts for inline overlay |
 | `alarms` | **Required** to keep service worker alive and schedule background indexing updates |
 | `scripting` | **Required** for zero-downtime extension updates. After Chrome/Edge auto-updates the extension, manifest-declared content scripts in already-open tabs become stale — the keyboard shortcut stops working until the user manually reloads every tab. The `scripting` permission lets us re-inject our own content script (`content_scripts/quick-search.js`) into those tabs so the shortcut keeps working instantly. We ONLY inject our own bundled file, NEVER run arbitrary code, and NEVER read or collect any page content. |
+| `activeTab` | **Required** as a companion to `scripting`. Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut (Ctrl+Shift+S). This allows `chrome.scripting.executeScript` to inject into the active tab without requiring broad host permissions. No background access — strictly user-initiated. |
 | `<all_urls>` (optional) | **Optional permission** - Users can optionally grant this to enable metadata extraction (page titles, keywords) for improved search relevance. This feature is OFF by default and must be enabled in Settings. The extension works fully without this permission. |
 
 ### Single Purpose Justification
@@ -291,7 +293,7 @@ Everything serves ONE goal: Find pages in your history faster.
 - ✅ Faster Chrome Store approval (no "Broad Host Permissions" warning)
 
 **User Experience:**
-1. Extension installs with minimal permissions (history, bookmarks, storage, tabs, alarms, scripting)
+1. Extension installs with minimal permissions (history, bookmarks, storage, tabs, alarms, scripting, activeTab)
 2. Search works instantly with browser history data
 3. Users can enable "Enhanced Metadata" in Settings (requires granting optional permission)
 4. Once granted, extension extracts titles/keywords from visited pages for better search
@@ -510,6 +512,7 @@ The extension requires these permissions for core functionality:
 - **tabs:** Query active tab and send messages to content scripts for inline overlay
 - **alarms:** Keep service worker alive and schedule background indexing updates
 - **scripting:** Re-inject the quick-search overlay into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. Used ONLY for our own content script (`content_scripts/quick-search.js`), never to run arbitrary code. No user data is read, collected, or sent.
+- **activeTab:** Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut. Required by `chrome.scripting` to re-inject the content script. No background access — strictly user-initiated.
 - **<all_urls>:** (Optional) Extract metadata from pages user visits (local processing only)
 
 #### 8. Third-Party Data Sharing
