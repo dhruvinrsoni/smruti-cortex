@@ -76,8 +76,10 @@ async function createZip() {
 
     archive.pipe(output);
     
-    // Add all files from dist/ directory
-    archive.directory(distDir, false);
+    archive.glob('**/*', {
+      cwd: distDir,
+      ignore: ['_*', '_*/**']
+    });
     
     archive.finalize();
   });
@@ -86,6 +88,7 @@ async function createZip() {
 function getAllFiles(dir, files = []) {
   const entries = readdirSync(dir);
   for (const entry of entries) {
+    if (entry.startsWith('_')) continue;
     const fullPath = join(dir, entry);
     if (statSync(fullPath).isDirectory()) {
       getAllFiles(fullPath, files);
