@@ -55,29 +55,37 @@ async function getClearIndexedDB(): Promise<() => Promise<void>> { // eslint-dis
 declare const browser: typeof chrome | undefined;
 
 // Simple toast notification
-function showToast(message: string, isError = false) {
+function showToast(message: string, isError = false, durationMs = 2000) {
   const toast = document.createElement('div');
   toast.textContent = message;
   toast.style.cssText = `
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
     background: ${isError ? '#ef4444' : '#10b981'};
     color: white;
-    padding: 8px 16px;
-    border-radius: 4px;
+    padding: 8px 20px;
+    border-radius: 8px;
     z-index: 10000;
-    font-size: 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    white-space: nowrap;
   `;
   document.body.appendChild(toast);
-  requestAnimationFrame(() => toast.style.opacity = '1');
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+  });
   setTimeout(() => {
     toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+    toast.style.transform = 'translateX(-50%) translateY(-8px)';
+    setTimeout(() => toast.remove(), 200);
+  }, durationMs);
 }
 
 // Fast initialization - prioritize speed over logging
@@ -1085,9 +1093,9 @@ function initializePopup() {
       if (item) {
         const markdown = createMarkdownLink(item as SearchResult);
         navigator.clipboard.writeText(markdown).then(() => {
-          const prev = resultCountNode.textContent;
-          resultCountNode.textContent = 'Copied!';
-          setTimeout(() => resultCountNode.textContent = prev, 900);
+          showToast('📋 Copied markdown link!');
+        }).catch(() => {
+          showToast('❌ Copy failed', true);
         });
         addRecentInteraction(item.url, item.title || '', 'copy').catch(() => {});
       }
@@ -1100,13 +1108,9 @@ function initializePopup() {
       const item = resultsLocal[currentIndex];
       if (item) {
         copyHtmlLinkToClipboard(item as SearchResult).then(() => {
-          const prev = resultCountNode.textContent;
-          resultCountNode.textContent = 'Copied HTML!';
-          setTimeout(() => resultCountNode.textContent = prev, 900);
+          showToast('📋 Copied HTML link!');
         }).catch(() => {
-          const prev = resultCountNode.textContent;
-          resultCountNode.textContent = 'Copied (text only)';
-          setTimeout(() => resultCountNode.textContent = prev, 900);
+          showToast('📋 Copied (text only)');
         });
         addRecentInteraction(item.url, item.title || '', 'copy').catch(() => {});
       }
