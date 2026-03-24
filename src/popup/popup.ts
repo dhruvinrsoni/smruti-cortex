@@ -2433,7 +2433,7 @@ function initializePopup() {
           sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }).catch(() => {});
           closeSettingsModal();
           renderResults();
-          showToast('Settings reset to defaults');
+          showToast('Settings reset to defaults', 'info');
         }
       });
     }
@@ -2487,10 +2487,12 @@ function initializePopup() {
             if (total === 0) {
               manualIndexFeedback.textContent = '✓ No new pages to index';
               manualIndexFeedback.className = 'index-feedback success';
+              showToast('✅ Index is up to date', 'info');
             } else {
               const durationSec = (duration / 1000).toFixed(1);
               manualIndexFeedback.textContent = `✓ Indexed ${total} page${total > 1 ? 's' : ''} (${added} new, ${updated} updated) in ${durationSec}s`;
               manualIndexFeedback.className = 'index-feedback success';
+              showToast(`✅ Indexed ${total} page${total > 1 ? 's' : ''}`);
               
               // Refresh storage quota display
               await fetchStorageQuotaInfo();
@@ -2498,10 +2500,12 @@ function initializePopup() {
           } else {
             manualIndexFeedback.textContent = '✗ Indexing failed: ' + (resp?.message || 'Unknown error');
             manualIndexFeedback.className = 'index-feedback error';
+            showToast('❌ Indexing failed', 'error');
           }
         } catch (error) {
           manualIndexFeedback.textContent = '✗ Indexing failed';
           manualIndexFeedback.className = 'index-feedback error';
+          showToast('❌ Indexing failed', 'error');
           console.error('Manual index error:', error);
         } finally {
           manualIndexBtn.disabled = false;
@@ -2541,11 +2545,13 @@ function initializePopup() {
               exportImportFeedback.textContent = `✓ Exported ${resp.data.itemCount} items`;
               exportImportFeedback.className = 'index-feedback success';
             }
+            showToast(`✅ Exported ${resp.data.itemCount} items`);
           } else {
             if (exportImportFeedback) {
               exportImportFeedback.textContent = '✗ Export failed: ' + (resp?.message || 'Unknown error');
               exportImportFeedback.className = 'index-feedback error';
             }
+            showToast('❌ Export failed', 'error');
           }
         } catch (error) {
           console.error('Export error:', error);
@@ -2553,6 +2559,7 @@ function initializePopup() {
             exportImportFeedback.textContent = '✗ Export failed';
             exportImportFeedback.className = 'index-feedback error';
           }
+          showToast('❌ Export failed', 'error');
         } finally {
           exportBtn.disabled = false;
           exportBtn.textContent = '📥 Export Index';
@@ -2597,12 +2604,14 @@ function initializePopup() {
               exportImportFeedback.textContent = `✓ Imported ${resp.imported} items` + (resp.skipped > 0 ? ` (${resp.skipped} skipped)` : '');
               exportImportFeedback.className = 'index-feedback success';
             }
+            showToast(`✅ Imported ${resp.imported} items`);
             await fetchStorageQuotaInfo();
           } else {
             if (exportImportFeedback) {
               exportImportFeedback.textContent = '✗ Import failed: ' + (resp?.message || 'Unknown error');
               exportImportFeedback.className = 'index-feedback error';
             }
+            showToast('❌ Import failed', 'error');
           }
         } catch (error) {
           console.error('Import error:', error);
@@ -2827,7 +2836,7 @@ function initializePopup() {
           type: 'SET_SEARCH_DEBUG_ENABLED',
           enabled: searchDebugCheckbox.checked,
         });
-        showToast(searchDebugCheckbox.checked ? '✅ Debug mode enabled' : '🔇 Debug mode disabled');
+        showToast(searchDebugCheckbox.checked ? '✅ Debug mode enabled' : '🔇 Debug mode disabled', 'info');
       });
     }
 
@@ -2876,7 +2885,7 @@ function initializePopup() {
       clearDebugBtn.addEventListener('click', async () => {
         if (confirm('Are you sure you want to clear all search debug history?')) {
           await sendMessage({ type: 'CLEAR_SEARCH_DEBUG' });
-          showToast('🗑️ Debug history cleared');
+          showToast('🗑️ Debug history cleared', 'info');
         }
       });
     }
