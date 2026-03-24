@@ -50,6 +50,10 @@ console.log(`bookmarks   — Merges bookmarks into search results alongside hist
 console.log(`storage     — Persists search index (IndexedDB), settings, and favicon cache locally`);
 console.log(`tabs        — Opens results in new tabs; reads active tab URL for context`);
 console.log(`alarms      — Schedules periodic background re-indexing when browser is idle`);
+console.log(`scripting   — Re-injects the quick-search overlay into already-open tabs after an extension`);
+console.log(`              update so the keyboard shortcut keeps working without a page reload.`);
+console.log(`              Used ONLY for our own content script (content_scripts/quick-search.js),`);
+console.log(`              NEVER to run arbitrary code. No user data is read, collected, or sent.`);
 console.log(`<all_urls>  — Optional host permission for fetching favicons from Google API (display only)`);
 
 console.log('\n' + '-'.repeat(60));
@@ -57,6 +61,7 @@ console.log('\n🔒 PRIVACY SUMMARY:\n');
 console.log(`- All data stays local (IndexedDB in extension storage)`);
 console.log(`- No browsing data sent to any server`);
 console.log(`- AI features use local Ollama models only (opt-in)`);
+console.log(`- scripting used ONLY to re-inject our own content script after updates — never arbitrary code`);
 console.log(`- <all_urls> used only for favicon images, never for data collection`);
 console.log(`- Privacy policy: https://dhruvinrsoni.github.io/smruti-cortex/privacy.html`);
 

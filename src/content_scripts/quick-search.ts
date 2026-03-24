@@ -1,15 +1,21 @@
 /**
- * quick-search.ts
- * Ultra-fast inline search overlay that bypasses service worker wake-up delays.
- * 
- * Architecture: Uses shared search-ui-base.ts for DRY compliance.
- * Performance Optimizations:
- * - Shadow DOM for complete style isolation (no CSS conflicts)
- * - CSS containment for faster rendering
- * - Port-based messaging for faster search-as-you-type
- * - Service worker pre-warming on visibility change
- * - Early overlay pre-creation
- * - Performance timing logs at debug level
+ * quick-search.ts — SmrutiCortex In-Page Search Overlay
+ *
+ * The modern face of SmrutiCortex: an instant, full-featured search overlay
+ * injected directly into every web page. Activates via keyboard shortcut
+ * without leaving the current tab — faster than any popup.
+ *
+ * Key architectural decisions:
+ *   - Closed Shadow DOM: complete style isolation from any host page CSS
+ *   - Port-based messaging: persistent connection to the service worker for
+ *     real-time search-as-you-type without per-message handshake overhead
+ *   - MHTML-safe: overlay detaches from DOM when hidden, so browser "Save As"
+ *     and print never capture extension UI into saved pages
+ *   - Zero-downtime updates: survives extension reloads via automatic
+ *     re-injection from the service worker (see service-worker.ts Tier 2)
+ *   - Graceful degradation: if injection fails on a restricted page, the
+ *     service worker falls back to the classic popup — the user never sees
+ *     an error, only a slightly different (but fully functional) UI
  */
 
 /* eslint-disable no-inner-declarations */
@@ -44,12 +50,22 @@ declare global {
   }
 }
 
-// Prevent double-injection
+// Prevent double-injection within the same extension lifecycle.
+// After an extension update, Chrome destroys the old isolated world and
+// creates a fresh one, so this flag resets automatically — allowing the
+// service worker to re-inject us via chrome.scripting.executeScript()
+// without a page reload. See service-worker.ts "Zero-Downtime" comments.
 if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   window.__SMRUTI_QUICK_SEARCH_LOADED__ = true;
 
   // ===== CONFIGURATION =====
   const OVERLAY_ID = 'smruti-cortex-overlay';
+
+  // Clean up any stale overlay left by a previous extension version.
+  // The old content script's shadow host may linger in the DOM after
+  // an extension update — remove it so the new overlay initializes cleanly.
+  const staleOverlay = document.getElementById(OVERLAY_ID);
+  if (staleOverlay) { staleOverlay.remove(); }
   const DEBOUNCE_MS = 150; // Wait for user to pause typing before searching (prevents flicker)
   const MAX_RESULTS = 15;
   
@@ -658,8 +674,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     .toggle-chip {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 2px 10px;
+      gap: 3px;
+      padding: 2px 8px;
       border-radius: 12px;
       font-size: 11px;
       font-weight: 600;
@@ -667,19 +683,22 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       border: 1px solid var(--bg-hover);
       background: transparent;
       color: var(--text-secondary);
-      transition: all 0.2s ease;
+      transition: all 0.18s ease;
       user-select: none;
       white-space: nowrap;
       font-family: inherit;
-      line-height: 1.6;
-    }
-    .toggle-chip.active {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
+      line-height: 1.5;
+      opacity: 0.5;
     }
     .toggle-chip:hover {
-      opacity: 0.85;
+      opacity: 0.75;
+    }
+    .toggle-chip.active {
+      background: var(--accent-color);
+      color: #fff;
+      border-color: var(--accent-color);
+      opacity: 1;
+      box-shadow: 0 0 8px rgba(13, 110, 253, 0.4);
     }
     .toggle-chip .chip-icon {
       font-size: 12px;
@@ -2132,19 +2151,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function renderErrorResults(message: string, reconnect?: () => void): void {
     if (!resultsEl) {return;}
     
-    // Clear existing results
     while (resultsEl.firstChild) {
       resultsEl.removeChild(resultsEl.firstChild);
     }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.padding = '20px';
+    wrapper.style.textAlign = 'center';
 
     const errorDiv = document.createElement('div');
     errorDiv.className = 'empty';
     errorDiv.textContent = message;
     errorDiv.style.color = 'var(--text-danger, #ef4444)';
-    errorDiv.style.padding = '20px';
-    errorDiv.style.textAlign = 'center';
     errorDiv.style.lineHeight = '1.5';
-    resultsEl.appendChild(errorDiv);
+    wrapper.appendChild(errorDiv);
     
     if (reconnect) {
       const btn = document.createElement('button');
@@ -2158,7 +2181,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       btn.style.cursor = 'pointer';
       btn.style.fontSize = '14px';
       btn.style.fontWeight = '500';
-      btn.style.display = 'inline-block';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (btn.disabled) {return;}
@@ -2167,7 +2189,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           btn.textContent = '⏳ Reconnecting...';
           btn.style.opacity = '0.6';
           reconnect();
-          // Re-enable after a delay if still showing
           setTimeout(() => {
             if (btn.parentElement) {
               btn.disabled = false;
@@ -2182,16 +2203,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           log.error('reconnect', 'Reconnect failed:', (err as Error).message);
         }
       });
-      resultsEl.appendChild(btn);
+      wrapper.appendChild(btn);
       
-      // Add helpful tip
       const tipDiv = document.createElement('div');
       tipDiv.style.marginTop = '16px';
       tipDiv.style.fontSize = '12px';
       tipDiv.style.color = 'var(--text-secondary, #666)';
       tipDiv.textContent = 'Tip: If this persists, try reloading the page (F5) or reinstalling the extension.';
-      resultsEl.appendChild(tipDiv);
+      wrapper.appendChild(tipDiv);
     }
+
+    resultsEl.appendChild(wrapper);
   }
 
   // ===== COPY TO CLIPBOARD (using shared utility) =====

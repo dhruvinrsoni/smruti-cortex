@@ -92,6 +92,7 @@ Use `--dry-run` to preview without making changes.
 | `storage` | Persists search index (IndexedDB), settings, and favicon cache locally |
 | `tabs` | Opens results in new tabs; reads active tab URL for context |
 | `alarms` | Schedules periodic background re-indexing when browser is idle |
+| `scripting` | Re-injects our own content script (`content_scripts/quick-search.js`) into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. NEVER runs arbitrary code, NEVER reads page content. |
 | `<all_urls>` | Optional: fetches favicons from Google API for display (no user data sent) |
 
 ### Common Rejection Reasons

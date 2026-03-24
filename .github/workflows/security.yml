@@ -156,7 +156,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Check for sensitive permissions
-          SENSITIVE_PERMS=$(echo "$PERMISSIONS" | grep -E "(tabs|cookies|webRequest|proxy|management)" || true)
+          SENSITIVE_PERMS=$(echo "$PERMISSIONS" | grep -E "(tabs|cookies|webRequest|proxy|management|scripting)" || true)
           if [ -n "$SENSITIVE_PERMS" ]; then
             echo "⚠️ **Sensitive permissions detected:**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY

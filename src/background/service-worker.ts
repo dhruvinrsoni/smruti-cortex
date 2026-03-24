@@ -1,4 +1,14 @@
 // service-worker.ts — Core brain of SmrutiCortex
+//
+// === Zero-Downtime Extension Updates ===
+// SmrutiCortex uses a 3-tier keyboard shortcut strategy that ensures the
+// extension NEVER feels broken — even mid-update:
+//   1. Try the in-page quick-search overlay (fastest, most modern UX)
+//   2. If the content script is stale after an extension update, re-inject
+//      it on-the-fly via chrome.scripting and retry (seamless recovery)
+//   3. If injection isn't possible (restricted page, permissions), gracefully
+//      fall back to the classic popup (always works, zero failures)
+// The user never sees an error. They either get quick-search or the popup.
 
 import { openDatabase, getStorageQuotaInfo, setForceRebuildFlag, getForceRebuildFlag, getAllIndexedItems, saveIndexedItem } from './database';
 import { ingestHistory, performFullRebuild } from './indexing';
@@ -38,6 +48,19 @@ function sendMessageWithTimeout<T = unknown>(tabId: number, message: unknown, ti
   });
 }
 
+// Re-inject content script into a single tab (used after extension update)
+async function reinjectContentScript(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content_scripts/quick-search.js'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function registerCommandsListenerEarly() {
   if (commandsListenerRegistered) {return;}
   if (browserAPI.commands && browserAPI.commands.onCommand && typeof browserAPI.commands.onCommand.addListener === 'function') {
@@ -46,38 +69,54 @@ function registerCommandsListenerEarly() {
         const t0 = performance.now();
         logger.debug('onCommand', '🚀 Keyboard shortcut triggered');
         
-        // Send message to content script to open inline overlay (FASTER than popup)
         try {
           const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
           if (tab?.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://') && !tab.url.startsWith('about:') && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('moz-extension://')) {
+
+            // --- Tier 1: Try existing content script ---
             try {
-              // Try to send message to existing content script (auto-injected via manifest)
-              // Use timeout to avoid hanging if content script is unresponsive
               const response = await sendMessageWithTimeout<{ success?: boolean }>(tab.id, { type: 'OPEN_INLINE_SEARCH' }, 300);
               if (response?.success) {
-                logger.debug('onCommand', `✅ Inline overlay opened in ${(performance.now() - t0).toFixed(1)}ms`);
-                return; // Success - don't continue
+                logger.debug('onCommand', `✅ Quick-search opened in ${(performance.now() - t0).toFixed(1)}ms`);
+                return;
               }
-              // Response received but not successful - fall through to popup
-              throw new Error('Content script returned unsuccessful response');
-            } catch (msgError) {
-              // Content script not available on this page - fall through to popup
-              logger.debug('onCommand', 'Content script not available, using popup', { error: (msgError as Error).message });
-              throw msgError; // Re-throw to trigger popup fallback
+            } catch {
+              // Content script stale or missing — continue to Tier 2
             }
+
+            // --- Tier 2: Re-inject content script and retry ---
+            // After an extension update, the old content script's runtime context is
+            // invalidated. Re-inject a fresh copy and try once more before giving up.
+            try {
+              const injected = await reinjectContentScript(tab.id);
+              if (injected) {
+                await new Promise(r => setTimeout(r, 150));
+                const retryResponse = await sendMessageWithTimeout<{ success?: boolean }>(tab.id, { type: 'OPEN_INLINE_SEARCH' }, 400);
+                if (retryResponse?.success) {
+                  logger.info('onCommand', `✅ Quick-search opened after re-injection in ${(performance.now() - t0).toFixed(1)}ms`);
+                  return;
+                }
+              }
+            } catch {
+              // Re-injection or retry failed — continue to Tier 3
+            }
+
+            // --- Tier 3: Popup fallback (always works) ---
+            logger.info('onCommand', 'Quick-search unavailable, opening popup');
+            await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
+            logger.info('onCommand', `✅ Popup opened (fallback) in ${(performance.now() - t0).toFixed(1)}ms`);
+
           } else {
-            // Special page (chrome://, edge://, about:, extension page) - use popup
+            // Special page (chrome://, edge://, about:) — popup is the only option
             logger.info('onCommand', `Special page detected (${tab?.url?.slice(0, 30)}...), using popup`);
             await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
             logger.info('onCommand', `✅ Popup opened in ${(performance.now() - t0).toFixed(1)}ms`);
           }
         } catch (e) {
-          // Content script not loaded or page doesn't support it - fallback to popup
           const errorMsg = (e as Error).message || 'Unknown error';
-          logger.info('onCommand', `Inline failed (${errorMsg}), falling back to popup`);
+          logger.info('onCommand', `All tiers failed (${errorMsg}), last-resort popup`);
           try {
             await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
-            logger.info('onCommand', `✅ Popup opened (fallback) in ${(performance.now() - t0).toFixed(1)}ms`);
           } catch {
             // Ignore - best effort
           }
@@ -877,5 +916,25 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
     if (!initialized) {
         await init();
+    }
+
+    // === Proactive Content Script Re-injection ===
+    // Chrome/Edge do NOT re-inject manifest-declared content scripts into
+    // already-open tabs after an extension update. This leaves quick-search
+    // broken until the user manually reloads each page. We fix that here by
+    // programmatically re-injecting into all eligible tabs so quick-search
+    // works instantly — no page reload needed.
+    if (details.reason === 'update' || details.reason === 'install') {
+        try {
+            const tabs = await browserAPI.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+            let injected = 0;
+            for (const tab of tabs) {
+                if (!tab.id) continue;
+                if (await reinjectContentScript(tab.id)) injected++;
+            }
+            logger.info('onInstalled', `🔄 Re-injected quick-search into ${injected}/${tabs.length} open tabs`);
+        } catch (e) {
+            logger.warn('onInstalled', 'Content script re-injection failed', { error: (e as Error).message });
+        }
     }
 });

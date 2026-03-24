@@ -107,6 +107,7 @@
         <li><strong>storage:</strong> Save settings and indexed data locally</li>
         <li><strong>tabs:</strong> Query active tab and send messages to content scripts for inline overlay</li>
         <li><strong>alarms:</strong> Keep service worker alive and schedule background indexing updates</li>
+        <li><strong>scripting:</strong> Re-inject the quick-search overlay into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. Used ONLY for our own content script (content_scripts/quick-search.js), never to run arbitrary code. No user data is read, collected, or sent.</li>
         <li><strong>&lt;all_urls&gt;:</strong> (Optional) Extract metadata from pages user visits (local processing only)</li>
     </ul>
 
