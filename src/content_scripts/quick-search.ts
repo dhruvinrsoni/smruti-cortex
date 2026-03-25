@@ -1,15 +1,21 @@
 /**
- * quick-search.ts
- * Ultra-fast inline search overlay that bypasses service worker wake-up delays.
- * 
- * Architecture: Uses shared search-ui-base.ts for DRY compliance.
- * Performance Optimizations:
- * - Shadow DOM for complete style isolation (no CSS conflicts)
- * - CSS containment for faster rendering
- * - Port-based messaging for faster search-as-you-type
- * - Service worker pre-warming on visibility change
- * - Early overlay pre-creation
- * - Performance timing logs at debug level
+ * quick-search.ts — SmrutiCortex In-Page Search Overlay
+ *
+ * The modern face of SmrutiCortex: an instant, full-featured search overlay
+ * injected directly into every web page. Activates via keyboard shortcut
+ * without leaving the current tab — faster than any popup.
+ *
+ * Key architectural decisions:
+ *   - Closed Shadow DOM: complete style isolation from any host page CSS
+ *   - Port-based messaging: persistent connection to the service worker for
+ *     real-time search-as-you-type without per-message handshake overhead
+ *   - MHTML-safe: overlay detaches from DOM when hidden, so browser "Save As"
+ *     and print never capture extension UI into saved pages
+ *   - Zero-downtime updates: survives extension reloads via automatic
+ *     re-injection from the service worker (see service-worker.ts Tier 2)
+ *   - Graceful degradation: if injection fails on a restricted page, the
+ *     service worker falls back to the classic popup — the user never sees
+ *     an error, only a slightly different (but fully functional) UI
  */
 
 /* eslint-disable no-inner-declarations */
@@ -33,7 +39,9 @@ import {
 
 import { type AppSettings, DisplayMode } from '../core/settings';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
+import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
+import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
 
 // Extend window interface for our extension
 declare global {
@@ -42,12 +50,22 @@ declare global {
   }
 }
 
-// Prevent double-injection
+// Prevent double-injection within the same extension lifecycle.
+// After an extension update, Chrome destroys the old isolated world and
+// creates a fresh one, so this flag resets automatically — allowing the
+// service worker to re-inject us via chrome.scripting.executeScript()
+// without a page reload. See service-worker.ts "Zero-Downtime" comments.
 if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   window.__SMRUTI_QUICK_SEARCH_LOADED__ = true;
 
   // ===== CONFIGURATION =====
   const OVERLAY_ID = 'smruti-cortex-overlay';
+
+  // Clean up any stale overlay left by a previous extension version.
+  // The old content script's shadow host may linger in the DOM after
+  // an extension update — remove it so the new overlay initializes cleanly.
+  const staleOverlay = document.getElementById(OVERLAY_ID);
+  if (staleOverlay) { staleOverlay.remove(); }
   const DEBOUNCE_MS = 150; // Wait for user to pause typing before searching (prevents flicker)
   const MAX_RESULTS = 15;
   
@@ -114,7 +132,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let aiSearchPending = false; // True from handleInput until Phase 2 response arrives (or AI disabled)
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
+  let clearBtnEl: HTMLButtonElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
+  let toggleBarEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
   const SPINNER_TIMEOUT_MS = 15_000; // Hide spinner after 15s if no response
@@ -168,6 +188,26 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     
     return false;
+  }
+
+  // No-reload reconnect: re-establish port and retry search without reloading
+  // the page. After an extension update, the service worker re-injects this
+  // content script automatically (via chrome.scripting). This function handles
+  // the content-script side: reset recovery state, reopen the port, and
+  // retry the current query so the user never loses their underlying page.
+  function attemptNoReloadReconnect(): void {
+    contextRecoveryAttempts = 0;
+    if (isExtensionContextValid()) {
+      openSearchPort();
+      const query = inputEl?.value?.trim() || '';
+      if (query.length > 0) {
+        performSearch(query, true);
+      } else {
+        loadRecentHistory();
+      }
+    } else {
+      showToast('Extension context not available yet — press the shortcut again to trigger re-injection.', 'warning');
+    }
   }
 
   // Helper: Sanitize query string to prevent issues with special characters or malformed URLs
@@ -295,6 +335,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       flex-shrink: 0;
       object-fit: contain;
     }
+    .search-input-wrapper {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
     .search-input {
       flex: 1;
       background: transparent;
@@ -303,9 +349,34 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       font-size: 18px;
       color: var(--text-primary);
       caret-color: var(--accent-color);
+      padding-right: 24px;
     }
     .search-input::placeholder {
       color: var(--text-secondary);
+    }
+    .clear-input-btn {
+      position: absolute;
+      right: 2px;
+      border: none;
+      background: transparent;
+      color: #e05252;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 2px;
+      opacity: 0.7;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .clear-input-btn:hover {
+      opacity: 1;
+      color: #d32f2f;
+    }
+    .clear-input-btn.visible {
+      display: flex;
     }
     .sort-btn {
       background: var(--bg-kbd);
@@ -484,21 +555,29 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     .toast {
       position: fixed;
-      bottom: 20px;
+      top: 12px;
       left: 50%;
-      transform: translateX(-50%);
-      background: var(--bg-hover);
-      color: var(--text-primary);
-      padding: 8px 16px;
-      border-radius: 6px;
+      transform: translateX(-50%) translateY(-8px);
+      color: #fff;
+      padding: 8px 20px;
+      border-radius: 8px;
       font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       opacity: 0;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, transform 0.2s;
       pointer-events: none;
+      white-space: nowrap;
+      z-index: 999999;
+      background: #10b981;
     }
     .toast.show {
       opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
+    .toast.toast-error   { background: #ef4444; }
+    .toast.toast-warning { background: #f59e0b; }
+    .toast.toast-info    { background: #3b82f6; }
     .footer {
       display: flex;
       flex-wrap: wrap;
@@ -608,6 +687,50 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       margin-left: auto;
       opacity: 0.7;
     }
+    /* Toggle chip bar */
+    .toggle-bar {
+      display: flex;
+      gap: 6px;
+      padding: 4px 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-height: 0;
+    }
+    .toggle-bar:empty {
+      display: none;
+    }
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--bg-hover);
+      background: transparent;
+      color: var(--text-secondary);
+      transition: all 0.18s ease;
+      user-select: none;
+      white-space: nowrap;
+      font-family: inherit;
+      line-height: 1.5;
+      opacity: 0.5;
+    }
+    .toggle-chip:hover {
+      opacity: 0.75;
+    }
+    .toggle-chip.active {
+      background: var(--accent-color);
+      color: #fff;
+      border-color: var(--accent-color);
+      opacity: 1;
+      box-shadow: 0 0 8px rgba(13, 110, 253, 0.4);
+    }
+    .toggle-chip .chip-icon {
+      font-size: 12px;
+    }
     .recent-searches-section {
       margin-bottom: 8px;
       border-bottom: 1px solid var(--bg-hover);
@@ -688,38 +811,37 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // Fetch settings (non-blocking). This populates `cachedSettings` and adjusts debounce.
-  function fetchSettings(): void {
+  // Fetch settings from background. Returns a promise so callers can await fresh settings.
+  function fetchSettings(): Promise<void> {
     if (!chrome.runtime?.id) {
-      // Extension context invalidated
-      return;
+      return Promise.resolve();
     }
-    try {
-      chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
-        try {
-          const settings = resp?.settings || {};
-          cachedSettings = settings;
+    return new Promise<void>((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
           try {
-            updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
-          } catch { /* ignore */ }
-          try {
-            if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
-          } catch { /* ignore */ }
-          // Search debounce is intentionally separate from focusDelayMs
-          // focusDelayMs controls auto-focus to results, not search delay
-          searchDebounceMs = DEBOUNCE_MS;
-          log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
-          // Re-render results with updated display mode (popup parity)
-          if (currentResults.length > 0) {
-            try { renderResults(currentResults); } catch { /* ignore */ }
+            const settings = resp?.settings || {};
+            cachedSettings = settings;
+            try {
+              updateSelectAllBadge(Boolean(settings?.selectAllOnFocus));
+            } catch { /* ignore */ }
+            try {
+              if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
+            } catch { /* ignore */ }
+            searchDebounceMs = DEBOUNCE_MS;
+            log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
+            if (currentResults.length > 0) {
+              try { renderResults(currentResults); } catch { /* ignore */ }
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
-        }
-      });
-    } catch {
-      // ignore
-    }
+          resolve();
+        });
+      } catch {
+        resolve();
+      }
+    });
   }
 
   // ===== SERVICE WORKER PRE-WARMING =====
@@ -852,14 +974,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let toastTimeout: number | null = null;
   let selectAllBadge: HTMLElement | null = null;
   
-  function showToast(message: string): void {
+  function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success'): void {
     if (!toastEl) {return;}
     toastEl.textContent = message;
-    toastEl.classList.add('show');
+    toastEl.className = 'toast show' + (type !== 'success' ? ` toast-${type}` : '');
     if (toastTimeout) {clearTimeout(toastTimeout);}
     toastTimeout = window.setTimeout(() => {
-      toastEl?.classList.remove('show');
-    }, 1500);
+      if (toastEl) {
+        toastEl.classList.remove('show');
+      }
+    }, 2000);
   }
 
   function updateSelectAllBadge(enabled: boolean): void {
@@ -930,8 +1054,30 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl.placeholder = 'Search your browsing history...';
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
-    inputEl.tabIndex = 0; // Ensure focusable
-    
+    inputEl.tabIndex = 0;
+
+    clearBtnEl = document.createElement('button');
+    clearBtnEl.className = 'clear-input-btn';
+    clearBtnEl.type = 'button';
+    clearBtnEl.title = 'Clear search';
+    clearBtnEl.setAttribute('aria-label', 'Clear search');
+    clearBtnEl.textContent = '✕';
+    clearBtnEl.tabIndex = -1;
+    clearBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (inputEl) {
+        inputEl.value = '';
+        syncClearButton();
+        inputEl.dispatchEvent(new Event('input'));
+        inputEl.focus();
+      }
+    });
+
+    const inputWrapper = document.createElement('div');
+    inputWrapper.className = 'search-input-wrapper';
+    inputWrapper.appendChild(inputEl);
+    inputWrapper.appendChild(clearBtnEl);
+
     // Sort button (cycles through options on click)
     const sortBtn = document.createElement('button');
     sortBtn.className = 'sort-btn';
@@ -1030,10 +1176,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     spinnerEl.className = 'search-spinner';
 
     header.appendChild(logo);
-    header.appendChild(inputEl);
+    header.appendChild(inputWrapper);
     header.appendChild(spinnerEl);
     header.appendChild(sortBtn);
-    header.appendChild(selectAllBadge);
+    // header.appendChild(selectAllBadge); // hidden to reduce UI clutter for LTS
     header.appendChild(settingsBtn);
 
     // AI status bar (below header, shows AI feedback)
@@ -1096,7 +1242,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     });
     footer.appendChild(helpLink);
 
+    toggleBarEl = document.createElement('div');
+    toggleBarEl.className = 'toggle-bar';
+
     container.appendChild(header);
+    container.appendChild(toggleBarEl);
     container.appendChild(aiStatusBarEl);
     container.appendChild(resultsEl);
     container.appendChild(footer);
@@ -1222,19 +1372,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Refresh settings each time overlay is shown so UI (badge, focus behavior)
     // reflects the most recent user preferences even if the overlay was pre-created
     try {
-      // Apply cached settings immediately if available
       updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
     } catch { /* ignore */ }
-    // Then fetch latest settings asynchronously (will update badge when done)
-    fetchSettings();
     
     // Reset state
     inputEl.value = '';
+    syncClearButton();
     currentResults = [];
     selectedIndex = 0;
     
-    // Load recent history as smart default (instead of empty state)
-    loadRecentHistory();
+    // Await fresh settings before loading defaults so toggles are respected
+    fetchSettings().then(() => { renderQSToggleBar(); loadRecentHistory(); }).catch(() => loadRecentHistory());
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
     // Strategy 1: Blur active element (likely the omnibox with selected text)
@@ -1336,7 +1484,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== SEARCH =====
+  function syncClearButton() {
+    if (clearBtnEl) { clearBtnEl.classList.toggle('visible', (inputEl?.value?.length ?? 0) > 0); }
+  }
+
   function handleInput(): void {
+    syncClearButton();
+
     // Typing "?" triggers the feature tour
     const raw = inputEl?.value?.trim();
     if (raw === '?' && shadowRoot) {
@@ -1361,16 +1515,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             performSearch(query, true);
           }
         } else {
-          // Show error after failed recovery attempts
           renderErrorResults(
-            '🔄 Extension was updated. Please reload this page to continue searching.',
-            () => window.location.reload()
+            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+            attemptNoReloadReconnect
           );
         }
       }).catch(() => {
         renderErrorResults(
-          '🔄 Extension was updated. Please reload this page to continue searching.',
-          () => window.location.reload()
+          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+          attemptNoReloadReconnect
         );
       });
       return;
@@ -1498,6 +1651,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       item.addEventListener('click', () => {
         if (inputEl) {
           inputEl.value = entry.query;
+          syncClearButton();
           inputEl.focus();
           performSearch(entry.query, true);
         }
@@ -1510,6 +1664,128 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     return container;
   }
 
+  function buildRecentInteractionsSection(entries: Array<{ url: string; title: string; timestamp: number; action: string }>): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'recent-searches-section';
+
+    const header = document.createElement('div');
+    header.className = 'recent-searches-header';
+    const title = document.createElement('span');
+    title.className = 'recent-searches-title';
+    title.textContent = '⚡ Recently Visited';
+    header.appendChild(title);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'recent-searches-clear';
+    clearBtn.textContent = 'Clear';
+    clearBtn.title = 'Clear recently visited';
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearRecentInteractions().then(() => container.remove()).catch(() => {});
+    });
+    header.appendChild(clearBtn);
+    container.appendChild(header);
+
+    for (const entry of entries) {
+      const item = document.createElement('div');
+      item.className = 'recent-search-item';
+      item.tabIndex = 0;
+      item.title = entry.title || entry.url;
+
+      const icon = document.createElement('span');
+      icon.className = 'recent-search-icon';
+      icon.textContent = entry.action === 'copy' ? '📋' : '🔗';
+      item.appendChild(icon);
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'recent-search-query';
+      labelSpan.textContent = entry.title || entry.url;
+      item.appendChild(labelSpan);
+
+      item.addEventListener('click', () => {
+        hideOverlay();
+        window.open(entry.url, '_blank');
+      });
+      item.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') item.click();
+      });
+      container.appendChild(item);
+    }
+    return container;
+  }
+
+  // --- Toggle Chip Bar for Quick-Search ---
+  function renderQSToggleBar() {
+    if (!toggleBarEl) return;
+    toggleBarEl.innerHTML = '';
+    const visibleKeys = cachedSettings?.toolbarToggles ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
+    for (const key of visibleKeys) {
+      const def = getToggleDef(key);
+      if (!def) continue;
+
+      const chip = document.createElement('button');
+      chip.className = 'toggle-chip';
+      chip.dataset.toggleKey = key;
+      chip.type = 'button';
+
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const s = cachedSettings as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (def.type === 'boolean') {
+          const cur = s?.[def.key] as boolean ?? false;
+          const next = !cur;
+          if (s) { s[def.key] = next; }
+          try {
+            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
+          } catch { /* context invalidated */ }
+        } else if (def.type === 'cycle') {
+          const cur = s?.[def.key];
+          const next = getNextCycleValue(def, cur);
+          if (s) { s[def.key] = next; }
+          try {
+            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
+          } catch { /* context invalidated */ }
+        }
+        syncQSToggleBar();
+        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
+          renderResults(currentResults);
+        } else if (inputEl?.value?.trim()) {
+          handleInput();
+        } else {
+          loadRecentHistory();
+        }
+      });
+
+      toggleBarEl.appendChild(chip);
+    }
+    syncQSToggleBar();
+  }
+
+  function syncQSToggleBar() {
+    if (!toggleBarEl) return;
+    const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
+    chips.forEach(chip => {
+      const key = chip.dataset.toggleKey;
+      if (!key) return;
+      const def = getToggleDef(key);
+      if (!def) return;
+
+      const val = (cachedSettings as any)?.[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      if (def.type === 'boolean') {
+        const isActive = Boolean(val);
+        chip.classList.toggle('active', isActive);
+        chip.title = isActive ? def.tooltipOn : def.tooltipOff;
+        chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
+      } else if (def.type === 'cycle') {
+        const cs = getCycleState(def, val);
+        chip.classList.add('active');
+        chip.title = `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
+        chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
+      }
+    });
+  }
+
   // Load recent history (smart default results when query is empty)
   async function loadRecentHistory(): Promise<void> {
     const t0 = performance.now();
@@ -1520,8 +1796,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       perfLog('Extension context invalid - showing error');
       currentResults = [];
       renderErrorResults(
-        '🔄 Extension was updated. Please reload this page to continue.',
-        () => window.location.reload()
+        '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+        attemptNoReloadReconnect
       );
       return;
     }
@@ -1558,11 +1834,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       selectedIndex = -1;
       renderResults(currentResults);
 
+      // Show recently visited entries (gated by showRecentHistory)
+      if (showHistory && resultsEl) {
+        getRecentInteractions().then(entries => {
+          if (entries.length > 0 && resultsEl) {
+            const section = buildRecentInteractionsSection(entries.slice(0, 5));
+            resultsEl.insertBefore(section, resultsEl.firstChild);
+          }
+        }).catch(() => {});
+      }
+
       // Show recent searches above results when enabled
       if (showSearches && resultsEl) {
         getRecentSearches().then(entries => {
           if (entries.length > 0 && resultsEl) {
-            const section = buildRecentSearchesSection(entries.slice(0, 8));
+            const section = buildRecentSearchesSection(entries.slice(0, 5));
             resultsEl.insertBefore(section, resultsEl.firstChild);
           }
         }).catch(() => {});
@@ -1604,21 +1890,20 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       attemptContextRecovery().then(recovered => {
         if (recovered) {
           log.info('performSearch', 'Context recovered — retrying search');
-          showToast('Extension reconnected');
-          // Retry the search
+          showToast('Extension reconnected', 'success');
           performSearch(query);
         } else {
           log.error('performSearch', 'Context recovery failed after all attempts');
           renderErrorResults(
-            '🔄 Extension was updated. Please reload this page to continue searching.',
-            () => window.location.reload()
+            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+            attemptNoReloadReconnect
           );
         }
       }).catch(() => {
         log.error('performSearch', 'Context recovery threw an error');
         renderErrorResults(
-          '🔄 Extension was updated. Please reload this page to continue searching.',
-          () => window.location.reload()
+          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+          attemptNoReloadReconnect
         );
       });
       return;
@@ -1738,9 +2023,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             // Attempt to reconnect
             if (isExtensionContextValid()) {
               openSearchPort();
-              showToast('Attempting reconnect...');
+              showToast('Attempting reconnect...', 'info');
             } else {
-              showToast('Extension context lost. Please reload the page.');
+              showToast('Extension context lost. Press the shortcut again to reconnect.', 'error');
             }
           }
         );
@@ -1894,19 +2179,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function renderErrorResults(message: string, reconnect?: () => void): void {
     if (!resultsEl) {return;}
     
-    // Clear existing results
     while (resultsEl.firstChild) {
       resultsEl.removeChild(resultsEl.firstChild);
     }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.padding = '20px';
+    wrapper.style.textAlign = 'center';
 
     const errorDiv = document.createElement('div');
     errorDiv.className = 'empty';
     errorDiv.textContent = message;
     errorDiv.style.color = 'var(--text-danger, #ef4444)';
-    errorDiv.style.padding = '20px';
-    errorDiv.style.textAlign = 'center';
     errorDiv.style.lineHeight = '1.5';
-    resultsEl.appendChild(errorDiv);
+    wrapper.appendChild(errorDiv);
     
     if (reconnect) {
       const btn = document.createElement('button');
@@ -1920,7 +2209,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       btn.style.cursor = 'pointer';
       btn.style.fontSize = '14px';
       btn.style.fontWeight = '500';
-      btn.style.display = 'inline-block';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (btn.disabled) {return;}
@@ -1929,7 +2217,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           btn.textContent = '⏳ Reconnecting...';
           btn.style.opacity = '0.6';
           reconnect();
-          // Re-enable after a delay if still showing
           setTimeout(() => {
             if (btn.parentElement) {
               btn.disabled = false;
@@ -1944,16 +2231,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           log.error('reconnect', 'Reconnect failed:', (err as Error).message);
         }
       });
-      resultsEl.appendChild(btn);
+      wrapper.appendChild(btn);
       
-      // Add helpful tip
       const tipDiv = document.createElement('div');
       tipDiv.style.marginTop = '16px';
       tipDiv.style.fontSize = '12px';
       tipDiv.style.color = 'var(--text-secondary, #666)';
-      tipDiv.textContent = 'Tip: If this persists, try reloading the page (F5) or reinstalling the extension.';
-      resultsEl.appendChild(tipDiv);
+      tipDiv.textContent = 'Tip: If this persists, press the keyboard shortcut (Ctrl+Shift+S) to trigger automatic re-injection.';
+      wrapper.appendChild(tipDiv);
     }
+
+    resultsEl.appendChild(wrapper);
   }
 
   // ===== COPY TO CLIPBOARD (using shared utility) =====
@@ -1964,10 +2252,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const markdown = createMarkdownLink(result);
     
     navigator.clipboard.writeText(markdown).then(() => {
-      showToast('Copied markdown link!');
+      showToast('📋 Copied markdown link!');
     }).catch(() => {
-      showToast('Failed to copy');
+      showToast('❌ Copy failed', 'error');
     });
+    addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
   }
 
   function copyHtmlLink(index: number): void {
@@ -1975,10 +2264,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (!result?.url) {return;}
     
     copyHtmlLinkToClipboard(result).then(() => {
-      showToast('Copied HTML link!');
+      showToast('📋 Copied HTML link!');
     }).catch(() => {
-      showToast('Copied (text only)');
+      showToast('📋 Copied (text only)', 'info');
     });
+    addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
   }
 
   // ===== TAB NAVIGATION =====
@@ -2197,7 +2487,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const selected = resultsEl.querySelector(`${itemSel}.selected`);
     selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // If a result is selected and currently not focused, move focus to it so arrow keys operate there
-    if (selected && document.activeElement !== selected) {
+    const currentlyFocused = getFocusedElement();
+    if (selected && currentlyFocused !== selected) {
       try {
         (selected as HTMLElement).focus();
       } catch {
@@ -2206,15 +2497,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  function openResult(index: number, newTab: boolean, _background: boolean = false): void {
+  function openResult(index: number, newTab: boolean, background: boolean = false): void {
     const result = currentResults[index];
     if (!result?.url) {return;}
 
-    // Record recent search (fire-and-forget)
     const query = inputEl?.value?.trim();
     if (query) {
       addRecentSearch(query, result.url).catch(() => {});
     }
+
+    const action = background ? 'background-tab' : 'click';
+    addRecentInteraction(result.url, result.title || '', action).catch(() => {});
 
     hideOverlay();
 
@@ -2226,70 +2519,104 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== GLOBAL KEYBOARD LISTENER =====
+  /**
+   * Returns true for key combos the overlay explicitly handles.
+   * Everything else (browser shortcuts, other extension shortcuts, F-keys,
+   * Alt combos, unknown Ctrl combos) passes through untouched.
+   */
+  function isOverlayKey(e: KeyboardEvent): boolean {
+    const key = e.key;
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (key === 'Escape' || key === 'Tab') return true;
+
+    // F-keys → browser (F5 reload, F12 devtools, etc.)
+    if (/^F\d{1,2}$/.test(key)) return false;
+
+    // Alt combos → browser (Alt+Left/Right = back/forward, etc.)
+    if (e.altKey) return false;
+
+    if (mod) {
+      const lk = key.toLowerCase();
+      // Ctrl+Shift+S = toggle overlay
+      if (e.shiftKey && lk === 's') return true;
+      // Ctrl+Shift+Z = redo
+      if (e.shiftKey && lk === 'z') return true;
+      // Our text-editing Ctrl shortcuts
+      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) return true;
+      // Ctrl+Backspace/Delete (word delete), Ctrl+Arrow (word jump), Ctrl+Home/End
+      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return true;
+      // Any other Ctrl/Cmd combo (Ctrl+R, Ctrl+K, Ctrl+L, Ctrl+T, Ctrl+W,
+      // Ctrl+N, Ctrl+E, Ctrl+H, Ctrl+J, Ctrl+D, Ctrl+P, Ctrl+F, Ctrl+G,
+      // Ctrl+Shift+K, Ctrl+Shift+T, Ctrl+Tab, etc.) → pass to browser
+      return false;
+    }
+
+    // Non-modifier navigation & editing keys
+    if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+         'Backspace', 'Delete', 'Home', 'End'].includes(key)) return true;
+
+    // Printable character (single char, no Ctrl/Alt/Meta)
+    if (key.length === 1) return true;
+
+    // Modifier-only presses (Shift, Control, CapsLock, etc.) — ignore
+    return false;
+  }
+
   function handleGlobalKeydown(e: KeyboardEvent): void {
-    // COMPLETE KEYBOARD TAKEOVER when overlay is visible
-    if (isOverlayVisible()) {
-      // Intercept Tab/Shift+Tab to keep focus cycling inside the overlay
-      if (e.key === 'Tab') {
-        // Prevent the browser from moving focus outside the overlay
+    if (!isOverlayVisible()) {
+      // Only handle Ctrl+Shift+S to open the overlay
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        // Route to our Tab navigation handler (Shift+Tab => backward)
-        handleTabNavigation(e.shiftKey);
-        return;
-      }
-
-      // Always handle Escape to close overlay regardless of focused element
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        hideOverlay();
-        return;
-      }
-      // Route keys based on currently focused element within the overlay
-      const focusedElement = getFocusedElement();
-
-
-      // If the input is focused, we must still prevent the underlying page from
-      // receiving the key but we need to preserve (or emulate) native input shortcuts
-      // like Ctrl+A/C/V. Prevent the event from reaching the page and route to
-      // our controlled input handler which will emulate native behaviour.
-      if (focusedElement === inputEl) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (inputEl) { handleKeyInput(e); }
-        return;
-      }
-
-      // For other overlay-focused elements (results, settings) we should intercept
-      // the key and prevent the page from handling it.
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
-      if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement.classList?.contains('result-card') || focusedElement === settingsBtn)) {
-        // Results or settings button is focused - handle navigation/action keys
-        handleKeydown(e);
-      } else {
-        // Nothing specific focused - focus input and allow typing behavior
-        if (inputEl) {
-          inputEl.focus();
-          // Do not simulate typing; let native event continue. Stop propagation so page doesn't get it.
-          try { e.stopPropagation(); e.stopImmediatePropagation(); } catch { /* ignore */ }
-        }
+        showOverlay();
       }
       return;
     }
 
-    // Handle shortcut to open overlay
+    // Overlay is visible — only intercept keys we explicitly handle.
+    // All browser shortcuts (Ctrl+R, Ctrl+K, F5, Alt+Left, etc.) pass through.
+    if (!isOverlayKey(e)) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    if (e.key === 'Tab') {
+      handleTabNavigation(e.shiftKey);
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      hideOverlay();
+      return;
+    }
+
+    // Ctrl+Shift+S toggles overlay closed
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      showOverlay(); // showOverlay now handles all focus attempts
+      hideOverlay();
+      return;
+    }
+
+    const focusedElement = getFocusedElement();
+
+    if (focusedElement === inputEl) {
+      if (inputEl) { handleKeyInput(e); }
+      return;
+    }
+
+    if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement.classList?.contains('result-card') || focusedElement === settingsBtn)) {
+      handleKeydown(e);
+      return;
+    }
+
+    // Nothing specific focused — focus input and handle the key there
+    if (inputEl) {
+      inputEl.focus();
+      handleKeyInput(e);
     }
   }
 
@@ -2349,7 +2676,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (lk === 'c') {
         const sel = val.substring(start, end);
         if (sel.length > 0) {
-          try { navigator.clipboard.writeText(sel); showToast('Copied'); } catch { showToast('Copy failed'); }
+          try { navigator.clipboard.writeText(sel); showToast('📋 Copied'); } catch { showToast('Copy failed', 'error'); }
         } else if (currentResults.length > 0) {
           copyHtmlLink(selectedIndex >= 0 ? selectedIndex : 0);
         }
@@ -2379,7 +2706,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           inputEl.value = inputEl.value.substring(0, s) + text + inputEl.value.substring(ep);
           inputEl.setSelectionRange(s + text.length, s + text.length);
           triggerInputEvent();
-        }).catch(() => { showToast('Paste failed'); });
+        }).catch(() => { showToast('Paste failed', 'error'); });
         return;
       }
 
@@ -2548,9 +2875,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
+    if (key === 'ArrowDown' && currentResults.length > 0) {
+      selectedIndex = 0;
+      updateSelection();
+      return;
+    }
+
+    if (key === 'ArrowUp') {
+      return;
+    }
+
     if (key === 'Enter') {
-      // Dispatch to the input's own keydown handler for result navigation
-      inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      if (currentResults.length > 0) {
+        const idx = selectedIndex >= 0 ? selectedIndex : 0;
+        openResult(idx, !e.shiftKey);
+      }
       return;
     }
 
@@ -2596,6 +2935,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         } catch { /* ignore */ }
         // Search debounce is separate from focusDelayMs
         searchDebounceMs = DEBOUNCE_MS;
+        syncQSToggleBar();
       } catch {
         // ignore
       }
