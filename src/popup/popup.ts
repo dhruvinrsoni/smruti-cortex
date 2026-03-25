@@ -990,17 +990,27 @@ function initializePopup() {
         return;
       }
       if (e.key === 'Escape') {
-        // Don't prevent default - let Escape bubble up to close the popup
-        input.value = '';
-        syncClearButton();
-        currentQuery = '';
-        resultsLocal = [];
-        activeIndex = -1;
-        renderResults();
-        // Don't focus input - let popup close naturally
+        if (input.value.length > 0) {
+          e.preventDefault();
+          input.value = '';
+          syncClearButton();
+          currentQuery = '';
+          resultsLocal = [];
+          activeIndex = -1;
+          renderResults();
+          loadRecentHistory();
+          return;
+        }
+        // Input already empty — let Escape bubble up to close the popup
         return;
       }
-      // Don't intercept any other keys in input - allow normal text editing (Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+Backspace, etc.)
+      // Ctrl+A in input: select only the input text, not the whole popup document
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        e.stopPropagation();
+        input.select();
+        return;
+      }
+      // Don't intercept any other keys in input - allow normal text editing (Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+Backspace, etc.)
       return;
     }
 
@@ -1102,14 +1112,19 @@ function initializePopup() {
       }
 
       if (e.key === 'Escape') {
-        // Don't prevent default - let Escape bubble up to close the popup
-        input.value = '';
-        syncClearButton();
-        currentQuery = '';
-        resultsLocal = [];
-        activeIndex = -1;
-        renderResults();
-        // Don't focus input - let popup close naturally
+        if (input.value.length > 0) {
+          e.preventDefault();
+          input.value = '';
+          syncClearButton();
+          currentQuery = '';
+          resultsLocal = [];
+          activeIndex = -1;
+          renderResults();
+          loadRecentHistory();
+          input.focus();
+          return;
+        }
+        // Input already empty — let Escape bubble up to close the popup
         return;
       }
     }

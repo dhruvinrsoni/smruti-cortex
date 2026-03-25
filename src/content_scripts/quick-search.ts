@@ -2370,6 +2370,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
+        if (inputEl && inputEl.value.length > 0) {
+          inputEl.value = '';
+          inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+          syncClearButton();
+          return;
+        }
         hideOverlay();
         return;
       }
@@ -2611,6 +2617,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     if (e.key === 'Escape') {
+      if (inputEl && inputEl.value.length > 0) {
+        inputEl.value = '';
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        syncClearButton();
+        inputEl.focus();
+        return;
+      }
       hideOverlay();
       return;
     }
