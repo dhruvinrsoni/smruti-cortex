@@ -2,6 +2,46 @@
 
 All notable changes to SmrutiCortex are documented here.
 
+## [8.1.0] — 2026-03-25
+
+### Features
+- **In-extension onboarding tour** — Spotlight-driven guided walkthrough for new users with step-by-step UX highlights
+- **Toggle chip bar** — Quick-toggle chips in popup and quick-search overlay for frequently used settings (e.g. AI, bookmarks, duplicates)
+- **Toolbar settings tab** — New "Toolbar" tab in settings to configure which toggle chips appear
+- **Toast notifications** — Non-intrusive toast messages for index operations with type system (success/error/info) and configurable duration
+- **Recent searches** — Separate toggles for recent history and recent searches with display cap
+- **Recently interacted entries** — Track and surface clicked/copied results for quick re-access
+- **Dark/light/auto theme toggle** — Theme preference in popup settings with system-auto detection
+- **Index export/import** — Full data portability via export/import in the Data Management settings tab
+- **Clear input button** — Minimal red X button in popup and quick-search for quick query clearing
+- **Zero-reload extension updates** — `scripting` + `activeTab` permissions to re-inject content scripts after update without page reload
+- **Smart pre-commit hook** — Skips full build/test for docs-only commits, runs them for product file changes
+- **Enhanced semantic search** — On-demand embedding generation that skips unnecessary embeddings to avoid Ollama slot contention
+
+### Bug Fixes
+- **Search precision** — Gate search inclusion on original tokens (not synonym expansions); dampen scores for items matching fewer original query tokens
+- **Synonym pruning** — Remove overly broad synonym map entries that caused false-positive matches
+- **Browser shortcuts** — Stop blocking native browser shortcuts when quick-search overlay is open
+- **Clear button styling** — Fix visibility on programmatic input; restyle as minimal red X
+- **Quick-search settings** — Await settings before loading defaults in quick-search overlay
+- **Overlay DOM leak** — Detach overlay from DOM when hidden to prevent serialization into MHTML/print saves
+- **Packaging fix** — Correctly implement globbing in `createZip` to include all files except hidden ones
+
+### Testing
+- **1071 tests across 34 files** — Up from 905 tests in v8.0.0
+- Expanded service-worker tests (14 → 50), search-ui-base tests (27 → 98), extractor tests (15 → 31)
+- Added ranking regression tests for multi-token queries and synonym edge cases
+- Added ai-scorer-placeholder interface validation tests
+- 90%+ line coverage maintained
+
+### Other
+- Quick-search arrow-key navigation improved to only focus on selected result
+- Reduced recent searches display cap from 8 to 5
+- Updated documentation with onboarding tour screenshots and Chrome Web Store listing copy
+- Improved logging and circuit breaker handling for AI features
+
+---
+
 ## [8.0.0] — 2026-03-01
 
 ### Search Intelligence
