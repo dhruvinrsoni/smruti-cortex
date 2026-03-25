@@ -142,7 +142,7 @@ function focusGroup(group: FocusableGroup): void {
 export function truncateUrl(url: string, maxLength: number = 60): string {
   try {
     const urlObj = new URL(url);
-    let display = urlObj.hostname + urlObj.pathname;
+    let display = urlObj.host + urlObj.pathname;
     if (display.length > maxLength) {
       display = display.substring(0, maxLength - 3) + '...';
     }

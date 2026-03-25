@@ -48,8 +48,18 @@ const createKeyboardEvent = (key: string, modifiers: Partial<KeyboardEvent> = {}
 // truncateUrl
 // ---------------------------------------------------------------------------
 describe('truncateUrl', () => {
-  it('should return hostname + path for valid URLs', () => {
+  it('should return host + path for valid URLs', () => {
     expect(truncateUrl('https://github.com/user/repo')).toBe('github.com/user/repo');
+  });
+
+  it('should preserve non-default port in display', () => {
+    expect(truncateUrl('http://localhost:3000/api/data')).toBe('localhost:3000/api/data');
+    expect(truncateUrl('https://dev.local:8443/dashboard')).toBe('dev.local:8443/dashboard');
+  });
+
+  it('should not show port for standard ports (443, 80)', () => {
+    expect(truncateUrl('https://example.com/path')).toBe('example.com/path');
+    expect(truncateUrl('http://example.com/path')).toBe('example.com/path');
   });
 
   it('should truncate long URLs with ellipsis', () => {
