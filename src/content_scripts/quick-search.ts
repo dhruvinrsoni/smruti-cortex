@@ -206,7 +206,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         loadRecentHistory();
       }
     } else {
-      showToast('Extension context not available yet — press the shortcut again to trigger re-injection.', 'warning');
+      showToast('Extension context not available yet — press Ctrl+Shift+S to trigger re-injection.', 'warning', 8000);
     }
   }
 
@@ -559,15 +559,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       left: 50%;
       transform: translateX(-50%) translateY(-8px);
       color: #fff;
-      padding: 8px 20px;
+      padding: 10px 20px;
       border-radius: 8px;
       font-size: 13px;
       font-weight: 600;
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       opacity: 0;
-      transition: opacity 0.2s, transform 0.2s;
-      pointer-events: none;
-      white-space: nowrap;
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: auto;
+      white-space: normal;
+      max-width: 90%;
+      word-break: break-word;
+      user-select: text;
+      cursor: default;
       z-index: 999999;
       background: #10b981;
     }
@@ -972,18 +976,26 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== TOAST NOTIFICATION =====
   let toastEl: HTMLDivElement | null = null;
   let toastTimeout: number | null = null;
+  let toastDurationMs = 5000;
+  let toastHovered = false;
   let selectAllBadge: HTMLElement | null = null;
   
-  function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success'): void {
+  function startToastDismissTimer(): void {
+    if (toastTimeout) {clearTimeout(toastTimeout);}
+    toastTimeout = window.setTimeout(() => {
+      if (toastEl && !toastHovered) {
+        toastEl.classList.remove('show');
+      }
+    }, toastDurationMs);
+  }
+
+  function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success', durationMs = 5000): void {
     if (!toastEl) {return;}
     toastEl.textContent = message;
     toastEl.className = 'toast show' + (type !== 'success' ? ` toast-${type}` : '');
-    if (toastTimeout) {clearTimeout(toastTimeout);}
-    toastTimeout = window.setTimeout(() => {
-      if (toastEl) {
-        toastEl.classList.remove('show');
-      }
-    }, 2000);
+    toastDurationMs = durationMs;
+    toastHovered = false;
+    startToastDismissTimer();
   }
 
   function updateSelectAllBadge(enabled: boolean): void {
@@ -1255,6 +1267,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Toast for copy feedback
     toastEl = document.createElement('div');
     toastEl.className = 'toast';
+    toastEl.addEventListener('mouseenter', () => {
+      toastHovered = true;
+      if (toastTimeout) { clearTimeout(toastTimeout); toastTimeout = null; }
+    });
+    toastEl.addEventListener('mouseleave', () => {
+      toastHovered = false;
+      startToastDismissTimer();
+    });
     overlayEl.appendChild(toastEl);
 
     shadowRoot.appendChild(overlayEl);
@@ -2025,7 +2045,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               openSearchPort();
               showToast('Attempting reconnect...', 'info');
             } else {
-              showToast('Extension context lost. Press the shortcut again to reconnect.', 'error');
+              showToast('Extension context lost. Press Ctrl+Shift+S to reconnect.', 'error', 8000);
             }
           }
         );

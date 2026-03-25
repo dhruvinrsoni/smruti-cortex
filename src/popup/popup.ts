@@ -62,7 +62,7 @@ const TOAST_COLORS: Record<ToastType, string> = {
   info:    '#3b82f6',
 };
 
-function showToast(message: string, type: ToastType = 'success', durationMs = 2000) {
+function showToast(message: string, type: ToastType = 'success', durationMs = 5000) {
   const toast = document.createElement('div');
   toast.textContent = message;
   toast.style.cssText = `
@@ -72,27 +72,49 @@ function showToast(message: string, type: ToastType = 'success', durationMs = 20
     transform: translateX(-50%) translateY(-8px);
     background: ${TOAST_COLORS[type]};
     color: white;
-    padding: 8px 20px;
+    padding: 10px 20px;
     border-radius: 8px;
     z-index: 10000;
     font-size: 13px;
     font-weight: 600;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     opacity: 0;
-    transition: opacity 0.2s, transform 0.2s;
-    pointer-events: none;
-    white-space: nowrap;
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: auto;
+    white-space: normal;
+    max-width: 90%;
+    word-break: break-word;
+    user-select: text;
+    cursor: default;
   `;
   document.body.appendChild(toast);
   requestAnimationFrame(() => {
     toast.style.opacity = '1';
     toast.style.transform = 'translateX(-50%) translateY(0)';
   });
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(-50%) translateY(-8px)';
-    setTimeout(() => toast.remove(), 200);
-  }, durationMs);
+
+  let hovered = false;
+  let dismissTimer: ReturnType<typeof setTimeout>;
+
+  function startDismiss() {
+    dismissTimer = setTimeout(() => {
+      if (hovered) return;
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(-50%) translateY(-8px)';
+      setTimeout(() => toast.remove(), 250);
+    }, durationMs);
+  }
+
+  toast.addEventListener('mouseenter', () => {
+    hovered = true;
+    clearTimeout(dismissTimer);
+  });
+  toast.addEventListener('mouseleave', () => {
+    hovered = false;
+    startDismiss();
+  });
+
+  startDismiss();
 }
 
 // Fast initialization - prioritize speed over logging
