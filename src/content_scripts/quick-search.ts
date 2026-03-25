@@ -2197,7 +2197,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const selected = resultsEl.querySelector(`${itemSel}.selected`);
     selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // If a result is selected and currently not focused, move focus to it so arrow keys operate there
-    if (selected && document.activeElement !== selected) {
+    const currentlyFocused = getFocusedElement();
+    if (selected && currentlyFocused !== selected) {
       try {
         (selected as HTMLElement).focus();
       } catch {
@@ -2548,9 +2549,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
+    if (key === 'ArrowDown' && currentResults.length > 0) {
+      selectedIndex = 0;
+      updateSelection();
+      return;
+    }
+
+    if (key === 'ArrowUp') {
+      return;
+    }
+
     if (key === 'Enter') {
-      // Dispatch to the input's own keydown handler for result navigation
-      inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      if (currentResults.length > 0) {
+        const idx = selectedIndex >= 0 ? selectedIndex : 0;
+        openResult(idx, !e.shiftKey);
+      }
       return;
     }
 
