@@ -19,6 +19,10 @@ All notable changes to SmrutiCortex are documented here.
 - **Enhanced semantic search** — On-demand embedding generation that skips unnecessary embeddings to avoid Ollama slot contention
 
 ### Bug Fixes
+- **Port display in URLs** — `localhost:3000`, `dev.local:8443` and other non-standard ports now visible in search results list view (was using `hostname` instead of `host`)
+- **Ctrl+A in popup** — Now selects only the input text, not the entire popup HTML document
+- **Toast notification UX** — Longer display duration (5s default, 8s for errors), hover-to-pause with full timer restart, selectable text
+- **Smart Escape key** — First Esc clears search input, second Esc closes popup/overlay (was closing immediately)
 - **Search precision** — Gate search inclusion on original tokens (not synonym expansions); dampen scores for items matching fewer original query tokens
 - **Synonym pruning** — Remove overly broad synonym map entries that caused false-positive matches
 - **Browser shortcuts** — Stop blocking native browser shortcuts when quick-search overlay is open
@@ -28,10 +32,11 @@ All notable changes to SmrutiCortex are documented here.
 - **Packaging fix** — Correctly implement globbing in `createZip` to include all files except hidden ones
 
 ### Testing
-- **1071 tests across 34 files** — Up from 905 tests in v8.0.0
-- Expanded service-worker tests (14 → 50), search-ui-base tests (27 → 98), extractor tests (15 → 31)
+- **1,073 tests across 34 files** — Up from 905 tests in v8.0.0
+- Expanded service-worker tests (14 → 50), search-ui-base tests (27 → 100), extractor tests (15 → 31)
 - Added ranking regression tests for multi-token queries and synonym edge cases
 - Added ai-scorer-placeholder interface validation tests
+- Added port-inclusive URL display tests for `truncateUrl`
 - 90%+ line coverage maintained
 
 ### Other

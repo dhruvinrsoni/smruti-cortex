@@ -28,6 +28,7 @@ Navigate here first — don't broad-search when the location is known:
 | All test files | `src/**/__tests__/*.test.ts` |
 | Vitest config | `vitest.config.ts` |
 | Build scripts | `scripts/esbuild-*.mjs` |
+| Store submission docs | `docs/store-submissions/vX.Y.Z-chrome-web-store.md` |
 
 ---
 
@@ -35,14 +36,14 @@ Navigate here first — don't broad-search when the location is known:
 
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm test` | Run full test suite (980+ tests, 34 files) | ~28s |
+| `npm test` | Run full test suite (1,073+ tests, 34 files) | ~28s |
 | `npx vitest run --coverage --pool=forks` | Tests + v8 coverage report | ~30s |
 | `npm run lint` | ESLint check | ~5s |
 | `npm run build:prod` | Production build (minified) | ~30s |
 | `npm run build:dev` | Dev build (source maps) | ~10s |
 | `npm run package` | Build + zip for Chrome Web Store | ~35s |
 | `node scripts/release.mjs <patch\|minor\|major>` | Full release: bump, changelog, tag, push, GitHub Release, zip | ~60s |
-| `node scripts/store-prep.mjs` | Print Chrome Web Store submission text | instant |
+| `npm run store-prep` | Print Chrome Web Store submission text | instant |
 
 **Note:** Pre-commit hook (`scripts/pre-commit-check.js`) runs build+test for product files. Skips for docs-only changes. Override with `FORCE_PRE_COMMIT=1`.
 
@@ -91,7 +92,7 @@ Prefer in this order:
 - **Tests run fast:** `npm test` finishes in ~28s. Always run after code changes before committing.
 - **Build is slow:** `npm run build:prod` takes ~30s + pre-commit hook adds another run on commit. Verify logic via `npm test` first.
 - **Chrome APIs require mocking:** jsdom has no `chrome.*`. Every test that touches Chrome APIs must mock them. See `.github/skills/testing/SKILL.md` patterns.
-- **90%+ line coverage:** 980+ tests across 34 test files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
+- **90%+ line coverage:** 1,073+ tests across 34 test files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
 
 ### Parallelization
 
@@ -141,13 +142,16 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 ### Release + Chrome Web Store
 ```bash
 node scripts/release.mjs <patch|minor|major>   # automated: bump, changelog, tag, push, GitHub Release, zip
-node scripts/store-prep.mjs                     # prints: What's New, permissions, privacy summary
+npm run store-prep                              # prints: What's New, permissions, privacy summary
 ```
-Then manually:
-1. Go to https://chrome.google.com/webstore/devconsole
-2. Upload `release/smruti-cortex-vX.Y.Z.zip`
-3. Paste "What's New" text from store-prep output
-4. Submit for review
+Then:
+1. Create/update `docs/store-submissions/vX.Y.Z-chrome-web-store.md` with full submission fields
+2. Commit the submission doc: `git commit -m "docs: add Chrome Web Store submission record for vX.Y.Z"`
+3. Upload the submission doc as a GitHub release attachment alongside the zip
+4. Go to https://chrome.google.com/webstore/devconsole
+5. Upload `release/smruti-cortex-vX.Y.Z.zip`
+6. Fill all fields using the submission doc as reference
+7. Submit for review
 
 ### Security / Dependency Fix
 1. Check `npm audit` output — identify the vulnerability
