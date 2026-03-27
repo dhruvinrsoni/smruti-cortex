@@ -11,7 +11,9 @@
     "tabs",
     "alarms",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "sessions",
+    "windows"
   ],
   "optional_host_permissions": [
     "<all_urls>"

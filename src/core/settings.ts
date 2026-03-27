@@ -42,6 +42,12 @@ export interface AppSettings {
     showRecentSearches?: boolean;  // Show recent search queries when input is empty (default: true)
     // Toolbar toggle chip bar — which toggles are visible on the main screen
     toolbarToggles?: string[];
+    // Command Palette — prefix-based mode system for quick-search overlay
+    commandPaletteEnabled?: boolean;     // Master switch: OFF disables all prefix modes
+    commandPaletteModes?: string[];      // Which prefix modes are active: ['/', '>', '@', '#', '??']
+    commandPaletteInPopup?: boolean;     // Whether popup also gets prefix modes (off by default)
+    commandPaletteOnboarded?: boolean;   // True after user has seen the first-use hint
+    webSearchEngine?: string;            // Default search engine for ?? mode: 'google', 'duckduckgo', 'bing', 'youtube', 'github'
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -169,6 +175,28 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     toolbarToggles: {
         default: ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'],
         validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'), // eslint-disable-line @typescript-eslint/no-explicit-any
+    },
+
+    // Command Palette settings
+    commandPaletteEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    commandPaletteModes: {
+        default: ['/', '>', '@', '#', '??'],
+        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string' && ['/', '>', '@', '#', '??'].includes(v)), // eslint-disable-line @typescript-eslint/no-explicit-any
+    },
+    commandPaletteInPopup: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    commandPaletteOnboarded: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    webSearchEngine: {
+        default: 'google',
+        validate: (val) => typeof val === 'string' && ['google', 'duckduckgo', 'bing', 'youtube', 'github'].includes(val),
     },
 
     // Future settings (placeholders)
