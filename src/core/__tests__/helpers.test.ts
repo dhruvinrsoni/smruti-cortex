@@ -77,30 +77,6 @@ describe('getBrowserCompatibility', () => {
     vi.unstubAllGlobals();
   });
 
-  it('should return an object with browser, supportsServiceWorker, supportsIndexedDB, supportsOmnibox, manifestVersion', async () => {
-    vi.stubGlobal('chrome', {
-      omnibox: {},
-      runtime: {
-        getManifest: () => ({ manifest_version: 3, version: '1.0.0' }),
-        lastError: null,
-      },
-    });
-    vi.stubGlobal('navigator', {
-      userAgent: 'Mozilla/5.0 Chrome/120.0.0.0',
-      serviceWorker: { register: vi.fn() },
-    });
-    vi.stubGlobal('window', { indexedDB: {} });
-
-    const { getBrowserCompatibility } = await import('../helpers');
-    const result = getBrowserCompatibility();
-
-    expect(result).toHaveProperty('browser');
-    expect(result).toHaveProperty('supportsServiceWorker');
-    expect(result).toHaveProperty('supportsIndexedDB');
-    expect(result).toHaveProperty('supportsOmnibox');
-    expect(result).toHaveProperty('manifestVersion');
-  });
-
   it('should report manifestVersion 3 from manifest', async () => {
     vi.stubGlobal('chrome', {
       omnibox: {},

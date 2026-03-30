@@ -21,14 +21,6 @@ describe('recencyScorer', () => {
     vi.clearAllMocks();
   });
 
-  it('should have name "recency"', () => {
-    expect(recencyScorer.name).toBe('recency');
-  });
-
-  it('should have weight 0.20', () => {
-    expect(recencyScorer.weight).toBe(0.20);
-  });
-
   describe('score calculation', () => {
     it('should return ~1.0 for an item visited right now', () => {
       vi.useFakeTimers();

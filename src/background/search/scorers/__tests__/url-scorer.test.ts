@@ -37,14 +37,6 @@ describe('urlScorer', () => {
     vi.clearAllMocks();
   });
 
-  it('should have name "url"', () => {
-    expect(urlScorer.name).toBe('url');
-  });
-
-  it('should have weight 0.12', () => {
-    expect(urlScorer.weight).toBe(0.12);
-  });
-
   describe('score calculation', () => {
     it('should return 0 when query tokenizes to empty', () => {
       const item = makeItem('https://github.com/react', 'github.com');

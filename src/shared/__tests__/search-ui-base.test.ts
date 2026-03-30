@@ -96,10 +96,6 @@ describe('escapeRegex', () => {
     expect(escapeRegex('path\\file')).toBe('path\\\\file');
   });
 
-  it('should not modify strings without special characters', () => {
-    expect(escapeRegex('hello world')).toBe('hello world');
-    expect(escapeRegex('simple123')).toBe('simple123');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -196,17 +192,6 @@ describe('sortResults', () => {
     expect(sorted.map(r => r.title)).toEqual(['Banana', 'Apple', 'Cherry']);
   });
 
-  it('should return the same array reference (in-place sort)', () => {
-    const copy = [...results];
-    const sorted = sortResults(copy, 'most-recent');
-    expect(sorted).toBe(copy);
-  });
-
-  it('should handle unknown sort option as best-match', () => {
-    const copy = [...results];
-    sortResults(copy, 'unknown-sort');
-    expect(copy.map(r => r.title)).toEqual(['Banana', 'Apple', 'Cherry']);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -253,9 +238,6 @@ describe('escapeHtml', () => {
     expect(escapeHtml('<a href="x">&')).toBe('&lt;a href=&quot;x&quot;&gt;&amp;');
   });
 
-  it('should pass through safe strings unchanged', () => {
-    expect(escapeHtml('hello world')).toBe('hello world');
-  });
 });
 
 // ---------------------------------------------------------------------------

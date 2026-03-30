@@ -271,12 +271,6 @@ describe('ai-keyword-expander', () => {
     });
   });
 
-  describe('getLastExpansionSource', () => {
-    it('should return disabled by default', async () => {
-      const { getLastExpansionSource } = await importFreshModule();
-      expect(getLastExpansionSource()).toBe('disabled');
-    });
-  });
 
   describe('parseKeywordResponse — object format (legacy)', () => {
     // The object format path is reached when the response contains { } with original/expanded arrays

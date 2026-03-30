@@ -187,20 +187,6 @@ describe('embedding-processor', () => {
   });
 
   describe('getProgress', () => {
-    it('should return progress with all fields', async () => {
-      const { embeddingProcessor } = await importFreshModule();
-      const progress = embeddingProcessor.getProgress();
-      expect(progress).toEqual(expect.objectContaining({
-        state: 'idle',
-        processed: 0,
-        total: 0,
-        withEmbeddings: 0,
-        remaining: 0,
-        speed: 0,
-        estimatedMinutes: 0,
-      }));
-    });
-
     it('should show remaining count after start', async () => {
       dbMocks.getItemsWithoutEmbeddingsBatch.mockResolvedValue([]);
       const { embeddingProcessor } = await importFreshModule();

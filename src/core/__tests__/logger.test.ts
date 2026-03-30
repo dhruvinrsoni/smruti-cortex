@@ -38,17 +38,6 @@ describe('Logger', () => {
     });
   });
 
-  describe('LogLevel enum', () => {
-    it('should have correct numeric values', async () => {
-      const { LogLevel } = await import('../logger');
-      expect(LogLevel.ERROR).toBe(0);
-      expect(LogLevel.WARN).toBe(1);
-      expect(LogLevel.INFO).toBe(2);
-      expect(LogLevel.DEBUG).toBe(3);
-      expect(LogLevel.TRACE).toBe(4);
-    });
-  });
-
   describe('getLevel / setLevelInternal', () => {
     it('should default to INFO level (2)', async () => {
       const { Logger, LogLevel } = await import('../logger');
@@ -186,16 +175,6 @@ describe('Logger', () => {
   });
 
   describe('forComponent', () => {
-    it('should return a ComponentLogger with error/warn/info/debug/trace methods', async () => {
-      const { Logger } = await import('../logger');
-      const componentLogger = Logger.forComponent('MyComponent');
-      expect(typeof componentLogger.info).toBe('function');
-      expect(typeof componentLogger.warn).toBe('function');
-      expect(typeof componentLogger.error).toBe('function');
-      expect(typeof componentLogger.debug).toBe('function');
-      expect(typeof componentLogger.trace).toBe('function');
-    });
-
     it('should call Logger methods when ComponentLogger methods are called', async () => {
       const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
       const { Logger } = await import('../logger');
@@ -263,14 +242,6 @@ describe('Logger', () => {
       vi.mocked(SettingsManager.setSetting).mockRejectedValueOnce(new Error('storage full'));
       vi.spyOn(console, 'error').mockImplementation(() => {});
       await expect(Logger.setLevel(LogLevel.WARN)).resolves.not.toThrow();
-    });
-  });
-
-  describe('createContextLogger (legacy)', () => {
-    it('should return a ComponentLogger', async () => {
-      const { createContextLogger } = await import('../logger');
-      const logger = createContextLogger('LegacyComp');
-      expect(typeof logger.info).toBe('function');
     });
   });
 

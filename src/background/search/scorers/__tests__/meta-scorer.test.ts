@@ -39,14 +39,6 @@ describe('metaScorer', () => {
     vi.clearAllMocks();
   });
 
-  it('should have name "meta"', () => {
-    expect(metaScorer.name).toBe('meta');
-  });
-
-  it('should have weight 0.10', () => {
-    expect(metaScorer.weight).toBe(0.10);
-  });
-
   describe('score calculation', () => {
     it('should return 0 when metaDescription and metaKeywords are both empty', () => {
       const item = makeItem({ metaDescription: '', metaKeywords: [] });

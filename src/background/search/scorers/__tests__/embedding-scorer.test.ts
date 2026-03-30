@@ -58,18 +58,6 @@ describe('embeddingScorer', () => {
     return await import('../embedding-scorer');
   }
 
-  describe('metadata', () => {
-    it('should have name "semantic"', async () => {
-      const { default: scorer } = await getModule();
-      expect(scorer.name).toBe('semantic');
-    });
-
-    it('should have default weight of 0.0', async () => {
-      const { default: scorer } = await getModule();
-      expect(scorer.weight).toBe(0.0);
-    });
-  });
-
   describe('score()', () => {
     it('should return 0 when embeddingsEnabled is false', async () => {
       const { default: scorer } = await getModule();

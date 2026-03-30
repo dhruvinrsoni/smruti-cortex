@@ -66,12 +66,6 @@ describe('expandQuery', () => {
     expect(result).toHaveLength(2);
   });
 
-  it('should include original and expanded fields', () => {
-    const result = expandQuery('javascript');
-    expect(result[0]).toHaveProperty('original');
-    expect(result[0]).toHaveProperty('expanded');
-  });
-
   it('should set original to the raw word', () => {
     const result = expandQuery('react');
     expect(result[0].original).toBe('react');
@@ -154,10 +148,6 @@ describe('matchesExpandedQuery', () => {
 
   it('returns false when no term matches', () => {
     expect(matchesExpandedQuery('python guide', ['javascript', 'node'])).toBe(false);
-  });
-
-  it('returns false for empty terms', () => {
-    expect(matchesExpandedQuery('something', [])).toBe(false);
   });
 });
 

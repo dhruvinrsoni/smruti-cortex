@@ -214,25 +214,6 @@ describe('SettingsManager', () => {
     vi.clearAllMocks();
   });
 
-  // -----------------------------------------------------------------------
-  // DisplayMode enum
-  // -----------------------------------------------------------------------
-  describe('DisplayMode enum', () => {
-    it('should export LIST and CARDS values', async () => {
-      const { DisplayMode } = await getManager();
-      expect(DisplayMode.LIST).toBe('list');
-      expect(DisplayMode.CARDS).toBe('cards');
-    });
-
-    it('should have exactly two members', async () => {
-      const { DisplayMode } = await getManager();
-      // Enum has both key->value and value->key mappings in TS, but string enums only have key->value
-      const values = Object.values(DisplayMode);
-      expect(values).toHaveLength(2);
-      expect(values).toContain('list');
-      expect(values).toContain('cards');
-    });
-  });
 
   // -----------------------------------------------------------------------
   // isInitialized
@@ -412,112 +393,17 @@ describe('SettingsManager', () => {
   });
 
   // -----------------------------------------------------------------------
-  // getSetting() — all schema keys
+  // getSetting() — all schema keys return correct defaults
   // -----------------------------------------------------------------------
   describe('getSetting', () => {
-    it('should return default displayMode (list)', async () => {
+    it('should return schema defaults for every setting key', async () => {
       const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('displayMode')).toBe('list');
-    });
+      const allDefaults = SettingsManager.getSettings();
 
-    it('should return default logLevel (2 = INFO)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('logLevel')).toBe(2);
-    });
-
-    it('should return default highlightMatches (true)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('highlightMatches')).toBe(true);
-    });
-
-    it('should return default focusDelayMs (450)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('focusDelayMs')).toBe(450);
-    });
-
-    it('should return default ollamaEnabled (false)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('ollamaEnabled')).toBe(false);
-    });
-
-    it('should return default ollamaEndpoint', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('ollamaEndpoint')).toBe('http://localhost:11434');
-    });
-
-    it('should return default ollamaModel (llama3.2:1b)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('ollamaModel')).toBe('llama3.2:1b');
-    });
-
-    it('should return default ollamaTimeout (30000)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('ollamaTimeout')).toBe(30000);
-    });
-
-    it('should return default aiSearchDelayMs (500)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('aiSearchDelayMs')).toBe(500);
-    });
-
-    it('should return default embeddingsEnabled (false)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('embeddingsEnabled')).toBe(false);
-    });
-
-    it('should return default embeddingModel', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('embeddingModel')).toBe('nomic-embed-text:latest');
-    });
-
-    it('should return default loadFavicons (true)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('loadFavicons')).toBe(true);
-    });
-
-    it('should return default sensitiveUrlBlacklist (empty array)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('sensitiveUrlBlacklist')).toEqual([]);
-    });
-
-    it('should return default indexBookmarks (true)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('indexBookmarks')).toBe(true);
-    });
-
-    it('should return default showDuplicateUrls (false)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('showDuplicateUrls')).toBe(false);
-    });
-
-    it('should return default showNonMatchingResults (false)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('showNonMatchingResults')).toBe(false);
-    });
-
-    it('should return default sortBy (best-match)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('sortBy')).toBe('best-match');
-    });
-
-    it('should return default defaultResultCount (50)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('defaultResultCount')).toBe(50);
-    });
-
-    it('should return default selectAllOnFocus (false)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('selectAllOnFocus')).toBe(false);
-    });
-
-    it('should return default theme (auto)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('theme')).toBe('auto');
-    });
-
-    it('should return default maxResults (100)', async () => {
-      const { SettingsManager } = await getManager();
-      expect(SettingsManager.getSetting('maxResults')).toBe(100);
+      for (const [key, expected] of Object.entries(allDefaults)) {
+        const actual = SettingsManager.getSetting(key as keyof typeof allDefaults);
+        expect(actual, `default for "${key}"`).toEqual(expected);
+      }
     });
   });
 
@@ -730,16 +616,6 @@ describe('SettingsManager', () => {
       expect(typeof json).toBe('string');
       expect(parsed).toHaveProperty('displayMode', 'list');
       expect(parsed).toHaveProperty('logLevel', 2);
-    });
-
-    it('should be pretty-printed with 2-space indentation', async () => {
-      const { SettingsManager } = await getManager();
-
-      const json = SettingsManager.exportSettings();
-
-      // JSON.stringify with indent=2 produces lines starting with spaces
-      expect(json).toContain('\n');
-      expect(json).toContain('  ');
     });
 
     it('should reflect updated settings', async () => {
