@@ -2970,13 +2970,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
           } catch { /* context invalidated */ }
         }
-        syncQSToggleBar();
-        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
-          renderResults(currentResults);
-        } else if (inputEl?.value?.trim()) {
-          handleInput();
-        } else {
-          loadRecentHistory();
+        applySettingSideEffects(def.key);
+        if (def.key !== 'displayMode' && def.key !== 'highlightMatches') {
+          if (inputEl?.value?.trim()) {
+            handleInput();
+          } else {
+            loadRecentHistory();
+          }
         }
       });
 
