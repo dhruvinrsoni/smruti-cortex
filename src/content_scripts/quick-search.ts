@@ -1099,11 +1099,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       searchPort.onMessage.addListener((response) => {
         // Handle error responses from service worker
         if (response?.error) {
+          if (response.error === 'Service worker not ready') {
+            log.debug('port', 'Service worker still initializing — will retry');
+            const query = inputEl?.value?.trim() || '';
+            if (query.length > 0) {
+              setTimeout(() => performSearch(query, true), 500);
+            } else {
+              setTimeout(() => loadRecentHistory(), 500);
+            }
+            return;
+          }
           log.warn('port', 'Error response from service worker:', response.error);
           aiSearchPending = false;
           hideSpinner();
-          // Don't render error as results — just clear spinner and log it
-          // The error badge will show via aiStatus if it's an AI error
           return;
         }
 
