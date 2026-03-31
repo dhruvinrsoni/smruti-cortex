@@ -12,6 +12,18 @@ import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shar
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import {
+  type PaletteCommand,
+  ALL_COMMANDS,
+  matchCommands,
+  getCommandsByTier,
+  getAvailableCommands,
+  getCycleValueFromCommand,
+  getCurrentValueLabel,
+  saveRecentCommand,
+  SEARCH_ENGINES,
+  SEARCH_ENGINE_PREFIXES,
+} from '../shared/command-registry';
 import type { AppSettings } from '../core/settings';
 import {
   type SearchResult,
@@ -484,35 +496,383 @@ function initializePopup() {
     if (btn) { btn.classList.toggle('visible', (inp?.value?.length ?? 0) > 0); }
   }
 
+  // Popup command palette state
+  type PopupPaletteMode = 'history' | 'commands' | 'power' | 'tabs' | 'bookmarks' | 'websearch' | 'help';
+  let popupPaletteMode: PopupPaletteMode = 'history';
+  let popupSelectedIndex = 0;
+  let popupConfirmingCommand: PaletteCommand | null = null;
+
+  function detectPopupMode(value: string): { mode: PopupPaletteMode; query: string } {
+    const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
+    const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
+    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+
+    if (!cpEnabled || !cpInPopup || !value) return { mode: 'history', query: value };
+    if (value === '?') return { mode: 'help', query: '' };
+    if (value.startsWith('??') && cpModes.includes('??')) return { mode: 'websearch', query: value.slice(2).trim() };
+
+    const prefixMap: Record<string, PopupPaletteMode> = { '/': 'commands', '>': 'power', '@': 'tabs', '#': 'bookmarks' };
+    const first = value[0];
+    if (prefixMap[first] && cpModes.includes(first)) return { mode: prefixMap[first], query: value.slice(1).trim() };
+
+    return { mode: 'history', query: value };
+  }
+
+  function renderPopupHelpScreen(): void {
+    const resultsList = $('results') as HTMLUListElement;
+    if (!resultsList) return;
+
+    popupSelectedIndex = -1;
+    resultsList.innerHTML = '';
+    resultsList.className = 'results list';
+
+    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+
+    const modes = [
+      { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
+      { prefix: '>',  label: 'Power / Admin',  desc: 'Index management, diagnostics, data export' },
+      { prefix: '@',  label: 'Tab Switcher',   desc: 'Search & switch open tabs, reopen closed' },
+      { prefix: '#',  label: 'Bookmarks',      desc: 'Search your bookmarks by title or URL' },
+      { prefix: '??', label: 'Web Search',     desc: 'Quick web search via Google, Bing, DDG...' },
+    ];
+
+    modes.forEach(m => {
+      const enabled = cpModes.includes(m.prefix);
+      const li = document.createElement('li');
+      li.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);${!enabled ? 'opacity:0.4;' : ''}`;
+      li.innerHTML = `
+        <span style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;color:var(--accent,#3b82f6);width:28px;text-align:center;">${m.prefix}</span>
+        <span style="flex:1;font-size:13px;font-weight:500;">${m.label}${!enabled ? ' <span style="font-size:10px;color:var(--muted);">[disabled]</span>' : ''}</span>
+        <span style="font-size:9px;color:var(--muted);">${m.desc}</span>
+      `;
+      if (enabled) {
+        li.addEventListener('click', () => {
+          const input = $('search-input') as HTMLInputElement;
+          if (input) {
+            input.value = m.prefix;
+            input.dispatchEvent(new Event('input'));
+            input.focus();
+          }
+        });
+      }
+      resultsList.appendChild(li);
+    });
+
+    const divider = document.createElement('li');
+    divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);cursor:default;border-top:1px solid var(--border,#e5e7eb);margin-top:4px;';
+    divider.textContent = 'Tips';
+    resultsList.appendChild(divider);
+
+    const tips = [
+      { icon: '⌨️', label: 'Keyboard Shortcut', desc: 'Ctrl+Shift+S to open quick-search' },
+      { icon: '🔍', label: 'Omnibox', desc: 'Type "sc " in the address bar' },
+      { icon: '🎯', label: 'Guided Tour', desc: 'Type /tour to start the interactive tour' },
+    ];
+
+    tips.forEach(t => {
+      const li = document.createElement('li');
+      li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:var(--card);cursor:default;';
+      li.innerHTML = `
+        <span style="font-size:16px;width:24px;text-align:center;">${t.icon}</span>
+        <span style="flex:1;font-size:13px;font-weight:500;">${t.label}</span>
+        <span style="font-size:9px;color:var(--muted);">${t.desc}</span>
+      `;
+      resultsList.appendChild(li);
+    });
+
+    resultCountNode.textContent = '';
+  }
+
+  function renderPopupPaletteResults(mode: PopupPaletteMode, query: string): void {
+    const resultsList = $('results') as HTMLUListElement;
+    if (!resultsList) return;
+
+    popupSelectedIndex = 0;
+    resultsList.innerHTML = '';
+    resultsList.className = 'results list';
+
+    if (mode === 'commands' || mode === 'power') {
+      const tier = mode === 'power' ? 'power' as const : 'everyday' as const;
+      const settings = SettingsManager.getSettings();
+      const commands = getAvailableCommands(tier, settings);
+
+      const displayList = query
+        ? matchCommands(query, commands, settings)
+        : commands;
+
+      resultCountNode.textContent = `${displayList.length} command${displayList.length !== 1 ? 's' : ''}`;
+      if (displayList.length === 0) {
+        resultsList.innerHTML = '<li style="text-align:center;padding:24px;color:var(--muted);">No matching commands</li>';
+        return;
+      }
+
+      displayList.forEach((cmd, idx) => {
+        const li = document.createElement('li');
+        li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);';
+        if (idx === 0) li.style.background = 'var(--hover)';
+
+        const currentLabel = getPopupCurrentLabel(cmd);
+        li.innerHTML = `
+          <span style="font-size:16px;width:24px;text-align:center;">${cmd.icon}</span>
+          <span style="flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cmd.label}${currentLabel ? ` <span style="font-size:10px;color:var(--accent,#3b82f6);font-weight:600;">[${currentLabel}]</span>` : ''}</span>
+          <span style="font-size:9px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:1px 6px;border-radius:3px;">${cmd.category}</span>
+          ${cmd.dangerous ? '<span>⚠️</span>' : ''}
+          ${cmd.shortcut ? `<span style="font-size:9px;color:var(--muted);background:var(--chip);padding:1px 5px;border-radius:3px;">${cmd.shortcut}</span>` : ''}
+        `;
+
+        li.addEventListener('click', () => {
+          popupSelectedIndex = idx;
+          executePopupCommand(cmd);
+        });
+        li.addEventListener('mouseenter', () => {
+          resultsList.querySelectorAll('li').forEach(el => (el as HTMLElement).style.background = 'var(--card)');
+          li.style.background = 'var(--hover)';
+          popupSelectedIndex = idx;
+        });
+        resultsList.appendChild(li);
+      });
+      return;
+    }
+
+    if (mode === 'tabs') {
+      resultCountNode.textContent = 'Loading tabs...';
+      sendMessage({ type: 'GET_OPEN_TABS' }).then((resp: { tabs?: chrome.tabs.Tab[] }) => {
+        if (!resp?.tabs) { resultCountNode.textContent = '0 tabs'; return; }
+        const tabs = query
+          ? resp.tabs.filter(t => t.title?.toLowerCase().includes(query.toLowerCase()) || t.url?.toLowerCase().includes(query.toLowerCase()))
+          : resp.tabs;
+        resultCountNode.textContent = `${tabs.length} tab${tabs.length !== 1 ? 's' : ''}`;
+        resultsList.innerHTML = '';
+        tabs.forEach((tab, idx) => {
+          const li = document.createElement('li');
+          li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
+          if (idx === 0) li.style.background = 'var(--hover)';
+          const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          li.innerHTML = `
+            <img src="${tab.favIconUrl || ''}" alt="" style="width:16px;height:16px;border-radius:3px;" onerror="this.style.display='none'">
+            <div style="flex:1;overflow:hidden;">
+              <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.title || 'Untitled')}</div>
+              <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.url || '')}</div>
+            </div>
+            ${tab.pinned ? '<span>📌</span>' : ''}${tab.active ? '<span>●</span>' : ''}
+          `;
+          li.addEventListener('click', () => {
+            sendMessage({ type: 'SWITCH_TO_TAB', tabId: tab.id, windowId: tab.windowId }).catch(() => {});
+          });
+          resultsList.appendChild(li);
+        });
+      }).catch(() => { resultCountNode.textContent = 'Error loading tabs'; });
+      return;
+    }
+
+    if (mode === 'bookmarks') {
+      resultCountNode.textContent = 'Searching bookmarks...';
+      const msgType = query ? 'SEARCH_BOOKMARKS' : 'GET_RECENT_BOOKMARKS';
+      const payload = query ? { type: msgType, query } : { type: msgType };
+      sendMessage(payload).then((resp: { bookmarks?: chrome.bookmarks.BookmarkTreeNode[] }) => {
+        if (!resp?.bookmarks) { resultCountNode.textContent = '0 bookmarks'; return; }
+        const bms = resp.bookmarks.filter(b => b.url);
+        resultCountNode.textContent = `${bms.length} bookmark${bms.length !== 1 ? 's' : ''}`;
+        resultsList.innerHTML = '';
+        bms.forEach((bm, idx) => {
+          const li = document.createElement('li');
+          li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
+          if (idx === 0) li.style.background = 'var(--hover)';
+          const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          li.innerHTML = `
+            <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" style="width:16px;height:16px;border-radius:3px;" onerror="this.style.display='none'">
+            <div style="flex:1;overflow:hidden;">
+              <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.title || 'Untitled')}</div>
+              <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.url || '')}</div>
+            </div>
+          `;
+          li.addEventListener('click', () => {
+            chrome.tabs.create({ url: bm.url!, active: true });
+          });
+          resultsList.appendChild(li);
+        });
+      }).catch(() => { resultCountNode.textContent = 'Error'; });
+      return;
+    }
+
+    if (mode === 'websearch') {
+      if (!query) {
+        resultsList.innerHTML = '<li style="text-align:center;padding:24px;color:var(--muted);">Type a search query...</li>';
+        resultCountNode.textContent = '';
+        return;
+      }
+      let engineKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+      let searchQuery = query;
+      const prefixMatch = query.match(/^([a-z]{1,2})\s+(.+)$/);
+      if (prefixMatch && SEARCH_ENGINE_PREFIXES[prefixMatch[1]]) {
+        engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
+        searchQuery = prefixMatch[2];
+      }
+      const engineName = engineKey.charAt(0).toUpperCase() + engineKey.slice(1);
+      const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      const li = document.createElement('li');
+      li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--hover);';
+      li.innerHTML = `
+        <span style="font-size:16px;">🔍</span>
+        <span style="flex:1;font-size:13px;font-weight:500;">Search ${engineName} for "${esc(searchQuery)}"</span>
+        <span style="font-size:10px;color:var(--muted);">Enter to search</span>
+      `;
+      li.addEventListener('click', () => {
+        chrome.tabs.create({ url: searchUrl, active: true });
+      });
+      resultsList.appendChild(li);
+      resultCountNode.textContent = '';
+      return;
+    }
+  }
+
+  function getPopupCurrentLabel(cmd: PaletteCommand): string | null {
+    const settings = SettingsManager.getSettings();
+    if (cmd.action === 'toggle-boolean' && cmd.settingKey) return settings[cmd.settingKey] ? 'ON' : 'OFF';
+    if (cmd.action === 'sub-command' && cmd.cycleValues && cmd.settingKey) {
+      const current = String(settings[cmd.settingKey]);
+      const match = cmd.cycleValues.find(cv => cv.value === current);
+      return match?.label ?? null;
+    }
+    if (cmd.action === 'cycle' && cmd.settingKey) {
+      const parent = ALL_COMMANDS.find(c => c.subCommands?.some(sub => sub.id === cmd.id));
+      if (parent?.cycleValues) {
+        const current = String(settings[parent.settingKey!]);
+        const thisValue = getCycleValueFromCommand(cmd);
+        return String(thisValue) === current ? 'current' : null;
+      }
+    }
+    return null;
+  }
+
+  function executePopupCommand(cmd: PaletteCommand): void {
+    saveRecentCommand(cmd.id);
+    if (cmd.action === 'toggle-boolean' && cmd.settingKey) {
+      const current = SettingsManager.getSetting(cmd.settingKey);
+      const newVal = !current;
+      SettingsManager.setSetting(cmd.settingKey, newVal as never);
+      showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`, 'info');
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        const { query } = detectPopupMode(input.value.trim());
+        renderPopupPaletteResults(popupPaletteMode, query);
+      }
+      return;
+    }
+    if (cmd.action === 'cycle' && cmd.settingKey) {
+      const value = getCycleValueFromCommand(cmd);
+      if (value !== undefined) {
+        SettingsManager.setSetting(cmd.settingKey, value as never);
+        showToast(`${cmd.label}`, 'info');
+        const input = $('search-input') as HTMLInputElement;
+        if (input) {
+          const { query } = detectPopupMode(input.value.trim());
+          renderPopupPaletteResults(popupPaletteMode, query);
+        }
+      }
+      return;
+    }
+    if (cmd.action === 'message' && cmd.messageType) {
+      const payload: Record<string, unknown> = { type: cmd.messageType };
+      if (cmd.id === 'zoom-in') payload.direction = 'in';
+      else if (cmd.id === 'zoom-out') payload.direction = 'out';
+      else if (cmd.id === 'zoom-reset') payload.direction = 'reset';
+      else if (cmd.id === 'new-tab') payload.windowType = 'tab';
+      else if (cmd.id === 'new-window') payload.windowType = 'window';
+      else if (cmd.id === 'new-incognito') payload.windowType = 'incognito';
+      sendMessage(payload).then(() => showToast(`${cmd.icon} ${cmd.label} — done`)).catch(() => showToast('Error', 'error'));
+      return;
+    }
+    if (cmd.action === 'open-url' && cmd.url) {
+      chrome.tabs.create({ url: cmd.url, active: true });
+      return;
+    }
+    if (cmd.action === 'page-action') {
+      if (cmd.id === 'tour') runTour(POPUP_TOUR_STEPS, document);
+      else if (cmd.id === 'about') {
+        const manifest = chrome.runtime.getManifest();
+        showToast(`SmrutiCortex v${manifest.version}\nInstant browser history search`);
+      }
+      else if (cmd.id === 'shortcuts') showToast('Enter: open · Shift+Enter: background · ↑↓: navigate · Esc: clear');
+    }
+  }
+
+  function handlePopupPaletteEnter(): void {
+    const resultsList = $('results') as HTMLUListElement;
+    if (!resultsList) return;
+    const input = $('search-input') as HTMLInputElement;
+
+    if (popupPaletteMode === 'websearch') {
+      const { query } = detectPopupMode((input?.value ?? '').trim());
+      if (query) {
+        let engineKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+        let searchQuery = query;
+        const prefixMatch = query.match(/^([a-z]{1,2})\s+(.+)$/);
+        if (prefixMatch && SEARCH_ENGINE_PREFIXES[prefixMatch[1]]) {
+          engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
+          searchQuery = prefixMatch[2];
+        }
+        const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
+        chrome.tabs.create({ url: searchUrl, active: true });
+      }
+      return;
+    }
+
+    if (popupPaletteMode === 'tabs' || popupPaletteMode === 'bookmarks') {
+      const items = resultsList.querySelectorAll('li');
+      if (items.length > 0) {
+        const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
+        selected?.click();
+      }
+      return;
+    }
+
+    if (popupPaletteMode === 'commands' || popupPaletteMode === 'power') {
+      const { query } = detectPopupMode((input?.value ?? '').trim());
+      const tier = popupPaletteMode === 'power' ? 'power' as const : 'everyday' as const;
+      const settings = SettingsManager.getSettings();
+      const commands = getAvailableCommands(tier, settings);
+      const matches = matchCommands(query, commands, settings);
+      if (matches.length > 0 && popupSelectedIndex >= 0 && popupSelectedIndex < matches.length) {
+        executePopupCommand(matches[popupSelectedIndex]);
+      }
+    }
+  }
+
   function debounceSearchLocal(q: string) {
     syncClearButton();
+    popupConfirmingCommand = null;
 
-    // Typing "?" triggers the feature tour
-    if (q.trim() === '?') {
-      const input = $('search-input') as HTMLInputElement;
-      if (input) { input.value = ''; }
-      syncClearButton();
-      runTour(POPUP_TOUR_STEPS, document);
+    const { mode, query } = detectPopupMode(q.trim());
+    popupPaletteMode = mode;
+
+    if (mode === 'help') {
+      renderPopupHelpScreen();
       return;
     }
 
     if (debounceTimer) {clearTimeout(debounceTimer);}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined;}
-    if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;} // Cancel pending focus shift
+    if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;}
 
-    // Determine AI state for this search cycle
+    // Non-history modes: route to palette rendering
+    if (mode !== 'history') {
+      if (popupSpinner) popupSpinner.classList.remove('active');
+      renderPopupPaletteResults(mode, query);
+      return;
+    }
+
+    // --- Original history search flow ---
     const aiEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
     aiSearchPending = aiEnabled;
 
-    // Show spinner + loading text immediately
     if (popupSpinner) {popupSpinner.classList.add('active');}
     resultCountNode.textContent = 'Searching...';
 
-    // Phase 1: Fast non-AI search
     debounceTimer = window.setTimeout(() => doSearch(q, true), 150);
 
-    // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
-    // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
     if (aiEnabled) {
       const aiDelayMs = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
       aiDebounceTimer = window.setTimeout(() => {
@@ -1004,6 +1364,12 @@ function initializePopup() {
         // Input already empty — let Escape bubble up to close the popup
         return;
       }
+      // Command palette: Enter in non-history mode
+      if (e.key === 'Enter' && popupPaletteMode !== 'history') {
+        e.preventDefault();
+        handlePopupPaletteEnter();
+        return;
+      }
       // Ctrl+A in input: select only the input text, not the whole popup document
       if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
         e.stopPropagation();
@@ -1330,6 +1696,34 @@ function initializePopup() {
       const blacklist = SettingsManager.getSetting('sensitiveUrlBlacklist') || [];
       sensitiveUrlBlacklistInput.value = blacklist.join('\n');
     }
+
+    // Command Palette settings
+    const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
+    const cpEnabledInput = modal.querySelector('#modal-commandPaletteEnabled') as HTMLInputElement;
+    if (cpEnabledInput) cpEnabledInput.checked = cpEnabled;
+
+    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+    const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
+    const cpInPopupInput = modal.querySelector('#modal-commandPaletteInPopup') as HTMLInputElement;
+    if (cpInPopupInput) {
+      cpInPopupInput.checked = cpInPopup;
+      cpInPopupInput.disabled = !cpEnabled;
+    }
+
+    const modeMap: Record<string, string> = { '/': 'slash', '>': 'angle', '@': 'at', '#': 'hash', '??': 'web' };
+    for (const [prefix, suffix] of Object.entries(modeMap)) {
+      const el = modal.querySelector(`#modal-palette-mode-${suffix}`) as HTMLInputElement;
+      if (el) {
+        el.checked = cpModes.includes(prefix);
+        el.disabled = !cpEnabled;
+      }
+    }
+
+    const currentWebEngine = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+    const webEngineInputs = modal.querySelectorAll('input[name="modal-webSearchEngine"]');
+    webEngineInputs.forEach(input => {
+      (input as HTMLInputElement).checked = (input as HTMLInputElement).value === currentWebEngine;
+    });
 
     // Initialize bookmark button in settings modal
     initializeBookmarkButton();
@@ -2426,6 +2820,52 @@ function initializePopup() {
         showToast(`Blacklist updated (${blacklist.length} entries)`, 'info');
       });
     }
+
+    // --- Command Palette settings ---
+    const cpMasterInput = modal.querySelector('#modal-commandPaletteEnabled') as HTMLInputElement;
+    const cpInPopupInput2 = modal.querySelector('#modal-commandPaletteInPopup') as HTMLInputElement;
+    const cpModeCheckboxes = modal.querySelectorAll<HTMLInputElement>('[id^="modal-palette-mode-"]');
+
+    function updatePaletteDisabledState() {
+      const enabled = cpMasterInput?.checked ?? true;
+      cpModeCheckboxes.forEach(cb => { cb.disabled = !enabled; });
+      if (cpInPopupInput2) cpInPopupInput2.disabled = !enabled;
+    }
+
+    if (cpMasterInput) {
+      cpMasterInput.addEventListener('change', async () => {
+        await SettingsManager.setSetting('commandPaletteEnabled', cpMasterInput.checked);
+        updatePaletteDisabledState();
+        showToast('Command Palette ' + (cpMasterInput.checked ? 'enabled' : 'disabled'), 'info');
+      });
+    }
+
+    cpModeCheckboxes.forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const selected: string[] = [];
+        cpModeCheckboxes.forEach(c => { if (c.checked) selected.push(c.value); });
+        await SettingsManager.setSetting('commandPaletteModes', selected);
+        showToast(`Active modes: ${selected.join(' ') || 'none'}`, 'info');
+      });
+    });
+
+    if (cpInPopupInput2) {
+      cpInPopupInput2.addEventListener('change', async () => {
+        await SettingsManager.setSetting('commandPaletteInPopup', cpInPopupInput2.checked);
+        showToast('Popup command palette ' + (cpInPopupInput2.checked ? 'enabled' : 'disabled'), 'info');
+      });
+    }
+
+    const webEngineInputs = modal.querySelectorAll('input[name="modal-webSearchEngine"]');
+    webEngineInputs.forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+          await SettingsManager.setSetting('webSearchEngine', target.value);
+          showToast(`Web search engine set to ${target.value}`, 'info');
+        }
+      });
+    });
 
     // --- Toolbar tab: populate toggle checkboxes ---
     const toolbarOptionsContainer = modal.querySelector('#toolbar-toggle-options') as HTMLDivElement;
