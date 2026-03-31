@@ -2144,6 +2144,22 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl?.addEventListener('keydown', cancelOnEsc);
   }
 
+  function applySettingSideEffects(key: keyof AppSettings): void {
+    syncQSToggleBar();
+    if (key === 'theme') {
+      applyQSTheme(cachedSettings?.theme);
+    }
+    if (key === 'selectAllOnFocus') {
+      updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
+      try { if (shadowHost) shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); } catch { /* ignore */ }
+    }
+    if (key === 'displayMode' || key === 'highlightMatches') {
+      if (currentResults.length > 0 && currentMode === 'history') {
+        renderResults(currentResults);
+      }
+    }
+  }
+
   function executeCommand(cmd: PaletteCommand): void {
     log.info('executeCommand', `Executing: ${cmd.id} (action: ${cmd.action})`);
     saveRecentCommand(cmd.id);
@@ -2159,8 +2175,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               settings: { [cmd.settingKey]: newVal },
             });
           } catch { /* context invalidated */ }
-          if (cmd.settingKey === 'theme') applyQSTheme(String(newVal));
-          syncQSToggleBar();
+          applySettingSideEffects(cmd.settingKey);
           showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`);
           const raw = inputEl?.value ?? '';
           const { query } = detectMode(raw.trim());
@@ -2179,8 +2194,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
                 settings: { [cmd.settingKey]: value },
               });
             } catch { /* context invalidated */ }
-            if (cmd.settingKey === 'theme') applyQSTheme(String(value));
-            syncQSToggleBar();
+            applySettingSideEffects(cmd.settingKey);
             showToast(`${cmd.label}`);
             const raw = inputEl?.value ?? '';
             const { query } = detectMode(raw.trim());
