@@ -182,35 +182,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // Track context invalidation recovery attempts
   let contextRecoveryAttempts = 0;
-  const MAX_CONTEXT_RECOVERY_ATTEMPTS = 3;
-  const CONTEXT_RECOVERY_DELAY = 500; // ms
-
-  // Helper: Attempt to recover from context invalidation
-  async function attemptContextRecovery(): Promise<boolean> {
-    if (contextRecoveryAttempts >= MAX_CONTEXT_RECOVERY_ATTEMPTS) {
-      return false;
-    }
-    
-    contextRecoveryAttempts++;
-    
-    // Wait before checking again (exponential backoff)
-    const delay = CONTEXT_RECOVERY_DELAY * Math.pow(2, contextRecoveryAttempts - 1);
-    await new Promise(resolve => setTimeout(resolve, delay));
-    
-    // Check if context is now valid
-    if (isExtensionContextValid()) {
-      contextRecoveryAttempts = 0; // Reset on success
-      // Try to reopen search port
-      if (!searchPort) {
-        openSearchPort();
-      }
-      return true;
-    }
-    
-    return false;
-  }
 
   // No-reload reconnect: re-establish port and retry search without reloading
   // the page. After an extension update, the service worker re-injects this
@@ -1910,26 +1882,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // --- Original history search flow ---
 
     if (!isExtensionContextValid()) {
-      log.warn('handleInput', 'Extension context invalid — attempting recovery');
-      attemptContextRecovery().then(recovered => {
-        if (recovered) {
-          log.info('handleInput', 'Context recovered successfully');
-          const q = inputEl?.value?.trim() || '';
-          if (q.length > 0) {
-            performSearch(q, true);
-          }
-        } else {
-          renderErrorResults(
-            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-            attemptNoReloadReconnect
-          );
-        }
-      }).catch(() => {
-        renderErrorResults(
-          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-          attemptNoReloadReconnect
-        );
-      });
+      log.debug('handleInput', 'Extension context invalid — showing reconnect UI');
+      renderErrorResults(
+        '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+        attemptNoReloadReconnect
+      );
       return;
     }
 
@@ -3128,31 +3085,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Spinner is NOT shown here — it's managed by response handlers.
     // Phase 1 results render without spinner; spinner appears only when AI is pending.
 
-    // Check extension context validity first
     if (!isExtensionContextValid()) {
-      log.warn('performSearch', 'Extension context invalid — attempting recovery');
+      log.debug('performSearch', 'Extension context invalid — showing reconnect UI');
       currentResults = [];
-
-      // Attempt silent recovery first
-      attemptContextRecovery().then(recovered => {
-        if (recovered) {
-          log.info('performSearch', 'Context recovered — retrying search');
-          showToast('Extension reconnected', 'success');
-          performSearch(query);
-        } else {
-          log.error('performSearch', 'Context recovery failed after all attempts');
-          renderErrorResults(
-            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-            attemptNoReloadReconnect
-          );
-        }
-      }).catch(() => {
-        log.error('performSearch', 'Context recovery threw an error');
-        renderErrorResults(
-          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-          attemptNoReloadReconnect
-        );
-      });
+      renderErrorResults(
+        '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+        attemptNoReloadReconnect
+      );
       return;
     }
 
