@@ -102,8 +102,8 @@
 
     <footer class="footer">
       <div id="hints-container" class="hints">
-        <span>Enter: open in new tab · Shift+Enter: background tab · Ctrl+C: copy HTML · Ctrl+M: copy markdown</span>
-        <span>↑↓: navigate · ←→: move columns (cards) · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
+        <span>Enter: open · Shift+Enter: background · Ctrl+C: copy HTML · Ctrl+M: markdown · ↑↓: navigate · Esc: clear</span>
+        <span style="font-size:10px;opacity:0.7;">/ Commands &nbsp; > Power &nbsp; @ Tabs &nbsp; # Bookmarks &nbsp; ?? Web Search &nbsp; ? Help</span>
       </div>
     </footer>
   </div>
@@ -125,6 +125,7 @@
         <button class="settings-tab" data-tab="privacy" role="tab" aria-selected="false">🔒 Privacy</button>
         <button class="settings-tab" data-tab="data" role="tab" aria-selected="false">💾 Data</button>
         <button class="settings-tab" data-tab="toolbar" role="tab" aria-selected="false">🔧 Toolbar</button>
+        <button class="settings-tab" data-tab="palette" role="tab" aria-selected="false">🎯 Command Palette</button>
         <button class="settings-tab" data-tab="advanced" role="tab" aria-selected="false">🛠️ Advanced</button>
       </div>
       <div class="settings-content">
@@ -554,6 +555,121 @@ ollama pull nomic-embed-text:latest
               <img src="../assets/icon-bookmark.svg" alt="" class="bookmark-icon" />
               <span id="bookmark-btn-text">Bookmark This Page</span>
             </button>
+          </div>
+        </div>
+        <div class="settings-section" data-tab="palette">
+          <h3>Command Palette</h3>
+          <p>Transform the quick-search overlay into a universal browser control surface with prefix-based modes.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-commandPaletteEnabled">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Enable Command Palette</strong>
+                <small>Master switch — enables prefix modes in the quick-search overlay. OFF = all prefixes trigger normal history search.</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section" data-tab="palette">
+          <h3>Active Modes</h3>
+          <p>Choose which prefix modes are available. Greyed out when master switch is off.</p>
+          <div class="setting-options" id="palette-mode-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-palette-mode-slash" value="/" disabled>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>/ Commands</strong>
+                <small>Everyday actions: toggles, page actions, navigation</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="checkbox" id="modal-palette-mode-angle" value=">" disabled>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>> Power</strong>
+                <small>Admin: rebuild index, clear data, diagnostics, factory reset</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="checkbox" id="modal-palette-mode-at" value="@" disabled>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>@ Tabs</strong>
+                <small>Switch between open tabs + recently closed</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="checkbox" id="modal-palette-mode-hash" value="#" disabled>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong># Bookmarks</strong>
+                <small>Search and open bookmarks with folder paths</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="checkbox" id="modal-palette-mode-web" value="??" disabled>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>?? Web Search</strong>
+                <small>Search the web from the palette</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section" data-tab="palette">
+          <h3>Popup Access</h3>
+          <p>By default, command palette modes are only available in the quick-search overlay. Enable this to also use them in the popup.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="checkbox" id="modal-commandPaletteInPopup" disabled>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Also enable in Popup</strong>
+                <small>Useful on restricted pages (chrome://, edge://) where quick-search can't inject</small>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="settings-section" data-tab="palette">
+          <h3>Web Search Engine</h3>
+          <p>Default search engine for the ?? web search mode.</p>
+          <div class="setting-options">
+            <label class="setting-option">
+              <input type="radio" name="modal-webSearchEngine" value="google">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Google</strong>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-webSearchEngine" value="duckduckgo">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>DuckDuckGo</strong>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-webSearchEngine" value="bing">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Bing</strong>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-webSearchEngine" value="youtube">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>YouTube</strong>
+              </div>
+            </label>
+            <label class="setting-option">
+              <input type="radio" name="modal-webSearchEngine" value="github">
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>GitHub</strong>
+              </div>
+            </label>
           </div>
         </div>
         <div class="settings-section" data-tab="toolbar">
