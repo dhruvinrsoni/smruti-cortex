@@ -1720,6 +1720,15 @@ function initializePopup() {
       (input as HTMLInputElement).checked = (input as HTMLInputElement).value === currentWebEngine;
     });
 
+    // Sync toolbar toggle checkboxes with current settings
+    const toolbarOptionsContainer = modal.querySelector('#toolbar-toggle-options') as HTMLDivElement | null;
+    if (toolbarOptionsContainer) {
+      const currentToggles = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
+      toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
+        cb.checked = currentToggles.includes(cb.dataset.toolbarKey!);
+      });
+    }
+
     // Initialize bookmark button in settings modal
     initializeBookmarkButton();
 
