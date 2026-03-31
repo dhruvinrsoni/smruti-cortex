@@ -1087,7 +1087,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Check extension context validity first
     if (!isExtensionContextValid()) {
-      log.warn('port', 'Cannot open port: extension context invalidated');
+      log.debug('port', 'Cannot open port: extension context invalidated');
       return;
     }
     
@@ -1401,7 +1401,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     settingsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!chrome.runtime?.id) {
-        log.warn('settings', 'Cannot open settings: extension context invalidated');
+        log.debug('settings', 'Cannot open settings: extension context invalidated');
         return;
       }
       // Open the extension popup page in a new tab
