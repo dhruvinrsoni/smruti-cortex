@@ -4212,16 +4212,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Update cached settings when background notifies of changes
     if (message?.type === 'SETTINGS_CHANGED' && message?.settings) {
       try {
+        const changedKeys = Object.keys(message.settings) as (keyof AppSettings)[];
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
-        try {
-          updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-        } catch { /* ignore */ }
-        try {
-          if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
-        } catch { /* ignore */ }
         searchDebounceMs = DEBOUNCE_MS;
-        applyQSTheme(cachedSettings?.theme);
-        syncQSToggleBar();
+
+        // Apply visual side effects for each changed key
+        for (const key of changedKeys) {
+          applySettingSideEffects(key);
+        }
+
+        // If toolbarToggles changed, re-render the whole chip bar (not just sync)
+        if (changedKeys.includes('toolbarToggles' as keyof AppSettings)) {
+          renderQSToggleBar();
+        }
+
+        // Reload recent history if relevant settings changed while input is empty
+        const historyKeys: string[] = ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'];
+        if (changedKeys.some(k => historyKeys.includes(k)) && !inputEl?.value?.trim()) {
+          loadRecentHistory();
+        }
       } catch {
         // ignore
       }
