@@ -2363,6 +2363,17 @@ function initializePopup() {
       });
     });
 
+    // Convert vertical mouse wheel to horizontal scroll on settings tab bar
+    const tabBar = modal.querySelector('.settings-tabs') as HTMLElement | null;
+    if (tabBar) {
+      tabBar.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          tabBar.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    }
+
     // Theme changes
     const themeInputs = modal.querySelectorAll('input[name="modal-theme"]');
     themeInputs.forEach(input => {
