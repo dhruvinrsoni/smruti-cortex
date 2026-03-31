@@ -1577,21 +1577,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Maintain focus behaviour on mousedown
     // Only force focus when clicking the backdrop (overlay background).
-    // Do NOT force-focus when clicking interactive elements (results, settings, input).
+    // Do NOT force-focus when clicking interactive elements or selectable text.
     overlayEl.addEventListener('mousedown', (e) => {
       const target = e.target as Element | null;
       if (!target) { return; }
 
-      // If clicking on the overlay backdrop itself (outside the container), close overlay.
-      if (target === overlayEl) {
-        // Allow the click handler above to close; do not refocus.
-        return;
-      }
+      if (target === overlayEl) { return; }
 
-      // If click landed directly on a non-interactive area inside overlay (rare),
-      // prefer focusing the input. But avoid forcing focus for interactive elements.
       const tag = target.tagName?.toLowerCase();
-      const isInteractive = tag === 'input' || tag === 'button' || tag === 'a' || target.classList?.contains('result') || target.closest && Boolean(target.closest('button, a, input'));
+      const isInteractive = tag === 'input' || tag === 'button' || tag === 'a'
+        || target.classList?.contains('result')
+        || target.closest?.('.toast, .recent-searches-section, .result, .command-row, .tab-row, .bookmark-row, .help-row')
+        || target.closest?.('button, a, input');
       if (!isInteractive) {
         setTimeout(() => inputEl?.focus(), 0);
       }
