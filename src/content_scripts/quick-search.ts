@@ -2205,6 +2205,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               settings: { [cmd.settingKey]: newVal },
             });
           } catch { /* context invalidated */ }
+          if (cmd.settingKey === 'theme') applyQSTheme(String(newVal));
+          syncQSToggleBar();
           showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`);
           const raw = inputEl?.value ?? '';
           const { query } = detectMode(raw.trim());
@@ -2223,6 +2225,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
                 settings: { [cmd.settingKey]: value },
               });
             } catch { /* context invalidated */ }
+            if (cmd.settingKey === 'theme') applyQSTheme(String(value));
+            syncQSToggleBar();
             showToast(`${cmd.label}`);
             const raw = inputEl?.value ?? '';
             const { query } = detectMode(raw.trim());

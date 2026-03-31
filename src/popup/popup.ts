@@ -753,6 +753,7 @@ function initializePopup() {
       const current = SettingsManager.getSetting(cmd.settingKey);
       const newVal = !current;
       SettingsManager.setSetting(cmd.settingKey, newVal as never);
+      syncToggleBar();
       showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`, 'info');
       const input = $('search-input') as HTMLInputElement;
       if (input) {
@@ -765,6 +766,8 @@ function initializePopup() {
       const value = getCycleValueFromCommand(cmd);
       if (value !== undefined) {
         SettingsManager.setSetting(cmd.settingKey, value as never);
+        if (cmd.settingKey === 'theme') applyTheme(String(value) as 'light' | 'dark' | 'auto');
+        syncToggleBar();
         showToast(`${cmd.label}`, 'info');
         const input = $('search-input') as HTMLInputElement;
         if (input) {
