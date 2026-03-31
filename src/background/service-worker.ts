@@ -746,6 +746,259 @@ setupPortBasedMessaging();
                 break;
               }
 
+              // ===== COMMAND PALETTE: Tab, Bookmark, Window, and utility handlers =====
+
+              case 'GET_OPEN_TABS': {
+                const tabs = await browserAPI.tabs.query({});
+                sendResponse({ tabs });
+                break;
+              }
+
+              case 'SWITCH_TO_TAB': {
+                const { tabId, windowId } = msg;
+                await browserAPI.tabs.update(tabId, { active: true });
+                await browserAPI.windows.update(windowId, { focused: true });
+                sendResponse({ status: 'OK' });
+                break;
+              }
+
+              case 'CLOSE_TAB': {
+                const senderTabId = sender.tab?.id;
+                const targetTabId = msg.tabId ?? senderTabId;
+                if (targetTabId) {
+                  await browserAPI.tabs.remove(targetTabId);
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to close' });
+                }
+                break;
+              }
+
+              case 'DUPLICATE_TAB': {
+                const dupTabId = msg.tabId ?? sender.tab?.id;
+                if (dupTabId) {
+                  await browserAPI.tabs.duplicate(dupTabId);
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to duplicate' });
+                }
+                break;
+              }
+
+              case 'PIN_TAB': {
+                const pinTabId = msg.tabId ?? sender.tab?.id;
+                if (pinTabId) {
+                  const tab = await browserAPI.tabs.get(pinTabId);
+                  await browserAPI.tabs.update(pinTabId, { pinned: !tab.pinned });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to pin' });
+                }
+                break;
+              }
+
+              case 'MUTE_TAB': {
+                const muteTabId = msg.tabId ?? sender.tab?.id;
+                if (muteTabId) {
+                  const tab = await browserAPI.tabs.get(muteTabId);
+                  await browserAPI.tabs.update(muteTabId, { muted: !tab.mutedInfo?.muted });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to mute' });
+                }
+                break;
+              }
+
+              case 'GET_RECENTLY_CLOSED': {
+                try {
+                  const sessions = await new Promise<chrome.sessions.Session[]>((resolve) => {
+                    browserAPI.sessions.getRecentlyClosed({ maxResults: 10 }, resolve);
+                  });
+                  sendResponse({ sessions });
+                } catch (err) {
+                  sendResponse({ sessions: [], error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'REOPEN_TAB': {
+                try {
+                  await browserAPI.sessions.restore(msg.sessionId);
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'SEARCH_BOOKMARKS': {
+                try {
+                  const bookmarks = await browserAPI.bookmarks.search(msg.query || '');
+                  const withPaths = await Promise.all(
+                    bookmarks.filter((b: chrome.bookmarks.BookmarkTreeNode) => b.url).map(async (b: chrome.bookmarks.BookmarkTreeNode) => {
+                      let folderPath = '';
+                      try {
+                        let parentId = b.parentId;
+                        const parts: string[] = [];
+                        while (parentId && parentId !== '0') {
+                          const parents = await browserAPI.bookmarks.get(parentId);
+                          if (parents[0]?.title) parts.unshift(parents[0].title);
+                          parentId = parents[0]?.parentId;
+                        }
+                        folderPath = parts.join(' > ');
+                      } catch { /* root node */ }
+                      return { ...b, folderPath };
+                    })
+                  );
+                  sendResponse({ bookmarks: withPaths });
+                } catch (err) {
+                  sendResponse({ bookmarks: [], error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'GET_RECENT_BOOKMARKS': {
+                try {
+                  const bookmarks = await browserAPI.bookmarks.getRecent(15);
+                  sendResponse({ bookmarks });
+                } catch (err) {
+                  sendResponse({ bookmarks: [], error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'ADD_BOOKMARK': {
+                try {
+                  const tab = sender.tab;
+                  if (tab?.url && tab?.title) {
+                    await browserAPI.bookmarks.create({ title: tab.title, url: tab.url });
+                    sendResponse({ status: 'OK' });
+                  } else {
+                    sendResponse({ error: 'No active tab info available' });
+                  }
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'TAB_RELOAD': {
+                const reloadTabId = msg.tabId ?? sender.tab?.id;
+                if (reloadTabId) {
+                  await browserAPI.tabs.reload(reloadTabId);
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to reload' });
+                }
+                break;
+              }
+
+              case 'TAB_HARD_RELOAD': {
+                const hardReloadTabId = msg.tabId ?? sender.tab?.id;
+                if (hardReloadTabId) {
+                  await browserAPI.tabs.reload(hardReloadTabId, { bypassCache: true });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to reload' });
+                }
+                break;
+              }
+
+              case 'TAB_GO_BACK': {
+                const backTabId = msg.tabId ?? sender.tab?.id;
+                if (backTabId) {
+                  await browserAPI.tabs.goBack(backTabId);
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'TAB_GO_FORWARD': {
+                const fwdTabId = msg.tabId ?? sender.tab?.id;
+                if (fwdTabId) {
+                  await browserAPI.tabs.goForward(fwdTabId);
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'TAB_ZOOM': {
+                const zoomTabId = msg.tabId ?? sender.tab?.id;
+                if (zoomTabId) {
+                  const currentZoom = await new Promise<number>((resolve) => {
+                    browserAPI.tabs.getZoom(zoomTabId, resolve);
+                  });
+                  let newZoom = currentZoom;
+                  if (msg.direction === 'in') newZoom = Math.min(currentZoom + 0.1, 5);
+                  else if (msg.direction === 'out') newZoom = Math.max(currentZoom - 0.1, 0.25);
+                  else if (msg.direction === 'reset') newZoom = 1;
+                  browserAPI.tabs.setZoom(zoomTabId, newZoom);
+                  sendResponse({ status: 'OK', zoom: newZoom });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'TAB_VIEW_SOURCE': {
+                const vsTabId = sender.tab?.id;
+                if (vsTabId && sender.tab?.url) {
+                  await browserAPI.tabs.create({ url: `view-source:${sender.tab.url}` });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab URL' });
+                }
+                break;
+              }
+
+              case 'WINDOW_CREATE': {
+                if (msg.windowType === 'incognito') {
+                  await browserAPI.windows.create({ incognito: true });
+                } else if (msg.windowType === 'window') {
+                  await browserAPI.windows.create({});
+                } else if (msg.windowType === 'background-tab') {
+                  await browserAPI.tabs.create({ url: msg.url, active: false });
+                } else {
+                  await browserAPI.tabs.create({ url: msg.url || 'chrome://newtab' });
+                }
+                sendResponse({ status: 'OK' });
+                break;
+              }
+
+              case 'EXECUTE_COMMAND': {
+                logger.info('onMessage', 'EXECUTE_COMMAND:', msg.commandId);
+                sendResponse({ status: 'OK' });
+                break;
+              }
+
+              case 'FACTORY_RESET': {
+                logger.info('onMessage', 'Factory reset requested');
+                try {
+                  await SettingsManager.resetToDefaults();
+                  const { clearAndRebuild: clearRebuild } = await import('./resilience');
+                  await clearRebuild();
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'RESET_SETTINGS': {
+                logger.info('onMessage', 'Reset settings requested');
+                try {
+                  await SettingsManager.resetToDefaults();
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
               // inside messaging onMessage handler
               case 'METADATA_CAPTURE': {
                 logger.debug('onMessage', 'Handling METADATA_CAPTURE for:', msg.payload.url);
@@ -939,5 +1192,106 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
         } catch (e) {
             logger.warn('onInstalled', 'Content script re-injection failed', { error: (e as Error).message });
         }
+    }
+});
+
+// ===== OMNIBOX INTEGRATION =====
+browserAPI.omnibox.setDefaultSuggestion({
+    description: 'Search history, or use / for commands, @ for tabs, # for bookmarks',
+});
+
+browserAPI.omnibox.onInputChanged.addListener(async (text, suggest) => {
+    try {
+        if (!initialized) { suggest([]); return; }
+        const trimmed = text.trim();
+        if (!trimmed) { suggest([]); return; }
+
+        if (trimmed.startsWith('/') || trimmed.startsWith('>')) {
+            const { matchCommands: matchCmds, getCommandsByTier: getCmds } = await import('../shared/command-registry');
+            const tier = trimmed.startsWith('>') ? 'power' as const : 'everyday' as const;
+            const query = trimmed.slice(1).trim();
+            const settings = SettingsManager.getSettings();
+            const commands = getCmds(tier);
+            const matches = matchCmds(query, commands, settings);
+            suggest(matches.slice(0, 5).map(cmd => ({
+                content: `${trimmed[0]}${cmd.id}`,
+                description: `${cmd.icon} ${cmd.label} — ${cmd.category}`,
+            })));
+            return;
+        }
+
+        if (trimmed.startsWith('@')) {
+            const tabs = await browserAPI.tabs.query({});
+            const query = trimmed.slice(1).trim().toLowerCase();
+            const filtered = query
+                ? tabs.filter(t => t.title?.toLowerCase().includes(query) || t.url?.toLowerCase().includes(query))
+                : tabs;
+            suggest(filtered.slice(0, 5).map(t => ({
+                content: `@tab:${t.id}`,
+                description: `${t.title || 'Untitled'} — ${t.url || ''}`.replace(/&/g, '&amp;').replace(/</g, '&lt;'),
+            })));
+            return;
+        }
+
+        if (trimmed.startsWith('#')) {
+            const query = trimmed.slice(1).trim();
+            if (query) {
+                const bookmarks = await browserAPI.bookmarks.search(query);
+                suggest(bookmarks.filter((b: chrome.bookmarks.BookmarkTreeNode) => b.url).slice(0, 5).map((b: chrome.bookmarks.BookmarkTreeNode) => ({
+                    content: b.url!,
+                    description: `${b.title || 'Untitled'} — ${b.url}`.replace(/&/g, '&amp;').replace(/</g, '&lt;'),
+                })));
+            }
+            return;
+        }
+
+        const results = await runSearch(trimmed, { skipAI: true });
+        suggest(results.slice(0, 5).map(r => ({
+            content: r.url,
+            description: `${r.title || 'Untitled'} — ${r.url}`.replace(/&/g, '&amp;').replace(/</g, '&lt;'),
+        })));
+    } catch (err) {
+        logger.debug('omnibox', 'onInputChanged error:', err);
+        suggest([]);
+    }
+});
+
+browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) => {
+    try {
+        const trimmed = text.trim();
+
+        if (trimmed.startsWith('@tab:')) {
+            const tabId = parseInt(trimmed.replace('@tab:', ''), 10);
+            if (!isNaN(tabId)) {
+                const tab = await browserAPI.tabs.get(tabId);
+                await browserAPI.tabs.update(tabId, { active: true });
+                if (tab.windowId) await browserAPI.windows.update(tab.windowId, { focused: true });
+            }
+            return;
+        }
+
+        if (trimmed.startsWith('/') || trimmed.startsWith('>')) {
+            const commandId = trimmed.slice(1).trim();
+            const { ALL_COMMANDS: allCmds } = await import('../shared/command-registry');
+            const cmd = allCmds.find(c => c.id === commandId);
+            if (cmd?.url) {
+                await browserAPI.tabs.create({ url: cmd.url });
+            } else if (cmd?.messageType) {
+                browserAPI.runtime.sendMessage({ type: cmd.messageType });
+            }
+            return;
+        }
+
+        let url = trimmed;
+        try { new URL(url); } catch { url = `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`; }
+
+        if (disposition === 'currentTab') {
+            const [activeTab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
+            if (activeTab?.id) await browserAPI.tabs.update(activeTab.id, { url });
+        } else {
+            await browserAPI.tabs.create({ url, active: disposition !== 'newBackgroundTab' });
+        }
+    } catch (err) {
+        logger.error('omnibox', 'onInputEntered error:', err);
     }
 });
