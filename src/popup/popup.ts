@@ -983,28 +983,23 @@ function initializePopup() {
       return;
     }
 
-    const showHistory = SettingsManager.getSetting('showRecentHistory') ?? true;
+    const showRecentlyVisited = SettingsManager.getSetting('showRecentHistory') ?? true;
     const showSearches = SettingsManager.getSetting('showRecentSearches') ?? true;
 
     try {
-      // Load recent browsing history if enabled
-      if (showHistory) {
-        const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
-        const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
-        resultsLocal = (resp && resp.results) ? resp.results : [];
-        const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
-        sortResults(resultsLocal, sortBy);
-      } else {
-        resultsLocal = [];
-      }
+      const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
+      const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
+      resultsLocal = (resp && resp.results) ? resp.results : [];
+      const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
+      sortResults(resultsLocal, sortBy);
 
       currentAIExpandedKeywords = [];
       renderAIStatus(null);
       activeIndex = -1;
       renderResults();
 
-      // Show recently visited entries (gated by showRecentHistory)
-      if (showHistory) {
+      // "⚡ Recently Visited" section — gated by showRecentHistory toggle
+      if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
         if (interactions.length > 0) {
           const section = renderRecentInteractionsSection(interactions.slice(0, 5));
@@ -1021,9 +1016,6 @@ function initializePopup() {
         }
       }
 
-      if (!showHistory && !showSearches) {
-        resultCountNode.textContent = 'Type to search';
-      }
     } catch {
       resultsLocal = [];
       activeIndex = -1;

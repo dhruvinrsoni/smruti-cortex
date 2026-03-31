@@ -3051,43 +3051,38 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     try {
-      const showHistory = cachedSettings?.showRecentHistory ?? true;
+      const showRecentlyVisited = cachedSettings?.showRecentHistory ?? true;
       const showSearches = cachedSettings?.showRecentSearches ?? true;
 
-      // Load recent browsing history if enabled
-      if (showHistory) {
-        const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
-        const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
-            (resp) => {
-              if (chrome.runtime.lastError) {
-                perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
-                resolve({ results: [] });
-              } else {
-                resolve(resp || { results: [] });
-              }
+      const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
+      const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
+          (resp) => {
+            if (chrome.runtime.lastError) {
+              perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
+              resolve({ results: [] });
+            } else {
+              resolve(resp || { results: [] });
             }
-          );
-        });
+          }
+        );
+      });
 
-        if (currentMode !== 'history') {
-          perfLog('loadRecentHistory — aborting, palette mode active: ' + currentMode);
-          return;
-        }
-        let recentItems: SearchResult[] = response.results || [];
-        const sortBy = cachedSettings?.sortBy || 'most-recent';
-        recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        currentResults = recentItems;
-      } else {
-        currentResults = [];
+      if (currentMode !== 'history') {
+        perfLog('loadRecentHistory — aborting, palette mode active: ' + currentMode);
+        return;
       }
+      let recentItems: SearchResult[] = response.results || [];
+      const sortBy = cachedSettings?.sortBy || 'most-recent';
+      recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      currentResults = recentItems;
 
       selectedIndex = -1;
       renderResults(currentResults);
 
-      // Show recently visited entries (gated by showRecentHistory)
-      if (showHistory && resultsEl) {
+      // "⚡ Recently Visited" section — gated by showRecentHistory toggle
+      if (showRecentlyVisited && resultsEl) {
         getRecentInteractions().then(entries => {
           if (entries.length > 0 && resultsEl) {
             const section = buildRecentInteractionsSection(entries.slice(0, 5));
