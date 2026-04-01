@@ -372,17 +372,14 @@ function initializePopup() {
           const cur = SettingsManager.getSetting(def.key);
           const next = getNextCycleValue(def, cur);
           await SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]);
-          if (def.key === 'theme') {
-            applyTheme(next as 'light' | 'dark' | 'auto');
-          }
         }
-        syncToggleBar();
-        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
-          renderResults();
-        } else if (currentQuery?.trim()) {
-          debounceSearch(currentQuery);
-        } else {
-          loadRecentHistory();
+        applyPopupSettingSideEffects(def.key);
+        if (def.key !== 'displayMode' && def.key !== 'highlightMatches' && def.key !== 'loadFavicons') {
+          if (currentQuery?.trim()) {
+            debounceSearch(currentQuery);
+          } else if (def.key !== 'showRecentHistory' && def.key !== 'showRecentSearches') {
+            loadRecentHistory();
+          }
         }
       });
 
@@ -747,13 +744,26 @@ function initializePopup() {
     return null;
   }
 
+  function applyPopupSettingSideEffects(key: string): void {
+    syncToggleBar();
+    if (key === 'theme') {
+      applyTheme((SettingsManager.getSetting('theme') ?? 'auto') as 'light' | 'dark' | 'auto');
+    }
+    if (key === 'displayMode' || key === 'highlightMatches' || key === 'loadFavicons') {
+      renderResults();
+    }
+    if (key === 'showRecentHistory' || key === 'showRecentSearches') {
+      if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+  }
+
   function executePopupCommand(cmd: PaletteCommand): void {
     saveRecentCommand(cmd.id);
     if (cmd.action === 'toggle-boolean' && cmd.settingKey) {
       const current = SettingsManager.getSetting(cmd.settingKey);
       const newVal = !current;
       SettingsManager.setSetting(cmd.settingKey, newVal as never);
-      syncToggleBar();
+      applyPopupSettingSideEffects(cmd.settingKey);
       showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`, 'info');
       const input = $('search-input') as HTMLInputElement;
       if (input) {
@@ -766,8 +776,7 @@ function initializePopup() {
       const value = getCycleValueFromCommand(cmd);
       if (value !== undefined) {
         SettingsManager.setSetting(cmd.settingKey, value as never);
-        if (cmd.settingKey === 'theme') applyTheme(String(value) as 'light' | 'dark' | 'auto');
-        syncToggleBar();
+        applyPopupSettingSideEffects(cmd.settingKey);
         showToast(`${cmd.label}`, 'info');
         const input = $('search-input') as HTMLInputElement;
         if (input) {
@@ -2392,6 +2401,7 @@ function initializePopup() {
           const value = target.value as 'light' | 'dark' | 'auto';
           await SettingsManager.setSetting('theme', value);
           applyTheme(value);
+          syncToggleBar();
           showToast(`Theme set to ${value}`, 'info');
         }
       });
@@ -2404,7 +2414,8 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
-          renderResults(); // Re-render results with new display mode
+          syncToggleBar();
+          renderResults();
           showToast('Display mode updated', 'info');
         }
       });
@@ -2430,7 +2441,8 @@ function initializePopup() {
       highlightInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('highlightMatches', target.checked);
-        renderResults(); // Re-render results with/without highlighting
+        syncToggleBar();
+        renderResults();
         showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
@@ -2454,6 +2466,7 @@ function initializePopup() {
       selectAllOnFocusInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('selectAllOnFocus', target.checked);
+        syncToggleBar();
         showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end', 'info');
       });
     }
@@ -2464,6 +2477,7 @@ function initializePopup() {
       showRecentHistoryInput2.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showRecentHistory', target.checked);
+        syncToggleBar();
         showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
@@ -2475,6 +2489,7 @@ function initializePopup() {
       showRecentSearchesInput2.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showRecentSearches', target.checked);
+        syncToggleBar();
         showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
@@ -2486,6 +2501,7 @@ function initializePopup() {
       ollamaEnabledInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('ollamaEnabled', target.checked);
+        syncToggleBar();
         console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
@@ -2655,8 +2671,9 @@ function initializePopup() {
       loadFaviconsInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('loadFavicons', target.checked);
+        syncToggleBar();
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`, 'info');
-        renderResults(); // Re-render to apply changes immediately
+        renderResults();
       });
     }
 
@@ -2785,9 +2802,9 @@ function initializePopup() {
       indexBookmarksInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('indexBookmarks', target.checked);
+        syncToggleBar();
         if (target.checked) {
           showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
-          // Trigger bookmark indexing via service worker
           chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' });
         } else {
           showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.', 'info');
@@ -2801,6 +2818,7 @@ function initializePopup() {
       showDuplicateUrlsInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showDuplicateUrls', target.checked);
+        syncToggleBar();
         showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`, 'info');
         // Trigger re-search to apply diversity filter
         const searchInput = $('search-input') as HTMLInputElement;
@@ -2816,6 +2834,7 @@ function initializePopup() {
       showNonMatchingResultsInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         await SettingsManager.setSetting('showNonMatchingResults', target.checked);
+        syncToggleBar();
         showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`, 'info');
         // Trigger re-search to apply strict matching
         const searchInput = $('search-input') as HTMLInputElement;
