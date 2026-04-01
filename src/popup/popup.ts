@@ -364,14 +364,14 @@ function initializePopup() {
       chip.dataset.toggleKey = key;
       chip.type = 'button';
 
-      chip.addEventListener('click', async () => {
+      chip.addEventListener('click', () => {
         if (def.type === 'boolean') {
           const cur = SettingsManager.getSetting(def.key) as boolean;
-          await SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]);
+          SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]).catch(() => {});
         } else if (def.type === 'cycle') {
           const cur = SettingsManager.getSetting(def.key);
           const next = getNextCycleValue(def, cur);
-          await SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]);
+          SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]).catch(() => {});
         }
         applyPopupSettingSideEffects(def.key);
         if (def.key !== 'displayMode' && def.key !== 'highlightMatches' && def.key !== 'loadFavicons') {
@@ -430,11 +430,10 @@ function initializePopup() {
     sortBySelect.value = savedSort;
     
     // Handle sort change
-    sortBySelect.addEventListener('change', async () => {
+    sortBySelect.addEventListener('change', () => {
       const newSort = sortBySelect.value;
-      await SettingsManager.setSetting('sortBy', newSort);
+      SettingsManager.setSetting('sortBy', newSort).catch(() => {});
       
-      // Re-sort current results without re-searching
       if (resultsLocal.length > 0) {
         sortResults(resultsLocal, newSort);
         activeIndex = resultsLocal.length ? 0 : -1;
@@ -2395,11 +2394,11 @@ function initializePopup() {
     // Theme changes
     const themeInputs = modal.querySelectorAll('input[name="modal-theme"]');
     themeInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           const value = target.value as 'light' | 'dark' | 'auto';
-          await SettingsManager.setSetting('theme', value);
+          SettingsManager.setSetting('theme', value).catch(() => {});
           applyTheme(value);
           syncToggleBar();
           showToast(`Theme set to ${value}`, 'info');
@@ -2410,10 +2409,10 @@ function initializePopup() {
     // Display mode changes
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     displayInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
-          await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
+          SettingsManager.setSetting('displayMode', target.value as DisplayMode).catch(() => {});
           syncToggleBar();
           renderResults();
           showToast('Display mode updated', 'info');
@@ -2424,12 +2423,12 @@ function initializePopup() {
     // Log level changes
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
     logInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           const level = parseInt(target.value);
-          await SettingsManager.setSetting('logLevel', level);
-          await Logger.setLevel(level);
+          SettingsManager.setSetting('logLevel', level).catch(() => {});
+          Logger.setLevel(level).catch(() => {});
           showToast('Log level updated', 'info');
         }
       });
@@ -2438,9 +2437,9 @@ function initializePopup() {
     // Highlight matches toggle
     const highlightInput = modal.querySelector('#modal-highlightMatches') as HTMLInputElement;
     if (highlightInput) {
-      highlightInput.addEventListener('change', async (e) => {
+      highlightInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('highlightMatches', target.checked);
+        SettingsManager.setSetting('highlightMatches', target.checked).catch(() => {});
         syncToggleBar();
         renderResults();
         showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'), 'info');
@@ -2450,11 +2449,11 @@ function initializePopup() {
     // Focus delay changes
     const focusDelayInput = modal.querySelector('#modal-focusDelayMs') as HTMLInputElement;
     if (focusDelayInput) {
-      focusDelayInput.addEventListener('change', async () => {
+      focusDelayInput.addEventListener('change', () => {
         let val = parseInt(focusDelayInput.value);
         if (isNaN(val) || val < 0) {val = 0;}
         if (val > 2000) {val = 2000;}
-        await SettingsManager.setSetting('focusDelayMs', val);
+        SettingsManager.setSetting('focusDelayMs', val).catch(() => {});
         focusDelayInput.value = String(val);
         showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`, 'info');
       });
@@ -2463,9 +2462,9 @@ function initializePopup() {
     // Select all on focus toggle
     const selectAllOnFocusInput = modal.querySelector('#modal-selectAllOnFocus') as HTMLInputElement;
     if (selectAllOnFocusInput) {
-      selectAllOnFocusInput.addEventListener('change', async (e) => {
+      selectAllOnFocusInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('selectAllOnFocus', target.checked);
+        SettingsManager.setSetting('selectAllOnFocus', target.checked).catch(() => {});
         syncToggleBar();
         showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end', 'info');
       });
@@ -2474,9 +2473,9 @@ function initializePopup() {
     // Recent history toggle
     const showRecentHistoryInput2 = modal.querySelector('#modal-showRecentHistory') as HTMLInputElement;
     if (showRecentHistoryInput2) {
-      showRecentHistoryInput2.addEventListener('change', async (e) => {
+      showRecentHistoryInput2.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showRecentHistory', target.checked);
+        SettingsManager.setSetting('showRecentHistory', target.checked).catch(() => {});
         syncToggleBar();
         showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
@@ -2486,9 +2485,9 @@ function initializePopup() {
     // Recent searches toggle
     const showRecentSearchesInput2 = modal.querySelector('#modal-showRecentSearches') as HTMLInputElement;
     if (showRecentSearchesInput2) {
-      showRecentSearchesInput2.addEventListener('change', async (e) => {
+      showRecentSearchesInput2.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showRecentSearches', target.checked);
+        SettingsManager.setSetting('showRecentSearches', target.checked).catch(() => {});
         syncToggleBar();
         showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
@@ -2498,9 +2497,9 @@ function initializePopup() {
     // Ollama enabled toggle
     const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
     if (ollamaEnabledInput) {
-      ollamaEnabledInput.addEventListener('change', async (e) => {
+      ollamaEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('ollamaEnabled', target.checked);
+        SettingsManager.setSetting('ollamaEnabled', target.checked).catch(() => {});
         syncToggleBar();
         console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
@@ -2510,10 +2509,10 @@ function initializePopup() {
     // Ollama endpoint changes
     const ollamaEndpointInput = modal.querySelector('#modal-ollamaEndpoint') as HTMLInputElement;
     if (ollamaEndpointInput) {
-      ollamaEndpointInput.addEventListener('change', async () => {
+      ollamaEndpointInput.addEventListener('change', () => {
         const val = ollamaEndpointInput.value.trim();
         if (val) {
-          await SettingsManager.setSetting('ollamaEndpoint', val);
+          SettingsManager.setSetting('ollamaEndpoint', val).catch(() => {});
           showToast('Ollama endpoint updated', 'info');
         }
       });
@@ -2522,10 +2521,10 @@ function initializePopup() {
     // Ollama model changes (hidden input synced by custom model select)
     const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
     if (ollamaModelInput) {
-      ollamaModelInput.addEventListener('change', async () => {
+      ollamaModelInput.addEventListener('change', () => {
         const val = ollamaModelInput.value.trim();
         if (val) {
-          await SettingsManager.setSetting('ollamaModel', val);
+          SettingsManager.setSetting('ollamaModel', val).catch(() => {});
           showToast(`Model set to: ${val}`, 'info');
         }
       });
@@ -2577,22 +2576,19 @@ function initializePopup() {
     // Ollama timeout changes
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
-      ollamaTimeoutInput.addEventListener('change', async () => {
+      ollamaTimeoutInput.addEventListener('change', () => {
         let val = parseInt(ollamaTimeoutInput.value);
         
-        // Handle special cases
         if (val === -1) {
-          // Infinite timeout (no timeout)
-          await SettingsManager.setSetting('ollamaTimeout', -1);
+          SettingsManager.setSetting('ollamaTimeout', -1).catch(() => {});
           ollamaTimeoutInput.value = '-1';
           showToast('Timeout disabled (infinite wait)', 'info');
           return;
         }
         
-        // Validate range for non-infinite timeouts
-        if (isNaN(val) || val < 5000) {val = 5000;}  // Minimum 5s
-        if (val > 120000) {val = 120000;}  // Maximum 2min
-        await SettingsManager.setSetting('ollamaTimeout', val);
+        if (isNaN(val) || val < 5000) {val = 5000;}
+        if (val > 120000) {val = 120000;}
+        SettingsManager.setSetting('ollamaTimeout', val).catch(() => {});
         ollamaTimeoutInput.value = String(val);
         showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`, 'info');
       });
@@ -2601,9 +2597,9 @@ function initializePopup() {
     // Semantic search settings
     const embeddingsEnabledInput = modal.querySelector('#modal-embeddingsEnabled') as HTMLInputElement;
     if (embeddingsEnabledInput) {
-      embeddingsEnabledInput.addEventListener('change', async (e) => {
+      embeddingsEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('embeddingsEnabled', target.checked);
+        SettingsManager.setSetting('embeddingsEnabled', target.checked).catch(() => {});
         console.info(`[Settings] Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
         if (target.checked) {
@@ -2614,10 +2610,10 @@ function initializePopup() {
 
     const embeddingModelHidden = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
     if (embeddingModelHidden) {
-      embeddingModelHidden.addEventListener('change', async () => {
+      embeddingModelHidden.addEventListener('change', () => {
         const val = embeddingModelHidden.value.trim();
         if (val) {
-          await SettingsManager.setSetting('embeddingModel', val);
+          SettingsManager.setSetting('embeddingModel', val).catch(() => {});
           showToast(`Embedding model set to: ${val}`, 'info');
         }
       });
@@ -2668,9 +2664,9 @@ function initializePopup() {
     // Privacy settings - Load Favicons
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
     if (loadFaviconsInput) {
-      loadFaviconsInput.addEventListener('change', async (e) => {
+      loadFaviconsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('loadFavicons', target.checked);
+        SettingsManager.setSetting('loadFavicons', target.checked).catch(() => {});
         syncToggleBar();
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`, 'info');
         renderResults();
@@ -2799,9 +2795,9 @@ function initializePopup() {
     // Bookmarks indexing
     const indexBookmarksInput = modal.querySelector('#modal-indexBookmarks') as HTMLInputElement;
     if (indexBookmarksInput) {
-      indexBookmarksInput.addEventListener('change', async (e) => {
+      indexBookmarksInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('indexBookmarks', target.checked);
+        SettingsManager.setSetting('indexBookmarks', target.checked).catch(() => {});
         syncToggleBar();
         if (target.checked) {
           showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
@@ -2815,12 +2811,11 @@ function initializePopup() {
     // Search result diversity - Show Duplicate URLs
     const showDuplicateUrlsInput = modal.querySelector('#modal-showDuplicateUrls') as HTMLInputElement;
     if (showDuplicateUrlsInput) {
-      showDuplicateUrlsInput.addEventListener('change', async (e) => {
+      showDuplicateUrlsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showDuplicateUrls', target.checked);
+        SettingsManager.setSetting('showDuplicateUrls', target.checked).catch(() => {});
         syncToggleBar();
         showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`, 'info');
-        // Trigger re-search to apply diversity filter
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
           doSearch(searchInput.value);
@@ -2831,12 +2826,11 @@ function initializePopup() {
     // Strict matching - Show Non-Matching Results
     const showNonMatchingResultsInput = modal.querySelector('#modal-showNonMatchingResults') as HTMLInputElement;
     if (showNonMatchingResultsInput) {
-      showNonMatchingResultsInput.addEventListener('change', async (e) => {
+      showNonMatchingResultsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showNonMatchingResults', target.checked);
+        SettingsManager.setSetting('showNonMatchingResults', target.checked).catch(() => {});
         syncToggleBar();
         showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`, 'info');
-        // Trigger re-search to apply strict matching
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
           doSearch(searchInput.value);
@@ -2847,10 +2841,10 @@ function initializePopup() {
     // Privacy settings - Sensitive URL Blacklist
     const sensitiveUrlBlacklistInput = modal.querySelector('#modal-sensitiveUrlBlacklist') as HTMLTextAreaElement;
     if (sensitiveUrlBlacklistInput) {
-      sensitiveUrlBlacklistInput.addEventListener('change', async () => {
+      sensitiveUrlBlacklistInput.addEventListener('change', () => {
         const val = sensitiveUrlBlacklistInput.value.trim();
         const blacklist = val ? val.split('\n').map(s => s.trim()).filter(Boolean) : [];
-        await SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist);
+        SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist).catch(() => {});
         showToast(`Blacklist updated (${blacklist.length} entries)`, 'info');
       });
     }
@@ -2867,35 +2861,35 @@ function initializePopup() {
     }
 
     if (cpMasterInput) {
-      cpMasterInput.addEventListener('change', async () => {
-        await SettingsManager.setSetting('commandPaletteEnabled', cpMasterInput.checked);
+      cpMasterInput.addEventListener('change', () => {
+        SettingsManager.setSetting('commandPaletteEnabled', cpMasterInput.checked).catch(() => {});
         updatePaletteDisabledState();
         showToast('Command Palette ' + (cpMasterInput.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
 
     cpModeCheckboxes.forEach(cb => {
-      cb.addEventListener('change', async () => {
+      cb.addEventListener('change', () => {
         const selected: string[] = [];
         cpModeCheckboxes.forEach(c => { if (c.checked) selected.push(c.value); });
-        await SettingsManager.setSetting('commandPaletteModes', selected);
+        SettingsManager.setSetting('commandPaletteModes', selected).catch(() => {});
         showToast(`Active modes: ${selected.join(' ') || 'none'}`, 'info');
       });
     });
 
     if (cpInPopupInput2) {
-      cpInPopupInput2.addEventListener('change', async () => {
-        await SettingsManager.setSetting('commandPaletteInPopup', cpInPopupInput2.checked);
+      cpInPopupInput2.addEventListener('change', () => {
+        SettingsManager.setSetting('commandPaletteInPopup', cpInPopupInput2.checked).catch(() => {});
         showToast('Popup command palette ' + (cpInPopupInput2.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
 
     const webEngineInputs = modal.querySelectorAll('input[name="modal-webSearchEngine"]');
     webEngineInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
-          await SettingsManager.setSetting('webSearchEngine', target.value);
+          SettingsManager.setSetting('webSearchEngine', target.value).catch(() => {});
           showToast(`Web search engine set to ${target.value}`, 'info');
         }
       });
@@ -2920,12 +2914,12 @@ function initializePopup() {
           </div>
         `;
         const checkbox = label.querySelector('input') as HTMLInputElement;
-        checkbox.addEventListener('change', async () => {
+        checkbox.addEventListener('change', () => {
           const allChecked: string[] = [];
           toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
             if (cb.checked) allChecked.push(cb.dataset.toolbarKey!);
           });
-          await SettingsManager.setSetting('toolbarToggles', allChecked);
+          SettingsManager.setSetting('toolbarToggles', allChecked).catch(() => {});
           renderToggleBar();
           showToast(`Toolbar updated (${allChecked.length} toggle${allChecked.length !== 1 ? 's' : ''})`, 'info');
         });
