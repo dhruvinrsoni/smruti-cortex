@@ -3418,6 +3418,27 @@ function initializePopup() {
     }
   }
 
+  function applyRemoteSettingsChanges(settings: Record<string, unknown> | undefined): void {
+    if (!settings) return;
+    SettingsManager.applyRemoteSettings(settings).catch(() => {});
+    const keys = Object.keys(settings);
+
+    if (keys.includes('theme')) {
+      applyTheme(String(settings.theme ?? 'auto') as 'light' | 'dark' | 'auto');
+    }
+    if (keys.includes('toolbarToggles')) {
+      renderToggleBar();
+    } else {
+      syncToggleBar();
+    }
+    if (keys.some(k => ['displayMode', 'highlightMatches', 'loadFavicons'].includes(k))) {
+      renderResults();
+    }
+    if (keys.some(k => ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'].includes(k))) {
+      if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+  }
+
   // Apply theme immediately from stored setting
   applyTheme((SettingsManager.getSetting('theme') ?? 'auto') as 'light' | 'dark' | 'auto');
 
@@ -3478,12 +3499,7 @@ function initializePopup() {
       } else if (message.type === 'PING') {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
-        if (message.settings) {
-          // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
-          SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
-        }
-        syncToggleBar();
-        renderResults();
+        applyRemoteSettingsChanges(message.settings);
         sendResponse({ status: 'ok' });
       }
     });
@@ -3495,12 +3511,7 @@ function initializePopup() {
       } else if (message.type === 'PING') {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
-        if (message.settings) {
-          // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
-          SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
-        }
-        syncToggleBar();
-        renderResults();
+        applyRemoteSettingsChanges(message.settings);
         sendResponse({ status: 'ok' });
       }
     });
