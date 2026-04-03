@@ -793,6 +793,7 @@ function initializePopup() {
       else if (cmd.id === 'new-tab') payload.windowType = 'tab';
       else if (cmd.id === 'new-window') payload.windowType = 'window';
       else if (cmd.id === 'new-incognito') payload.windowType = 'incognito';
+      else if (cmd.id.startsWith('color-group-')) payload.color = cmd.id.replace('color-group-', '');
       sendMessage(payload).then(() => showToast(`${cmd.icon} ${cmd.label} — done`)).catch(() => showToast('Error', 'error'));
       return;
     }
@@ -1680,6 +1681,12 @@ function initializePopup() {
     const indexBookmarksInput = modal.querySelector('#modal-indexBookmarks') as HTMLInputElement;
     if (indexBookmarksInput) {
       indexBookmarksInput.checked = SettingsManager.getSetting('indexBookmarks') ?? true;
+    }
+
+    // Advanced Browser Commands setting
+    const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
+    if (advBrowserInput) {
+      advBrowserInput.checked = SettingsManager.getSetting('advancedBrowserCommands') ?? false;
     }
 
     // Search result diversity setting
@@ -2804,6 +2811,30 @@ function initializePopup() {
           chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' });
         } else {
           showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.', 'info');
+        }
+      });
+    }
+
+    // Advanced Browser Commands toggle + permission request
+    const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
+    if (advBrowserInput) {
+      advBrowserInput.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        SettingsManager.setSetting('advancedBrowserCommands', target.checked).catch(() => {});
+        syncToggleBar();
+        if (target.checked) {
+          chrome.runtime.sendMessage({
+            type: 'REQUEST_OPTIONAL_PERMISSIONS',
+            permissions: ['tabGroups', 'browsingData', 'topSites'],
+          }, (resp) => {
+            if (resp?.granted) {
+              showToast('Advanced Browser Commands enabled with all permissions', 'info');
+            } else {
+              showToast('Advanced Browser Commands enabled. Some features may need permissions later.', 'info');
+            }
+          });
+        } else {
+          showToast('Advanced Browser Commands disabled', 'info');
         }
       });
     }

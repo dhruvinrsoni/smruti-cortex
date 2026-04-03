@@ -2220,6 +2220,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           else if (cmd.id === 'new-tab') payload.windowType = 'tab';
           else if (cmd.id === 'new-window') payload.windowType = 'window';
           else if (cmd.id === 'new-incognito') payload.windowType = 'incognito';
+          else if (cmd.id.startsWith('color-group-')) payload.color = cmd.id.replace('color-group-', '');
 
           showToast(`${cmd.icon} ${cmd.label}...`);
           try {
