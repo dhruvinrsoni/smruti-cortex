@@ -48,6 +48,8 @@ export interface AppSettings {
     commandPaletteInPopup?: boolean;     // Whether popup also gets prefix modes (off by default)
     commandPaletteOnboarded?: boolean;   // True after user has seen the first-use hint
     webSearchEngine?: string;            // Default search engine for ?? mode: 'google', 'duckduckgo', 'bing', 'youtube', 'github'
+    // Advanced browser commands — opt-in for tab power, tab groups, browsing data
+    advancedBrowserCommands?: boolean;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -197,6 +199,11 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     webSearchEngine: {
         default: 'google',
         validate: (val) => typeof val === 'string' && ['google', 'duckduckgo', 'bing', 'youtube', 'github'].includes(val),
+    },
+
+    advancedBrowserCommands: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
     },
 
     // Future settings (placeholders)

@@ -15,6 +15,11 @@
     "sessions",
     "windows"
   ],
+  "optional_permissions": [
+    "tabGroups",
+    "browsingData",
+    "topSites"
+  ],
   "optional_host_permissions": [
     "<all_urls>"
   ],
