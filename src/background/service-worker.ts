@@ -19,6 +19,25 @@ import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring } from './resilience';
 
+// Promisified Chrome API helpers for callback-only APIs
+function hasOptionalPermission(perm: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    (browserAPI as typeof chrome).permissions.contains({ permissions: [perm] }, resolve);
+  });
+}
+
+function requestOptionalPermissions(perms: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    (browserAPI as typeof chrome).permissions.request({ permissions: perms }, (granted) => resolve(granted ?? false));
+  });
+}
+
+function getTopSites(): Promise<chrome.topSites.MostVisitedURL[]> {
+  return new Promise((resolve) => {
+    (browserAPI as typeof chrome).topSites.get(resolve);
+  });
+}
+
 // Logger will be initialized below - don't log before that
 
 let initialized = false;
@@ -972,6 +991,465 @@ setupPortBasedMessaging();
               case 'EXECUTE_COMMAND': {
                 logger.info('onMessage', 'EXECUTE_COMMAND:', msg.commandId);
                 sendResponse({ status: 'OK' });
+                break;
+              }
+
+              // --- Advanced Tab Management ---
+              case 'CLOSE_OTHER_TABS': {
+                const activeTabId = msg.tabId ?? sender.tab?.id;
+                if (activeTabId) {
+                  const tabs = await browserAPI.tabs.query({ currentWindow: true });
+                  const toRemove = tabs.filter((t: chrome.tabs.Tab) => t.id !== activeTabId && !t.pinned).map((t: chrome.tabs.Tab) => t.id!);
+                  if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                  sendResponse({ status: 'OK', closed: toRemove.length });
+                } else {
+                  sendResponse({ error: 'No active tab' });
+                }
+                break;
+              }
+
+              case 'CLOSE_TABS_RIGHT': {
+                const senderTab = sender.tab ?? (await browserAPI.tabs.query({ active: true, currentWindow: true }))[0];
+                if (senderTab?.id != null && senderTab.index != null) {
+                  const tabs = await browserAPI.tabs.query({ currentWindow: true });
+                  const toRemove = tabs.filter((t: chrome.tabs.Tab) => t.index > senderTab.index && !t.pinned).map((t: chrome.tabs.Tab) => t.id!);
+                  if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                  sendResponse({ status: 'OK', closed: toRemove.length });
+                } else {
+                  sendResponse({ error: 'No tab context' });
+                }
+                break;
+              }
+
+              case 'CLOSE_TABS_LEFT': {
+                const senderTabL = sender.tab ?? (await browserAPI.tabs.query({ active: true, currentWindow: true }))[0];
+                if (senderTabL?.id != null && senderTabL.index != null) {
+                  const tabs = await browserAPI.tabs.query({ currentWindow: true });
+                  const toRemove = tabs.filter((t: chrome.tabs.Tab) => t.index < senderTabL.index && !t.pinned).map((t: chrome.tabs.Tab) => t.id!);
+                  if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                  sendResponse({ status: 'OK', closed: toRemove.length });
+                } else {
+                  sendResponse({ error: 'No tab context' });
+                }
+                break;
+              }
+
+              case 'CLOSE_ALL_TABS': {
+                const tabs = await browserAPI.tabs.query({ currentWindow: true });
+                await browserAPI.tabs.create({ url: 'chrome://newtab' });
+                const toRemove = tabs.map((t: chrome.tabs.Tab) => t.id!);
+                if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                sendResponse({ status: 'OK', closed: toRemove.length });
+                break;
+              }
+
+              case 'DISCARD_TAB': {
+                const discardTabId = msg.tabId ?? sender.tab?.id;
+                if (discardTabId) {
+                  await browserAPI.tabs.discard(discardTabId);
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to discard' });
+                }
+                break;
+              }
+
+              case 'DISCARD_OTHER_TABS': {
+                const activeDiscardId = msg.tabId ?? sender.tab?.id;
+                const allTabs = await browserAPI.tabs.query({ currentWindow: true });
+                let discardedCount = 0;
+                for (const t of allTabs) {
+                  if (t.id && t.id !== activeDiscardId && !t.active && !t.discarded) {
+                    try { await browserAPI.tabs.discard(t.id); discardedCount++; } catch { /* pinned/active tabs can't be discarded */ }
+                  }
+                }
+                sendResponse({ status: 'OK', discarded: discardedCount });
+                break;
+              }
+
+              case 'MOVE_TAB_NEW_WINDOW': {
+                const moveTabId = msg.tabId ?? sender.tab?.id;
+                if (moveTabId) {
+                  await browserAPI.windows.create({ tabId: moveTabId });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab to move' });
+                }
+                break;
+              }
+
+              case 'MERGE_WINDOWS': {
+                const currentWindow = await browserAPI.windows.getCurrent();
+                const allWindows = await browserAPI.windows.getAll({ populate: true });
+                let movedCount = 0;
+                for (const w of allWindows) {
+                  if (w.id !== currentWindow.id && w.tabs) {
+                    for (const t of w.tabs) {
+                      if (t.id) {
+                        await browserAPI.tabs.move(t.id, { windowId: currentWindow.id!, index: -1 });
+                        movedCount++;
+                      }
+                    }
+                  }
+                }
+                sendResponse({ status: 'OK', moved: movedCount });
+                break;
+              }
+
+              case 'CLOSE_DUPLICATES': {
+                const dedupTabs = await browserAPI.tabs.query({ currentWindow: true });
+                const seen = new Map<string, number>();
+                const toRemove: number[] = [];
+                for (const t of dedupTabs) {
+                  if (t.url && t.id) {
+                    const normalized = t.url.replace(/#.*$/, '');
+                    if (seen.has(normalized)) {
+                      toRemove.push(t.id);
+                    } else {
+                      seen.set(normalized, t.id);
+                    }
+                  }
+                }
+                if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                sendResponse({ status: 'OK', closed: toRemove.length });
+                break;
+              }
+
+              case 'SORT_TABS': {
+                const sortTabs = await browserAPI.tabs.query({ currentWindow: true });
+                const pinned = sortTabs.filter((t: chrome.tabs.Tab) => t.pinned);
+                const unpinned = sortTabs.filter((t: chrome.tabs.Tab) => !t.pinned);
+                unpinned.sort((a: chrome.tabs.Tab, b: chrome.tabs.Tab) => (a.url ?? '').localeCompare(b.url ?? ''));
+                for (let i = 0; i < unpinned.length; i++) {
+                  if (unpinned[i].id) {
+                    await browserAPI.tabs.move(unpinned[i].id!, { index: pinned.length + i });
+                  }
+                }
+                sendResponse({ status: 'OK', sorted: unpinned.length });
+                break;
+              }
+
+              case 'SCROLL_TO_TOP': {
+                const scrollTopTabId = msg.tabId ?? sender.tab?.id;
+                if (scrollTopTabId) {
+                  await (browserAPI as typeof chrome).scripting.executeScript({
+                    target: { tabId: scrollTopTabId },
+                    func: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+                  });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'SCROLL_TO_BOTTOM': {
+                const scrollBtmTabId = msg.tabId ?? sender.tab?.id;
+                if (scrollBtmTabId) {
+                  await (browserAPI as typeof chrome).scripting.executeScript({
+                    target: { tabId: scrollBtmTabId },
+                    func: () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }),
+                  });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'UNPIN_TAB': {
+                const unpinTabId = msg.tabId ?? sender.tab?.id;
+                if (unpinTabId) {
+                  await browserAPI.tabs.update(unpinTabId, { pinned: false });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'UNMUTE_TAB': {
+                const unmuteTabId = msg.tabId ?? sender.tab?.id;
+                if (unmuteTabId) {
+                  await browserAPI.tabs.update(unmuteTabId, { muted: false });
+                  sendResponse({ status: 'OK' });
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              // --- Tab Groups ---
+              case 'GROUP_TAB': {
+                const groupTabId = msg.tabId ?? sender.tab?.id;
+                if (groupTabId) {
+                  try {
+                    if (!await hasOptionalPermission('tabGroups')) {
+                      sendResponse({ error: 'tabGroups permission not granted. Enable Advanced Browser Commands in settings.' });
+                      break;
+                    }
+                    const groupId = await (browserAPI as typeof chrome).tabs.group({ tabIds: groupTabId });
+                    sendResponse({ status: 'OK', groupId });
+                  } catch (err) {
+                    sendResponse({ error: (err as Error).message });
+                  }
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'UNGROUP_TAB': {
+                const ungroupTabId = msg.tabId ?? sender.tab?.id;
+                if (ungroupTabId) {
+                  try {
+                    await (browserAPI as typeof chrome).tabs.ungroup(ungroupTabId);
+                    sendResponse({ status: 'OK' });
+                  } catch (err) {
+                    sendResponse({ error: (err as Error).message });
+                  }
+                } else {
+                  sendResponse({ error: 'No tab' });
+                }
+                break;
+              }
+
+              case 'COLLAPSE_GROUPS': {
+                try {
+                    if (!await hasOptionalPermission('tabGroups')) {
+                      sendResponse({ error: 'tabGroups permission not granted' });
+                      break;
+                    }
+                  const groups = await (browserAPI as typeof chrome).tabGroups.query({ windowId: (browserAPI as typeof chrome).windows.WINDOW_ID_CURRENT });
+                  for (const g of groups) {
+                    await (browserAPI as typeof chrome).tabGroups.update(g.id, { collapsed: true });
+                  }
+                  sendResponse({ status: 'OK', collapsed: groups.length });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'EXPAND_GROUPS': {
+                try {
+                    if (!await hasOptionalPermission('tabGroups')) {
+                      sendResponse({ error: 'tabGroups permission not granted' });
+                      break;
+                    }
+                  const groups = await (browserAPI as typeof chrome).tabGroups.query({ windowId: (browserAPI as typeof chrome).windows.WINDOW_ID_CURRENT });
+                  for (const g of groups) {
+                    await (browserAPI as typeof chrome).tabGroups.update(g.id, { collapsed: false });
+                  }
+                  sendResponse({ status: 'OK', expanded: groups.length });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'NAME_GROUP': {
+                try {
+                  const nameTabId = msg.tabId ?? sender.tab?.id;
+                  if (!nameTabId) { sendResponse({ error: 'No tab' }); break; }
+                  const tab = await browserAPI.tabs.get(nameTabId);
+                  if (tab.groupId && tab.groupId !== -1) {
+                    await (browserAPI as typeof chrome).tabGroups.update(tab.groupId, { title: msg.name ?? 'Group' });
+                    sendResponse({ status: 'OK' });
+                  } else {
+                    sendResponse({ error: 'Tab is not in a group' });
+                  }
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'COLOR_GROUP': {
+                try {
+                  const colorTabId = msg.tabId ?? sender.tab?.id;
+                  if (!colorTabId) { sendResponse({ error: 'No tab' }); break; }
+                  const tab = await browserAPI.tabs.get(colorTabId);
+                  if (tab.groupId && tab.groupId !== -1) {
+                    const color = msg.color ?? 'blue';
+                    await (browserAPI as typeof chrome).tabGroups.update(tab.groupId, { color: color as chrome.tabGroups.ColorEnum });
+                    sendResponse({ status: 'OK' });
+                  } else {
+                    sendResponse({ error: 'Tab is not in a group' });
+                  }
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLOSE_GROUP': {
+                try {
+                  const closeGroupTabId = msg.tabId ?? sender.tab?.id;
+                  if (!closeGroupTabId) { sendResponse({ error: 'No tab' }); break; }
+                  const tab = await browserAPI.tabs.get(closeGroupTabId);
+                  if (tab.groupId && tab.groupId !== -1) {
+                    const groupTabs = await browserAPI.tabs.query({ groupId: tab.groupId });
+                    const ids = groupTabs.map((t: chrome.tabs.Tab) => t.id!).filter(Boolean);
+                    if (ids.length) await browserAPI.tabs.remove(ids);
+                    sendResponse({ status: 'OK', closed: ids.length });
+                  } else {
+                    sendResponse({ error: 'Tab is not in a group' });
+                  }
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'UNGROUP_ALL': {
+                try {
+                  const allGroupedTabs = await browserAPI.tabs.query({ currentWindow: true });
+                  const grouped = allGroupedTabs.filter((t: chrome.tabs.Tab) => t.groupId && t.groupId !== -1);
+                  for (const t of grouped) {
+                    if (t.id) await (browserAPI as typeof chrome).tabs.ungroup(t.id);
+                  }
+                  sendResponse({ status: 'OK', ungrouped: grouped.length });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              // --- Browsing Data Cleanup ---
+              case 'CLEAR_BROWSER_CACHE': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) {
+                    sendResponse({ error: 'browsingData permission not granted. Enable Advanced Browser Commands in settings.' });
+                    break;
+                  }
+                  await (browserAPI as typeof chrome).browsingData.removeCache({});
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_COOKIES': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  await (browserAPI as typeof chrome).browsingData.removeCookies({});
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_LOCAL_STORAGE': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  await (browserAPI as typeof chrome).browsingData.removeLocalStorage({});
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_DOWNLOADS_HISTORY': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  await (browserAPI as typeof chrome).browsingData.removeDownloads({});
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_FORM_DATA': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  await (browserAPI as typeof chrome).browsingData.removeFormData({});
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_PASSWORDS': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  await (browserAPI as typeof chrome).browsingData.removePasswords({});
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_LAST_HOUR': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  const since = Date.now() - (60 * 60 * 1000);
+                  await (browserAPI as typeof chrome).browsingData.remove({ since }, {
+                    cache: true, cookies: true, downloads: true,
+                    formData: true, history: true, localStorage: true,
+                  });
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CLEAR_LAST_DAY': {
+                try {
+                  if (!await hasOptionalPermission('browsingData')) { sendResponse({ error: 'browsingData permission not granted' }); break; }
+                  const since = Date.now() - (24 * 60 * 60 * 1000);
+                  await (browserAPI as typeof chrome).browsingData.remove({ since }, {
+                    cache: true, cookies: true, downloads: true,
+                    formData: true, history: true, localStorage: true,
+                  });
+                  sendResponse({ status: 'OK' });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              // --- Top Sites ---
+              case 'GET_TOP_SITES': {
+                try {
+                  if (!await hasOptionalPermission('topSites')) {
+                    sendResponse({ error: 'topSites permission not granted. Enable Advanced Browser Commands in settings.' });
+                    break;
+                  }
+                  const sites = await getTopSites();
+                  sendResponse({ status: 'OK', sites });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              // --- Permission Management ---
+              case 'REQUEST_OPTIONAL_PERMISSIONS': {
+                try {
+                  const granted = await requestOptionalPermissions(msg.permissions ?? []);
+                  sendResponse({ status: 'OK', granted });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'CHECK_PERMISSIONS': {
+                try {
+                  const permsToCheck: string[] = msg.permissions ?? [];
+                  const results = await Promise.all(permsToCheck.map((p: string) => hasOptionalPermission(p)));
+                  sendResponse({ status: 'OK', granted: results.every(Boolean) });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
                 break;
               }
 
