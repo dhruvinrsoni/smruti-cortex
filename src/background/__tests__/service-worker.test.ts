@@ -4,6 +4,76 @@
  */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
+/** Mocks for advanced browser command handlers (tabs, windows, permissions, tabGroups, browsingData, topSites). */
+const swBrowserMocks = vi.hoisted(() => {
+  const tabsQuery = vi.fn();
+  const tabsRemove = vi.fn();
+  const tabsCreate = vi.fn();
+  const tabsDiscard = vi.fn();
+  const tabsMove = vi.fn();
+  const tabsUpdate = vi.fn();
+  const tabsGet = vi.fn();
+  const tabsGroup = vi.fn();
+  const tabsUngroup = vi.fn();
+  const windowsGetCurrent = vi.fn();
+  const windowsGetAll = vi.fn();
+  const windowsCreate = vi.fn();
+  const scriptingExecuteScript = vi.fn();
+  const permissionsContains = vi.fn();
+  const permissionsRequest = vi.fn();
+  const tabGroupsQuery = vi.fn();
+  const tabGroupsUpdate = vi.fn();
+  const browsingDataRemoveCache = vi.fn();
+  const browsingDataRemoveCookies = vi.fn();
+  const browsingDataRemoveLocalStorage = vi.fn();
+  const browsingDataRemoveDownloads = vi.fn();
+  const browsingDataRemoveFormData = vi.fn();
+  const browsingDataRemovePasswords = vi.fn();
+  const browsingDataRemove = vi.fn();
+  const topSitesGet = vi.fn();
+
+  function resetSwBrowserCommandMocks() {
+    tabsQuery.mockImplementation(async () => []);
+    tabsRemove.mockImplementation(async () => undefined);
+    tabsCreate.mockImplementation(async () => ({}));
+    tabsDiscard.mockImplementation(async () => ({}));
+    tabsMove.mockImplementation(async () => ({}));
+    tabsUpdate.mockImplementation(async () => ({}));
+    tabsGet.mockImplementation(async () => ({ id: 1, groupId: -1 }));
+    tabsGroup.mockImplementation(async () => 1);
+    tabsUngroup.mockImplementation(async () => undefined);
+    windowsGetCurrent.mockImplementation(async () => ({ id: 10 }));
+    windowsGetAll.mockImplementation(async () => []);
+    windowsCreate.mockImplementation(async () => ({}));
+    scriptingExecuteScript.mockImplementation(async () => []);
+    permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => { cb(true); });
+    permissionsRequest.mockImplementation((_p: unknown, cb?: (g: boolean) => void) => { cb?.(true); });
+    tabGroupsQuery.mockImplementation(async () => []);
+    tabGroupsUpdate.mockImplementation(async () => ({}));
+    browsingDataRemoveCache.mockImplementation(async () => undefined);
+    browsingDataRemoveCookies.mockImplementation(async () => undefined);
+    browsingDataRemoveLocalStorage.mockImplementation(async () => undefined);
+    browsingDataRemoveDownloads.mockImplementation(async () => undefined);
+    browsingDataRemoveFormData.mockImplementation(async () => undefined);
+    browsingDataRemovePasswords.mockImplementation(async () => undefined);
+    browsingDataRemove.mockImplementation(async () => undefined);
+    topSitesGet.mockImplementation((cb: (s: { url: string; title: string }[]) => void) => { cb([]); });
+  }
+  resetSwBrowserCommandMocks();
+
+  return {
+    tabsQuery, tabsRemove, tabsCreate, tabsDiscard, tabsMove, tabsUpdate, tabsGet, tabsGroup, tabsUngroup,
+    windowsGetCurrent, windowsGetAll, windowsCreate,
+    scriptingExecuteScript,
+    permissionsContains, permissionsRequest,
+    tabGroupsQuery, tabGroupsUpdate,
+    browsingDataRemoveCache, browsingDataRemoveCookies, browsingDataRemoveLocalStorage,
+    browsingDataRemoveDownloads, browsingDataRemoveFormData, browsingDataRemovePasswords, browsingDataRemove,
+    topSitesGet,
+    resetSwBrowserCommandMocks,
+  };
+});
+
 // Mock all heavy dependencies to prevent side effects
 vi.mock('../database', () => ({
   openDatabase: vi.fn(async () => ({})),
@@ -82,6 +152,7 @@ vi.mock('../../core/settings', () => ({
 }));
 
 vi.mock('../../core/helpers', () => {
+  const m = swBrowserMocks;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function noOp(): any {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,7 +171,49 @@ vi.mock('../../core/helpers', () => {
   }
   return {
     browserAPI: proxied({
-      tabs: proxied({ query: async () => [], sendMessage: () => {}, create: () => {}, onActivated: { addListener: () => {} }, onUpdated: { addListener: () => {} } }),
+      tabs: proxied({
+        query: (...args: unknown[]) => m.tabsQuery(...args),
+        sendMessage: () => {},
+        create: (...args: unknown[]) => m.tabsCreate(...args),
+        remove: (...args: unknown[]) => m.tabsRemove(...args),
+        discard: (...args: unknown[]) => m.tabsDiscard(...args),
+        move: (...args: unknown[]) => m.tabsMove(...args),
+        update: (...args: unknown[]) => m.tabsUpdate(...args),
+        get: (...args: unknown[]) => m.tabsGet(...args),
+        group: (...args: unknown[]) => m.tabsGroup(...args),
+        ungroup: (...args: unknown[]) => m.tabsUngroup(...args),
+        onActivated: { addListener: () => {} },
+        onUpdated: { addListener: () => {} },
+      }),
+      windows: proxied({
+        create: (...args: unknown[]) => m.windowsCreate(...args),
+        getCurrent: (...args: unknown[]) => m.windowsGetCurrent(...args),
+        getAll: (...args: unknown[]) => m.windowsGetAll(...args),
+        WINDOW_ID_CURRENT: -2,
+      }),
+      scripting: proxied({
+        executeScript: (...args: unknown[]) => m.scriptingExecuteScript(...args),
+      }),
+      permissions: proxied({
+        contains: (p: unknown, cb: (r: boolean) => void) => m.permissionsContains(p, cb),
+        request: (p: unknown, cb?: (g: boolean) => void) => m.permissionsRequest(p, cb),
+      }),
+      tabGroups: proxied({
+        query: (...args: unknown[]) => m.tabGroupsQuery(...args),
+        update: (...args: unknown[]) => m.tabGroupsUpdate(...args),
+      }),
+      browsingData: proxied({
+        removeCache: (...args: unknown[]) => m.browsingDataRemoveCache(...args),
+        removeCookies: (...args: unknown[]) => m.browsingDataRemoveCookies(...args),
+        removeLocalStorage: (...args: unknown[]) => m.browsingDataRemoveLocalStorage(...args),
+        removeDownloads: (...args: unknown[]) => m.browsingDataRemoveDownloads(...args),
+        removeFormData: (...args: unknown[]) => m.browsingDataRemoveFormData(...args),
+        removePasswords: (...args: unknown[]) => m.browsingDataRemovePasswords(...args),
+        remove: (...args: unknown[]) => m.browsingDataRemove(...args),
+      }),
+      topSites: proxied({
+        get: (cb: (sites: { url: string; title: string }[]) => void) => m.topSitesGet(cb),
+      }),
       runtime: proxied({
         lastError: null,
         getManifest: () => ({ manifest_version: 3, version: '8.0.0' }),
@@ -252,15 +365,18 @@ void mocks;
 // Import the service-worker module — registers listeners at module level
 import '../service-worker';
 
-// Helper to send a message and get response
-async function sendMessage(msg: Record<string, unknown>): Promise<unknown> {
+// Helper to send a message and get response (optional sender.tab for tab-scoped commands)
+async function sendMessage(
+  msg: Record<string, unknown>,
+  sender: { tab?: { id?: number; url?: string; index?: number } } = {},
+): Promise<unknown> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handler = (globalThis as any).__swTestMessageHandler;
   if (!handler) {
     throw new Error('Message handler not captured — initLogger() may have failed');
   }
   return new Promise((resolve) => {
-    handler(msg, {}, (response: unknown) => resolve(response));
+    handler(msg, sender, (response: unknown) => resolve(response));
   });
 }
 
@@ -768,5 +884,327 @@ describe('service-worker port-based messaging', () => {
     expect(postMessage).toHaveBeenCalled();
     const call = postMessage.mock.calls[0][0];
     expect(call).toHaveProperty('skipAI', true);
+  });
+});
+
+describe('advanced browser command message handlers', () => {
+  const m = swBrowserMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('CLOSE_OTHER_TABS removes non-active unpinned tabs', async () => {
+    m.tabsQuery.mockImplementation(async () => [
+      { id: 1, pinned: false },
+      { id: 2, pinned: false },
+      { id: 3, pinned: true },
+    ]);
+    const response = await sendMessage({ type: 'CLOSE_OTHER_TABS', tabId: 1 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.closed).toBe(1);
+    expect(m.tabsRemove).toHaveBeenCalledWith([2]);
+  });
+
+  it('CLOSE_OTHER_TABS returns error without tab id', async () => {
+    const response = await sendMessage({ type: 'CLOSE_OTHER_TABS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).error).toBe('No active tab');
+  });
+
+  it('CLOSE_TABS_RIGHT uses active tab index (two queries)', async () => {
+    m.tabsQuery
+      .mockResolvedValueOnce([{ id: 5, index: 1, pinned: false }])
+      .mockResolvedValueOnce([
+        { id: 5, index: 1, pinned: false },
+        { id: 6, index: 2, pinned: false },
+        { id: 7, index: 3, pinned: false },
+      ]);
+    const response = await sendMessage({ type: 'CLOSE_TABS_RIGHT' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.closed).toBe(2);
+    expect(m.tabsRemove).toHaveBeenCalledWith([6, 7]);
+  });
+
+  it('CLOSE_TABS_LEFT closes tabs with lower index (two queries)', async () => {
+    m.tabsQuery
+      .mockResolvedValueOnce([{ id: 3, index: 2, pinned: false }])
+      .mockResolvedValueOnce([
+        { id: 1, index: 0, pinned: false },
+        { id: 2, index: 1, pinned: false },
+        { id: 3, index: 2, pinned: false },
+      ]);
+    const response = await sendMessage({ type: 'CLOSE_TABS_LEFT' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.closed).toBe(2);
+    expect(m.tabsRemove).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it('CLOSE_ALL_TABS creates new tab then removes all', async () => {
+    m.tabsQuery.mockImplementation(async () => [{ id: 1 }, { id: 2 }]);
+    const response = await sendMessage({ type: 'CLOSE_ALL_TABS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.closed).toBe(2);
+    expect(m.tabsCreate).toHaveBeenCalledWith({ url: 'chrome://newtab' });
+    expect(m.tabsRemove).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it('DISCARD_TAB discards given tab', async () => {
+    const response = await sendMessage({ type: 'DISCARD_TAB', tabId: 9 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.tabsDiscard).toHaveBeenCalledWith(9);
+  });
+
+  it('DISCARD_OTHER_TABS counts discarded background tabs', async () => {
+    m.tabsQuery.mockImplementation(async () => [
+      { id: 1, active: true, discarded: false },
+      { id: 2, active: false, discarded: false },
+      { id: 3, active: false, discarded: true },
+    ]);
+    const response = await sendMessage({ type: 'DISCARD_OTHER_TABS', tabId: 1 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.discarded).toBe(1);
+    expect(m.tabsDiscard).toHaveBeenCalledWith(2);
+  });
+
+  it('MOVE_TAB_NEW_WINDOW creates window with tab', async () => {
+    const response = await sendMessage({ type: 'MOVE_TAB_NEW_WINDOW', tabId: 4 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.windowsCreate).toHaveBeenCalledWith({ tabId: 4 });
+  });
+
+  it('MERGE_WINDOWS moves tabs from other windows', async () => {
+    m.windowsGetCurrent.mockResolvedValue({ id: 1 });
+    m.windowsGetAll.mockResolvedValue([
+      { id: 1, tabs: [{ id: 10 }] },
+      { id: 2, tabs: [{ id: 20 }, { id: 21 }] },
+    ]);
+    const response = await sendMessage({ type: 'MERGE_WINDOWS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.moved).toBe(2);
+    expect(m.tabsMove).toHaveBeenCalledWith(20, { windowId: 1, index: -1 });
+    expect(m.tabsMove).toHaveBeenCalledWith(21, { windowId: 1, index: -1 });
+  });
+
+  it('CLOSE_DUPLICATES keeps first URL and closes rest', async () => {
+    m.tabsQuery.mockImplementation(async () => [
+      { id: 1, url: 'https://x.com' },
+      { id: 2, url: 'https://x.com#frag' },
+      { id: 3, url: 'https://y.com' },
+    ]);
+    const response = await sendMessage({ type: 'CLOSE_DUPLICATES' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.closed).toBe(1);
+    expect(m.tabsRemove).toHaveBeenCalledWith([2]);
+  });
+
+  it('SORT_TABS moves unpinned tabs by URL order', async () => {
+    m.tabsQuery.mockImplementation(async () => [
+      { id: 1, pinned: true, url: 'https://z.com' },
+      { id: 2, pinned: false, url: 'https://b.com' },
+      { id: 3, pinned: false, url: 'https://a.com' },
+    ]);
+    const response = await sendMessage({ type: 'SORT_TABS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.sorted).toBe(2);
+    expect(m.tabsMove).toHaveBeenCalledWith(3, { index: 1 });
+    expect(m.tabsMove).toHaveBeenCalledWith(2, { index: 2 });
+  });
+
+  it('SCROLL_TO_TOP runs executeScript', async () => {
+    const response = await sendMessage({ type: 'SCROLL_TO_TOP', tabId: 8 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.scriptingExecuteScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 8 } }));
+  });
+
+  it('UNPIN_TAB and UNMUTE_TAB update tab', async () => {
+    await sendMessage({ type: 'UNPIN_TAB', tabId: 3 });
+    expect(m.tabsUpdate).toHaveBeenCalledWith(3, { pinned: false });
+    await sendMessage({ type: 'UNMUTE_TAB', tabId: 3 });
+    expect(m.tabsUpdate).toHaveBeenCalledWith(3, { muted: false });
+  });
+
+  it('GROUP_TAB requires tabGroups permission', async () => {
+    m.permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => { cb(false); });
+    const response = await sendMessage({ type: 'GROUP_TAB', tabId: 1 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(String((response as any).error)).toContain('tabGroups');
+    expect(m.tabsGroup).not.toHaveBeenCalled();
+  });
+
+  it('GROUP_TAB calls tabs.group when permitted', async () => {
+    const response = await sendMessage({ type: 'GROUP_TAB', tabId: 1 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.tabsGroup).toHaveBeenCalledWith({ tabIds: 1 });
+  });
+
+  it('COLLAPSE_GROUPS updates each group', async () => {
+    m.tabGroupsQuery.mockResolvedValue([{ id: 100 }, { id: 101 }]);
+    const response = await sendMessage({ type: 'COLLAPSE_GROUPS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.collapsed).toBe(2);
+    expect(m.tabGroupsUpdate).toHaveBeenCalledWith(100, { collapsed: true });
+    expect(m.tabGroupsUpdate).toHaveBeenCalledWith(101, { collapsed: true });
+  });
+
+  it('NAME_GROUP sets title when tab is grouped', async () => {
+    m.tabsGet.mockResolvedValue({ id: 1, groupId: 42 });
+    const response = await sendMessage({ type: 'NAME_GROUP', tabId: 1, name: 'Work' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.tabGroupsUpdate).toHaveBeenCalledWith(42, { title: 'Work' });
+  });
+
+  it('COLOR_GROUP passes color to tabGroups.update', async () => {
+    m.tabsGet.mockResolvedValue({ id: 1, groupId: 7 });
+    const response = await sendMessage({ type: 'COLOR_GROUP', tabId: 1, color: 'red' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.tabGroupsUpdate).toHaveBeenCalledWith(7, { color: 'red' });
+  });
+
+  it('CLOSE_GROUP removes all tabs in group', async () => {
+    m.tabsGet.mockResolvedValue({ id: 1, groupId: 99 });
+    m.tabsQuery.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    const response = await sendMessage({ type: 'CLOSE_GROUP', tabId: 1 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.closed).toBe(2);
+    expect(m.tabsRemove).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it('UNGROUP_ALL ungroups grouped tabs', async () => {
+    m.tabsQuery.mockResolvedValue([
+      { id: 1, groupId: -1 },
+      { id: 2, groupId: 5 },
+    ]);
+    const response = await sendMessage({ type: 'UNGROUP_ALL' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.ungrouped).toBe(1);
+    expect(m.tabsUngroup).toHaveBeenCalledWith(2);
+  });
+
+  it('CLEAR_BROWSER_CACHE calls removeCache when browsingData allowed', async () => {
+    const response = await sendMessage({ type: 'CLEAR_BROWSER_CACHE' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.browsingDataRemoveCache).toHaveBeenCalledWith({});
+  });
+
+  it('CLEAR_LAST_HOUR calls browsingData.remove with time range', async () => {
+    const response = await sendMessage({ type: 'CLEAR_LAST_HOUR' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.browsingDataRemove).toHaveBeenCalled();
+    const arg0 = m.browsingDataRemove.mock.calls[0][0];
+    expect(arg0).toHaveProperty('since');
+    expect(typeof arg0.since).toBe('number');
+    expect(m.browsingDataRemove.mock.calls[0][1]).toMatchObject({
+      cache: true, cookies: true, history: true, localStorage: true,
+    });
+  });
+
+  it('GET_TOP_SITES returns sites when permitted', async () => {
+    m.topSitesGet.mockImplementation((cb) => {
+      cb([{ url: 'https://a.test/', title: 'A' }]);
+    });
+    const response = await sendMessage({ type: 'GET_TOP_SITES' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.sites).toHaveLength(1);
+    expect(res.sites[0].url).toBe('https://a.test/');
+  });
+
+  it('REQUEST_OPTIONAL_PERMISSIONS returns granted flag', async () => {
+    m.permissionsRequest.mockImplementation((_p: unknown, cb?: (g: boolean) => void) => { cb?.(false); });
+    const response = await sendMessage({
+      type: 'REQUEST_OPTIONAL_PERMISSIONS',
+      permissions: ['topSites'],
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.granted).toBe(false);
+  });
+
+  it('CHECK_PERMISSIONS is true only when all permissions granted', async () => {
+    let call = 0;
+    m.permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => {
+      call += 1;
+      cb(call === 1);
+    });
+    const response = await sendMessage({
+      type: 'CHECK_PERMISSIONS',
+      permissions: ['a', 'b'],
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).granted).toBe(false);
+  });
+
+  it('UNGROUP_TAB calls tabs.ungroup', async () => {
+    const response = await sendMessage({ type: 'UNGROUP_TAB', tabId: 11 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.tabsUngroup).toHaveBeenCalledWith(11);
+  });
+
+  it('EXPAND_GROUPS expands each group', async () => {
+    m.tabGroupsQuery.mockResolvedValue([{ id: 200 }]);
+    const response = await sendMessage({ type: 'EXPAND_GROUPS' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = response as any;
+    expect(res.status).toBe('OK');
+    expect(res.expanded).toBe(1);
+    expect(m.tabGroupsUpdate).toHaveBeenCalledWith(200, { collapsed: false });
+  });
+
+  it('CLEAR_COOKIES returns error when browsingData permission denied', async () => {
+    m.permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => { cb(false); });
+    const response = await sendMessage({ type: 'CLEAR_COOKIES' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).error).toContain('browsingData');
+    expect(m.browsingDataRemoveCookies).not.toHaveBeenCalled();
+  });
+
+  it('NAME_GROUP returns error when tab is not grouped', async () => {
+    m.tabsGet.mockResolvedValue({ id: 1, groupId: -1 });
+    const response = await sendMessage({ type: 'NAME_GROUP', tabId: 1, name: 'X' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).error).toContain('not in a group');
+  });
+
+  it('SCROLL_TO_BOTTOM runs executeScript with scroll target', async () => {
+    const response = await sendMessage({ type: 'SCROLL_TO_BOTTOM', tabId: 12 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((response as any).status).toBe('OK');
+    expect(m.scriptingExecuteScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 12 } }));
   });
 });
