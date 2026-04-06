@@ -9,6 +9,8 @@ import {
   getCommandsByTier,
   getAvailableCommands,
   matchCommands,
+  preparePaletteCommandList,
+  getPowerSettingsPatch,
   getCycleValueFromCommand,
   getCurrentValueLabel,
   saveRecentCommand,
@@ -102,6 +104,33 @@ describe('command-registry core', () => {
     expect(cmd).toBeDefined();
     if (!cmd) { throw new Error('settings missing'); }
     expect(getCurrentValueLabel(cmd, base)).toBeUndefined();
+  });
+
+  it('clear-recent-searches targets CLEAR_RECENT_SEARCHES', () => {
+    const cmd = ALL_COMMANDS.find(c => c.id === 'clear-recent-searches');
+    expect(cmd?.messageType).toBe('CLEAR_RECENT_SEARCHES');
+  });
+
+  it('clear-search-debug command targets CLEAR_SEARCH_DEBUG', () => {
+    const cmd = ALL_COMMANDS.find(c => c.id === 'clear-search-debug');
+    expect(cmd?.messageType).toBe('CLEAR_SEARCH_DEBUG');
+  });
+
+  it('getPowerSettingsPatch returns palette and toolbar presets', () => {
+    expect(getPowerSettingsPatch('palette-modes-full')?.commandPaletteModes).toEqual(['/', '>', '@', '#', '??']);
+    expect(getPowerSettingsPatch('palette-modes-minimal')?.commandPaletteModes).toEqual(['/', '@']);
+    expect(getPowerSettingsPatch('toolbar-preset-minimal')?.toolbarToggles).toEqual(['ollamaEnabled', 'theme']);
+    expect(getPowerSettingsPatch('not-a-command')).toBeNull();
+  });
+
+  it('preparePaletteCommandList orders power categories when query empty', () => {
+    const power = getCommandsByTier('power');
+    const list = preparePaletteCommandList('power', '', power, base);
+    const idxTab = list.findIndex(c => c.category === 'tab');
+    const idxMeta = list.findIndex(c => c.category === 'meta');
+    expect(idxTab).toBeGreaterThanOrEqual(0);
+    expect(idxMeta).toBeGreaterThanOrEqual(0);
+    expect(idxTab).toBeLessThan(idxMeta);
   });
 });
 

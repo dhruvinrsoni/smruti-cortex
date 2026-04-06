@@ -8,6 +8,10 @@
  */
 
 import type { AppSettings } from '../core/settings';
+import { DEFAULT_TOOLBAR_TOGGLES, TOOLBAR_TOGGLE_DEFS } from './toolbar-toggles';
+
+/** All toolbar chip keys for a “show every toggle” preset */
+export const FULL_TOOLBAR_TOGGLES: string[] = TOOLBAR_TOGGLE_DEFS.map(d => d.key as string);
 
 export interface PaletteCommand {
     id: string;
@@ -31,6 +35,8 @@ export interface PaletteCommand {
     aliases?: string[];
     shortcut?: string;
     dangerous?: boolean;
+    /** One-line consequence / tip (shown in quick-search power list) */
+    hint?: string;
     messageType?: string;
     settingKey?: keyof AppSettings;
     action:
@@ -1180,6 +1186,18 @@ const POWER_COMMANDS: PaletteCommand[] = [
         tier: 'power',
         category: 'data',
         keywords: ['clear', 'recent', 'searches', 'history'],
+        hint: 'Clears saved queries in the quick-search / popup empty state',
+        action: 'message',
+        messageType: 'CLEAR_RECENT_SEARCHES',
+    },
+    {
+        id: 'clear-search-debug',
+        label: 'Clear Search Debug History',
+        icon: '🗑️',
+        tier: 'power',
+        category: 'diagnostics',
+        keywords: ['clear', 'search', 'debug', 'analytics', 'history'],
+        hint: 'Clears recorded search traces when Search Debug mode is on',
         action: 'message',
         messageType: 'CLEAR_SEARCH_DEBUG',
     },
@@ -1362,9 +1380,262 @@ const POWER_COMMANDS: PaletteCommand[] = [
         tier: 'power',
         category: 'diagnostics',
         keywords: ['search', 'analytics', 'stats'],
+        hint: 'Shows query stats from this session',
         action: 'message',
         messageType: 'GET_SEARCH_ANALYTICS',
     },
+
+    // --- Quick-search / popup tuning (SETTINGS_CHANGED patches from palette) ---
+    {
+        id: 'palette-in-popup',
+        label: 'Command Palette in Popup',
+        icon: '🪟',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['popup', 'palette', 'prefix', 'modes', 'inline'],
+        hint: 'When on, / > @ # work inside the extension popup too',
+        action: 'toggle-boolean',
+        settingKey: 'commandPaletteInPopup',
+    },
+    {
+        id: 'palette-modes-full',
+        label: 'Palette Modes: All ( / > @ # ?? )',
+        icon: '⌨️',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['palette', 'modes', 'all', 'prefixes'],
+        hint: 'Restores every prefix mode including power (>) and web (??)',
+        action: 'message',
+        messageType: 'SETTINGS_CHANGED',
+    },
+    {
+        id: 'palette-modes-no-power',
+        label: 'Palette Modes: No power (drop >)',
+        icon: '⌨️',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['palette', 'modes', 'everyday', 'no', 'admin'],
+        hint: 'Keeps commands (/) but removes > admin prefix',
+        action: 'message',
+        messageType: 'SETTINGS_CHANGED',
+    },
+    {
+        id: 'palette-modes-minimal',
+        label: 'Palette Modes: Minimal ( / @ )',
+        icon: '⌨️',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['palette', 'minimal', 'simple'],
+        hint: 'Only commands and tab switcher; no bookmarks, web, or power',
+        action: 'message',
+        messageType: 'SETTINGS_CHANGED',
+    },
+    {
+        id: 'toolbar-preset-default',
+        label: 'Toolbar Chips: Default',
+        icon: '🧩',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['toolbar', 'chips', 'default', 'toggles'],
+        hint: 'AI, Bookmarks, Dupes — same as fresh install',
+        action: 'message',
+        messageType: 'SETTINGS_CHANGED',
+    },
+    {
+        id: 'toolbar-preset-full',
+        label: 'Toolbar Chips: Show All',
+        icon: '🧩',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['toolbar', 'chips', 'all', 'every'],
+        hint: 'Every toggle appears in the chip bar',
+        action: 'message',
+        messageType: 'SETTINGS_CHANGED',
+    },
+    {
+        id: 'toolbar-preset-minimal',
+        label: 'Toolbar Chips: Minimal',
+        icon: '🧩',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['toolbar', 'chips', 'minimal'],
+        hint: 'Only AI + theme cycle',
+        action: 'message',
+        messageType: 'SETTINGS_CHANGED',
+    },
+    {
+        id: 'open-full-settings',
+        label: 'Open Extension Popup (full settings)',
+        icon: '⚙️',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['settings', 'options', 'popup', 'configure', 'modal'],
+        hint: 'Opens the popup for detailed AI, privacy, and blacklist',
+        action: 'message',
+        messageType: 'OPEN_SETTINGS',
+    },
+    {
+        id: 'copy-ollama-endpoint',
+        label: 'Copy Ollama Endpoint',
+        icon: '📋',
+        tier: 'power',
+        category: 'ai',
+        keywords: ['copy', 'ollama', 'url', 'endpoint', 'localhost'],
+        hint: 'Copies the current API URL to the clipboard',
+        action: 'page-action',
+    },
+    {
+        id: 'copy-ollama-model',
+        label: 'Copy Ollama Model (keywords)',
+        icon: '📋',
+        tier: 'power',
+        category: 'ai',
+        keywords: ['copy', 'ollama', 'model', 'llama'],
+        hint: 'Copies the keyword-expansion model name',
+        action: 'page-action',
+    },
+    {
+        id: 'copy-embedding-model',
+        label: 'Copy Embedding Model',
+        icon: '📋',
+        tier: 'power',
+        category: 'ai',
+        keywords: ['copy', 'embedding', 'model', 'nomic'],
+        hint: 'Copies the semantic search embedding model name',
+        action: 'page-action',
+    },
+
+    // --- Numeric presets (match SETTINGS_SCHEMA ranges) ---
+    {
+        id: 'max-results',
+        label: 'Max Results (search cap)',
+        icon: '📊',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['max', 'results', 'limit', 'cap'],
+        hint: 'Upper bound per search query',
+        action: 'sub-command',
+        settingKey: 'maxResults',
+        cycleValues: [
+            { value: '50', label: '50', icon: '📊' },
+            { value: '100', label: '100', icon: '📊' },
+            { value: '200', label: '200', icon: '📊' },
+            { value: '500', label: '500', icon: '📊' },
+            { value: '1000', label: '1000', icon: '📊' },
+        ],
+        subCommands: [
+            { id: 'max-results-50', label: 'Max results: 50', icon: '📊', tier: 'power', category: 'meta', keywords: ['50'], action: 'cycle', settingKey: 'maxResults' },
+            { id: 'max-results-100', label: 'Max results: 100', icon: '📊', tier: 'power', category: 'meta', keywords: ['100'], action: 'cycle', settingKey: 'maxResults' },
+            { id: 'max-results-200', label: 'Max results: 200', icon: '📊', tier: 'power', category: 'meta', keywords: ['200'], action: 'cycle', settingKey: 'maxResults' },
+            { id: 'max-results-500', label: 'Max results: 500', icon: '📊', tier: 'power', category: 'meta', keywords: ['500'], action: 'cycle', settingKey: 'maxResults' },
+            { id: 'max-results-1000', label: 'Max results: 1000', icon: '📊', tier: 'power', category: 'meta', keywords: ['1000'], action: 'cycle', settingKey: 'maxResults' },
+        ],
+    },
+    {
+        id: 'default-result-count',
+        label: 'Default Result Count (empty query)',
+        icon: '📋',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['default', 'results', 'empty', 'popup'],
+        hint: 'How many items load when the box opens with no text',
+        action: 'sub-command',
+        settingKey: 'defaultResultCount',
+        cycleValues: [
+            { value: '25', label: '25', icon: '📋' },
+            { value: '50', label: '50', icon: '📋' },
+            { value: '75', label: '75', icon: '📋' },
+            { value: '100', label: '100', icon: '📋' },
+            { value: '150', label: '150', icon: '📋' },
+            { value: '200', label: '200', icon: '📋' },
+        ],
+        subCommands: [
+            { id: 'default-result-count-25', label: 'Default results: 25', icon: '📋', tier: 'power', category: 'meta', keywords: ['25'], action: 'cycle', settingKey: 'defaultResultCount' },
+            { id: 'default-result-count-50', label: 'Default results: 50', icon: '📋', tier: 'power', category: 'meta', keywords: ['50'], action: 'cycle', settingKey: 'defaultResultCount' },
+            { id: 'default-result-count-75', label: 'Default results: 75', icon: '📋', tier: 'power', category: 'meta', keywords: ['75'], action: 'cycle', settingKey: 'defaultResultCount' },
+            { id: 'default-result-count-100', label: 'Default results: 100', icon: '📋', tier: 'power', category: 'meta', keywords: ['100'], action: 'cycle', settingKey: 'defaultResultCount' },
+            { id: 'default-result-count-150', label: 'Default results: 150', icon: '📋', tier: 'power', category: 'meta', keywords: ['150'], action: 'cycle', settingKey: 'defaultResultCount' },
+            { id: 'default-result-count-200', label: 'Default results: 200', icon: '📋', tier: 'power', category: 'meta', keywords: ['200'], action: 'cycle', settingKey: 'defaultResultCount' },
+        ],
+    },
+    {
+        id: 'focus-delay',
+        label: 'Focus Delay (auto-focus results)',
+        icon: '⏱️',
+        tier: 'power',
+        category: 'meta',
+        keywords: ['focus', 'delay', 'ms', 'keyboard'],
+        hint: 'Wait after typing before focus moves to results (0 = off)',
+        action: 'sub-command',
+        settingKey: 'focusDelayMs',
+        cycleValues: [
+            { value: '0', label: 'Off', icon: '⏱️' },
+            { value: '200', label: '200 ms', icon: '⏱️' },
+            { value: '450', label: '450 ms', icon: '⏱️' },
+            { value: '800', label: '800 ms', icon: '⏱️' },
+            { value: '1500', label: '1.5 s', icon: '⏱️' },
+        ],
+        subCommands: [
+            { id: 'focus-delay-off', label: 'Focus delay: Off', icon: '⏱️', tier: 'power', category: 'meta', keywords: ['off', 'zero'], action: 'cycle', settingKey: 'focusDelayMs' },
+            { id: 'focus-delay-200', label: 'Focus delay: 200 ms', icon: '⏱️', tier: 'power', category: 'meta', keywords: ['200'], action: 'cycle', settingKey: 'focusDelayMs' },
+            { id: 'focus-delay-450', label: 'Focus delay: 450 ms', icon: '⏱️', tier: 'power', category: 'meta', keywords: ['450', 'default'], action: 'cycle', settingKey: 'focusDelayMs' },
+            { id: 'focus-delay-800', label: 'Focus delay: 800 ms', icon: '⏱️', tier: 'power', category: 'meta', keywords: ['800'], action: 'cycle', settingKey: 'focusDelayMs' },
+            { id: 'focus-delay-1500', label: 'Focus delay: 1.5 s', icon: '⏱️', tier: 'power', category: 'meta', keywords: ['1500', 'slow'], action: 'cycle', settingKey: 'focusDelayMs' },
+        ],
+    },
+    {
+        id: 'ai-search-delay',
+        label: 'AI Search Delay',
+        icon: '🤖',
+        tier: 'power',
+        category: 'ai',
+        keywords: ['ai', 'delay', 'debounce', 'ollama'],
+        hint: 'Idle time before Ollama keyword expansion runs',
+        action: 'sub-command',
+        settingKey: 'aiSearchDelayMs',
+        cycleValues: [
+            { value: '200', label: '200 ms', icon: '🤖' },
+            { value: '400', label: '400 ms', icon: '🤖' },
+            { value: '500', label: '500 ms', icon: '🤖' },
+            { value: '1000', label: '1 s', icon: '🤖' },
+            { value: '2000', label: '2 s', icon: '🤖' },
+        ],
+        subCommands: [
+            { id: 'ai-search-delay-200', label: 'AI delay: 200 ms', icon: '🤖', tier: 'power', category: 'ai', keywords: ['200'], action: 'cycle', settingKey: 'aiSearchDelayMs' },
+            { id: 'ai-search-delay-400', label: 'AI delay: 400 ms', icon: '🤖', tier: 'power', category: 'ai', keywords: ['400'], action: 'cycle', settingKey: 'aiSearchDelayMs' },
+            { id: 'ai-search-delay-500', label: 'AI delay: 500 ms', icon: '🤖', tier: 'power', category: 'ai', keywords: ['500', 'default'], action: 'cycle', settingKey: 'aiSearchDelayMs' },
+            { id: 'ai-search-delay-1000', label: 'AI delay: 1 s', icon: '🤖', tier: 'power', category: 'ai', keywords: ['1000'], action: 'cycle', settingKey: 'aiSearchDelayMs' },
+            { id: 'ai-search-delay-2000', label: 'AI delay: 2 s', icon: '🤖', tier: 'power', category: 'ai', keywords: ['2000'], action: 'cycle', settingKey: 'aiSearchDelayMs' },
+        ],
+    },
+    {
+        id: 'ollama-timeout',
+        label: 'Ollama Request Timeout',
+        icon: '⏳',
+        tier: 'power',
+        category: 'ai',
+        keywords: ['ollama', 'timeout', 'seconds', 'wait'],
+        hint: '-1 = no limit; else max wait for the API',
+        action: 'sub-command',
+        settingKey: 'ollamaTimeout',
+        cycleValues: [
+            { value: '-1', label: 'Unlimited', icon: '⏳' },
+            { value: '10000', label: '10 s', icon: '⏳' },
+            { value: '15000', label: '15 s', icon: '⏳' },
+            { value: '30000', label: '30 s', icon: '⏳' },
+            { value: '60000', label: '60 s', icon: '⏳' },
+            { value: '120000', label: '120 s', icon: '⏳' },
+        ],
+        subCommands: [
+            { id: 'ollama-timeout-unlimited', label: 'Ollama timeout: Unlimited', icon: '⏳', tier: 'power', category: 'ai', keywords: ['unlimited', 'infinite'], action: 'cycle', settingKey: 'ollamaTimeout' },
+            { id: 'ollama-timeout-10000', label: 'Ollama timeout: 10 s', icon: '⏳', tier: 'power', category: 'ai', keywords: ['10'], action: 'cycle', settingKey: 'ollamaTimeout' },
+            { id: 'ollama-timeout-15000', label: 'Ollama timeout: 15 s', icon: '⏳', tier: 'power', category: 'ai', keywords: ['15'], action: 'cycle', settingKey: 'ollamaTimeout' },
+            { id: 'ollama-timeout-30000', label: 'Ollama timeout: 30 s', icon: '⏳', tier: 'power', category: 'ai', keywords: ['30', 'default'], action: 'cycle', settingKey: 'ollamaTimeout' },
+            { id: 'ollama-timeout-60000', label: 'Ollama timeout: 60 s', icon: '⏳', tier: 'power', category: 'ai', keywords: ['60'], action: 'cycle', settingKey: 'ollamaTimeout' },
+            { id: 'ollama-timeout-120000', label: 'Ollama timeout: 120 s', icon: '⏳', tier: 'power', category: 'ai', keywords: ['120'], action: 'cycle', settingKey: 'ollamaTimeout' },
+        ],
+    },
+
     {
         id: 'log-level',
         label: 'Log Level',
@@ -1522,7 +1793,7 @@ export function matchCommands(
             }
 
             tokens.forEach(t => {
-                if (searchable.includes(t)) score += 10;
+                if (searchable.includes(t)) {score += 10;}
             });
 
             if (score > 0) {
@@ -1534,6 +1805,68 @@ export function matchCommands(
     return scored.sort((a, b) => b.score - a.score).map(r => r.cmd);
 }
 
+/** Display order for power palette when the query is empty (scanability). */
+const POWER_PALETTE_CATEGORY_ORDER = [
+    'tab',
+    'data',
+    'index',
+    'ai',
+    'diagnostics',
+    'meta',
+    'toggle',
+    'page',
+    'sort',
+    'navigation',
+    'browser',
+    'window',
+] as const;
+
+function rankPowerPaletteCategory(category: string): number {
+    const idx = (POWER_PALETTE_CATEGORY_ORDER as readonly string[]).indexOf(category);
+    return idx === -1 ? 99 : idx;
+}
+
+/**
+ * Commands shown in the palette for a tier/query, with power-tier empty-query sort
+ * for category grouping in the overlay.
+ */
+export function preparePaletteCommandList(
+    tier: 'everyday' | 'power',
+    query: string,
+    commands: PaletteCommand[],
+    settings?: AppSettings,
+): PaletteCommand[] {
+    const trimmed = query.trim();
+    const list = matchCommands(trimmed, commands, settings);
+    if (tier !== 'power' || trimmed) {return list;}
+    return [...list].sort((a, b) => {
+        const ra = rankPowerPaletteCategory(a.category);
+        const rb = rankPowerPaletteCategory(b.category);
+        if (ra !== rb) {return ra - rb;}
+        return a.label.localeCompare(b.label);
+    });
+}
+
+/** Settings patch for power commands that use messageType SETTINGS_CHANGED. */
+export function getPowerSettingsPatch(cmdId: string): Partial<AppSettings> | null {
+    switch (cmdId) {
+        case 'palette-modes-full':
+            return { commandPaletteModes: ['/', '>', '@', '#', '??'] };
+        case 'palette-modes-no-power':
+            return { commandPaletteModes: ['/', '@', '#', '??'] };
+        case 'palette-modes-minimal':
+            return { commandPaletteModes: ['/', '@'] };
+        case 'toolbar-preset-default':
+            return { toolbarToggles: [...DEFAULT_TOOLBAR_TOGGLES] };
+        case 'toolbar-preset-full':
+            return { toolbarToggles: [...FULL_TOOLBAR_TOGGLES] };
+        case 'toolbar-preset-minimal':
+            return { toolbarToggles: ['ollamaEnabled', 'theme'] };
+        default:
+            return null;
+    }
+}
+
 /**
  * Get the value to set when a cycle sub-command is executed.
  * Extracts the value from the sub-command's ID pattern (e.g., "theme-dark" → "dark").
@@ -1542,7 +1875,7 @@ export function getCycleValueFromCommand(cmd: PaletteCommand): string | number |
     const parent = ALL_COMMANDS.find(
         c => c.subCommands?.some(sub => sub.id === cmd.id),
     );
-    if (!parent?.cycleValues) return undefined;
+    if (!parent?.cycleValues) {return undefined;}
 
     for (const cv of parent.cycleValues) {
         const expectedId = `${parent.id}-${cv.label.toLowerCase().replace(/\s+/g, '-')}`;
@@ -1572,7 +1905,7 @@ export function getCurrentValueLabel(
     cmd: PaletteCommand,
     settings: AppSettings,
 ): string | undefined {
-    if (!cmd.cycleValues || !cmd.settingKey) return undefined;
+    if (!cmd.cycleValues || !cmd.settingKey) {return undefined;}
     const current = String(settings[cmd.settingKey]);
     const match = cmd.cycleValues.find(cv => cv.value === current);
     return match?.label;
