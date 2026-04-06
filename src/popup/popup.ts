@@ -15,15 +15,19 @@ import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } f
 import {
   type PaletteCommand,
   ALL_COMMANDS,
-  matchCommands,
-  getCommandsByTier,
+  preparePaletteCommandList,
+  getPowerSettingsPatch,
   getAvailableCommands,
   getCycleValueFromCommand,
-  getCurrentValueLabel,
   saveRecentCommand,
   SEARCH_ENGINES,
   SEARCH_ENGINE_PREFIXES,
 } from '../shared/command-registry';
+import {
+  formatPaletteDiagnosticToast,
+  isPaletteDiagnosticMessageType,
+  PALETTE_DIAGNOSTIC_TOAST_MS,
+} from '../shared/palette-messages';
 import type { AppSettings } from '../core/settings';
 import {
   type SearchResult,
@@ -592,9 +596,7 @@ function initializePopup() {
       const settings = SettingsManager.getSettings();
       const commands = getAvailableCommands(tier, settings);
 
-      const displayList = query
-        ? matchCommands(query, commands, settings)
-        : commands;
+      const displayList = preparePaletteCommandList(tier, query, commands, settings);
 
       resultCountNode.textContent = `${displayList.length} command${displayList.length !== 1 ? 's' : ''}`;
       if (displayList.length === 0) {
@@ -608,10 +610,16 @@ function initializePopup() {
         if (idx === 0) li.style.background = 'var(--hover)';
 
         const currentLabel = getPopupCurrentLabel(cmd);
+        const hintBlock = cmd.hint
+          ? `<div style="font-size:11px;color:var(--muted);line-height:1.25;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cmd.hint)}</div>`
+          : '';
         li.innerHTML = `
-          <span style="font-size:16px;width:24px;text-align:center;">${cmd.icon}</span>
-          <span style="flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cmd.label}${currentLabel ? ` <span style="font-size:10px;color:var(--accent,#3b82f6);font-weight:600;">[${currentLabel}]</span>` : ''}</span>
-          <span style="font-size:9px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:1px 6px;border-radius:3px;">${cmd.category}</span>
+          <span style="font-size:16px;width:24px;text-align:center;flex-shrink:0;">${cmd.icon}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+            <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cmd.label}${currentLabel ? ` <span style="font-size:10px;color:var(--accent,#3b82f6);font-weight:600;">[${currentLabel}]</span>` : ''}</span>
+            ${hintBlock}
+          </div>
+          <span style="font-size:9px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:1px 6px;border-radius:3px;flex-shrink:0;">${cmd.category}</span>
           ${cmd.dangerous ? '<span>⚠️</span>' : ''}
           ${cmd.shortcut ? `<span style="font-size:9px;color:var(--muted);background:var(--chip);padding:1px 5px;border-radius:3px;">${cmd.shortcut}</span>` : ''}
         `;
@@ -754,6 +762,9 @@ function initializePopup() {
     if (key === 'showRecentHistory' || key === 'showRecentSearches') {
       if (!currentQuery?.trim()) { loadRecentHistory(); }
     }
+    if (key === 'maxResults' || key === 'defaultResultCount') {
+      if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
   }
 
   function executePopupCommand(cmd: PaletteCommand): void {
@@ -786,15 +797,88 @@ function initializePopup() {
       return;
     }
     if (cmd.action === 'message' && cmd.messageType) {
+      if (cmd.messageType === 'SETTINGS_CHANGED') {
+        const patch = getPowerSettingsPatch(cmd.id);
+        if (patch) {
+          void SettingsManager.updateSettings(patch).then(() => {
+            (Object.keys(patch) as (keyof AppSettings)[]).forEach(k => applyPopupSettingSideEffects(k));
+            showToast(`${cmd.label} — saved`, 'info');
+            const input = $('search-input') as HTMLInputElement;
+            if (input) {
+              debounceSearch(input.value);
+            }
+          });
+        }
+        return;
+      }
+
+      if (cmd.id === 'search-debug') {
+        void (async () => {
+          try {
+            const g = await sendMessage({ type: 'GET_SEARCH_DEBUG_ENABLED' }) as { enabled?: boolean };
+            const next = !g?.enabled;
+            await sendMessage({ type: 'SET_SEARCH_DEBUG_ENABLED', enabled: next });
+            showToast(`Search debug: ${next ? 'ON' : 'OFF'}`, 'info');
+            const input = $('search-input') as HTMLInputElement;
+            if (input) {
+              const { query } = detectPopupMode(input.value.trim());
+              renderPopupPaletteResults(popupPaletteMode, query);
+            }
+          } catch {
+            showToast('Error', 'error');
+          }
+        })();
+        return;
+      }
+
       const payload: Record<string, unknown> = { type: cmd.messageType };
-      if (cmd.id === 'zoom-in') payload.direction = 'in';
-      else if (cmd.id === 'zoom-out') payload.direction = 'out';
-      else if (cmd.id === 'zoom-reset') payload.direction = 'reset';
-      else if (cmd.id === 'new-tab') payload.windowType = 'tab';
-      else if (cmd.id === 'new-window') payload.windowType = 'window';
-      else if (cmd.id === 'new-incognito') payload.windowType = 'incognito';
-      else if (cmd.id.startsWith('color-group-')) payload.color = cmd.id.replace('color-group-', '');
-      sendMessage(payload).then(() => showToast(`${cmd.icon} ${cmd.label} — done`)).catch(() => showToast('Error', 'error'));
+      if (cmd.id === 'zoom-in') {
+        payload.direction = 'in';
+      } else if (cmd.id === 'zoom-out') {
+        payload.direction = 'out';
+      } else if (cmd.id === 'zoom-reset') {
+        payload.direction = 'reset';
+      } else if (cmd.id === 'new-tab') {
+        payload.windowType = 'tab';
+      } else if (cmd.id === 'new-window') {
+        payload.windowType = 'window';
+      } else if (cmd.id === 'new-incognito') {
+        payload.windowType = 'incognito';
+      } else if (cmd.id.startsWith('color-group-')) {
+        payload.color = cmd.id.replace('color-group-', '');
+      }
+
+      const diagnostic = isPaletteDiagnosticMessageType(cmd.messageType);
+      const toastMs = diagnostic ? PALETTE_DIAGNOSTIC_TOAST_MS : 5000;
+
+      void sendMessage(payload)
+        .then((resp: Record<string, unknown>) => {
+          if (resp?.error) {
+            showToast(`Error: ${resp.error}`, 'error');
+            return;
+          }
+          const formatted =
+            cmd.messageType && resp
+              ? formatPaletteDiagnosticToast(cmd.messageType, resp)
+              : null;
+          if (formatted) {
+            showToast(formatted, 'info', toastMs);
+            return;
+          }
+          const ok = resp?.status === 'OK' || resp?.status === 'ok' || resp?.success;
+          if (ok) {
+            showToast(`${cmd.icon} ${cmd.label} — done`, 'success', toastMs);
+            return;
+          }
+          if (resp?.data !== undefined) {
+            const slice =
+              typeof resp.data === 'string'
+                ? resp.data.slice(0, 280)
+                : JSON.stringify(resp.data).slice(0, 280);
+            showToast(`${cmd.icon} ${cmd.label}:\n${slice}`, 'info', toastMs);
+          }
+        })
+        .catch(() => showToast('Error', 'error'));
       return;
     }
     if (cmd.action === 'open-url' && cmd.url) {
@@ -802,12 +886,35 @@ function initializePopup() {
       return;
     }
     if (cmd.action === 'page-action') {
-      if (cmd.id === 'tour') runTour(POPUP_TOUR_STEPS, document);
-      else if (cmd.id === 'about') {
+      if (cmd.id === 'tour') {
+        runTour(POPUP_TOUR_STEPS, document);
+      } else if (cmd.id === 'about') {
         const manifest = chrome.runtime.getManifest();
         showToast(`SmrutiCortex v${manifest.version}\nInstant browser history search`);
+      } else if (cmd.id === 'shortcuts') {
+        showToast('Enter: open · Shift+Enter: background · ↑↓: navigate · Esc: clear');
+      } else if (cmd.id === 'copy-ollama-endpoint') {
+        const url = SettingsManager.getSetting('ollamaEndpoint') ?? '';
+        if (!url) {
+          showToast('No Ollama endpoint set', 'warning');
+        } else {
+          void navigator.clipboard.writeText(url).then(() => showToast('Ollama endpoint copied', 'info')).catch(() => showToast('Failed to copy', 'error'));
+        }
+      } else if (cmd.id === 'copy-ollama-model') {
+        const m = SettingsManager.getSetting('ollamaModel') ?? '';
+        if (!m) {
+          showToast('No keyword model set', 'warning');
+        } else {
+          void navigator.clipboard.writeText(m).then(() => showToast('Ollama model copied', 'info')).catch(() => showToast('Failed to copy', 'error'));
+        }
+      } else if (cmd.id === 'copy-embedding-model') {
+        const m = SettingsManager.getSetting('embeddingModel') ?? '';
+        if (!m) {
+          showToast('No embedding model set', 'warning');
+        } else {
+          void navigator.clipboard.writeText(m).then(() => showToast('Embedding model copied', 'info')).catch(() => showToast('Failed to copy', 'error'));
+        }
       }
-      else if (cmd.id === 'shortcuts') showToast('Enter: open · Shift+Enter: background · ↑↓: navigate · Esc: clear');
     }
   }
 
@@ -846,9 +953,9 @@ function initializePopup() {
       const tier = popupPaletteMode === 'power' ? 'power' as const : 'everyday' as const;
       const settings = SettingsManager.getSettings();
       const commands = getAvailableCommands(tier, settings);
-      const matches = matchCommands(query, commands, settings);
-      if (matches.length > 0 && popupSelectedIndex >= 0 && popupSelectedIndex < matches.length) {
-        executePopupCommand(matches[popupSelectedIndex]);
+      const list = preparePaletteCommandList(tier, query, commands, settings);
+      if (list.length > 0 && popupSelectedIndex >= 0 && popupSelectedIndex < list.length) {
+        executePopupCommand(list[popupSelectedIndex]);
       }
     }
   }
