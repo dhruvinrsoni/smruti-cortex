@@ -271,6 +271,7 @@ vi.mock('../../core/helpers', () => {
         local: proxied({
           get: (_keys: unknown, cb: (r: Record<string, unknown>) => void) => cb({}),
           set: (_items: unknown, cb?: () => void) => cb?.(),
+          remove: (_keys: unknown, cb?: () => void) => cb?.(),
         }),
         onChanged: { addListener: () => {} },
       }),
@@ -288,6 +289,10 @@ vi.mock('../diagnostics', () => ({
   setSearchDebugEnabled: vi.fn(async () => {}),
   recordSearchDebug: vi.fn(),
   initSearchDebugState: vi.fn(async () => {}),
+}));
+
+vi.mock('../search-debug', () => ({
+  searchDebugService: { clearHistory: vi.fn() },
 }));
 
 vi.mock('../performance-monitor', () => ({
@@ -462,6 +467,16 @@ describe('service-worker message handler', () => {
   it('should respond to EXPORT_SEARCH_DEBUG', async () => {
     const response = await sendMessage({ type: 'EXPORT_SEARCH_DEBUG' });
     expect(response).toHaveProperty('status', 'OK');
+  });
+
+  it('should respond to CLEAR_SEARCH_DEBUG', async () => {
+    const response = await sendMessage({ type: 'CLEAR_SEARCH_DEBUG' });
+    expect(response).toEqual({ status: 'OK' });
+  });
+
+  it('should respond to CLEAR_RECENT_SEARCHES', async () => {
+    const response = await sendMessage({ type: 'CLEAR_RECENT_SEARCHES' });
+    expect(response).toEqual({ status: 'OK' });
   });
 
   it('should respond to POPUP_PERF_LOG', async () => {

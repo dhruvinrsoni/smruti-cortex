@@ -391,6 +391,25 @@ setupPortBasedMessaging();
             }
             break;
           }
+          case 'CLEAR_SEARCH_DEBUG': {
+            try {
+              const { searchDebugService } = await import('./search-debug');
+              searchDebugService.clearHistory();
+              sendResponse({ status: 'OK' });
+            } catch (error) {
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
+          case 'CLEAR_RECENT_SEARCHES': {
+            try {
+              await chrome.storage.local.remove('recentSearches');
+              sendResponse({ status: 'OK' });
+            } catch (error) {
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
           case 'GET_SETTINGS': {
             // Settings are available immediately after SettingsManager.init() (before full init)
             const settings = SettingsManager.getSettings();
