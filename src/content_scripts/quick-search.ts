@@ -45,7 +45,8 @@ import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } f
 import {
   type PaletteCommand,
   ALL_COMMANDS,
-  matchCommands,
+  preparePaletteCommandList,
+  getPowerSettingsPatch,
   getCommandsByTier,
   getAvailableCommands,
   getCycleValueFromCommand,
@@ -54,6 +55,11 @@ import {
   SEARCH_ENGINES,
   SEARCH_ENGINE_PREFIXES,
 } from '../shared/command-registry';
+import {
+  formatPaletteDiagnosticToast,
+  isPaletteDiagnosticMessageType,
+  PALETTE_DIAGNOSTIC_TOAST_MS,
+} from '../shared/palette-messages';
 
 // Extend window interface for our extension
 declare global {
@@ -837,7 +843,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     /* Command Palette — command rows */
     .command-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 8px;
       padding: 8px 12px;
       border-radius: 6px;
@@ -850,7 +856,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       background: var(--bg-hover);
       border-color: var(--border-color);
     }
-    .cmd-icon { font-size: 16px; flex-shrink: 0; width: 24px; text-align: center; }
+    .cmd-icon { font-size: 16px; flex-shrink: 0; width: 24px; text-align: center; margin-top: 1px; }
     .cmd-label { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cmd-current { font-size: 10px; color: var(--accent-color, #3b82f6); font-weight: 600; }
     .cmd-category {
@@ -879,6 +885,29 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       opacity: 0.6;
       flex-shrink: 0;
     }
+    .cmd-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .cmd-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .cmd-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      opacity: 0.9;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .palette-category-header {
+      list-style: none;
+      padding: 8px 12px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      cursor: default;
+      margin-top: 4px;
+    }
+    .palette-category-header:first-child { margin-top: 0; }
 
     /* Command Palette — confirmation view */
     .confirm-view {
@@ -1942,7 +1971,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     const modes = [
       { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
-      { prefix: '>',  label: 'Power / Admin',  desc: 'Index management, diagnostics, data export' },
+      { prefix: '>',  label: 'Power / Admin',  desc: 'Index, diagnostics, tuning presets, AI copy, data tools' },
       { prefix: '@',  label: 'Tab Switcher',   desc: 'Search & switch open tabs, reopen closed' },
       { prefix: '#',  label: 'Bookmarks',      desc: 'Search your bookmarks by title or URL' },
       { prefix: '??', label: 'Web Search',     desc: 'Quick web search via Google, Bing, DDG...' },
@@ -2024,6 +2053,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== COMMAND PALETTE: RENDER COMMANDS =====
 
+  const POWER_CATEGORY_HEADER_LABELS: Record<string, string> = {
+    tab: 'Tabs & groups',
+    data: 'Data & storage',
+    index: 'Index',
+    ai: 'AI & embeddings',
+    diagnostics: 'Diagnostics',
+    meta: 'Palette & toolbar',
+    toggle: 'Toggles',
+    page: 'Page',
+    sort: 'Sort',
+    navigation: 'Navigation',
+    browser: 'Browser',
+    window: 'Window',
+  };
+
+  function formatPowerCategoryTitle(category: string): string {
+    return POWER_CATEGORY_HEADER_LABELS[category] ?? category;
+  }
+
   function renderCommandResults(query: string, tier: 'everyday' | 'power'): void {
     if (!resultsEl) return;
 
@@ -2031,9 +2079,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       ? getAvailableCommands(tier, cachedSettings)
       : getCommandsByTier(tier);
 
-    const displayList = query
-      ? matchCommands(query, commands, cachedSettings ?? undefined)
-      : commands;
+    const displayList = preparePaletteCommandList(tier, query, commands, cachedSettings ?? undefined);
 
     selectedIndex = 0;
     resultsEl.innerHTML = '';
@@ -2049,7 +2095,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     updateResultCount(`${displayList.length} command${displayList.length !== 1 ? 's' : ''}`);
 
+    const showCategoryHeaders = tier === 'power' && !query.trim();
+    let lastCategory = '';
+
     displayList.forEach((cmd, idx) => {
+      if (showCategoryHeaders && cmd.category !== lastCategory) {
+        lastCategory = cmd.category;
+        const header = document.createElement('li');
+        header.className = 'palette-category-header';
+        header.setAttribute('role', 'presentation');
+        header.textContent = formatPowerCategoryTitle(cmd.category);
+        resultsEl!.appendChild(header);
+      }
+
       const li = document.createElement('li');
       li.className = 'command-row';
       li.dataset.commandId = cmd.id;
@@ -2058,10 +2116,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
 
       const currentLabel = getCurrentLabel(cmd);
+      const hintHtml = cmd.hint
+        ? `<div class="cmd-hint">${escapeHtml(cmd.hint)}</div>`
+        : '';
 
       li.innerHTML = `
         <span class="cmd-icon">${cmd.icon}</span>
-        <span class="cmd-label">${cmd.label}${currentLabel ? ` <span class="cmd-current">[${currentLabel}]</span>` : ''}</span>
+        <div class="cmd-main">
+          <div class="cmd-label-row">
+            <span class="cmd-label">${cmd.label}${currentLabel ? ` <span class="cmd-current">[${currentLabel}]</span>` : ''}</span>
+          </div>
+          ${hintHtml}
+        </div>
         <span class="cmd-category">${cmd.category}</span>
         ${cmd.dangerous ? '<span class="cmd-danger">⚠️</span>' : ''}
         ${cmd.shortcut ? `<span class="cmd-shortcut">${cmd.shortcut}</span>` : ''}
@@ -2166,6 +2232,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         renderResults(currentResults);
       }
     }
+    if (key === 'maxResults' || key === 'defaultResultCount') {
+      if (currentMode === 'history' && !(inputEl?.value?.trim())) {
+        loadRecentHistory();
+      }
+    }
+  }
+
+  function applySettingsPatchSideEffects(patch: Partial<AppSettings>): void {
+    (Object.keys(patch) as (keyof AppSettings)[]).forEach(k => applySettingSideEffects(k));
   }
 
   function executeCommand(cmd: PaletteCommand): void {
@@ -2213,6 +2288,51 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       case 'message':
         if (cmd.messageType) {
+          if (cmd.messageType === 'SETTINGS_CHANGED') {
+            const patch = getPowerSettingsPatch(cmd.id);
+            if (patch && cachedSettings) {
+              cachedSettings = { ...cachedSettings, ...patch };
+              try {
+                chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: patch });
+              } catch { /* context invalidated */ }
+              applySettingsPatchSideEffects(patch);
+              showToast(`${cmd.label} — saved`);
+              inputEl?.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            break;
+          }
+
+          if (cmd.id === 'search-debug') {
+            showToast(`${cmd.icon} ${cmd.label}...`);
+            try {
+              chrome.runtime.sendMessage({ type: 'GET_SEARCH_DEBUG_ENABLED' }, (gResp) => {
+                if (chrome.runtime.lastError) {
+                  showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+                  return;
+                }
+                const cur = Boolean((gResp as { enabled?: boolean })?.enabled);
+                const next = !cur;
+                chrome.runtime.sendMessage({ type: 'SET_SEARCH_DEBUG_ENABLED', enabled: next }, (sResp) => {
+                  if (chrome.runtime.lastError) {
+                    showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+                    return;
+                  }
+                  if ((sResp as { error?: string })?.error) {
+                    showToast(`Error: ${(sResp as { error: string }).error}`, 'error');
+                    return;
+                  }
+                  showToast(`Search debug: ${next ? 'ON' : 'OFF'}`);
+                  const raw = inputEl?.value ?? '';
+                  const { query } = detectMode(raw.trim());
+                  renderCommandResults(query, cmd.tier);
+                });
+              });
+            } catch {
+              showToast('Extension context lost — please reopen', 'error');
+            }
+            break;
+          }
+
           const payload: Record<string, unknown> = { type: cmd.messageType };
           if (cmd.id === 'zoom-in') payload.direction = 'in';
           else if (cmd.id === 'zoom-out') payload.direction = 'out';
@@ -2222,6 +2342,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           else if (cmd.id === 'new-incognito') payload.windowType = 'incognito';
           else if (cmd.id.startsWith('color-group-')) payload.color = cmd.id.replace('color-group-', '');
 
+          const diagnostic = isPaletteDiagnosticMessageType(cmd.messageType);
+          const toastMs = diagnostic ? PALETTE_DIAGNOSTIC_TOAST_MS : 5000;
+
           showToast(`${cmd.icon} ${cmd.label}...`);
           try {
             chrome.runtime.sendMessage(payload, (resp) => {
@@ -2229,19 +2352,38 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
                 showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
                 return;
               }
-              if (resp?.error) {
-                showToast(`Error: ${resp.error}`, 'error');
-              } else if (resp?.status === 'OK' || resp?.success) {
-                showToast(`${cmd.icon} ${cmd.label} — done`);
+              const r = resp as Record<string, unknown> | undefined;
+              if (r?.error) {
+                showToast(`Error: ${r.error}`, 'error');
+                return;
+              }
+              const ok = r?.status === 'OK' || r?.status === 'ok' || r?.success;
+              const formatted =
+                cmd.messageType && r
+                  ? formatPaletteDiagnosticToast(cmd.messageType, r)
+                  : null;
+              if (formatted) {
+                showToast(formatted, 'info', toastMs);
+              } else if (ok) {
+                showToast(`${cmd.icon} ${cmd.label} — done`, 'success', toastMs);
                 if (cmd.id === 'close-tab') hideOverlay();
-              } else if (resp?.data) {
-                showToast(`${cmd.icon} ${cmd.label}:\n${typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data).slice(0, 200)}`);
+              } else if (r?.data !== undefined) {
+                const slice =
+                  typeof r.data === 'string'
+                    ? r.data.slice(0, 280)
+                    : JSON.stringify(r.data).slice(0, 280);
+                showToast(`${cmd.icon} ${cmd.label}:\n${slice}`, 'info', toastMs);
               }
             });
           } catch {
             showToast('Extension context lost — please reopen', 'error');
           }
-          if (!cmd.dangerous && cmd.messageType !== 'CLOSE_TAB') {
+
+          const keepOverlayOpen =
+            diagnostic ||
+            cmd.dangerous ||
+            cmd.messageType === 'CLOSE_TAB';
+          if (!keepOverlayOpen) {
             hideOverlay();
           }
         }
@@ -2323,6 +2465,39 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       case 'import-index':
         triggerFileImport();
         break;
+      case 'copy-ollama-endpoint': {
+        const url = cachedSettings?.ollamaEndpoint ?? '';
+        if (!url) {
+          showToast('No Ollama endpoint set — open extension settings', 'warning');
+          break;
+        }
+        navigator.clipboard.writeText(url)
+          .then(() => showToast('Ollama endpoint copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
+      case 'copy-ollama-model': {
+        const m = cachedSettings?.ollamaModel ?? '';
+        if (!m) {
+          showToast('No keyword model set — open extension settings', 'warning');
+          break;
+        }
+        navigator.clipboard.writeText(m)
+          .then(() => showToast('Ollama model copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
+      case 'copy-embedding-model': {
+        const m = cachedSettings?.embeddingModel ?? '';
+        if (!m) {
+          showToast('No embedding model set — open extension settings', 'warning');
+          break;
+        }
+        navigator.clipboard.writeText(m)
+          .then(() => showToast('Embedding model copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
     }
   }
 
@@ -2343,8 +2518,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const reader = new FileReader();
         reader.onload = () => {
           try {
-            const data = JSON.parse(reader.result as string);
-            chrome.runtime.sendMessage({ type: 'IMPORT_INDEX', data }, (resp) => {
+            const parsed = JSON.parse(reader.result as string) as { items?: unknown } | unknown[];
+            const items = Array.isArray(parsed) ? parsed : parsed?.items;
+            if (!Array.isArray(items)) {
+              showToast('Invalid file: expected { items: [...] } or a top-level array', 'error');
+              return;
+            }
+            chrome.runtime.sendMessage({ type: 'IMPORT_INDEX', items }, (resp) => {
               if (resp?.status === 'OK') {
                 showToast('Index imported successfully');
               } else {
@@ -2727,9 +2907,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const commands = cachedSettings
         ? getAvailableCommands(tier, cachedSettings)
         : getCommandsByTier(tier);
-      const matches = matchCommands(query, commands, cachedSettings ?? undefined);
-      if (matches.length > 0 && selectedIndex >= 0 && selectedIndex < matches.length) {
-        executeSelectedCommand(matches);
+      const list = preparePaletteCommandList(tier, query, commands, cachedSettings ?? undefined);
+      if (list.length > 0 && selectedIndex >= 0 && selectedIndex < list.length) {
+        executeSelectedCommand(list);
       }
     }
   }
