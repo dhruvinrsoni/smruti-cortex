@@ -74,6 +74,19 @@ const swBrowserMocks = vi.hoisted(() => {
   };
 });
 
+/** Omnibox + bookmarks + runtime.sendMessage for service-worker omnibox integration tests */
+const swOmniboxMocks = vi.hoisted(() => {
+  const omniboxOnInputChanged: Array<
+    (text: string, suggest: (suggestions: { content: string; description: string }[]) => void) => void | Promise<void>
+  > = [];
+  const omniboxOnInputEntered: Array<
+    (text: string, disposition: string) => void | Promise<void>
+  > = [];
+  const bookmarksSearch = vi.fn(async () => [] as chrome.bookmarks.BookmarkTreeNode[]);
+  const runtimeSendMessage = vi.fn();
+  return { omniboxOnInputChanged, omniboxOnInputEntered, bookmarksSearch, runtimeSendMessage };
+});
+
 // Mock all heavy dependencies to prevent side effects
 vi.mock('../database', () => ({
   openDatabase: vi.fn(async () => ({})),
@@ -153,6 +166,7 @@ vi.mock('../../core/settings', () => ({
 
 vi.mock('../../core/helpers', () => {
   const m = swBrowserMocks;
+  const o = swOmniboxMocks;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function noOp(): any {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,6 +228,20 @@ vi.mock('../../core/helpers', () => {
       topSites: proxied({
         get: (cb: (sites: { url: string; title: string }[]) => void) => m.topSitesGet(cb),
       }),
+      bookmarks: proxied({
+        search: (...args: unknown[]) => o.bookmarksSearch(...args),
+      }),
+      omnibox: proxied({
+        setDefaultSuggestion: () => {},
+        onInputChanged: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          addListener: (cb: any) => { o.omniboxOnInputChanged.push(cb); },
+        },
+        onInputEntered: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          addListener: (cb: any) => { o.omniboxOnInputEntered.push(cb); },
+        },
+      }),
       runtime: proxied({
         lastError: null,
         getManifest: () => ({ manifest_version: 3, version: '8.0.0' }),
@@ -235,7 +263,7 @@ vi.mock('../../core/helpers', () => {
         onStartup: { addListener: () => {} },
         onInstalled: { addListener: () => {} },
         getURL: (path: string) => `chrome-extension://test/${path}`,
-        sendMessage: () => {},
+        sendMessage: (...args: unknown[]) => o.runtimeSendMessage(...args),
       }),
       commands: proxied({ onCommand: { addListener: () => {} } }),
       action: proxied({ openPopup: () => {} }),
@@ -361,6 +389,8 @@ const mocks = vi.hoisted(() => {
 
 // Reference the mocks so they're used
 void mocks;
+
+import { runSearch } from '../search/search-engine';
 
 // Import the service-worker module — registers listeners at module level
 import '../service-worker';
@@ -1206,5 +1236,137 @@ describe('advanced browser command message handlers', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((response as any).status).toBe('OK');
     expect(m.scriptingExecuteScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 12 } }));
+  });
+});
+
+describe('omnibox listeners', () => {
+  const m = swBrowserMocks;
+  const o = swOmniboxMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    o.bookmarksSearch.mockResolvedValue([]);
+    o.runtimeSendMessage.mockClear();
+    vi.mocked(runSearch).mockResolvedValue([]);
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('onInputChanged suggests everyday commands for / prefix', async () => {
+    const onInputChanged = o.omniboxOnInputChanged[0];
+    expect(onInputChanged).toBeDefined();
+    const suggest = vi.fn();
+    await onInputChanged('/settings', suggest);
+    expect(suggest).toHaveBeenCalled();
+    const suggestions = suggest.mock.calls[0][0] as { content: string }[];
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(suggestions.some(s => s.content === '/settings')).toBe(true);
+  });
+
+  it('onInputChanged uses power tier for > prefix', async () => {
+    const onInputChanged = o.omniboxOnInputChanged[0];
+    const suggest = vi.fn();
+    await onInputChanged('>', suggest);
+    expect(suggest).toHaveBeenCalled();
+    const suggestions = suggest.mock.calls[0][0] as { content: string }[];
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(suggestions.every(s => s.content.startsWith('>'))).toBe(true);
+  });
+
+  it('onInputChanged filters tabs for @ prefix', async () => {
+    m.tabsQuery.mockResolvedValue([
+      { id: 42, title: 'Alpha', url: 'https://alpha.example' },
+    ]);
+    const onInputChanged = o.omniboxOnInputChanged[0];
+    const suggest = vi.fn();
+    await onInputChanged('@alp', suggest);
+    expect(suggest).toHaveBeenCalledWith([
+      expect.objectContaining({ content: '@tab:42' }),
+    ]);
+  });
+
+  it('onInputChanged suggests bookmarks for # prefix with query', async () => {
+    o.bookmarksSearch.mockResolvedValue([
+      { id: '1', title: 'Doc', url: 'https://doc.example/x' } as chrome.bookmarks.BookmarkTreeNode,
+    ]);
+    const onInputChanged = o.omniboxOnInputChanged[0];
+    const suggest = vi.fn();
+    await onInputChanged('#doc', suggest);
+    expect(suggest).toHaveBeenCalledWith([
+      expect.objectContaining({ content: 'https://doc.example/x' }),
+    ]);
+  });
+
+  it('onInputChanged suggests history search results by default', async () => {
+    vi.mocked(runSearch).mockResolvedValue([
+      { url: 'https://hist.example', title: 'H', visitCount: 1, lastVisit: Date.now() },
+    ]);
+    const onInputChanged = o.omniboxOnInputChanged[0];
+    const suggest = vi.fn();
+    await onInputChanged('hist', suggest);
+    expect(suggest).toHaveBeenCalledWith([
+      expect.objectContaining({ content: 'https://hist.example' }),
+    ]);
+  });
+
+  it('onInputChanged passes empty suggestions on runSearch error', async () => {
+    vi.mocked(runSearch).mockRejectedValueOnce(new Error('search failed'));
+    const onInputChanged = o.omniboxOnInputChanged[0];
+    const suggest = vi.fn();
+    await onInputChanged('x', suggest);
+    expect(suggest).toHaveBeenCalledWith([]);
+  });
+
+  it('onInputEntered activates @tab:id and focuses window', async () => {
+    m.tabsGet.mockResolvedValue({ id: 5, windowId: 99 });
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    expect(onInputEntered).toBeDefined();
+    await onInputEntered('@tab:5', 'currentTab');
+    expect(m.tabsGet).toHaveBeenCalledWith(5);
+    expect(m.tabsUpdate).toHaveBeenCalledWith(5, { active: true });
+  });
+
+  it('onInputEntered sends message for / command with messageType', async () => {
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    await onInputEntered('/settings', 'newForegroundTab');
+    expect(o.runtimeSendMessage).toHaveBeenCalledWith({ type: 'OPEN_SETTINGS' });
+  });
+
+  it('onInputEntered creates tab for command with url', async () => {
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    await onInputEntered('/password-manager', 'newForegroundTab');
+    expect(m.tabsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ url: expect.stringContaining('chrome://') }),
+    );
+  });
+
+  it('onInputEntered opens google search when text is not a valid URL', async () => {
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    await onInputEntered('hello world', 'newForegroundTab');
+    expect(m.tabsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringContaining('google.com/search'),
+        active: true,
+      }),
+    );
+  });
+
+  it('onInputEntered updates current tab when disposition is currentTab', async () => {
+    m.tabsQuery.mockResolvedValueOnce([{ id: 7, active: true, windowId: 1 }]);
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    await onInputEntered('https://example.com/path', 'currentTab');
+    expect(m.tabsUpdate).toHaveBeenCalledWith(7, { url: 'https://example.com/path' });
+  });
+
+  it('onInputEntered creates background tab when disposition is newBackgroundTab', async () => {
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    await onInputEntered('https://example.com/', 'newBackgroundTab');
+    expect(m.tabsCreate).toHaveBeenCalledWith({ url: 'https://example.com/', active: false });
+  });
+
+  it('onInputEntered swallows errors from tabs.get', async () => {
+    m.tabsGet.mockRejectedValueOnce(new Error('missing'));
+    const onInputEntered = o.omniboxOnInputEntered[0];
+    await expect(onInputEntered('@tab:99', 'currentTab')).resolves.toBeUndefined();
   });
 });
