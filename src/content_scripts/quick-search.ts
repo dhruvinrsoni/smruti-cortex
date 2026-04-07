@@ -52,11 +52,13 @@ import {
   getCycleValueFromCommand,
   getCurrentValueLabel,
   saveRecentCommand,
-  SEARCH_ENGINES,
-  SEARCH_ENGINE_PREFIXES,
   getWebSearchPrefixHintLines,
   getWebSearchEngineDisplayName,
   formatPaletteCategoryHeader,
+  parseWebSearchQuery,
+  buildWebSearchUrl,
+  webSearchSiteUrlToastMessage,
+  webSearchSiteUrlPreviewLabel,
 } from '../shared/command-registry';
 import {
   formatPaletteDiagnosticToast,
@@ -2935,15 +2937,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const raw = inputEl?.value ?? '';
       const { query } = detectMode(raw.trim());
       if (query) {
-        let engineKey = cachedSettings?.webSearchEngine ?? 'google';
-        let searchQuery = query;
-        const prefixMatch = query.match(/^([a-z]{1,2})\s+(.+)$/);
-        if (prefixMatch && SEARCH_ENGINE_PREFIXES[prefixMatch[1]]) {
-          engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
-          searchQuery = prefixMatch[2];
+        const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
+        const parsed = parseWebSearchQuery(query, defaultKey);
+        const built = buildWebSearchUrl(parsed, cachedSettings ?? {});
+        if ('error' in built) {
+          if (built.error === 'no-terms') {
+            showToast('Add search text after the prefix.', 'info');
+          } else if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+          }
+          return;
         }
-        const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
-        window.open(searchUrl, '_blank');
+        window.open(built.url, '_blank');
         hideOverlay();
       }
       return;
@@ -3046,7 +3051,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const intro = document.createElement('li');
       intro.className = 'palette-discovery-tip';
       intro.setAttribute('role', 'presentation');
-      intro.textContent = `Default engine: ${defaultLabel} (change in settings). Type a query, then Enter.`;
+      intro.textContent = `Default engine: ${defaultLabel} (change in settings). Type a query, then Enter. For Jira and Confluence, set each site URL in settings.`;
       resultsEl.appendChild(intro);
       const prefixTitle = document.createElement('li');
       prefixTitle.className = 'palette-category-header';
@@ -3064,31 +3069,75 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
-    let engineKey = cachedSettings?.webSearchEngine ?? 'google';
-    let searchQuery = query;
-
-    const prefixMatch = query.match(/^([a-z]{1,2})\s+(.+)$/);
-    if (prefixMatch && SEARCH_ENGINE_PREFIXES[prefixMatch[1]]) {
-      engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
-      searchQuery = prefixMatch[2];
-    }
-
-    const engineName = engineKey.charAt(0).toUpperCase() + engineKey.slice(1);
-    const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
+    const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
+    const parsed = parseWebSearchQuery(query, defaultKey);
+    const engineName = getWebSearchEngineDisplayName(parsed.engineKey);
+    const jiraOrigin = (cachedSettings?.jiraSiteUrl ?? '').trim();
+    const confluenceOrigin = (cachedSettings?.confluenceSiteUrl ?? '').trim();
+    const missingSiteForEngine =
+      (parsed.engineKey === 'jira' && !jiraOrigin)
+      || (parsed.engineKey === 'confluence' && !confluenceOrigin);
+    const built = buildWebSearchUrl(parsed, cachedSettings ?? {});
 
     const li = document.createElement('li');
     li.className = 'command-row selected';
     li.setAttribute('role', 'option');
     li.setAttribute('aria-selected', 'true');
-    li.innerHTML = `
-      <span class="cmd-icon">🔍</span>
-      <span class="cmd-label">Search ${engineName} for "${escapeHtml(searchQuery)}"</span>
-      <span class="cmd-shortcut">Enter to search</span>
-    `;
-    li.addEventListener('click', () => {
-      window.open(searchUrl, '_blank');
-      hideOverlay();
-    });
+
+    if (parsed.usedPrefix && parsed.searchTerms === '') {
+      const mp = parsed.matchedPrefix ?? '';
+      if (missingSiteForEngine) {
+        const siteHint = parsed.engineKey === 'jira' ? 'Jira' : 'Confluence';
+        li.innerHTML = `
+          <span class="cmd-icon">🔍</span>
+          <span class="cmd-label">${escapeHtml(engineName)} — set ${siteHint} site URL in settings, then add terms (e.g. <code>?? ${escapeHtml(mp)} PROJ-1</code>)</span>
+          <span class="cmd-shortcut">Enter: n/a</span>
+        `;
+        li.addEventListener('click', () => {
+          showToast(
+            webSearchSiteUrlToastMessage(parsed.engineKey === 'jira' ? 'no-jira-site' : 'no-confluence-site'),
+            'warning',
+          );
+        });
+      } else {
+        li.innerHTML = `
+          <span class="cmd-icon">🔍</span>
+          <span class="cmd-label">${escapeHtml(engineName)} — type search terms after a space (e.g. <code>?? ${escapeHtml(mp)} query</code>)</span>
+          <span class="cmd-shortcut">Enter: n/a</span>
+        `;
+        li.addEventListener('click', () => {
+          showToast('Add search text after the prefix.', 'info');
+        });
+      }
+    } else if ('error' in built) {
+      const msg =
+        built.error === 'no-jira-site' || built.error === 'no-confluence-site'
+          ? webSearchSiteUrlPreviewLabel(built.error, engineName)
+          : 'Cannot open search';
+      li.innerHTML = `
+        <span class="cmd-icon">🔍</span>
+        <span class="cmd-label">${escapeHtml(msg)}</span>
+        <span class="cmd-shortcut">Enter: n/a</span>
+      `;
+      li.addEventListener('click', () => {
+        if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+          showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+        } else {
+          showToast('Add search text after the prefix.', 'info');
+        }
+      });
+    } else {
+      li.innerHTML = `
+        <span class="cmd-icon">🔍</span>
+        <span class="cmd-label">Search ${escapeHtml(engineName)} for "${escapeHtml(parsed.searchTerms)}"</span>
+        <span class="cmd-shortcut">Enter to search</span>
+      `;
+      li.addEventListener('click', () => {
+        window.open(built.url, '_blank');
+        hideOverlay();
+      });
+    }
+
     resultsEl.appendChild(li);
     updateResultCount('');
   }

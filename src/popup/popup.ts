@@ -20,11 +20,13 @@ import {
   getAvailableCommands,
   getCycleValueFromCommand,
   saveRecentCommand,
-  SEARCH_ENGINES,
-  SEARCH_ENGINE_PREFIXES,
   getWebSearchPrefixHintLines,
   getWebSearchEngineDisplayName,
   formatPaletteCategoryHeader,
+  parseWebSearchQuery,
+  buildWebSearchUrl,
+  webSearchSiteUrlToastMessage,
+  webSearchSiteUrlPreviewLabel,
 } from '../shared/command-registry';
 import {
   formatPaletteDiagnosticToast,
@@ -792,7 +794,7 @@ function initializePopup() {
         const intro = document.createElement('li');
         intro.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
         intro.setAttribute('role', 'presentation');
-        intro.textContent = `Default engine: ${getWebSearchEngineDisplayName(defaultKey)} (change in settings). Type a query, then Enter.`;
+        intro.textContent = `Default engine: ${getWebSearchEngineDisplayName(defaultKey)} (change in settings). Type a query, then Enter. For Jira and Confluence, set each site URL in settings.`;
         resultsList.appendChild(intro);
         const prefixTitle = document.createElement('li');
         prefixTitle.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
@@ -810,29 +812,75 @@ function initializePopup() {
         resultCountNode.textContent = '';
         return;
       }
-      let engineKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
-      let searchQuery = query;
-      const prefixMatch = query.match(/^([a-z]{1,2})\s+(.+)$/);
-      if (prefixMatch && SEARCH_ENGINE_PREFIXES[prefixMatch[1]]) {
-        engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
-        searchQuery = prefixMatch[2];
-      }
-      const engineName = getWebSearchEngineDisplayName(engineKey);
-      const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
+      const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+      const settings = SettingsManager.getSettings();
+      const parsed = parseWebSearchQuery(query, defaultKey);
+      const engineName = getWebSearchEngineDisplayName(parsed.engineKey);
+      const jiraOrigin = (settings.jiraSiteUrl ?? '').trim();
+      const confluenceOrigin = (settings.confluenceSiteUrl ?? '').trim();
+      const missingSiteForEngine =
+        (parsed.engineKey === 'jira' && !jiraOrigin)
+        || (parsed.engineKey === 'confluence' && !confluenceOrigin);
+      const built = buildWebSearchUrl(parsed, settings);
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       const li = document.createElement('li');
       li.className = 'palette-selectable-row';
       li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--hover);';
-      li.innerHTML = `
-        <span style="font-size:16px;">🔍</span>
-        <span style="flex:1;font-size:13px;font-weight:500;">Search ${esc(engineName)} for "${esc(searchQuery)}"</span>
-        <span style="font-size:10px;color:var(--muted);">Enter to search</span>
-      `;
-      li.addEventListener('click', (ev) => {
-        const sk = (ev as MouseEvent).shiftKey;
-        chrome.tabs.create({ url: searchUrl, active: !sk });
-      });
+
+      if (parsed.usedPrefix && parsed.searchTerms === '') {
+        const mp = parsed.matchedPrefix ?? '';
+        if (missingSiteForEngine) {
+          const siteHint = parsed.engineKey === 'jira' ? 'Jira' : 'Confluence';
+          li.innerHTML = `
+            <span style="font-size:16px;">🔍</span>
+            <span style="flex:1;font-size:13px;font-weight:500;">${esc(engineName)} — set ${siteHint} site URL in settings, then add terms (e.g. ?? ${esc(mp)} PROJ-1)</span>
+            <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
+          `;
+          li.addEventListener('click', () => {
+            showToast(
+              webSearchSiteUrlToastMessage(parsed.engineKey === 'jira' ? 'no-jira-site' : 'no-confluence-site'),
+              'warning',
+            );
+          });
+        } else {
+          li.innerHTML = `
+            <span style="font-size:16px;">🔍</span>
+            <span style="flex:1;font-size:13px;font-weight:500;">${esc(engineName)} — type terms after a space (e.g. ?? ${esc(mp)} query)</span>
+            <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
+          `;
+          li.addEventListener('click', () => {
+            showToast('Add search text after the prefix.', 'info');
+          });
+        }
+      } else if ('error' in built) {
+        const msg =
+          built.error === 'no-jira-site' || built.error === 'no-confluence-site'
+            ? webSearchSiteUrlPreviewLabel(built.error, engineName)
+            : 'Cannot open search';
+        li.innerHTML = `
+          <span style="font-size:16px;">🔍</span>
+          <span style="flex:1;font-size:13px;font-weight:500;">${esc(msg)}</span>
+          <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
+        `;
+        li.addEventListener('click', () => {
+          if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+          } else {
+            showToast('Add search text after the prefix.', 'info');
+          }
+        });
+      } else {
+        li.innerHTML = `
+          <span style="font-size:16px;">🔍</span>
+          <span style="flex:1;font-size:13px;font-weight:500;">Search ${esc(engineName)} for "${esc(parsed.searchTerms)}"</span>
+          <span style="font-size:10px;color:var(--muted);">Enter to search</span>
+        `;
+        li.addEventListener('click', (ev) => {
+          const sk = (ev as MouseEvent).shiftKey;
+          chrome.tabs.create({ url: built.url, active: !sk });
+        });
+      }
       resultsList.appendChild(li);
       resultCountNode.textContent = '';
       return;
@@ -871,6 +919,13 @@ function initializePopup() {
     }
     if (key === 'maxResults' || key === 'defaultResultCount') {
       if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+    if ((key === 'jiraSiteUrl' || key === 'confluenceSiteUrl') && popupPaletteMode === 'websearch') {
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        const { query } = detectPopupMode(input.value.trim());
+        renderPopupPaletteResults('websearch', query);
+      }
     }
   }
 
@@ -1033,15 +1088,18 @@ function initializePopup() {
     if (popupPaletteMode === 'websearch') {
       const { query } = detectPopupMode((input?.value ?? '').trim());
       if (query) {
-        let engineKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
-        let searchQuery = query;
-        const prefixMatch = query.match(/^([a-z]{1,2})\s+(.+)$/);
-        if (prefixMatch && SEARCH_ENGINE_PREFIXES[prefixMatch[1]]) {
-          engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
-          searchQuery = prefixMatch[2];
+        const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+        const parsed = parseWebSearchQuery(query, defaultKey);
+        const built = buildWebSearchUrl(parsed, SettingsManager.getSettings());
+        if ('error' in built) {
+          if (built.error === 'no-terms') {
+            showToast('Add search text after the prefix.', 'info');
+          } else if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+          }
+          return;
         }
-        const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
-        chrome.tabs.create({ url: searchUrl, active: !shiftKey });
+        chrome.tabs.create({ url: built.url, active: !shiftKey });
       }
       return;
     }
@@ -1967,6 +2025,15 @@ function initializePopup() {
     webEngineInputs.forEach(input => {
       (input as HTMLInputElement).checked = (input as HTMLInputElement).value === currentWebEngine;
     });
+
+    const jiraUrlInput = modal.querySelector('#modal-jiraSiteUrl') as HTMLInputElement | null;
+    if (jiraUrlInput) {
+      jiraUrlInput.value = SettingsManager.getSetting('jiraSiteUrl') ?? '';
+    }
+    const confluenceUrlInput = modal.querySelector('#modal-confluenceSiteUrl') as HTMLInputElement | null;
+    if (confluenceUrlInput) {
+      confluenceUrlInput.value = SettingsManager.getSetting('confluenceSiteUrl') ?? '';
+    }
 
     // Sync toolbar toggle checkboxes with current settings
     const toolbarOptionsContainer = modal.querySelector('#toolbar-toggle-options') as HTMLDivElement | null;
@@ -3159,6 +3226,23 @@ function initializePopup() {
       });
     });
 
+    const jiraUrlInput2 = modal.querySelector('#modal-jiraSiteUrl') as HTMLInputElement | null;
+    if (jiraUrlInput2) {
+      jiraUrlInput2.addEventListener('change', () => {
+        const raw = jiraUrlInput2.value.trim();
+        SettingsManager.setSetting('jiraSiteUrl', raw).catch(() => {});
+        showToast(raw ? 'Jira site URL saved' : 'Jira site URL cleared', 'info');
+      });
+    }
+    const confluenceUrlInput2 = modal.querySelector('#modal-confluenceSiteUrl') as HTMLInputElement | null;
+    if (confluenceUrlInput2) {
+      confluenceUrlInput2.addEventListener('change', () => {
+        const raw = confluenceUrlInput2.value.trim();
+        SettingsManager.setSetting('confluenceSiteUrl', raw).catch(() => {});
+        showToast(raw ? 'Confluence site URL saved' : 'Confluence site URL cleared', 'info');
+      });
+    }
+
     // --- Toolbar tab: populate toggle checkboxes ---
     const toolbarOptionsContainer = modal.querySelector('#toolbar-toggle-options') as HTMLDivElement;
     if (toolbarOptionsContainer) {
@@ -3713,6 +3797,13 @@ function initializePopup() {
     }
     if (keys.some(k => ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'].includes(k))) {
       if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+    if (keys.some(k => k === 'jiraSiteUrl' || k === 'confluenceSiteUrl' || k === 'webSearchEngine') && popupPaletteMode === 'websearch') {
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        const { query } = detectPopupMode(input.value.trim());
+        renderPopupPaletteResults('websearch', query);
+      }
     }
   }
 

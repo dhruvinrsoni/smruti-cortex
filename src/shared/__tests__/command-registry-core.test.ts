@@ -31,8 +31,11 @@ const base: AppSettings = {
 };
 
 describe('command-registry core', () => {
-  it('SEARCH_ENGINES and SEARCH_ENGINE_PREFIXES stay aligned', () => {
+  it('SEARCH_ENGINE_PREFIXES map to static SEARCH_ENGINES or Jira/Confluence targets', () => {
     for (const [, engineKey] of Object.entries(SEARCH_ENGINE_PREFIXES)) {
+      if (engineKey === 'jira' || engineKey === 'confluence') {
+        continue;
+      }
       expect(SEARCH_ENGINES[engineKey]).toMatch(/^https?:\/\//);
     }
   });
