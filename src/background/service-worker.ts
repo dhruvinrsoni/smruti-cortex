@@ -198,10 +198,10 @@ function setupPortBasedMessaging() {
       port.onMessage.addListener(async (msg) => {
         if (msg.type === 'SEARCH_QUERY') {
           const t0 = performance.now();
-          logger.debug('portMessage', `Quick-search query: "${msg.query}"`);
+          const portQuery = typeof msg.query === 'string' ? msg.query.slice(0, 500) : '';
+          logger.debug('portMessage', `Quick-search query: "${portQuery}"`);
 
           if (!initialized) {
-            // SW is still starting up — wait for it rather than failing the search
             if (initializationPromise) {
               try { await initializationPromise; } catch {
                 try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
@@ -215,16 +215,16 @@ function setupPortBasedMessaging() {
 
           try {
             const { getLastAIStatus } = await import('./search/search-engine');
-            const results = await runSearch(msg.query, { skipAI: !!msg.skipAI });
+            const results = await runSearch(portQuery, { skipAI: !!msg.skipAI });
             const aiStatus = getLastAIStatus();
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
             if (!portDisconnected) {
-              try { port.postMessage({ results, aiStatus, query: msg.query, skipAI: !!msg.skipAI }); } catch { /* port closed during async search */ }
+              try { port.postMessage({ results, aiStatus, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed during async search */ }
             }
           } catch (error) {
             logger.error('portMessage', 'Search error:', error);
             if (!portDisconnected) {
-              try { port.postMessage({ error: (error as Error).message, query: msg.query, skipAI: !!msg.skipAI }); } catch { /* port closed */ }
+              try { port.postMessage({ error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed */ }
             }
           }
         }
@@ -436,20 +436,24 @@ setupPortBasedMessaging();
             }
             switch (msg.type) {
               case 'SEARCH_QUERY': {
-                logger.info('onMessage', `Popup search: "${msg.query}" (skipAI: ${!!msg.skipAI})`);
+                const MAX_QUERY_LEN = 500;
+                const safeQuery = typeof msg.query === 'string' ? msg.query.slice(0, MAX_QUERY_LEN) : '';
+                logger.info('onMessage', `Popup search: "${safeQuery}" (skipAI: ${!!msg.skipAI})`);
                 const { getLastAIStatus } = await import('./search/search-engine');
-                const results = await runSearch(msg.query, { skipAI: !!msg.skipAI });
+                const results = await runSearch(safeQuery, { skipAI: !!msg.skipAI });
                 const aiStatus = getLastAIStatus();
                 logger.debug('onMessage', 'Search completed, results:', results.length);
-                sendResponse({ results, aiStatus, query: msg.query, skipAI: !!msg.skipAI });
+                sendResponse({ results, aiStatus, query: safeQuery, skipAI: !!msg.skipAI });
                 break;
               }
 
               case 'GET_RECENT_HISTORY': {
-                logger.debug('onMessage', `GET_RECENT_HISTORY requested with limit: ${msg.limit || 50}`);
+                const MAX_HISTORY_LIMIT = 500;
+                const historyLimit = Math.min(Math.max(1, Number(msg.limit) || 50), MAX_HISTORY_LIMIT);
+                logger.debug('onMessage', `GET_RECENT_HISTORY requested with limit: ${historyLimit}`);
                 try {
                   const { getRecentIndexedItems } = await import('./database');
-                  const recentItems = await getRecentIndexedItems(msg.limit || 50);
+                  const recentItems = await getRecentIndexedItems(historyLimit);
                   logger.debug('onMessage', `GET_RECENT_HISTORY completed, items: ${recentItems.length}`);
                   sendResponse({ results: recentItems });
                 } catch (error) {
@@ -563,6 +567,7 @@ setupPortBasedMessaging();
               }
 
               case 'IMPORT_INDEX': {
+                const MAX_IMPORT_ITEMS = 50_000;
                 logger.info('onMessage', '📤 IMPORT_INDEX requested', { count: msg.items?.length });
                 try {
                   const items = msg.items as Array<Record<string, unknown>>;
@@ -570,10 +575,18 @@ setupPortBasedMessaging();
                     sendResponse({ status: 'ERROR', message: 'Invalid import data: items must be an array' });
                     break;
                   }
+                  if (items.length > MAX_IMPORT_ITEMS) {
+                    sendResponse({ status: 'ERROR', message: `Import too large: ${items.length} items exceeds limit of ${MAX_IMPORT_ITEMS}` });
+                    break;
+                  }
                   let imported = 0;
                   let skipped = 0;
                   for (const item of items) {
-                    if (typeof item.url === 'string' && typeof item.title === 'string' && typeof item.lastVisit === 'number') {
+                    if (
+                      typeof item.url === 'string' && item.url.length > 0 && item.url.length <= 2048 &&
+                      typeof item.title === 'string' && item.title.length <= 1000 &&
+                      typeof item.lastVisit === 'number' && Number.isFinite(item.lastVisit)
+                    ) {
                       await saveIndexedItem(item as unknown as import('./schema').IndexedItem);
                       imported++;
                     } else {
@@ -997,14 +1010,26 @@ setupPortBasedMessaging();
               }
 
               case 'WINDOW_CREATE': {
+                const ALLOWED_SCHEMES = ['http:', 'https:', 'chrome:', 'chrome-extension:'];
+                const safeUrl = (raw: unknown): string | undefined => {
+                  if (typeof raw !== 'string' || !raw) return undefined;
+                  try {
+                    const parsed = new URL(raw);
+                    return ALLOWED_SCHEMES.includes(parsed.protocol) ? raw : undefined;
+                  } catch { return undefined; }
+                };
+
                 if (msg.windowType === 'incognito') {
                   await browserAPI.windows.create({ incognito: true });
                 } else if (msg.windowType === 'window') {
                   await browserAPI.windows.create({});
                 } else if (msg.windowType === 'background-tab') {
-                  await browserAPI.tabs.create({ url: msg.url, active: false });
+                  const url = safeUrl(msg.url);
+                  if (!url) { sendResponse({ status: 'ERROR', message: 'Invalid or disallowed URL scheme' }); break; }
+                  await browserAPI.tabs.create({ url, active: false });
                 } else {
-                  await browserAPI.tabs.create({ url: msg.url || 'chrome://newtab' });
+                  const url = safeUrl(msg.url) || 'chrome://newtab';
+                  await browserAPI.tabs.create({ url });
                 }
                 sendResponse({ status: 'OK' });
                 break;
@@ -1501,12 +1526,15 @@ setupPortBasedMessaging();
 
               // inside messaging onMessage handler
               case 'METADATA_CAPTURE': {
-                logger.debug('onMessage', 'Handling METADATA_CAPTURE for:', msg.payload.url);
                 const { payload } = msg;
-                // call mergeMetadata (implementation in indexing.ts)
+                if (!payload || typeof payload.url !== 'string' || !payload.url) {
+                  sendResponse({ status: 'ERROR', message: 'METADATA_CAPTURE: missing or invalid payload.url' });
+                  break;
+                }
+                logger.debug('onMessage', 'Handling METADATA_CAPTURE for:', payload.url);
                 await mergeMetadata(payload.url, {
-                  description: payload.metaDescription,
-                  keywords: payload.metaKeywords
+                  description: typeof payload.metaDescription === 'string' ? payload.metaDescription.slice(0, 2000) : undefined,
+                  keywords: typeof payload.metaKeywords === 'string' ? payload.metaKeywords.slice(0, 2000) : undefined,
                 });
                 sendResponse({ status: 'ok' });
                 break;
