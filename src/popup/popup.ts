@@ -22,6 +22,9 @@ import {
   saveRecentCommand,
   SEARCH_ENGINES,
   SEARCH_ENGINE_PREFIXES,
+  getWebSearchPrefixHintLines,
+  getWebSearchEngineDisplayName,
+  formatPaletteCategoryHeader,
 } from '../shared/command-registry';
 import {
   formatPaletteDiagnosticToast,
@@ -532,8 +535,8 @@ function initializePopup() {
       { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
       { prefix: '>',  label: 'Power / Admin',  desc: 'Index management, diagnostics, data export' },
       { prefix: '@',  label: 'Tab Switcher',   desc: 'Search & switch open tabs, reopen closed' },
-      { prefix: '#',  label: 'Bookmarks',      desc: 'Search your bookmarks by title or URL' },
-      { prefix: '??', label: 'Web Search',     desc: 'Quick web search via Google, Bing, DDG...' },
+      { prefix: '#',  label: 'Bookmarks',      desc: 'Recent bookmarks when empty; type to search all' },
+      { prefix: '??', label: 'Web Search',     desc: 'Default engine + optional prefix (g, d, …) then query' },
     ];
 
     modes.forEach(m => {
@@ -604,10 +607,35 @@ function initializePopup() {
         return;
       }
 
+      const rowBaseStyle = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);';
+      const emptyQuery = !query.trim();
+      if (emptyQuery) {
+        const tip = document.createElement('li');
+        tip.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+        tip.setAttribute('role', 'presentation');
+        tip.textContent = tier === 'power'
+          ? 'Tabs, data, AI, diagnostics, presets — type to filter.'
+          : 'Toggles, sort, page actions, navigation, tabs — type to filter.';
+        resultsList.appendChild(tip);
+      }
+
+      let lastCategory = '';
       displayList.forEach((cmd, idx) => {
+        if (emptyQuery && cmd.category !== lastCategory) {
+          lastCategory = cmd.category;
+          const h = document.createElement('li');
+          h.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
+          h.setAttribute('role', 'presentation');
+          h.textContent = formatPaletteCategoryHeader(cmd.category, tier);
+          resultsList.appendChild(h);
+        }
+
         const li = document.createElement('li');
-        li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);';
-        if (idx === 0) li.style.background = 'var(--hover)';
+        li.className = 'palette-selectable-row';
+        li.style.cssText = rowBaseStyle;
+        if (idx === 0) {
+          li.style.background = 'var(--hover)';
+        }
 
         const currentLabel = getPopupCurrentLabel(cmd);
         const hintBlock = cmd.hint
@@ -629,7 +657,9 @@ function initializePopup() {
           executePopupCommand(cmd);
         });
         li.addEventListener('mouseenter', () => {
-          resultsList.querySelectorAll('li').forEach(el => (el as HTMLElement).style.background = 'var(--card)');
+          resultsList.querySelectorAll('.palette-selectable-row').forEach(el => {
+            (el as HTMLElement).style.background = 'var(--card)';
+          });
           li.style.background = 'var(--hover)';
           popupSelectedIndex = idx;
         });
@@ -647,10 +677,27 @@ function initializePopup() {
           : resp.tabs;
         resultCountNode.textContent = `${tabs.length} tab${tabs.length !== 1 ? 's' : ''}`;
         resultsList.innerHTML = '';
+        const hint = document.createElement('li');
+        hint.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+        hint.setAttribute('role', 'presentation');
+        hint.textContent = 'Enter: switch tab · Shift+Enter: open URL in background.';
+        resultsList.appendChild(hint);
         tabs.forEach((tab, idx) => {
           const li = document.createElement('li');
+          li.className = 'palette-selectable-row';
           li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
-          if (idx === 0) li.style.background = 'var(--hover)';
+          if (idx === 0) {
+            li.style.background = 'var(--hover)';
+          }
+          if (typeof tab.id === 'number') {
+            li.dataset.tabId = String(tab.id);
+          }
+          if (typeof tab.windowId === 'number') {
+            li.dataset.windowId = String(tab.windowId);
+          }
+          if (tab.url) {
+            li.dataset.tabUrl = tab.url;
+          }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           li.innerHTML = `
             <img src="${tab.favIconUrl || ''}" alt="" style="width:16px;height:16px;border-radius:3px;" onerror="this.style.display='none'">
@@ -660,8 +707,21 @@ function initializePopup() {
             </div>
             ${tab.pinned ? '<span>📌</span>' : ''}${tab.active ? '<span>●</span>' : ''}
           `;
-          li.addEventListener('click', () => {
-            sendMessage({ type: 'SWITCH_TO_TAB', tabId: tab.id, windowId: tab.windowId }).catch(() => {});
+          li.addEventListener('click', (ev) => {
+            const sk = (ev as MouseEvent).shiftKey;
+            const url = tab.url || '';
+            if (sk && url) {
+              chrome.tabs.create({ url, active: false });
+            } else if (typeof tab.id === 'number' && typeof tab.windowId === 'number') {
+              void sendMessage({ type: 'SWITCH_TO_TAB', tabId: tab.id, windowId: tab.windowId });
+            }
+          });
+          li.addEventListener('mouseenter', () => {
+            resultsList.querySelectorAll('.palette-selectable-row').forEach(el => {
+              (el as HTMLElement).style.background = 'var(--card)';
+            });
+            li.style.background = 'var(--hover)';
+            popupSelectedIndex = idx;
           });
           resultsList.appendChild(li);
         });
@@ -678,10 +738,28 @@ function initializePopup() {
         const bms = resp.bookmarks.filter(b => b.url);
         resultCountNode.textContent = `${bms.length} bookmark${bms.length !== 1 ? 's' : ''}`;
         resultsList.innerHTML = '';
+        if (!query.trim() && bms.length > 0) {
+          const header = document.createElement('li');
+          header.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
+          header.setAttribute('role', 'presentation');
+          header.textContent = 'Recent bookmarks';
+          resultsList.appendChild(header);
+          const tip = document.createElement('li');
+          tip.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+          tip.setAttribute('role', 'presentation');
+          tip.textContent = 'Type to search all bookmarks by title or URL.';
+          resultsList.appendChild(tip);
+        }
         bms.forEach((bm, idx) => {
           const li = document.createElement('li');
+          li.className = 'palette-selectable-row';
           li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
-          if (idx === 0) li.style.background = 'var(--hover)';
+          if (idx === 0) {
+            li.style.background = 'var(--hover)';
+          }
+          if (bm.url) {
+            li.dataset.bookmarkUrl = bm.url;
+          }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           li.innerHTML = `
             <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" style="width:16px;height:16px;border-radius:3px;" onerror="this.style.display='none'">
@@ -690,8 +768,16 @@ function initializePopup() {
               <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.url || '')}</div>
             </div>
           `;
-          li.addEventListener('click', () => {
-            chrome.tabs.create({ url: bm.url!, active: true });
+          li.addEventListener('click', (ev) => {
+            const sk = (ev as MouseEvent).shiftKey;
+            chrome.tabs.create({ url: bm.url!, active: !sk });
+          });
+          li.addEventListener('mouseenter', () => {
+            resultsList.querySelectorAll('.palette-selectable-row').forEach(el => {
+              (el as HTMLElement).style.background = 'var(--card)';
+            });
+            li.style.background = 'var(--hover)';
+            popupSelectedIndex = idx;
           });
           resultsList.appendChild(li);
         });
@@ -701,7 +787,26 @@ function initializePopup() {
 
     if (mode === 'websearch') {
       if (!query) {
-        resultsList.innerHTML = '<li style="text-align:center;padding:24px;color:var(--muted);">Type a search query...</li>';
+        resultsList.innerHTML = '';
+        const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+        const intro = document.createElement('li');
+        intro.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+        intro.setAttribute('role', 'presentation');
+        intro.textContent = `Default engine: ${getWebSearchEngineDisplayName(defaultKey)} (change in settings). Type a query, then Enter.`;
+        resultsList.appendChild(intro);
+        const prefixTitle = document.createElement('li');
+        prefixTitle.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
+        prefixTitle.setAttribute('role', 'presentation');
+        prefixTitle.textContent = 'Prefix + space + query';
+        resultsList.appendChild(prefixTitle);
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        for (const line of getWebSearchPrefixHintLines()) {
+          const row = document.createElement('li');
+          row.style.cssText = 'list-style:none;padding:5px 12px 5px 16px;font-size:11px;color:var(--muted);line-height:1.4;cursor:default;';
+          row.setAttribute('role', 'presentation');
+          row.innerHTML = `<code style='font-family:ui-monospace,monospace;font-size:10px;background:var(--chip);padding:1px 5px;border-radius:3px'>?? ${esc(line.prefix)}</code> — ${esc(line.engineLabel)} <span style='opacity:0.85'>(e.g. <code style='font-family:ui-monospace,monospace;font-size:10px;background:var(--chip);padding:1px 5px;border-radius:3px'>?? ${esc(line.prefix)} cats</code>)</span>`;
+          resultsList.appendChild(row);
+        }
         resultCountNode.textContent = '';
         return;
       }
@@ -712,19 +817,21 @@ function initializePopup() {
         engineKey = SEARCH_ENGINE_PREFIXES[prefixMatch[1]];
         searchQuery = prefixMatch[2];
       }
-      const engineName = engineKey.charAt(0).toUpperCase() + engineKey.slice(1);
+      const engineName = getWebSearchEngineDisplayName(engineKey);
       const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       const li = document.createElement('li');
+      li.className = 'palette-selectable-row';
       li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--hover);';
       li.innerHTML = `
         <span style="font-size:16px;">🔍</span>
-        <span style="flex:1;font-size:13px;font-weight:500;">Search ${engineName} for "${esc(searchQuery)}"</span>
+        <span style="flex:1;font-size:13px;font-weight:500;">Search ${esc(engineName)} for "${esc(searchQuery)}"</span>
         <span style="font-size:10px;color:var(--muted);">Enter to search</span>
       `;
-      li.addEventListener('click', () => {
-        chrome.tabs.create({ url: searchUrl, active: true });
+      li.addEventListener('click', (ev) => {
+        const sk = (ev as MouseEvent).shiftKey;
+        chrome.tabs.create({ url: searchUrl, active: !sk });
       });
       resultsList.appendChild(li);
       resultCountNode.textContent = '';
@@ -918,7 +1025,7 @@ function initializePopup() {
     }
   }
 
-  function handlePopupPaletteEnter(): void {
+  function handlePopupPaletteEnter(shiftKey = false): void {
     const resultsList = $('results') as HTMLUListElement;
     if (!resultsList) return;
     const input = $('search-input') as HTMLInputElement;
@@ -934,16 +1041,35 @@ function initializePopup() {
           searchQuery = prefixMatch[2];
         }
         const searchUrl = SEARCH_ENGINES[engineKey] + encodeURIComponent(searchQuery);
-        chrome.tabs.create({ url: searchUrl, active: true });
+        chrome.tabs.create({ url: searchUrl, active: !shiftKey });
       }
       return;
     }
 
-    if (popupPaletteMode === 'tabs' || popupPaletteMode === 'bookmarks') {
-      const items = resultsList.querySelectorAll('li');
-      if (items.length > 0) {
-        const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
-        selected?.click();
+    if (popupPaletteMode === 'tabs') {
+      const items = resultsList.querySelectorAll('.palette-selectable-row');
+      if (items.length === 0) return;
+      const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
+      const tabId = selected.dataset.tabId;
+      const windowId = selected.dataset.windowId;
+      const url = selected.dataset.tabUrl || '';
+      if (tabId && windowId) {
+        if (shiftKey && url) {
+          chrome.tabs.create({ url, active: false });
+        } else {
+          void sendMessage({ type: 'SWITCH_TO_TAB', tabId: Number(tabId), windowId: Number(windowId) });
+        }
+      }
+      return;
+    }
+
+    if (popupPaletteMode === 'bookmarks') {
+      const items = resultsList.querySelectorAll('.palette-selectable-row');
+      if (items.length === 0) return;
+      const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
+      const url = selected.dataset.bookmarkUrl;
+      if (url) {
+        chrome.tabs.create({ url, active: !shiftKey });
       }
       return;
     }
@@ -1478,7 +1604,7 @@ function initializePopup() {
       // Command palette: Enter in non-history mode
       if (e.key === 'Enter' && popupPaletteMode !== 'history') {
         e.preventDefault();
-        handlePopupPaletteEnter();
+        handlePopupPaletteEnter(e.shiftKey);
         return;
       }
       // Ctrl+A in input: select only the input text, not the whole popup document

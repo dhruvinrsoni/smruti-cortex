@@ -54,6 +54,9 @@ import {
   saveRecentCommand,
   SEARCH_ENGINES,
   SEARCH_ENGINE_PREFIXES,
+  getWebSearchPrefixHintLines,
+  getWebSearchEngineDisplayName,
+  formatPaletteCategoryHeader,
 } from '../shared/command-registry';
 import {
   formatPaletteDiagnosticToast,
@@ -908,6 +911,31 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       margin-top: 4px;
     }
     .palette-category-header:first-child { margin-top: 0; }
+
+    .palette-discovery-tip {
+      list-style: none;
+      padding: 8px 12px 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      cursor: default;
+    }
+    .palette-hint-line {
+      list-style: none;
+      padding: 5px 12px 5px 16px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      cursor: default;
+    }
+    .palette-hint-line code {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 10px;
+      background: var(--bg-kbd, rgba(0,0,0,0.06));
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .palette-hint-muted { opacity: 0.85; }
 
     /* Command Palette — confirmation view */
     .confirm-view {
@@ -1973,8 +2001,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
       { prefix: '>',  label: 'Power / Admin',  desc: 'Index, diagnostics, tuning presets, AI copy, data tools' },
       { prefix: '@',  label: 'Tab Switcher',   desc: 'Search & switch open tabs, reopen closed' },
-      { prefix: '#',  label: 'Bookmarks',      desc: 'Search your bookmarks by title or URL' },
-      { prefix: '??', label: 'Web Search',     desc: 'Quick web search via Google, Bing, DDG...' },
+      { prefix: '#',  label: 'Bookmarks',      desc: 'Recent bookmarks when empty; type to search all' },
+      { prefix: '??', label: 'Web Search',     desc: 'Default engine + optional prefix (g, d, …) then query' },
     ];
 
     const enabledModes = cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'];
@@ -2053,25 +2081,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== COMMAND PALETTE: RENDER COMMANDS =====
 
-  const POWER_CATEGORY_HEADER_LABELS: Record<string, string> = {
-    tab: 'Tabs & groups',
-    data: 'Data & storage',
-    index: 'Index',
-    ai: 'AI & embeddings',
-    diagnostics: 'Diagnostics',
-    meta: 'Palette & toolbar',
-    toggle: 'Toggles',
-    page: 'Page',
-    sort: 'Sort',
-    navigation: 'Navigation',
-    browser: 'Browser',
-    window: 'Window',
-  };
-
-  function formatPowerCategoryTitle(category: string): string {
-    return POWER_CATEGORY_HEADER_LABELS[category] ?? category;
-  }
-
   function renderCommandResults(query: string, tier: 'everyday' | 'power'): void {
     if (!resultsEl) return;
 
@@ -2089,14 +2098,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     if (displayList.length === 0) {
       resultsEl.innerHTML = '<li class="empty-state">No matching commands</li>';
-      updateResultCount(`0 commands`);
+      updateResultCount('0 commands');
       return;
     }
 
     updateResultCount(`${displayList.length} command${displayList.length !== 1 ? 's' : ''}`);
 
-    const showCategoryHeaders = tier === 'power' && !query.trim();
+    const emptyQuery = !query.trim();
+    const showCategoryHeaders = emptyQuery;
     let lastCategory = '';
+
+    if (emptyQuery) {
+      const tip = document.createElement('li');
+      tip.className = 'palette-discovery-tip';
+      tip.setAttribute('role', 'presentation');
+      tip.textContent = tier === 'power'
+        ? 'Tabs, data, AI, diagnostics, presets — type to filter.'
+        : 'Toggles, sort, page actions, navigation, tabs — type to filter.';
+      resultsEl.appendChild(tip);
+    }
 
     displayList.forEach((cmd, idx) => {
       if (showCategoryHeaders && cmd.category !== lastCategory) {
@@ -2104,7 +2124,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const header = document.createElement('li');
         header.className = 'palette-category-header';
         header.setAttribute('role', 'presentation');
-        header.textContent = formatPowerCategoryTitle(cmd.category);
+        header.textContent = formatPaletteCategoryHeader(cmd.category, tier);
         resultsEl!.appendChild(header);
       }
 
@@ -2594,6 +2614,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const windowIds = [...new Set(tabs.map(t => t.windowId))];
     updateResultCount(`${tabs.length} tab${tabs.length !== 1 ? 's' : ''} across ${windowIds.length} window${windowIds.length !== 1 ? 's' : ''}`);
 
+    const tabHint = document.createElement('li');
+    tabHint.className = 'palette-discovery-tip';
+    tabHint.setAttribute('role', 'presentation');
+    tabHint.textContent = 'Enter: switch tab · Shift+Enter: open URL in background · Recently closed appears below when available.';
+    resultsEl.appendChild(tabHint);
+
     let globalIdx = 0;
     for (const wid of windowIds) {
       if (windowIds.length > 1) {
@@ -2631,8 +2657,20 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
         const tabId = tab.id!;
         const windowId = tab.windowId!;
-        li.addEventListener('click', () => {
-          switchToTab(tabId, windowId);
+        const tabUrl = tab.url || '';
+        li.dataset.tabId = String(tabId);
+        li.dataset.windowId = String(windowId);
+        if (tabUrl) li.dataset.tabUrl = tabUrl;
+        li.addEventListener('click', (ev) => {
+          const sk = (ev as MouseEvent).shiftKey;
+          if (sk && tabUrl) {
+            try {
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl });
+            } catch { window.open(tabUrl); }
+            hideOverlay();
+          } else {
+            switchToTab(tabId, windowId);
+          }
         });
         resultsEl!.appendChild(li);
         globalIdx++;
@@ -2649,14 +2687,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function appendRecentlyClosedTabs(
-    sessions: Array<{ tab?: chrome.tabs.Tab; lastModified: number }>,
+    sessions: Array<{ tab?: chrome.tabs.Tab; lastModified: number; sessionId?: string }>,
     query: string
   ): void {
     if (!resultsEl) return;
 
     const closedTabs = sessions
       .filter(s => s.tab)
-      .map(s => ({ ...s.tab!, lastModified: s.lastModified }));
+      .map(s => ({
+        ...s.tab!,
+        lastModified: s.lastModified,
+        sessionId: s.sessionId,
+      }));
 
     let filtered = closedTabs;
     if (query) {
@@ -2691,14 +2733,24 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         <span class="tab-badges">${ago}</span>
       `;
 
-      const sessionId = (tab as unknown as { sessionId?: string }).sessionId;
-      li.addEventListener('click', () => {
-        if (sessionId) {
+      const sessionId = tab.sessionId;
+      const closedUrl = tab.url || '';
+      if (sessionId) li.dataset.sessionId = sessionId;
+      if (closedUrl) li.dataset.closedUrl = closedUrl;
+      li.addEventListener('click', (ev) => {
+        const sk = (ev as MouseEvent).shiftKey;
+        if (sessionId && !sk) {
           try {
             chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId });
           } catch { /* ignore */ }
-        } else if (tab.url) {
-          window.open(tab.url, '_blank');
+        } else if (closedUrl) {
+          if (sk) {
+            try {
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl });
+            } catch { window.open(closedUrl); }
+          } else {
+            window.open(closedUrl, '_blank');
+          }
         }
         hideOverlay();
       });
@@ -2796,6 +2848,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     updateResultCount(`${bookmarks.length} bookmark${bookmarks.length !== 1 ? 's' : ''}`);
 
+    if (!query.trim()) {
+      const header = document.createElement('li');
+      header.className = 'palette-category-header';
+      header.setAttribute('role', 'presentation');
+      header.textContent = 'Recent bookmarks';
+      resultsEl.appendChild(header);
+      const tip = document.createElement('li');
+      tip.className = 'palette-discovery-tip';
+      tip.setAttribute('role', 'presentation');
+      tip.textContent = 'Type to search all bookmarks by title or URL.';
+      resultsEl.appendChild(tip);
+    }
+
     bookmarks.forEach((bm, idx) => {
       const li = document.createElement('li');
       li.className = 'bookmark-row';
@@ -2863,7 +2928,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  function handlePaletteEnter(): void {
+  function handlePaletteEnter(shiftKey = false): void {
     if (!resultsEl) return;
 
     if (currentMode === 'websearch') {
@@ -2885,9 +2950,39 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     if (currentMode === 'tabs') {
-      const selected = resultsEl.querySelector('.tab-row.selected') as HTMLElement;
-      if (selected) {
-        selected.click();
+      const selected = resultsEl.querySelector('.tab-row.selected') as HTMLElement | null;
+      if (!selected) return;
+      if (selected.classList.contains('recently-closed-row')) {
+        const sessionId = selected.dataset.sessionId;
+        const closedUrl = selected.dataset.closedUrl || '';
+        if (sessionId && !shiftKey) {
+          try {
+            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId });
+          } catch { /* ignore */ }
+        } else if (closedUrl) {
+          if (shiftKey) {
+            try {
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl });
+            } catch { window.open(closedUrl); }
+          } else {
+            window.open(closedUrl, '_blank');
+          }
+        }
+        hideOverlay();
+        return;
+      }
+      const tabId = selected.dataset.tabId ? Number(selected.dataset.tabId) : NaN;
+      const windowId = selected.dataset.windowId ? Number(selected.dataset.windowId) : NaN;
+      const tabUrl = selected.dataset.tabUrl || '';
+      if (Number.isFinite(tabId) && Number.isFinite(windowId)) {
+        if (shiftKey && tabUrl) {
+          try {
+            chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl });
+          } catch { window.open(tabUrl); }
+          hideOverlay();
+        } else {
+          switchToTab(tabId, windowId);
+        }
       }
       return;
     }
@@ -2944,7 +3039,27 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     resultsEl.className = 'results list';
 
     if (!query) {
-      resultsEl.innerHTML = '<li class="empty-state">Type a search query...</li>';
+      resultsEl.setAttribute('role', 'listbox');
+      resultsEl.setAttribute('aria-label', 'Web search hints');
+      const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
+      const defaultLabel = getWebSearchEngineDisplayName(defaultKey);
+      const intro = document.createElement('li');
+      intro.className = 'palette-discovery-tip';
+      intro.setAttribute('role', 'presentation');
+      intro.textContent = `Default engine: ${defaultLabel} (change in settings). Type a query, then Enter.`;
+      resultsEl.appendChild(intro);
+      const prefixTitle = document.createElement('li');
+      prefixTitle.className = 'palette-category-header';
+      prefixTitle.setAttribute('role', 'presentation');
+      prefixTitle.textContent = 'Prefix + space + query';
+      resultsEl.appendChild(prefixTitle);
+      for (const line of getWebSearchPrefixHintLines()) {
+        const row = document.createElement('li');
+        row.className = 'palette-hint-line';
+        row.setAttribute('role', 'presentation');
+        row.innerHTML = `<code>?? ${escapeHtml(line.prefix)}</code> — ${escapeHtml(line.engineLabel)} <span class="palette-hint-muted">(e.g. <code>?? ${escapeHtml(line.prefix)} cats</code>)</span>`;
+        resultsEl.appendChild(row);
+      }
       updateResultCount('');
       return;
     }
@@ -3757,7 +3872,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (currentMode !== 'history') {
           e.preventDefault();
           e.stopPropagation();
-          handlePaletteEnter();
+          handlePaletteEnter(e.shiftKey);
           return;
         }
         if (currentResults.length > 0) {
@@ -4350,7 +4465,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     if (key === 'Enter') {
       if (currentMode !== 'history') {
-        handlePaletteEnter();
+        handlePaletteEnter(e.shiftKey);
         return;
       }
       if (currentResults.length > 0) {

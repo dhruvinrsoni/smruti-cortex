@@ -68,6 +68,47 @@ export const SEARCH_ENGINE_PREFIXES: Record<string, string> = {
     gh: 'github',
 };
 
+/** Stable order for empty-state ?? prefix hints (matches user-facing examples). */
+const WEB_SEARCH_PREFIX_ORDER = ['g', 'd', 'b', 'y', 'gh'] as const;
+
+const SEARCH_ENGINE_DISPLAY_NAMES: Record<string, string> = {
+    google: 'Google',
+    duckduckgo: 'DuckDuckGo',
+    bing: 'Bing',
+    youtube: 'YouTube',
+    github: 'GitHub',
+};
+
+export interface WebSearchPrefixHintLine {
+    prefix: string;
+    engineKey: string;
+    engineLabel: string;
+}
+
+export function getWebSearchEngineDisplayName(engineKey: string): string {
+    return (
+        SEARCH_ENGINE_DISPLAY_NAMES[engineKey]
+        ?? engineKey.charAt(0).toUpperCase() + engineKey.slice(1)
+    );
+}
+
+/** Prefix examples for ?? empty-state education (non-selectable UI rows). */
+export function getWebSearchPrefixHintLines(): WebSearchPrefixHintLine[] {
+    const out: WebSearchPrefixHintLine[] = [];
+    for (const prefix of WEB_SEARCH_PREFIX_ORDER) {
+        const engineKey = SEARCH_ENGINE_PREFIXES[prefix];
+        if (!engineKey || !SEARCH_ENGINES[engineKey]) {
+            continue;
+        }
+        out.push({
+            prefix,
+            engineKey,
+            engineLabel: getWebSearchEngineDisplayName(engineKey),
+        });
+    }
+    return out;
+}
+
 const EVERYDAY_COMMANDS: PaletteCommand[] = [
     // --- Quick Toggles ---
     {
@@ -1821,8 +1862,48 @@ const POWER_PALETTE_CATEGORY_ORDER = [
     'window',
 ] as const;
 
+/** Display order for everyday `/` palette when the query is empty. */
+const EVERYDAY_PALETTE_CATEGORY_ORDER = [
+    'toggle',
+    'sort',
+    'page',
+    'navigation',
+    'tab',
+    'browser',
+    'window',
+    'meta',
+] as const;
+
+/** Section titles for palette category headers (quick-search + popup). */
+export const PALETTE_CATEGORY_HEADER_LABELS: Record<string, string> = {
+    tab: 'Tabs & groups',
+    data: 'Data & storage',
+    index: 'Index',
+    ai: 'AI & embeddings',
+    diagnostics: 'Diagnostics',
+    meta: 'Palette & toolbar',
+    toggle: 'Toggles',
+    page: 'Page',
+    sort: 'Sort',
+    navigation: 'Navigation',
+    browser: 'Browser',
+    window: 'Window',
+};
+
+export function formatPaletteCategoryHeader(category: string, tier: 'everyday' | 'power'): string {
+    if (tier === 'everyday' && category === 'meta') {
+        return 'About & links';
+    }
+    return PALETTE_CATEGORY_HEADER_LABELS[category] ?? category;
+}
+
 function rankPowerPaletteCategory(category: string): number {
     const idx = (POWER_PALETTE_CATEGORY_ORDER as readonly string[]).indexOf(category);
+    return idx === -1 ? 99 : idx;
+}
+
+function rankEverydayPaletteCategory(category: string): number {
+    const idx = (EVERYDAY_PALETTE_CATEGORY_ORDER as readonly string[]).indexOf(category);
     return idx === -1 ? 99 : idx;
 }
 
@@ -1838,10 +1919,20 @@ export function preparePaletteCommandList(
 ): PaletteCommand[] {
     const trimmed = query.trim();
     const list = matchCommands(trimmed, commands, settings);
-    if (tier !== 'power' || trimmed) {return list;}
+    if (trimmed) {
+        return list;
+    }
+    if (tier === 'power') {
+        return [...list].sort((a, b) => {
+            const ra = rankPowerPaletteCategory(a.category);
+            const rb = rankPowerPaletteCategory(b.category);
+            if (ra !== rb) {return ra - rb;}
+            return a.label.localeCompare(b.label);
+        });
+    }
     return [...list].sort((a, b) => {
-        const ra = rankPowerPaletteCategory(a.category);
-        const rb = rankPowerPaletteCategory(b.category);
+        const ra = rankEverydayPaletteCategory(a.category);
+        const rb = rankEverydayPaletteCategory(b.category);
         if (ra !== rb) {return ra - rb;}
         return a.label.localeCompare(b.label);
     });

@@ -15,6 +15,8 @@ import {
   getCurrentValueLabel,
   saveRecentCommand,
   getRecentCommands,
+  getWebSearchPrefixHintLines,
+  formatPaletteCategoryHeader,
 } from '../command-registry';
 import type { AppSettings } from '../../core/settings';
 import { DisplayMode } from '../../core/settings';
@@ -131,6 +133,27 @@ describe('command-registry core', () => {
     expect(idxTab).toBeGreaterThanOrEqual(0);
     expect(idxMeta).toBeGreaterThanOrEqual(0);
     expect(idxTab).toBeLessThan(idxMeta);
+  });
+
+  it('preparePaletteCommandList orders everyday categories when query empty', () => {
+    const everyday = getCommandsByTier('everyday');
+    const list = preparePaletteCommandList('everyday', '', everyday, base);
+    const idxToggle = list.findIndex(c => c.category === 'toggle');
+    const idxWindow = list.findIndex(c => c.category === 'window');
+    expect(idxToggle).toBeGreaterThanOrEqual(0);
+    expect(idxWindow).toBeGreaterThanOrEqual(0);
+    expect(idxToggle).toBeLessThan(idxWindow);
+  });
+
+  it('getWebSearchPrefixHintLines lists each SEARCH_ENGINE_PREFIXES entry', () => {
+    const lines = getWebSearchPrefixHintLines();
+    expect(lines.length).toBe(Object.keys(SEARCH_ENGINE_PREFIXES).length);
+    expect(lines.some(l => l.prefix === 'g' && l.engineKey === 'google')).toBe(true);
+  });
+
+  it('formatPaletteCategoryHeader distinguishes everyday meta from power meta', () => {
+    expect(formatPaletteCategoryHeader('meta', 'everyday')).toBe('About & links');
+    expect(formatPaletteCategoryHeader('meta', 'power')).toBe('Palette & toolbar');
   });
 });
 
