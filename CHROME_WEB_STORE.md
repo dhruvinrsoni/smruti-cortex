@@ -255,6 +255,17 @@ Chrome requires explaining why each permission is needed:
 | `activeTab` | **Required** as a companion to `scripting`. Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut (Ctrl+Shift+S). This allows `chrome.scripting.executeScript` to inject into the active tab without requiring broad host permissions. No background access — strictly user-initiated. |
 | `<all_urls>` (optional) | **Optional permission** - Users can optionally grant this to enable metadata extraction (page titles, keywords) for improved search relevance. This feature is OFF by default and must be enabled in Settings. The extension works fully without this permission. |
 
+### Optional API permissions — Advanced Browser Commands (reviewer note)
+
+**For Chrome Web Store review:** The manifest declares **`optional_permissions`**: `tabGroups`, `browsingData`, and `topSites`. These are **not** granted at install.
+
+- **Advanced Browser Commands** is **off by default** (Settings → General).
+- When the user turns it **on**, the extension calls **`chrome.permissions.request()`** for those three APIs only.
+- If the user **denies** the browser prompt, the setting **stays off**; no advanced commands are exposed and those APIs are **not** used.
+- This flow is **independent** of **`optional_host_permissions`** (`<all_urls>`), which is documented separately and is used only for other optional features (e.g. favicon display / metadata), not for this toggle.
+
+**Justification:** Tab groups commands need `tabGroups`; browsing-data cleanup commands need `browsingData`; “top sites” style shortcuts need `topSites`. All are user-initiated and gated behind an explicit Settings opt-in plus the permission dialog.
+
 ### Single Purpose Justification
 
 If Chrome asks for single purpose justification, paste this:
