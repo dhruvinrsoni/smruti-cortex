@@ -131,6 +131,11 @@ export async function loadEmbeddingsInto(items: IndexedItem[]): Promise<number> 
 // ------------------------------
 // Cursor-based pagination for large datasets
 // ------------------------------
+/**
+ * @deprecated Returns ALL batches at once, defeating the purpose of batching.
+ * Callers still get every item in RAM. Prefer cursor-based iteration
+ * (getItemsWithoutEmbeddingsBatch) or getAllIndexedItems + loadEmbeddingsInto.
+ */
 export async function getIndexedItemsBatches(batchSize = 1000): Promise<IndexedItem[][]> {
     const db = dbInstance || await openDatabase();
     const txn = db.transaction(STORE_NAME, 'readonly');
