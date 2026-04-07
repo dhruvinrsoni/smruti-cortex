@@ -195,8 +195,24 @@ function setupPortBasedMessaging() {
       
       let portDisconnected = false;
 
+      const PORT_RATE_LIMIT = 10;
+      const PORT_RATE_WINDOW_MS = 1000;
+      let portSearchCount = 0;
+      let portRateWindowStart = Date.now();
+
       port.onMessage.addListener(async (msg) => {
         if (msg.type === 'SEARCH_QUERY') {
+          const now = Date.now();
+          if (now - portRateWindowStart > PORT_RATE_WINDOW_MS) {
+            portSearchCount = 0;
+            portRateWindowStart = now;
+          }
+          if (++portSearchCount > PORT_RATE_LIMIT) {
+            logger.warn('portMessage', `Rate limited: ${portSearchCount} searches in window`);
+            try { port.postMessage({ error: 'Rate limited', query: msg.query }); } catch { /* port closed */ }
+            return;
+          }
+
           const t0 = performance.now();
           const portQuery = typeof msg.query === 'string' ? msg.query.slice(0, 500) : '';
           logger.debug('portMessage', `Quick-search query: "${portQuery}"`);
@@ -894,7 +910,9 @@ setupPortBasedMessaging();
                       try {
                         let parentId = b.parentId;
                         const parts: string[] = [];
-                        while (parentId && parentId !== '0') {
+                        let depth = 0;
+                        const MAX_BOOKMARK_DEPTH = 20;
+                        while (parentId && parentId !== '0' && depth++ < MAX_BOOKMARK_DEPTH) {
                           const parents = await browserAPI.bookmarks.get(parentId);
                           if (parents[0]?.title) parts.unshift(parents[0].title);
                           parentId = parents[0]?.parentId;
