@@ -262,6 +262,7 @@ class EmbeddingProcessorImpl {
                         if (embedding && embedding.length > 0) {
                             item.embedding = embedding;
                             await saveIndexedItem(item);
+                            item.embedding = undefined; // release the array now that it's persisted
                             this.processed++;
                             this.withEmbeddings++;
                             this.recordCompletion();
