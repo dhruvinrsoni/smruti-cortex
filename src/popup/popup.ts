@@ -1246,7 +1246,7 @@ function initializePopup() {
       item.className = 'recent-search-item';
       item.tabIndex = 0;
       item.title = entry.selectedUrl ? `Search: "${entry.query}" → ${entry.selectedUrl}` : `Search: "${entry.query}"`;
-      item.innerHTML = `<span class="recent-search-icon">🔍</span><span class="recent-search-query">${entry.query}</span>`;
+      item.innerHTML = `<span class="recent-search-icon">🔍</span><span class="recent-search-query">${escapeHtml(entry.query)}</span>`;
       item.addEventListener('click', () => {
         const input = $('search-input') as HTMLInputElement;
         if (input) {
@@ -1291,7 +1291,7 @@ function initializePopup() {
       item.title = entry.title || entry.url;
 
       const icon = entry.action === 'copy' ? '📋' : '🔗';
-      item.innerHTML = `<span class="recent-search-icon">${icon}</span><span class="recent-search-query">${entry.title || entry.url}</span>`;
+      item.innerHTML = `<span class="recent-search-icon">${icon}</span><span class="recent-search-query">${escapeHtml(entry.title || entry.url)}</span>`;
       item.addEventListener('click', () => {
         openUrl(entry.url, true, false);
       });
@@ -4033,7 +4033,7 @@ function initializePopup() {
           topQueriesDiv.innerHTML = analytics.topQueries
             .map(({ query, count }) => `
               <div class="query-item">
-                <span class="query-text">"${query}"</span>
+                <span class="query-text">"${escapeHtml(query)}"</span>
                 <span class="query-count">${count}x</span>
               </div>
             `)
@@ -4070,7 +4070,7 @@ function initializePopup() {
             .reverse()
             .map((entry: SearchDebugEntry) => `
               <div class="search-entry">
-                <div class="search-query">"${entry.query}"</div>
+                <div class="search-query">"${escapeHtml(entry.query)}"</div>
                 <div class="search-meta">
                   ${entry.resultCount} results · ${entry.duration.toFixed(2)}ms · 
                   ${new Date(entry.timestamp).toLocaleTimeString()}
