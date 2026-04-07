@@ -399,9 +399,15 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
     logger.debug('getStorageQuotaInfo', 'Retrieving storage quota information');
     
     try {
-        // Get IndexedDB item count
-        const items = await getAllIndexedItems();
-        const itemCount = items.length;
+        // Use store.count() instead of getAllIndexedItems() to avoid
+        // materializing every row just for a length check.
+        const db = dbInstance || await openDatabase();
+        const itemCount = await new Promise<number>((resolve, reject) => {
+            const txn = db.transaction(STORE_NAME, 'readonly');
+            const req = txn.objectStore(STORE_NAME).count();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
         
         // Try to get storage estimate (modern browsers)
         let used = 0;
