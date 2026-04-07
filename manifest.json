@@ -75,9 +75,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "content_scripts/*.js",
-        "assets/*",
-        "popup/*"
+        "assets/*"
       ],
       "matches": [
         "<all_urls>"

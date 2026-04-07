@@ -640,9 +640,13 @@ export async function getOllamaConfigFromSettings(forEmbeddings = false): Promis
     const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
     const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
 
-    // Use the correct model based on purpose:
-    // - forEmbeddings=true → use embeddingModel (nomic-embed-text, all-minilm, etc.)
-    // - forEmbeddings=false → use ollamaModel (llama3.2:1b, etc. for text generation)
+    try {
+      const host = new URL(endpoint).hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+        logger.warn('getOllamaConfigFromSettings', `⚠️ Ollama endpoint "${host}" is not localhost — search queries will be sent to a remote host`);
+      }
+    } catch { /* invalid URL handled downstream */ }
+
     const model = forEmbeddings
       ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text:latest')
       : (SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
