@@ -40,6 +40,7 @@ function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
 const indexedItems: IndexedItem[] = [];
 vi.mock('../../database', () => ({
   getAllIndexedItems: vi.fn(async () => indexedItems),
+  loadEmbeddingsInto: vi.fn(async () => 0),
   saveIndexedItem: vi.fn(),
 }));
 
@@ -162,6 +163,7 @@ describe('search-engine', () => {
     }));
     vi.doMock('../../database', () => ({
       getAllIndexedItems: vi.fn(async () => indexedItems),
+      loadEmbeddingsInto: vi.fn(async () => 0),
       saveIndexedItem: vi.fn(),
     }));
     vi.doMock('../scorer-manager', () => ({

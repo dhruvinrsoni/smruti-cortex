@@ -1,6 +1,6 @@
 // search-engine.ts — SmrutiCortex Vivek Search Engine
 
-import { getAllIndexedItems } from '../database';
+import { getAllIndexedItems, loadEmbeddingsInto } from '../database';
 import { getAllScorers } from './scorer-manager';
 import { IndexedItem } from '../schema';
 import {
@@ -191,8 +191,16 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         }
     }
 
-    // Get all indexed items
+    // Get all indexed items (cache does NOT hold embeddings to save RAM)
     const items = await getAllIndexedItems();
+
+    // Hydrate pre-computed embeddings from IndexedDB when semantic search is active
+    if (embeddingsEnabled && !skipEmbeddingThisPhase) {
+        const loaded = await loadEmbeddingsInto(items);
+        if (loaded > 0) {
+            logger.debug('runSearch', `Loaded ${loaded} pre-computed embeddings from IndexedDB`);
+        }
+    }
 
     // Pre-compute domain visit counts once (O(n)) instead of per-item (O(n^2))
     const domainVisitCounts = new Map<string, number>();
