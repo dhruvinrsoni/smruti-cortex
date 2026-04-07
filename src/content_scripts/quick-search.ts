@@ -65,6 +65,7 @@ import {
   isPaletteDiagnosticMessageType,
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
+import { wireHideImgOnError } from '../shared/hide-img-on-error';
 
 // Extend window interface for our extension
 declare global {
@@ -2649,13 +2650,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const rawFaviconUrl = tab.favIconUrl || '';
         const faviconUrl = (location.protocol === 'https:' && rawFaviconUrl.startsWith('http://')) ? '' : rawFaviconUrl;
         li.innerHTML = `
-          <img class="tab-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">
+          <img class="tab-favicon" src="${faviconUrl}" alt="">
           <div class="tab-details">
             <span class="tab-title">${escapeHtml(tab.title || 'Untitled')}</span>
             <span class="tab-url">${escapeHtml(truncateUrl(tab.url || ''))}</span>
           </div>
           ${badges ? `<span class="tab-badges">${badges}</span>` : ''}
         `;
+        wireHideImgOnError(li.querySelector('img'));
 
         const tabId = tab.id!;
         const windowId = tab.windowId!;
@@ -2727,13 +2729,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const rawClosedFavicon = tab.favIconUrl || '';
       const closedFavicon = (location.protocol === 'https:' && rawClosedFavicon.startsWith('http://')) ? '' : rawClosedFavicon;
       li.innerHTML = `
-        <img class="tab-favicon" src="${closedFavicon}" alt="" onerror="this.style.display='none'">
+        <img class="tab-favicon" src="${closedFavicon}" alt="">
         <div class="tab-details">
           <span class="tab-title">${escapeHtml(tab.title || 'Untitled')}</span>
           <span class="tab-url">${escapeHtml(truncateUrl(tab.url || ''))}</span>
         </div>
         <span class="tab-badges">${ago}</span>
       `;
+      wireHideImgOnError(li.querySelector('img'));
 
       const sessionId = tab.sessionId;
       const closedUrl = tab.url || '';
@@ -2872,13 +2875,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       const folderPath = (bm as unknown as { folderPath?: string }).folderPath || '';
       li.innerHTML = `
-        <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" onerror="this.style.display='none'">
+        <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="">
         <div class="tab-details">
           <span class="tab-title">${escapeHtml(bm.title || 'Untitled')}</span>
           ${folderPath ? `<span class="bookmark-folder">📁 ${escapeHtml(folderPath)}</span>` : ''}
           <span class="tab-url">${escapeHtml(truncateUrl(bm.url || ''))}</span>
         </div>
       `;
+      wireHideImgOnError(li.querySelector('img'));
 
       li.addEventListener('click', (e) => {
         const url = bm.url!;

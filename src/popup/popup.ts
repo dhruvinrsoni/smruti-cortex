@@ -33,6 +33,7 @@ import {
   isPaletteDiagnosticMessageType,
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
+import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import type { AppSettings } from '../core/settings';
 import {
   type SearchResult,
@@ -734,13 +735,14 @@ function initializePopup() {
           }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           li.innerHTML = `
-            <img src="${tab.favIconUrl || ''}" alt="" style="width:16px;height:16px;border-radius:3px;" onerror="this.style.display='none'">
+            <img src="${tab.favIconUrl || ''}" alt="" style="width:16px;height:16px;border-radius:3px;">
             <div style="flex:1;overflow:hidden;">
               <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.title || 'Untitled')}</div>
               <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.url || '')}</div>
             </div>
             ${tab.pinned ? '<span>📌</span>' : ''}${tab.active ? '<span>●</span>' : ''}
           `;
+          wireHideImgOnError(li.querySelector('img'));
           li.addEventListener('click', (ev) => {
             const sk = (ev as MouseEvent).shiftKey;
             const url = tab.url || '';
@@ -792,12 +794,13 @@ function initializePopup() {
           }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           li.innerHTML = `
-            <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" style="width:16px;height:16px;border-radius:3px;" onerror="this.style.display='none'">
+            <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" style="width:16px;height:16px;border-radius:3px;">
             <div style="flex:1;overflow:hidden;">
               <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.title || 'Untitled')}</div>
               <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.url || '')}</div>
             </div>
           `;
+          wireHideImgOnError(li.querySelector('img'));
           li.addEventListener('click', (ev) => {
             const sk = (ev as MouseEvent).shiftKey;
             chrome.tabs.create({ url: bm.url!, active: !sk });
