@@ -562,6 +562,14 @@ export function isCircuitBreakerOpen(): boolean {
   return circuitBreaker.isOpen();
 }
 
+export function recordCircuitBreakerFailure(): void {
+  circuitBreaker.recordFailure();
+}
+
+export function recordCircuitBreakerSuccess(): void {
+  circuitBreaker.recordSuccess();
+}
+
 // === CONCURRENT REQUEST LIMITER ===
 // Ollama processes requests sequentially; concurrent calls just queue and waste memory.
 // This semaphore prevents multiple in-flight Ollama calls from stacking up.

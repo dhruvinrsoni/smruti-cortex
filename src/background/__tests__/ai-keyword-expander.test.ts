@@ -29,6 +29,8 @@ const ollamaMocks = {
   checkMemoryPressure: vi.fn(() => ({ ok: true })),
   acquireOllamaSlot: vi.fn(() => true),
   releaseOllamaSlot: vi.fn(),
+  recordCircuitBreakerFailure: vi.fn(),
+  recordCircuitBreakerSuccess: vi.fn(),
 };
 vi.mock('../ollama-service', () => ollamaMocks);
 

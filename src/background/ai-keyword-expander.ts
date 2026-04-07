@@ -19,7 +19,7 @@
 
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot } from './ollama-service';
+import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess } from './ollama-service';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
 
 const COMPONENT = 'AIKeywordExpander';
@@ -288,8 +288,9 @@ async function callOllamaForKeywords(
   });
 
   const controller = new AbortController();
-  const hasTimeout = timeout > 0;
-  const timeoutId = hasTimeout ? setTimeout(() => controller.abort(), timeout) : undefined;
+  // Mirror the embedding guard: never allow an unbounded fetch.
+  const effectiveTimeout = timeout > 0 ? timeout : 120_000;
+  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
 
   // Propagate search abort signal so Ollama fetch is cancelled when the search is superseded.
   // This releases the Ollama slot immediately, preventing the next search's embedding from
@@ -297,7 +298,7 @@ async function callOllamaForKeywords(
   const onSearchAbort = () => controller.abort();
   if (searchSignal) {
     if (searchSignal.aborted) {
-      if (hasTimeout && timeoutId) {clearTimeout(timeoutId);}
+      clearTimeout(timeoutId);
       throw new Error('Search aborted before Ollama call');
     }
     searchSignal.addEventListener('abort', onSearchAbort, { once: true });
@@ -313,9 +314,7 @@ async function callOllamaForKeywords(
       signal: controller.signal
     });
 
-    if (hasTimeout && timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    clearTimeout(timeoutId);
 
     const duration = Date.now() - startTime;
 
@@ -337,21 +336,21 @@ async function callOllamaForKeywords(
     // Parse the JSON response, handling various edge cases
     const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
     if (searchSignal) {searchSignal.removeEventListener('abort', onSearchAbort);}
-    if (hasTimeout && timeoutId) {clearTimeout(timeoutId);}
+    clearTimeout(timeoutId);
+    recordCircuitBreakerSuccess();
     return expandedKeywords;
 
   } catch (error: unknown) {
-    if (hasTimeout && timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    clearTimeout(timeoutId);
     if (searchSignal) {
       searchSignal.removeEventListener('abort', onSearchAbort);
     }
 
     if (error instanceof Error && error.name === 'AbortError') {
-      // Could be timeout OR search abort — either way, propagate as abort so caller skips gracefully
+      // Abort errors are intentional (timeout or search superseded) — don't trip the breaker.
       throw new Error('Aborted (timeout or search superseded)');
     }
+    recordCircuitBreakerFailure();
     throw error;
   }
 }
