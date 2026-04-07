@@ -23,6 +23,41 @@ import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOl
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
 
 const COMPONENT = 'AIKeywordExpander';
+
+// Keyword expansion responses are small text; 1 MB is generous.
+const MAX_RESPONSE_BYTES = 1 * 1024 * 1024;
+
+async function readResponseText(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<string> {
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (!body || typeof body.getReader !== 'function') {
+    // No streaming body (e.g. in tests). Prefer .text(), fallback to .json().
+    const resp = response as { text?: () => Promise<string>; json?: () => Promise<unknown> };
+    if (typeof resp.text === 'function') {
+      const t = await resp.text();
+      if (t) return t;
+    }
+    if (typeof resp.json === 'function') {
+      return JSON.stringify(await resp.json());
+    }
+    return '';
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let result = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limitBytes) {
+      reader.cancel();
+      throw new Error(`Response exceeded ${limitBytes} bytes — aborting`);
+    }
+    result += decoder.decode(value, { stream: true });
+  }
+  result += decoder.decode();
+  return result;
+}
 const logger = Logger.forComponent(COMPONENT);
 
 // Tracks the source of the last expansion for UI feedback
@@ -285,11 +320,12 @@ async function callOllamaForKeywords(
     const duration = Date.now() - startTime;
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
+      const errorText = await readResponseText(response, 64 * 1024).catch(() => '');
       throw new Error(`Ollama API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
+    const rawText = await readResponseText(response);
+    const data = JSON.parse(rawText);
     // /api/chat returns { message: { content: "..." } }, /api/generate returns { response: "..." }
     const generatedText = data.message?.content || data.response || '';
 

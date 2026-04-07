@@ -16,6 +16,42 @@ import { Logger } from '../core/logger';
 const COMPONENT = 'OllamaService';
 const logger = Logger.forComponent(COMPONENT);
 
+// Hard cap on Ollama response body size to prevent a misconfigured
+// or malicious endpoint from allocating multi-GB strings in memory.
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+async function readResponseWithLimit(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<string> {
+  // Prefer streaming reader when available; falls back to .text() for
+  // environments without ReadableStream (e.g. test mocks).
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (!body || typeof body.getReader !== 'function') {
+    return (response as { text?: () => Promise<string> }).text
+      ? response.text()
+      : JSON.stringify(await (response as { json: () => Promise<unknown> }).json());
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let result = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limitBytes) {
+      reader.cancel();
+      throw new Error(`Response body exceeded ${limitBytes} bytes — aborting to prevent memory exhaustion`);
+    }
+    result += decoder.decode(value, { stream: true });
+  }
+  result += decoder.decode();
+  return result;
+}
+
+async function readJsonWithLimit<T = unknown>(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<T> {
+  const text = await readResponseWithLimit(response, limitBytes);
+  return JSON.parse(text) as T;
+}
+
 export interface OllamaConfig {
   endpoint: string;          // Default: 'http://localhost:11434'
   model: string;             // Default: 'nomic-embed-text:latest'
@@ -101,8 +137,8 @@ export class OllamaService {
       logger.trace('checkAvailability', `Response received: ${response.status} ${response.statusText}`);
 
       if (response.ok) {
-      const data = await response.json();
-      const models = Array.isArray(data.models) ? data.models as Array<{ name?: string }> : [];
+      const data = await readJsonWithLimit<{ models?: Array<{ name?: string }>; version?: string }>(response, MAX_RESPONSE_BYTES);
+      const models = Array.isArray(data.models) ? data.models : [];
       const modelNames = models.map(m => m.name || 'unknown');
       const hasModel = models.some(m => m.name === this.config.model);
 
@@ -284,7 +320,7 @@ export class OllamaService {
       logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'No error details');
+        const errorText = await readResponseWithLimit(response, 1024 * 64).catch(() => 'No error details');
 
         // === Handle 400 "context length exceeded" — input problem, NOT server failure ===
         // Don't trip circuit breaker for input validation errors.
@@ -333,7 +369,7 @@ export class OllamaService {
 
       logger.debug('generateEmbedding', '📄 Parsing JSON response...');
       const parseStartTime = Date.now();
-      const data = await response.json();
+      const data = await readJsonWithLimit<{ embeddings?: number[][] }>(response);
       const parseDuration = Date.now() - parseStartTime;
       const duration = Date.now() - startTime;
 
