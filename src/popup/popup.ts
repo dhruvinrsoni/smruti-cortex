@@ -3115,26 +3115,57 @@ function initializePopup() {
       });
     }
 
-    // Advanced Browser Commands toggle + permission request
+    // Advanced Browser Commands: optional permissions must be granted before the setting turns on
+    const ADV_BROWSER_OPTIONAL_PERMS = ['tabGroups', 'browsingData', 'topSites'] as const;
     const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
     if (advBrowserInput) {
-      advBrowserInput.addEventListener('change', (e) => {
+      advBrowserInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('advancedBrowserCommands', target.checked).catch(() => {});
-        syncToggleBar();
-        if (target.checked) {
-          chrome.runtime.sendMessage({
-            type: 'REQUEST_OPTIONAL_PERMISSIONS',
-            permissions: ['tabGroups', 'browsingData', 'topSites'],
-          }, (resp) => {
-            if (resp?.granted) {
-              showToast('Advanced Browser Commands enabled with all permissions', 'info');
-            } else {
-              showToast('Advanced Browser Commands enabled. Some features may need permissions later.', 'info');
-            }
-          });
-        } else {
+        if (!target.checked) {
+          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+          syncToggleBar();
           showToast('Advanced Browser Commands disabled', 'info');
+          return;
+        }
+        target.disabled = true;
+        try {
+          const resp = await sendMessage({
+            type: 'REQUEST_OPTIONAL_PERMISSIONS',
+            permissions: [...ADV_BROWSER_OPTIONAL_PERMS],
+          }) as { status?: string; granted?: boolean; error?: string };
+          if (resp?.error) {
+            target.checked = false;
+            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+            showToast(
+              'Advanced Browser Commands stay off (permission request failed). Try again from chrome://extensions → SmrutiCortex → Details → Permissions.',
+              'warning',
+            );
+            return;
+          }
+          if (resp?.granted) {
+            await SettingsManager.setSetting('advancedBrowserCommands', true).catch(() => {});
+            showToast(
+              'Advanced Browser Commands enabled. Tab groups, browsing data cleanup, and Top Sites are allowed.',
+              'info',
+            );
+          } else {
+            target.checked = false;
+            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+            showToast(
+              'Advanced Browser Commands stay off because optional permissions were not granted. Chrome was asked for: tab groups, browsing data cleanup, and Top Sites. To try again: chrome://extensions → SmrutiCortex → Details → Permissions.',
+              'warning',
+            );
+          }
+        } catch {
+          target.checked = false;
+          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+          showToast(
+            'Advanced Browser Commands stay off (could not complete permission request). Try again from chrome://extensions → SmrutiCortex → Details.',
+            'warning',
+          );
+        } finally {
+          target.disabled = false;
+          syncToggleBar();
         }
       });
     }
