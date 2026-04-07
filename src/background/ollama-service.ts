@@ -395,6 +395,7 @@ export class OllamaService {
       });
 
       circuitBreaker.recordSuccess();
+      sessionEmbeddingCount++;
 
       return {
         embedding,  // Use the extracted embedding, not data.embedding
@@ -597,6 +598,10 @@ export function releaseOllamaSlot(): void { requestSemaphore.release(); }
 // === MEMORY PRESSURE GUARD ===
 // Chrome extensions have limited memory; prevent embedding generation from consuming it all
 const MEMORY_LIMIT_MB = 512;  // Hard cap: stop AI features if extension exceeds 512MB
+const MAX_SESSION_EMBEDDINGS = 5000; // Fallback cap when performance.memory is unavailable
+let sessionEmbeddingCount = 0;
+
+export function incrementSessionEmbeddingCount(): void { sessionEmbeddingCount++; }
 
 export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: number } {
   try {
@@ -611,6 +616,12 @@ export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: n
       return { ok, usedMB, limitMB: MEMORY_LIMIT_MB };
     }
   } catch { /* ignore */ }
+
+  // Fallback: use session embedding counter when performance.memory is unavailable.
+  if (sessionEmbeddingCount >= MAX_SESSION_EMBEDDINGS) {
+    logger.warn('memoryGuard', `🔴 Session embedding cap reached: ${sessionEmbeddingCount}/${MAX_SESSION_EMBEDDINGS} — blocking AI operations`);
+    return { ok: false, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
+  }
   return { ok: true, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
 }
 
