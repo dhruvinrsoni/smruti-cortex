@@ -3174,13 +3174,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // Thin wrapper — delegates to shared renderAIStatus with this overlay's container
   function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
-    log.debug('aiStatus', 'Rendering AI status:', aiStatus ? {
-      aiKeywords: aiStatus.aiKeywords,
-      semantic: aiStatus.semantic,
-      expandedCount: aiStatus.expandedCount,
-      searchTimeMs: aiStatus.searchTimeMs,
-    } : 'cleared');
-    renderAIStatusShared(aiStatusBarEl, aiStatus);
+    try {
+      log.debug('aiStatus', 'Rendering AI status:', aiStatus ? {
+        aiKeywords: aiStatus.aiKeywords,
+        semantic: aiStatus.semantic,
+        expandedCount: aiStatus.expandedCount,
+        searchTimeMs: aiStatus.searchTimeMs,
+      } : 'cleared');
+      renderAIStatusShared(aiStatusBarEl, aiStatus);
+    } catch (err) {
+      console.error('[SmrutiCortex] renderAIStatus error:', err);
+    }
   }
 
   function buildRecentSearchesSection(entries: Array<{ query: string; timestamp: number; selectedUrl?: string }>): HTMLElement {
@@ -3599,6 +3603,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== RENDER RESULTS (card + list mode, mirrors popup.ts renderResults) =====
   function renderResults(results: SearchResult[]): void {
     if (!resultsEl) {return;}
+    try {
     const t0 = performance.now();
 
     const isCards = cachedSettings?.displayMode === DisplayMode.CARDS;
@@ -3727,6 +3732,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     perfLog(`renderResults (${results.length} items, ${isCards ? 'cards' : 'list'})`, t0);
+    } catch (err) {
+      if (resultsEl) {
+        resultsEl.innerHTML = '<div style="padding:12px;color:#ef4444;">Render error — try a new search</div>';
+      }
+      console.error('[SmrutiCortex] renderResults error:', err);
+    }
   }
 
   // ===== RENDER ERROR MESSAGE =====

@@ -300,7 +300,11 @@ function initializePopup() {
 
   // Thin wrapper — delegates to shared renderAIStatus with this popup's container
   function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
-    renderAIStatusShared(aiStatusBarEl, aiStatus);
+    try {
+      renderAIStatusShared(aiStatusBarEl, aiStatus);
+    } catch (err) {
+      console.error('[SmrutiCortex] renderAIStatus error:', err);
+    }
   }
 
   /**
@@ -1439,6 +1443,7 @@ function initializePopup() {
 
   // Fast rendering
   function renderResults() {
+    try {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true; // Default: true
     resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
@@ -1565,6 +1570,10 @@ function initializePopup() {
 
         resultsNode.appendChild(li);
       });
+    }
+    } catch (err) {
+      resultsNode.innerHTML = '<div style="padding:12px;color:#ef4444;">Render error — try a new search</div>';
+      console.error('[SmrutiCortex] renderResults error:', err);
     }
   }
 
