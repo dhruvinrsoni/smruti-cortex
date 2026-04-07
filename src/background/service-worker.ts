@@ -262,9 +262,10 @@ setupPortBasedMessaging();
             sendResponse({ status: 'ok' });
             break;
           case 'OPEN_SETTINGS':
-            // Open the popup page in a new tab with #settings hash to auto-open modal
             logger.debug('onMessage', 'Handling OPEN_SETTINGS');
-            browserAPI.tabs.create({ url: browserAPI.runtime.getURL('popup/popup.html#settings') });
+            void browserAPI.tabs.create({ url: browserAPI.runtime.getURL('popup/popup.html#settings') }).catch(err =>
+              logger.error('onMessage', 'Failed to open settings tab', undefined, err instanceof Error ? err : new Error(String(err)))
+            );
             sendResponse({ status: 'ok' });
             break;
           case 'GET_LOG_LEVEL':
@@ -305,7 +306,9 @@ setupPortBasedMessaging();
 
               if (!wasEmbeddingsEnabled && nowEmbeddingsEnabled) {
                 logger.info('onMessage', '🧠 Embeddings enabled — starting background processor');
-                embeddingProcessor.start();
+                void embeddingProcessor.start().catch(err =>
+                  logger.error('onMessage', 'Embedding processor start failed', undefined, err instanceof Error ? err : new Error(String(err)))
+                );
               } else if (wasEmbeddingsEnabled && !nowEmbeddingsEnabled) {
                 logger.info('onMessage', '🧠 Embeddings disabled — stopping background processor');
                 embeddingProcessor.stop();
@@ -1527,7 +1530,11 @@ setupPortBasedMessaging();
   });
 
   // Now start the main initialization
-  await init();
+  try {
+    await init();
+  } catch (err) {
+    logger.error('initLogger', 'Fatal error during initialization', undefined, err instanceof Error ? err : new Error(String(err)));
+  }
 })();
 
 async function init() {
@@ -1588,8 +1595,12 @@ async function init() {
                     clearTimeout(indexingTimeout);
                 }
                 indexingTimeout = setTimeout(async () => {
-                    logger.debug('onVisited', 'Performing debounced incremental indexing');
-                    await ingestHistory();
+                    try {
+                        logger.debug('onVisited', 'Performing debounced incremental indexing');
+                        await ingestHistory();
+                    } catch (err) {
+                        logger.error('onVisited', 'Incremental indexing failed', undefined, err instanceof Error ? err : new Error(String(err)));
+                    }
                 }, 10000); // Wait 10 seconds after last visit before indexing
             });
 
@@ -1658,14 +1669,19 @@ async function init() {
 
 // Background resilience: re-initialize on wake from suspension
 browserAPI.runtime.onStartup.addListener(async () => {
-    logger.info('onStartup', '🔄 Browser startup detected, ensuring service worker is initialized');
-    if (!initialized) {
-        await init();
+    try {
+        logger.info('onStartup', '🔄 Browser startup detected, ensuring service worker is initialized');
+        if (!initialized) {
+            await init();
+        }
+    } catch (err) {
+        logger.error('onStartup', 'Startup initialization failed', undefined, err instanceof Error ? err : new Error(String(err)));
     }
 });
 
 // Ensure initialization on install/update
 browserAPI.runtime.onInstalled.addListener(async (details) => {
+    try {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
     if (!initialized) {
         await init();
@@ -1689,6 +1705,9 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
         } catch (e) {
             logger.warn('onInstalled', 'Content script re-injection failed', { error: (e as Error).message });
         }
+    }
+    } catch (err) {
+        logger.error('onInstalled', 'onInstalled handler failed', undefined, err instanceof Error ? err : new Error(String(err)));
     }
 });
 
