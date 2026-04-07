@@ -507,6 +507,44 @@ function initializePopup() {
   let popupSelectedIndex = 0;
   let popupConfirmingCommand: PaletteCommand | null = null;
 
+  function getPopupPaletteSelectableRows(): HTMLElement[] {
+    const list = $local('results') as HTMLUListElement | null;
+    if (!list) return [];
+    return Array.from(list.querySelectorAll('.palette-selectable-row')) as HTMLElement[];
+  }
+
+  function applyPopupPaletteRowHighlight(): void {
+    const rows = getPopupPaletteSelectableRows();
+    const n = rows.length;
+    if (n === 0) return;
+    if (popupSelectedIndex < 0 || popupSelectedIndex >= n) {
+      popupSelectedIndex = 0;
+    }
+    rows.forEach((el, i) => {
+      el.style.background = i === popupSelectedIndex ? 'var(--hover)' : 'var(--card)';
+    });
+    rows[popupSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function handlePopupPaletteArrow(direction: 'up' | 'down'): void {
+    const rows = getPopupPaletteSelectableRows();
+    if (rows.length === 0) return;
+    if (direction === 'down') {
+      popupSelectedIndex = (popupSelectedIndex + 1) % rows.length;
+    } else {
+      popupSelectedIndex = (popupSelectedIndex - 1 + rows.length) % rows.length;
+    }
+    applyPopupPaletteRowHighlight();
+  }
+
+  function focusPopupPaletteRowAt(index: number): void {
+    const rows = getPopupPaletteSelectableRows();
+    const el = rows[index];
+    if (el) {
+      try { el.focus(); } catch { /* ignore */ }
+    }
+  }
+
   function detectPopupMode(value: string): { mode: PopupPaletteMode; query: string } {
     const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
     const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
@@ -634,10 +672,8 @@ function initializePopup() {
 
         const li = document.createElement('li');
         li.className = 'palette-selectable-row';
+        li.tabIndex = 0;
         li.style.cssText = rowBaseStyle;
-        if (idx === 0) {
-          li.style.background = 'var(--hover)';
-        }
 
         const currentLabel = getPopupCurrentLabel(cmd);
         const hintBlock = cmd.hint
@@ -659,14 +695,12 @@ function initializePopup() {
           executePopupCommand(cmd);
         });
         li.addEventListener('mouseenter', () => {
-          resultsList.querySelectorAll('.palette-selectable-row').forEach(el => {
-            (el as HTMLElement).style.background = 'var(--card)';
-          });
-          li.style.background = 'var(--hover)';
           popupSelectedIndex = idx;
+          applyPopupPaletteRowHighlight();
         });
         resultsList.appendChild(li);
       });
+      applyPopupPaletteRowHighlight();
       return;
     }
 
@@ -687,10 +721,8 @@ function initializePopup() {
         tabs.forEach((tab, idx) => {
           const li = document.createElement('li');
           li.className = 'palette-selectable-row';
+          li.tabIndex = 0;
           li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
-          if (idx === 0) {
-            li.style.background = 'var(--hover)';
-          }
           if (typeof tab.id === 'number') {
             li.dataset.tabId = String(tab.id);
           }
@@ -719,14 +751,12 @@ function initializePopup() {
             }
           });
           li.addEventListener('mouseenter', () => {
-            resultsList.querySelectorAll('.palette-selectable-row').forEach(el => {
-              (el as HTMLElement).style.background = 'var(--card)';
-            });
-            li.style.background = 'var(--hover)';
             popupSelectedIndex = idx;
+            applyPopupPaletteRowHighlight();
           });
           resultsList.appendChild(li);
         });
+        applyPopupPaletteRowHighlight();
       }).catch(() => { resultCountNode.textContent = 'Error loading tabs'; });
       return;
     }
@@ -755,10 +785,8 @@ function initializePopup() {
         bms.forEach((bm, idx) => {
           const li = document.createElement('li');
           li.className = 'palette-selectable-row';
+          li.tabIndex = 0;
           li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
-          if (idx === 0) {
-            li.style.background = 'var(--hover)';
-          }
           if (bm.url) {
             li.dataset.bookmarkUrl = bm.url;
           }
@@ -775,14 +803,12 @@ function initializePopup() {
             chrome.tabs.create({ url: bm.url!, active: !sk });
           });
           li.addEventListener('mouseenter', () => {
-            resultsList.querySelectorAll('.palette-selectable-row').forEach(el => {
-              (el as HTMLElement).style.background = 'var(--card)';
-            });
-            li.style.background = 'var(--hover)';
             popupSelectedIndex = idx;
+            applyPopupPaletteRowHighlight();
           });
           resultsList.appendChild(li);
         });
+        applyPopupPaletteRowHighlight();
       }).catch(() => { resultCountNode.textContent = 'Error'; });
       return;
     }
@@ -826,6 +852,7 @@ function initializePopup() {
 
       const li = document.createElement('li');
       li.className = 'palette-selectable-row';
+      li.tabIndex = 0;
       li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--hover);';
 
       if (parsed.usedPrefix && parsed.searchTerms === '') {
@@ -882,6 +909,8 @@ function initializePopup() {
         });
       }
       resultsList.appendChild(li);
+      popupSelectedIndex = 0;
+      applyPopupPaletteRowHighlight();
       resultCountNode.textContent = '';
       return;
     }
@@ -1162,6 +1191,8 @@ function initializePopup() {
 
     // Non-history modes: route to palette rendering
     if (mode !== 'history') {
+      resultsLocal = [];
+      activeIndex = -1;
       if (popupSpinner) popupSpinner.classList.remove('active');
       renderPopupPaletteResults(mode, query);
       return;
@@ -1589,6 +1620,15 @@ function initializePopup() {
           name: 'results',
           element: null, // Custom handling
           onFocus: () => {
+            if (popupPaletteMode !== 'history') {
+              const rows = getPopupPaletteSelectableRows();
+              if (rows.length > 0) {
+                popupSelectedIndex = 0;
+                applyPopupPaletteRowHighlight();
+                rows[0].focus();
+              }
+              return;
+            }
             if (resultsLocal.length > 0) {
               const firstResult = resultsNode.querySelector(selector) as HTMLElement;
               if (firstResult) {
@@ -1598,7 +1638,12 @@ function initializePopup() {
               }
             }
           },
-          shouldSkip: () => resultsLocal.length === 0 // Skip if no results
+          shouldSkip: () => {
+            if (popupPaletteMode !== 'history') {
+              return getPopupPaletteSelectableRows().length === 0;
+            }
+            return resultsLocal.length === 0;
+          },
         },
         {
           name: 'settings',
@@ -1621,6 +1666,14 @@ function initializePopup() {
 
     // Handle search input specific keys
     if (currentElement === input) {
+      if (popupPaletteMode !== 'history' && popupPaletteMode !== 'help') {
+        const pRows = getPopupPaletteSelectableRows();
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && pRows.length > 0) {
+          e.preventDefault();
+          handlePopupPaletteArrow(e.key === 'ArrowDown' ? 'down' : 'up');
+          return;
+        }
+      }
       if (e.key === 'ArrowDown' && resultsLocal.length > 0) {
         e.preventDefault();
         // Move focus to first result item if not already focused
@@ -1650,10 +1703,7 @@ function initializePopup() {
           input.value = '';
           syncClearButton();
           currentQuery = '';
-          resultsLocal = [];
-          activeIndex = -1;
-          renderResults();
-          loadRecentHistory();
+          debounceSearch('');
           return;
         }
         // Input already empty — let Escape bubble up to close the popup
@@ -1687,6 +1737,49 @@ function initializePopup() {
 
     // Handle result item navigation
     if (resultsNode.contains(currentElement)) {
+      const paletteRow = (currentElement as HTMLElement).closest?.('.palette-selectable-row');
+      if (popupPaletteMode !== 'history' && paletteRow) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          handlePopupPaletteArrow('down');
+          focusPopupPaletteRowAt(popupSelectedIndex);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const rows = getPopupPaletteSelectableRows();
+          if (rows.length === 0) return;
+          if (popupSelectedIndex <= 0) {
+            input.focus();
+            return;
+          }
+          handlePopupPaletteArrow('up');
+          focusPopupPaletteRowAt(popupSelectedIndex);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handlePopupPaletteEnter(e.shiftKey);
+          return;
+        }
+        if (e.key === 'Escape') {
+          if (input.value.length > 0) {
+            e.preventDefault();
+            input.value = '';
+            syncClearButton();
+            currentQuery = '';
+            debounceSearch('');
+            input.focus();
+            return;
+          }
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          return;
+        }
+      }
+
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (resultsLocal.length === 0) {return;}
@@ -1778,10 +1871,7 @@ function initializePopup() {
           input.value = '';
           syncClearButton();
           currentQuery = '';
-          resultsLocal = [];
-          activeIndex = -1;
-          renderResults();
-          loadRecentHistory();
+          debounceSearch('');
           input.focus();
           return;
         }
