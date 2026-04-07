@@ -380,9 +380,14 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         const scorerDetails: Array<{ name: string; score: number; weight: number }> = [];
         
         for (const scorer of scorers) {
-            const scorerScore = scorer.weight * scorer.score(item, q, items, context);
-            score += scorerScore;
-            scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
+            try {
+                const scorerScore = scorer.weight * scorer.score(item, q, items, context);
+                score += scorerScore;
+                scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
+            } catch (err) {
+                logger.error('runSearch', `Scorer "${scorer.name}" threw — treating as 0`, undefined, err instanceof Error ? err : new Error(String(err)));
+                scorerDetails.push({ name: scorer.name, score: 0, weight: scorer.weight });
+            }
         }
 
         // ─── Vivek Search Post-Score Boosters ────────────────────────────
