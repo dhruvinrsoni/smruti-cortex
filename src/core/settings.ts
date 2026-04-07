@@ -47,7 +47,12 @@ export interface AppSettings {
     commandPaletteModes?: string[];      // Which prefix modes are active: ['/', '>', '@', '#', '??']
     commandPaletteInPopup?: boolean;     // Whether popup also gets prefix modes (off by default)
     commandPaletteOnboarded?: boolean;   // True after user has seen the first-use hint
-    webSearchEngine?: string;            // Default search engine for ?? mode: 'google', 'duckduckgo', 'bing', 'youtube', 'github'
+    /** Default ?? engine when no prefix: google | youtube | github | gcp */
+    webSearchEngine?: string;
+    /** Jira site origin (e.g. https://jira.zebra.com) for ?? j */
+    jiraSiteUrl?: string;
+    /** Confluence site origin (e.g. https://confluence.zebra.com) for ?? c */
+    confluenceSiteUrl?: string;
     // Advanced browser commands — opt-in for tab power, tab groups, browsing data
     advancedBrowserCommands?: boolean;
     // Future settings can be added here
@@ -198,7 +203,84 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     },
     webSearchEngine: {
         default: 'google',
-        validate: (val) => typeof val === 'string' && ['google', 'duckduckgo', 'bing', 'youtube', 'github'].includes(val),
+        validate: (val) => typeof val === 'string' && (
+            ['google', 'youtube', 'github', 'gcp'].includes(val)
+            || val === 'duckduckgo'
+            || val === 'bing'
+        ),
+        transform: (val) => {
+            if (val === 'duckduckgo' || val === 'bing') {
+                return 'google';
+            }
+            if (['google', 'youtube', 'github', 'gcp'].includes(val)) {
+                return val;
+            }
+            return 'google';
+        },
+    },
+    jiraSiteUrl: {
+        default: '',
+        validate: (val) => {
+            if (typeof val !== 'string') {
+                return false;
+            }
+            const t = val.trim();
+            if (t === '') {
+                return true;
+            }
+            try {
+                const u = new URL(t);
+                return u.protocol === 'http:' || u.protocol === 'https:';
+            } catch {
+                return false;
+            }
+        },
+        transform: (val) => {
+            if (typeof val !== 'string') {
+                return '';
+            }
+            const t = val.trim();
+            if (t === '') {
+                return '';
+            }
+            try {
+                return new URL(t).origin;
+            } catch {
+                return '';
+            }
+        },
+    },
+    confluenceSiteUrl: {
+        default: '',
+        validate: (val) => {
+            if (typeof val !== 'string') {
+                return false;
+            }
+            const t = val.trim();
+            if (t === '') {
+                return true;
+            }
+            try {
+                const u = new URL(t);
+                return u.protocol === 'http:' || u.protocol === 'https:';
+            } catch {
+                return false;
+            }
+        },
+        transform: (val) => {
+            if (typeof val !== 'string') {
+                return '';
+            }
+            const t = val.trim();
+            if (t === '') {
+                return '';
+            }
+            try {
+                return new URL(t).origin;
+            } catch {
+                return '';
+            }
+        },
     },
 
     advancedBrowserCommands: {
@@ -494,6 +576,19 @@ export class SettingsManager {
                         this.logger.debug('validateSettings', `ℹ️ ${key}: not found, using default:`, schema.default);
                     }
                 }
+            }
+
+            const raw = settings as Record<string, unknown>;
+            const legacyAtlassian = raw.atlassianSiteUrl;
+            const jiraU = (validated.jiraSiteUrl ?? '').trim();
+            const confU = (validated.confluenceSiteUrl ?? '').trim();
+            if (!jiraU && !confU && typeof legacyAtlassian === 'string' && legacyAtlassian.trim()) {
+                try {
+                    const o = new URL(legacyAtlassian.trim()).origin;
+                    validated.jiraSiteUrl = o;
+                    validated.confluenceSiteUrl = o;
+                    this.logger.debug('validateSettings', 'Migrated atlassianSiteUrl → jiraSiteUrl + confluenceSiteUrl:', o);
+                } catch { /* ignore bad legacy URL */ }
             }
 
             this.logger.debug('validateSettings', '✅ Validation complete:', validated);
