@@ -192,13 +192,23 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     }
 
     // Get all indexed items (cache does NOT hold embeddings to save RAM)
-    const items = await getAllIndexedItems();
+    let items: IndexedItem[];
+    try {
+        items = await getAllIndexedItems();
+    } catch (dbErr) {
+        logger.error('runSearch', 'IndexedDB failed — falling back to chrome.history.search', undefined, dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+        items = [];
+    }
 
     // Hydrate pre-computed embeddings from IndexedDB when semantic search is active
-    if (embeddingsEnabled && !skipEmbeddingThisPhase) {
-        const loaded = await loadEmbeddingsInto(items);
-        if (loaded > 0) {
-            logger.debug('runSearch', `Loaded ${loaded} pre-computed embeddings from IndexedDB`);
+    if (items.length > 0 && embeddingsEnabled && !skipEmbeddingThisPhase) {
+        try {
+            const loaded = await loadEmbeddingsInto(items);
+            if (loaded > 0) {
+                logger.debug('runSearch', `Loaded ${loaded} pre-computed embeddings from IndexedDB`);
+            }
+        } catch (embErr) {
+            logger.warn('runSearch', 'Embedding hydration failed — continuing with keyword search only', { error: embErr });
         }
     }
 
