@@ -52,62 +52,25 @@ export interface PaletteCommand {
     cycleValues?: { value: string; label: string; icon: string }[];
 }
 
-export const SEARCH_ENGINES: Record<string, string> = {
-    google: 'https://www.google.com/search?q=',
-    duckduckgo: 'https://duckduckgo.com/?q=',
-    bing: 'https://www.bing.com/search?q=',
-    youtube: 'https://www.youtube.com/results?search_query=',
-    github: 'https://github.com/search?q=',
-};
+export {
+    SEARCH_ENGINES,
+    SEARCH_ENGINE_PREFIXES,
+    parseWebSearchQuery,
+    buildWebSearchUrl,
+    getWebSearchEngineDisplayName,
+    getWebSearchPrefixHintLines,
+    sortedWebSearchPrefixKeys,
+    WEB_SEARCH_DEFAULT_ENGINES,
+} from './web-search';
 
-export const SEARCH_ENGINE_PREFIXES: Record<string, string> = {
-    g: 'google',
-    d: 'duckduckgo',
-    b: 'bing',
-    y: 'youtube',
-    gh: 'github',
-};
-
-/** Stable order for empty-state ?? prefix hints (matches user-facing examples). */
-const WEB_SEARCH_PREFIX_ORDER = ['g', 'd', 'b', 'y', 'gh'] as const;
-
-const SEARCH_ENGINE_DISPLAY_NAMES: Record<string, string> = {
-    google: 'Google',
-    duckduckgo: 'DuckDuckGo',
-    bing: 'Bing',
-    youtube: 'YouTube',
-    github: 'GitHub',
-};
-
-export interface WebSearchPrefixHintLine {
-    prefix: string;
-    engineKey: string;
-    engineLabel: string;
-}
-
-export function getWebSearchEngineDisplayName(engineKey: string): string {
-    return (
-        SEARCH_ENGINE_DISPLAY_NAMES[engineKey]
-        ?? engineKey.charAt(0).toUpperCase() + engineKey.slice(1)
-    );
-}
-
-/** Prefix examples for ?? empty-state education (non-selectable UI rows). */
-export function getWebSearchPrefixHintLines(): WebSearchPrefixHintLine[] {
-    const out: WebSearchPrefixHintLine[] = [];
-    for (const prefix of WEB_SEARCH_PREFIX_ORDER) {
-        const engineKey = SEARCH_ENGINE_PREFIXES[prefix];
-        if (!engineKey || !SEARCH_ENGINES[engineKey]) {
-            continue;
-        }
-        out.push({
-            prefix,
-            engineKey,
-            engineLabel: getWebSearchEngineDisplayName(engineKey),
-        });
-    }
-    return out;
-}
+export type {
+    ParsedWebSearch,
+    WebSearchPrefixHintLine,
+    WebSearchUrlResult,
+    WebSearchDefaultEngine,
+    WebSearchSiteError,
+} from './web-search';
+export { webSearchSiteUrlToastMessage, webSearchSiteUrlPreviewLabel } from './web-search';
 
 const EVERYDAY_COMMANDS: PaletteCommand[] = [
     // --- Quick Toggles ---
