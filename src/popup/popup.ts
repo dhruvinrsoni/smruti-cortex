@@ -1473,7 +1473,7 @@ function initializePopup() {
         fav.className = 'card-favicon';
         const cardFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         fav.src = cardFavFallback;
-        fav.onerror = () => { fav.src = cardFavFallback; };
+        fav.addEventListener('error', () => { fav.src = cardFavFallback; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;
@@ -1527,7 +1527,7 @@ function initializePopup() {
         fav.className = 'favicon';
         const listFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         fav.src = listFavFallback;
-        fav.onerror = () => { fav.src = listFavFallback; };
+        fav.addEventListener('error', () => { fav.src = listFavFallback; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;
@@ -4095,12 +4095,13 @@ function initializePopup() {
       console.error('Failed to load analytics:', err);
     }
 
-    // Close button (use onclick to avoid stacking listeners)
     const closeBtn = modal.querySelector('#analytics-close') as HTMLElement;
     if (closeBtn) {
-      closeBtn.onclick = () => {
+      const newClose = closeBtn.cloneNode(true) as HTMLElement;
+      closeBtn.replaceWith(newClose);
+      newClose.addEventListener('click', () => {
         modal.classList.add('hidden');
-      };
+      });
     }
   }
 }

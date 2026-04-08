@@ -3641,7 +3641,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         fav.className = 'card-favicon';
         const qsFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         fav.src = qsFavFallback;
-        fav.onerror = () => { fav.src = qsFavFallback; };
+        fav.addEventListener('error', () => { fav.src = qsFavFallback; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;
