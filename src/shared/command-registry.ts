@@ -594,6 +594,18 @@ const EVERYDAY_COMMANDS: PaletteCommand[] = [
         isAvailable: (s) => !!s.advancedBrowserCommands,
     },
     {
+        id: 'move-tab-to-window',
+        label: 'Move Tab to Another Window…',
+        icon: '↗️',
+        tier: 'everyday',
+        category: 'window',
+        keywords: ['move', 'tab', 'window', 'transfer', 'shift', 'monitor', 'screen', 'another'],
+        hint: 'Pick a target window to send this tab to',
+        action: 'message',
+        messageType: 'MOVE_TAB_TO_WINDOW',
+        isAvailable: (s) => !!s.advancedBrowserCommands,
+    },
+    {
         id: 'merge-windows',
         label: 'Merge All Windows',
         icon: '🔗',

@@ -1143,6 +1143,43 @@ setupPortBasedMessaging();
                 break;
               }
 
+              case 'GET_WINDOWS': {
+                const allWins = await browserAPI.windows.getAll({ populate: true });
+                const senderWindowId = sender.tab?.windowId;
+                const windowList = allWins
+                  .filter(w => w.type === 'normal' && w.id !== undefined)
+                  .map(w => {
+                    const activeTab = w.tabs?.find(t => t.active);
+                    return {
+                      id: w.id!,
+                      tabCount: w.tabs?.length ?? 0,
+                      activeTabTitle: activeTab?.title ?? 'New Tab',
+                      activeTabFavicon: activeTab?.favIconUrl ?? '',
+                      isCurrent: w.id === senderWindowId,
+                    };
+                  });
+                sendResponse({ windows: windowList });
+                break;
+              }
+
+              case 'MOVE_TAB_TO_WINDOW': {
+                const srcTabId = msg.tabId ?? sender.tab?.id;
+                const targetWinId = msg.targetWindowId as number | undefined;
+                if (!srcTabId) {
+                  sendResponse({ error: 'No tab to move' });
+                  break;
+                }
+                if (!targetWinId) {
+                  sendResponse({ error: 'No target window specified' });
+                  break;
+                }
+                await browserAPI.tabs.move(srcTabId, { windowId: targetWinId, index: -1 });
+                await browserAPI.tabs.update(srcTabId, { active: true });
+                await browserAPI.windows.update(targetWinId, { focused: true });
+                sendResponse({ status: 'OK' });
+                break;
+              }
+
               case 'MERGE_WINDOWS': {
                 const currentWindow = await browserAPI.windows.getCurrent();
                 const allWindows = await browserAPI.windows.getAll({ populate: true });
