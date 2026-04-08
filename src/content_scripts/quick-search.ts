@@ -168,6 +168,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let currentMode: PaletteMode = 'history';
   let modeBadgeEl: HTMLDivElement | null = null;
   let confirmingCommand: PaletteCommand | null = null;
+  let qsWindowPickerActive = false;
   let cachedTabs: chrome.tabs.Tab[] | null = null;
   let cachedBookmarks: chrome.bookmarks.BookmarkTreeNode[] | null = null;
   let firstUseHintEl: HTMLDivElement | null = null;
@@ -2086,6 +2087,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function renderCommandResults(query: string, tier: 'everyday' | 'power'): void {
     if (!resultsEl) {return;}
+    qsWindowPickerActive = false;
 
     const commands = cachedSettings
       ? getAvailableCommands(tier, cachedSettings)
@@ -2266,6 +2268,98 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     (Object.keys(patch) as (keyof AppSettings)[]).forEach(k => applySettingSideEffects(k));
   }
 
+  interface QsWindowInfo {
+    id: number;
+    tabCount: number;
+    activeTabTitle: string;
+    activeTabFavicon: string;
+    isCurrent: boolean;
+  }
+
+  function showQsWindowPicker(): void {
+    if (!resultsEl) { return; }
+    qsWindowPickerActive = true;
+    selectedIndex = 0;
+    updateResultCount('Loading windows...');
+    resultsEl.innerHTML = '';
+
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_WINDOWS' }, (resp) => {
+        if (chrome.runtime.lastError || !resp) {
+          qsWindowPickerActive = false;
+          showToast('Failed to fetch windows', 'error');
+          return;
+        }
+        const windows = (resp as { windows?: QsWindowInfo[] }).windows;
+        if (!windows || windows.length === 0) {
+          qsWindowPickerActive = false;
+          updateResultCount('0 windows');
+          showToast('No windows found', 'error');
+          return;
+        }
+        const otherWindows = windows.filter(w => !w.isCurrent);
+        if (otherWindows.length === 0) {
+          qsWindowPickerActive = false;
+          updateResultCount('1 window');
+          showToast('Only one window open — nothing to move to', 'info');
+          return;
+        }
+        if (!resultsEl) { return; }
+        updateResultCount(`${otherWindows.length} window${otherWindows.length !== 1 ? 's' : ''}`);
+        resultsEl.innerHTML = '';
+        selectedIndex = 0;
+
+        const hint = document.createElement('li');
+        hint.className = 'palette-discovery-tip';
+        hint.setAttribute('role', 'presentation');
+        hint.textContent = 'Enter: move tab · Esc: back to commands · ↑↓: navigate';
+        resultsEl.appendChild(hint);
+
+        otherWindows.forEach((win, idx) => {
+          const row = document.createElement('li');
+          row.className = `command-row${idx === 0 ? ' selected' : ''}`;
+          row.setAttribute('role', 'option');
+          row.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+          row.dataset.windowId = String(win.id);
+          row.dataset.windowTitle = win.activeTabTitle;
+          const tabLabel = win.tabCount === 1 ? '1 tab' : `${win.tabCount} tabs`;
+          row.innerHTML = `
+            <span class="cmd-icon">🪟</span>
+            <span class="cmd-label">${escapeHtml(win.activeTabTitle)}</span>
+            <span class="cmd-hint">${tabLabel}</span>
+          `;
+          row.addEventListener('click', () => {
+            moveTabToWindowQs(win.id, win.activeTabTitle);
+          });
+          resultsEl!.appendChild(row);
+        });
+      });
+    } catch {
+      qsWindowPickerActive = false;
+      showToast('Extension context lost — please reopen', 'error');
+    }
+  }
+
+  function moveTabToWindowQs(targetWindowId: number, windowTitle: string): void {
+    try {
+      chrome.runtime.sendMessage({ type: 'MOVE_TAB_TO_WINDOW', targetWindowId }, (moveResp) => {
+        if (chrome.runtime.lastError) {
+          showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+          return;
+        }
+        const r = moveResp as Record<string, unknown> | undefined;
+        if (r?.error) {
+          showToast(`Error: ${r.error}`, 'error');
+        } else {
+          showToast(`↗️ Moved tab to: ${windowTitle}`, 'success');
+          hideOverlay();
+        }
+      });
+    } catch {
+      showToast('Extension context lost — please reopen', 'error');
+    }
+  }
+
   function executeCommand(cmd: PaletteCommand): void {
     log.info('executeCommand', `Executing: ${cmd.id} (action: ${cmd.action})`);
     saveRecentCommand(cmd.id);
@@ -2353,6 +2447,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             } catch {
               showToast('Extension context lost — please reopen', 'error');
             }
+            break;
+          }
+
+          if (cmd.id === 'move-tab-to-window') {
+            showQsWindowPicker();
             break;
           }
 
@@ -3000,6 +3099,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const selected = resultsEl.querySelector('.bookmark-row.selected') as HTMLElement;
       if (selected) {
         selected.click();
+      }
+      return;
+    }
+
+    if (qsWindowPickerActive) {
+      const rows = resultsEl.querySelectorAll('.command-row');
+      if (rows.length > 0 && selectedIndex >= 0 && selectedIndex < rows.length) {
+        const row = rows[selectedIndex] as HTMLElement;
+        row.click();
       }
       return;
     }
@@ -3914,6 +4022,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
+        if (qsWindowPickerActive) {
+          qsWindowPickerActive = false;
+          const raw = inputEl?.value ?? '';
+          const { query } = detectMode(raw.trim());
+          renderCommandResults(query, currentMode === 'power' ? 'power' : 'everyday');
+          return;
+        }
         if (confirmingCommand) {
           confirmingCommand = null;
           const raw = inputEl?.value ?? '';

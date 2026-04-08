@@ -511,6 +511,7 @@ function initializePopup() {
   let popupPaletteMode: PopupPaletteMode = 'history';
   let popupSelectedIndex = 0;
   let popupConfirmingCommand: PaletteCommand | null = null;
+  let popupWindowPickerActive = false;
 
   function getPopupPaletteSelectableRows(): HTMLElement[] {
     const list = $local('results') as HTMLUListElement | null;
@@ -635,6 +636,7 @@ function initializePopup() {
     const resultsList = $('results') as HTMLUListElement;
     if (!resultsList) {return;}
 
+    popupWindowPickerActive = false;
     popupSelectedIndex = 0;
     resultsList.innerHTML = '';
     resultsList.className = 'results list';
@@ -965,6 +967,102 @@ function initializePopup() {
     }
   }
 
+  interface WindowInfo {
+    id: number;
+    tabCount: number;
+    activeTabTitle: string;
+    activeTabFavicon: string;
+    isCurrent: boolean;
+  }
+
+  async function showWindowPicker(): Promise<void> {
+    const resultsList = $('results') as HTMLUListElement;
+    const resultCountNode = $('result-count') as HTMLDivElement;
+    if (!resultsList) { return; }
+
+    popupWindowPickerActive = true;
+    resultsList.innerHTML = '';
+    if (resultCountNode) { resultCountNode.textContent = 'Loading windows...'; }
+
+    let resp: { windows?: WindowInfo[] };
+    try {
+      resp = await sendMessage({ type: 'GET_WINDOWS' }) as { windows?: WindowInfo[] };
+    } catch {
+      showToast('Failed to fetch windows', 'error');
+      return;
+    }
+
+    const windows = resp?.windows;
+    if (!windows || windows.length === 0) {
+      if (resultCountNode) { resultCountNode.textContent = '0 windows'; }
+      showToast('No windows found', 'error');
+      return;
+    }
+
+    const otherWindows = windows.filter(w => !w.isCurrent);
+    if (otherWindows.length === 0) {
+      if (resultCountNode) { resultCountNode.textContent = '1 window'; }
+      showToast('Only one window open — nothing to move to', 'info');
+      return;
+    }
+
+    if (resultCountNode) {
+      resultCountNode.textContent = `${otherWindows.length} window${otherWindows.length !== 1 ? 's' : ''}`;
+    }
+
+    const hint = document.createElement('li');
+    hint.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+    hint.setAttribute('role', 'presentation');
+    hint.textContent = 'Select a window to move this tab to:';
+    resultsList.appendChild(hint);
+
+    const rowStyle = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);';
+    popupSelectedIndex = 0;
+
+    otherWindows.forEach((win, idx) => {
+      const li = document.createElement('li');
+      li.className = 'palette-selectable-row';
+      li.tabIndex = 0;
+      li.style.cssText = rowStyle;
+
+      const tabLabel = win.tabCount === 1 ? '1 tab' : `${win.tabCount} tabs`;
+      const title = escapeHtml(win.activeTabTitle);
+
+      li.innerHTML = `
+        <span style="font-size:16px;width:24px;text-align:center;flex-shrink:0;">🪟</span>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+          <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${title}</span>
+          <span style="font-size:11px;color:var(--muted);">${tabLabel}</span>
+        </div>
+        <span style="font-size:9px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:1px 6px;border-radius:3px;flex-shrink:0;">window</span>
+      `;
+
+      li.addEventListener('click', () => {
+        void moveTabToWindow(win.id, win.activeTabTitle);
+      });
+      li.addEventListener('mouseenter', () => {
+        popupSelectedIndex = idx;
+        applyPopupPaletteRowHighlight();
+      });
+      resultsList.appendChild(li);
+    });
+
+    applyPopupPaletteRowHighlight();
+  }
+
+  async function moveTabToWindow(targetWindowId: number, windowTitle: string): Promise<void> {
+    try {
+      const resp = await sendMessage({ type: 'MOVE_TAB_TO_WINDOW', targetWindowId }) as Record<string, unknown>;
+      if (resp?.error) {
+        showToast(`Error: ${resp.error}`, 'error');
+      } else {
+        showToast(`↗️ Moved tab to: ${windowTitle}`, 'success');
+      }
+    } catch {
+      showToast('Failed to move tab', 'error');
+    }
+  }
+
   function executePopupCommand(cmd: PaletteCommand): void {
     saveRecentCommand(cmd.id);
     if (cmd.action === 'toggle-boolean' && cmd.settingKey) {
@@ -1026,6 +1124,11 @@ function initializePopup() {
             showToast('Error', 'error');
           }
         })();
+        return;
+      }
+
+      if (cmd.id === 'move-tab-to-window') {
+        void showWindowPicker();
         return;
       }
 
@@ -1164,6 +1267,14 @@ function initializePopup() {
       const url = selected.dataset.bookmarkUrl;
       if (url) {
         chrome.tabs.create({ url, active: !shiftKey });
+      }
+      return;
+    }
+
+    if (popupWindowPickerActive) {
+      const rows = getPopupPaletteSelectableRows();
+      if (rows.length > 0 && popupSelectedIndex >= 0 && popupSelectedIndex < rows.length) {
+        rows[popupSelectedIndex].click();
       }
       return;
     }
@@ -1710,6 +1821,13 @@ function initializePopup() {
         return;
       }
       if (e.key === 'Escape') {
+        if (popupWindowPickerActive) {
+          e.preventDefault();
+          popupWindowPickerActive = false;
+          const { query } = detectPopupMode(input.value.trim());
+          renderPopupPaletteResults(popupPaletteMode, query);
+          return;
+        }
         if (input.value.length > 0) {
           e.preventDefault();
           input.value = '';
@@ -1775,6 +1893,14 @@ function initializePopup() {
           return;
         }
         if (e.key === 'Escape') {
+          if (popupWindowPickerActive) {
+            e.preventDefault();
+            popupWindowPickerActive = false;
+            const { query } = detectPopupMode(input.value.trim());
+            renderPopupPaletteResults(popupPaletteMode, query);
+            input.focus();
+            return;
+          }
           if (input.value.length > 0) {
             e.preventDefault();
             input.value = '';
