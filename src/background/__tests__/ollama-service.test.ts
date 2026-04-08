@@ -587,7 +587,7 @@ describe('OllamaService', () => {
       expect(result.limitMB).toBe(512);
 
       // Restore
-      if (saved !== undefined) (performance as any).memory = saved;
+      if (saved !== undefined) {(performance as any).memory = saved;}
     });
 
     it('should return ok when memory usage is below limit', async () => {

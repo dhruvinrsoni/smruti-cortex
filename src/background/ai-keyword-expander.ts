@@ -34,7 +34,7 @@ async function readResponseText(response: Response, limitBytes: number = MAX_RES
     const resp = response as { text?: () => Promise<string>; json?: () => Promise<unknown> };
     if (typeof resp.text === 'function') {
       const t = await resp.text();
-      if (t) return t;
+      if (t) {return t;}
     }
     if (typeof resp.json === 'function') {
       return JSON.stringify(await resp.json());
@@ -47,7 +47,7 @@ async function readResponseText(response: Response, limitBytes: number = MAX_RES
   let result = '';
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {break;}
     total += value.byteLength;
     if (total > limitBytes) {
       reader.cancel();

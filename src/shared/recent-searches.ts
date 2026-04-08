@@ -16,7 +16,7 @@ export async function getRecentSearches(): Promise<RecentSearchEntry[]> {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
     const entries = result[STORAGE_KEY];
-    if (Array.isArray(entries)) return entries;
+    if (Array.isArray(entries)) {return entries;}
     return [];
   } catch {
     return [];
@@ -25,7 +25,7 @@ export async function getRecentSearches(): Promise<RecentSearchEntry[]> {
 
 export async function addRecentSearch(query: string, selectedUrl?: string): Promise<void> {
   const trimmed = query.trim();
-  if (!trimmed || trimmed.length < 2) return;
+  if (!trimmed || trimmed.length < 2) {return;}
 
   try {
     const entries = await getRecentSearches();

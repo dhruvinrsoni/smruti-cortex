@@ -252,7 +252,7 @@ describe('ai-keyword-expander', () => {
       const { expandQueryKeywords, getLastExpansionSource } = await importFreshModule();
       // First token cached, second needs Ollama
       cacheMocks.getCachedExpansion.mockImplementation((token: string) => {
-        if (token === 'web') return ['web', 'internet', 'online'];
+        if (token === 'web') {return ['web', 'internet', 'online'];}
         return null;
       });
       cacheMocks.getPrefixMatch.mockReturnValue(null);

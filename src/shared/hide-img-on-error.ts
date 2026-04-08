@@ -3,7 +3,7 @@
  * Extension pages enforce a strict CSP: inline onerror on injected HTML is blocked.
  */
 export function wireHideImgOnError(img: HTMLImageElement | null | undefined): void {
-  if (!img) return;
+  if (!img) {return;}
   img.addEventListener(
     'error',
     () => {

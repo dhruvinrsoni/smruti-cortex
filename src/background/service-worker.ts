@@ -914,7 +914,7 @@ setupPortBasedMessaging();
                         const MAX_BOOKMARK_DEPTH = 20;
                         while (parentId && parentId !== '0' && depth++ < MAX_BOOKMARK_DEPTH) {
                           const parents = await browserAPI.bookmarks.get(parentId);
-                          if (parents[0]?.title) parts.unshift(parents[0].title);
+                          if (parents[0]?.title) {parts.unshift(parents[0].title);}
                           parentId = parents[0]?.parentId;
                         }
                         folderPath = parts.join(' > ');
@@ -1005,9 +1005,9 @@ setupPortBasedMessaging();
                     browserAPI.tabs.getZoom(zoomTabId, resolve);
                   });
                   let newZoom = currentZoom;
-                  if (msg.direction === 'in') newZoom = Math.min(currentZoom + 0.1, 5);
-                  else if (msg.direction === 'out') newZoom = Math.max(currentZoom - 0.1, 0.25);
-                  else if (msg.direction === 'reset') newZoom = 1;
+                  if (msg.direction === 'in') {newZoom = Math.min(currentZoom + 0.1, 5);}
+                  else if (msg.direction === 'out') {newZoom = Math.max(currentZoom - 0.1, 0.25);}
+                  else if (msg.direction === 'reset') {newZoom = 1;}
                   browserAPI.tabs.setZoom(zoomTabId, newZoom);
                   sendResponse({ status: 'OK', zoom: newZoom });
                 } else {
@@ -1030,7 +1030,7 @@ setupPortBasedMessaging();
               case 'WINDOW_CREATE': {
                 const ALLOWED_SCHEMES = ['http:', 'https:', 'chrome:', 'chrome-extension:'];
                 const safeUrl = (raw: unknown): string | undefined => {
-                  if (typeof raw !== 'string' || !raw) return undefined;
+                  if (typeof raw !== 'string' || !raw) {return undefined;}
                   try {
                     const parsed = new URL(raw);
                     return ALLOWED_SCHEMES.includes(parsed.protocol) ? raw : undefined;
@@ -1065,7 +1065,7 @@ setupPortBasedMessaging();
                 if (activeTabId) {
                   const tabs = await browserAPI.tabs.query({ currentWindow: true });
                   const toRemove = tabs.filter((t: chrome.tabs.Tab) => t.id !== activeTabId && !t.pinned).map((t: chrome.tabs.Tab) => t.id!);
-                  if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                  if (toRemove.length) {await browserAPI.tabs.remove(toRemove);}
                   sendResponse({ status: 'OK', closed: toRemove.length });
                 } else {
                   sendResponse({ error: 'No active tab' });
@@ -1075,10 +1075,10 @@ setupPortBasedMessaging();
 
               case 'CLOSE_TABS_RIGHT': {
                 const senderTab = sender.tab ?? (await browserAPI.tabs.query({ active: true, currentWindow: true }))[0];
-                if (senderTab?.id != null && senderTab.index != null) {
+                if (senderTab?.id !== null && senderTab?.id !== undefined && senderTab.index !== null && senderTab.index !== undefined) {
                   const tabs = await browserAPI.tabs.query({ currentWindow: true });
                   const toRemove = tabs.filter((t: chrome.tabs.Tab) => t.index > senderTab.index && !t.pinned).map((t: chrome.tabs.Tab) => t.id!);
-                  if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                  if (toRemove.length) {await browserAPI.tabs.remove(toRemove);}
                   sendResponse({ status: 'OK', closed: toRemove.length });
                 } else {
                   sendResponse({ error: 'No tab context' });
@@ -1088,10 +1088,10 @@ setupPortBasedMessaging();
 
               case 'CLOSE_TABS_LEFT': {
                 const senderTabL = sender.tab ?? (await browserAPI.tabs.query({ active: true, currentWindow: true }))[0];
-                if (senderTabL?.id != null && senderTabL.index != null) {
+                if (senderTabL?.id !== null && senderTabL?.id !== undefined && senderTabL.index !== null && senderTabL.index !== undefined) {
                   const tabs = await browserAPI.tabs.query({ currentWindow: true });
                   const toRemove = tabs.filter((t: chrome.tabs.Tab) => t.index < senderTabL.index && !t.pinned).map((t: chrome.tabs.Tab) => t.id!);
-                  if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                  if (toRemove.length) {await browserAPI.tabs.remove(toRemove);}
                   sendResponse({ status: 'OK', closed: toRemove.length });
                 } else {
                   sendResponse({ error: 'No tab context' });
@@ -1103,7 +1103,7 @@ setupPortBasedMessaging();
                 const tabs = await browserAPI.tabs.query({ currentWindow: true });
                 await browserAPI.tabs.create({ url: 'chrome://newtab' });
                 const toRemove = tabs.map((t: chrome.tabs.Tab) => t.id!);
-                if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                if (toRemove.length) {await browserAPI.tabs.remove(toRemove);}
                 sendResponse({ status: 'OK', closed: toRemove.length });
                 break;
               }
@@ -1175,7 +1175,7 @@ setupPortBasedMessaging();
                     }
                   }
                 }
-                if (toRemove.length) await browserAPI.tabs.remove(toRemove);
+                if (toRemove.length) {await browserAPI.tabs.remove(toRemove);}
                 sendResponse({ status: 'OK', closed: toRemove.length });
                 break;
               }
@@ -1356,7 +1356,7 @@ setupPortBasedMessaging();
                   if (tab.groupId && tab.groupId !== -1) {
                     const groupTabs = await browserAPI.tabs.query({ groupId: tab.groupId });
                     const ids = groupTabs.map((t: chrome.tabs.Tab) => t.id!).filter(Boolean);
-                    if (ids.length) await browserAPI.tabs.remove(ids);
+                    if (ids.length) {await browserAPI.tabs.remove(ids);}
                     sendResponse({ status: 'OK', closed: ids.length });
                   } else {
                     sendResponse({ error: 'Tab is not in a group' });
@@ -1372,7 +1372,7 @@ setupPortBasedMessaging();
                   const allGroupedTabs = await browserAPI.tabs.query({ currentWindow: true });
                   const grouped = allGroupedTabs.filter((t: chrome.tabs.Tab) => t.groupId && t.groupId !== -1);
                   for (const t of grouped) {
-                    if (t.id) await (browserAPI as typeof chrome).tabs.ungroup(t.id);
+                    if (t.id) {await (browserAPI as typeof chrome).tabs.ungroup(t.id);}
                   }
                   sendResponse({ status: 'OK', ungrouped: grouped.length });
                 } catch (err) {
@@ -1744,8 +1744,8 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
             const tabs = await browserAPI.tabs.query({ url: ['http://*/*', 'https://*/*'] });
             let injected = 0;
             for (const tab of tabs) {
-                if (!tab.id) continue;
-                if (await reinjectContentScript(tab.id)) injected++;
+                if (!tab.id) {continue;}
+                if (await reinjectContentScript(tab.id)) {injected++;}
             }
             logger.info('onInstalled', `🔄 Re-injected quick-search into ${injected}/${tabs.length} open tabs`);
         } catch (e) {
@@ -1827,7 +1827,7 @@ browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) => {
             if (!isNaN(tabId)) {
                 const tab = await browserAPI.tabs.get(tabId);
                 await browserAPI.tabs.update(tabId, { active: true });
-                if (tab.windowId) await browserAPI.windows.update(tab.windowId, { focused: true });
+                if (tab.windowId) {await browserAPI.windows.update(tab.windowId, { focused: true });}
             }
             return;
         }
@@ -1849,7 +1849,7 @@ browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) => {
 
         if (disposition === 'currentTab') {
             const [activeTab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
-            if (activeTab?.id) await browserAPI.tabs.update(activeTab.id, { url });
+            if (activeTab?.id) {await browserAPI.tabs.update(activeTab.id, { url });}
         } else {
             await browserAPI.tabs.create({ url, active: disposition !== 'newBackgroundTab' });
         }

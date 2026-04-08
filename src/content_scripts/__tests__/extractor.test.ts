@@ -59,7 +59,7 @@ describe('extractor IIFE — sensitive URL early return', () => {
     vi.stubGlobal('location', { href: 'https://example.com/login' });
     await import('../extractor');
     // Should NOT send METADATA_CAPTURE because isSensitiveUrl returns true at line 37
-    await vi.dynamicImportSettled?.() ?? new Promise(r => setTimeout(r, 50));
+    await (vi.dynamicImportSettled?.() ?? new Promise(r => setTimeout(r, 50)));
     const metadataCalls = mockSendMsg.mock.calls.filter(
       (c: unknown[]) => (c[0] as { type: string }).type === 'METADATA_CAPTURE'
     );

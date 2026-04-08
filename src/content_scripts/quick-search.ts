@@ -1115,7 +1115,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function applyQSTheme(theme?: string): void {
-    if (!shadowHost) return;
+    if (!shadowHost) {return;}
     if (theme === 'light' || theme === 'dark') {
       shadowHost.dataset.theme = theme;
     } else {
@@ -1869,7 +1869,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function updateModeBadge(mode: PaletteMode): void {
-    if (!modeBadgeEl || !inputEl) return;
+    if (!modeBadgeEl || !inputEl) {return;}
 
     const labels: Record<PaletteMode, string> = {
       history: '',
@@ -1994,7 +1994,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COMMAND PALETTE: HELP SCREEN =====
 
   function renderHelpScreen(): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     selectedIndex = -1;
     resultsEl.innerHTML = '';
@@ -2014,7 +2014,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const enabled = enabledModes.includes(m.prefix);
       const li = document.createElement('li');
       li.className = 'command-row';
-      if (!enabled) li.style.opacity = '0.4';
+      if (!enabled) {li.style.opacity = '0.4';}
       li.innerHTML = `
         <span class="cmd-icon" style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;color:var(--accent-color);width:28px;text-align:center;">${m.prefix}</span>
         <span class="cmd-label">${m.label}${!enabled ? ' <span class="cmd-current">[disabled]</span>' : ''}</span>
@@ -2085,7 +2085,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COMMAND PALETTE: RENDER COMMANDS =====
 
   function renderCommandResults(query: string, tier: 'everyday' | 'power'): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     const commands = cachedSettings
       ? getAvailableCommands(tier, cachedSettings)
@@ -2134,7 +2134,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const li = document.createElement('li');
       li.className = 'command-row';
       li.dataset.commandId = cmd.id;
-      if (idx === 0) li.classList.add('selected');
+      if (idx === 0) {li.classList.add('selected');}
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
 
@@ -2166,7 +2166,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function getCurrentLabel(cmd: PaletteCommand): string | null {
-    if (!cachedSettings) return null;
+    if (!cachedSettings) {return null;}
     if (cmd.action === 'toggle-boolean' && cmd.settingKey) {
       return cachedSettings[cmd.settingKey] ? 'ON' : 'OFF';
     }
@@ -2187,16 +2187,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function updateResultCount(text: string): void {
-    if (!resultsEl?.parentElement) return;
+    if (!resultsEl?.parentElement) {return;}
     const countEl = resultsEl.parentElement.querySelector('.result-count');
-    if (countEl) countEl.textContent = text;
+    if (countEl) {countEl.textContent = text;}
   }
 
   // ===== COMMAND PALETTE: EXECUTION =====
 
   function executeSelectedCommand(commands: PaletteCommand[]): void {
     const cmd = commands[selectedIndex];
-    if (!cmd) return;
+    if (!cmd) {return;}
 
     if (cmd.dangerous && !confirmingCommand) {
       showConfirmation(cmd, commands);
@@ -2208,7 +2208,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function showConfirmation(cmd: PaletteCommand, commands: PaletteCommand[]): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
     confirmingCommand = cmd;
 
     resultsEl.innerHTML = `
@@ -2248,7 +2248,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
     if (key === 'selectAllOnFocus') {
       updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-      try { if (shadowHost) shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); } catch { /* ignore */ }
+      try { if (shadowHost) {shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus));} } catch { /* ignore */ }
     }
     if (key === 'displayMode' || key === 'highlightMatches') {
       if (currentResults.length > 0 && currentMode === 'history') {
@@ -2357,13 +2357,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
 
           const payload: Record<string, unknown> = { type: cmd.messageType };
-          if (cmd.id === 'zoom-in') payload.direction = 'in';
-          else if (cmd.id === 'zoom-out') payload.direction = 'out';
-          else if (cmd.id === 'zoom-reset') payload.direction = 'reset';
-          else if (cmd.id === 'new-tab') payload.windowType = 'tab';
-          else if (cmd.id === 'new-window') payload.windowType = 'window';
-          else if (cmd.id === 'new-incognito') payload.windowType = 'incognito';
-          else if (cmd.id.startsWith('color-group-')) payload.color = cmd.id.replace('color-group-', '');
+          if (cmd.id === 'zoom-in') {payload.direction = 'in';}
+          else if (cmd.id === 'zoom-out') {payload.direction = 'out';}
+          else if (cmd.id === 'zoom-reset') {payload.direction = 'reset';}
+          else if (cmd.id === 'new-tab') {payload.windowType = 'tab';}
+          else if (cmd.id === 'new-window') {payload.windowType = 'window';}
+          else if (cmd.id === 'new-incognito') {payload.windowType = 'incognito';}
+          else if (cmd.id.startsWith('color-group-')) {payload.color = cmd.id.replace('color-group-', '');}
 
           const diagnostic = isPaletteDiagnosticMessageType(cmd.messageType);
           const toastMs = diagnostic ? PALETTE_DIAGNOSTIC_TOAST_MS : 5000;
@@ -2389,7 +2389,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
                 showToast(formatted, 'info', toastMs);
               } else if (ok) {
                 showToast(`${cmd.icon} ${cmd.label} — done`, 'success', toastMs);
-                if (cmd.id === 'close-tab') hideOverlay();
+                if (cmd.id === 'close-tab') {hideOverlay();}
               } else if (r?.data !== undefined) {
                 const slice =
                   typeof r.data === 'string'
@@ -2525,7 +2525,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function triggerFileImport(): void {
-    if (!shadowRoot) return;
+    if (!shadowRoot) {return;}
     let fileInput = shadowRoot.querySelector('#palette-file-import') as HTMLInputElement;
     if (!fileInput) {
       fileInput = document.createElement('input');
@@ -2537,7 +2537,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       fileInput.addEventListener('change', () => {
         const file = fileInput.files?.[0];
-        if (!file) return;
+        if (!file) {return;}
         const reader = new FileReader();
         reader.onload = () => {
           try {
@@ -2568,7 +2568,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COMMAND PALETTE: TAB SWITCHER =====
 
   function handleTabMode(query: string): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     if (!cachedTabs) {
       resultsEl.innerHTML = '<li class="empty-state">Loading tabs...</li>';
@@ -2591,7 +2591,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function renderTabResults(query: string): void {
-    if (!resultsEl || !cachedTabs) return;
+    if (!resultsEl || !cachedTabs) {return;}
 
     let tabs = cachedTabs;
     if (query) {
@@ -2637,7 +2637,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const li = document.createElement('li');
         li.className = 'tab-row';
         li.dataset.tabId = String(tab.id);
-        if (globalIdx === 0) li.classList.add('selected');
+        if (globalIdx === 0) {li.classList.add('selected');}
         li.setAttribute('role', 'option');
         li.setAttribute('aria-selected', globalIdx === 0 ? 'true' : 'false');
 
@@ -2664,7 +2664,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const tabUrl = tab.url || '';
         li.dataset.tabId = String(tabId);
         li.dataset.windowId = String(windowId);
-        if (tabUrl) li.dataset.tabUrl = tabUrl;
+        if (tabUrl) {li.dataset.tabUrl = tabUrl;}
         li.addEventListener('click', (ev) => {
           const sk = (ev as MouseEvent).shiftKey;
           if (sk && tabUrl) {
@@ -2684,7 +2684,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Recently closed section
     try {
       chrome.runtime.sendMessage({ type: 'GET_RECENTLY_CLOSED' }, (resp) => {
-        if (chrome.runtime.lastError || !resp?.sessions?.length) return;
+        if (chrome.runtime.lastError || !resp?.sessions?.length) {return;}
         appendRecentlyClosedTabs(resp.sessions, query);
       });
     } catch { /* ignore */ }
@@ -2694,7 +2694,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     sessions: Array<{ tab?: chrome.tabs.Tab; lastModified: number; sessionId?: string }>,
     query: string
   ): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     const closedTabs = sessions
       .filter(s => s.tab)
@@ -2713,7 +2713,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       );
     }
 
-    if (filtered.length === 0) return;
+    if (filtered.length === 0) {return;}
 
     const sep = document.createElement('li');
     sep.className = 'tab-window-sep recently-closed-sep';
@@ -2740,8 +2740,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       const sessionId = tab.sessionId;
       const closedUrl = tab.url || '';
-      if (sessionId) li.dataset.sessionId = sessionId;
-      if (closedUrl) li.dataset.closedUrl = closedUrl;
+      if (sessionId) {li.dataset.sessionId = sessionId;}
+      if (closedUrl) {li.dataset.closedUrl = closedUrl;}
       li.addEventListener('click', (ev) => {
         const sk = (ev as MouseEvent).shiftKey;
         if (sessionId && !sk) {
@@ -2772,11 +2772,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function formatTimeAgo(timestamp: number): string {
     const seconds = Math.floor(Date.now() / 1000 - timestamp);
-    if (seconds < 60) return 'just now';
+    if (seconds < 60) {return 'just now';}
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} min ago`;
+    if (minutes < 60) {return `${minutes} min ago`;}
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) {return `${hours}h ago`;}
     return `${Math.floor(hours / 24)}d ago`;
   }
 
@@ -2795,7 +2795,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COMMAND PALETTE: BOOKMARK SEARCH =====
 
   function handleBookmarkMode(query: string): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     if (!query && !cachedBookmarks) {
       resultsEl.innerHTML = '<li class="empty-state">Loading bookmarks...</li>';
@@ -2835,7 +2835,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function renderBookmarkResults(query: string): void {
-    if (!resultsEl || !cachedBookmarks) return;
+    if (!resultsEl || !cachedBookmarks) {return;}
 
     selectedIndex = 0;
     resultsEl.innerHTML = '';
@@ -2869,7 +2869,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     bookmarks.forEach((bm, idx) => {
       const li = document.createElement('li');
       li.className = 'bookmark-row';
-      if (idx === 0) li.classList.add('selected');
+      if (idx === 0) {li.classList.add('selected');}
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
 
@@ -2900,11 +2900,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COMMAND PALETTE: WEB SEARCH =====
 
   function showFirstUseHint(): void {
-    if (!resultsEl || !cachedSettings) return;
-    if (!cachedSettings.commandPaletteEnabled) return;
-    if (cachedSettings.commandPaletteOnboarded) return;
+    if (!resultsEl || !cachedSettings) {return;}
+    if (!cachedSettings.commandPaletteEnabled) {return;}
+    if (cachedSettings.commandPaletteOnboarded) {return;}
 
-    if (firstUseHintEl) return;
+    if (firstUseHintEl) {return;}
 
     firstUseHintEl = document.createElement('div');
     firstUseHintEl.className = 'first-use-hint';
@@ -2935,7 +2935,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function handlePaletteEnter(shiftKey = false): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     if (currentMode === 'websearch') {
       const raw = inputEl?.value ?? '';
@@ -2960,7 +2960,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     if (currentMode === 'tabs') {
       const selected = resultsEl.querySelector('.tab-row.selected') as HTMLElement | null;
-      if (!selected) return;
+      if (!selected) {return;}
       if (selected.classList.contains('recently-closed-row')) {
         const sessionId = selected.dataset.sessionId;
         const closedUrl = selected.dataset.closedUrl || '';
@@ -3019,12 +3019,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function handlePaletteArrow(direction: 'up' | 'down'): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     const rowSelector = currentMode === 'tabs' ? '.tab-row' :
       currentMode === 'bookmarks' ? '.bookmark-row' : '.command-row';
     const rows = resultsEl.querySelectorAll(rowSelector);
-    if (rows.length === 0) return;
+    if (rows.length === 0) {return;}
 
     rows[selectedIndex]?.classList.remove('selected');
     rows[selectedIndex]?.setAttribute('aria-selected', 'false');
@@ -3041,7 +3041,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function renderWebSearchPreview(query: string): void {
-    if (!resultsEl) return;
+    if (!resultsEl) {return;}
 
     selectedIndex = 0;
     resultsEl.innerHTML = '';
@@ -3234,7 +3234,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
       });
       item.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') item.click();
+        if (ev.key === 'Enter') {item.click();}
       });
       container.appendChild(item);
     }
@@ -3284,7 +3284,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         window.open(entry.url, '_blank');
       });
       item.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') item.click();
+        if (ev.key === 'Enter') {item.click();}
       });
       container.appendChild(item);
     }
@@ -3293,12 +3293,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // --- Toggle Chip Bar for Quick-Search ---
   function renderQSToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     toggleBarEl.innerHTML = '';
     const visibleKeys = cachedSettings?.toolbarToggles ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
     for (const key of visibleKeys) {
       const def = getToggleDef(key);
-      if (!def) continue;
+      if (!def) {continue;}
 
       const chip = document.createElement('button');
       chip.className = 'toggle-chip';
@@ -3339,13 +3339,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function syncQSToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
     chips.forEach(chip => {
       const key = chip.dataset.toggleKey;
-      if (!key) return;
+      if (!key) {return;}
       const def = getToggleDef(key);
-      if (!def) return;
+      if (!def) {return;}
 
       const val = (cachedSettings as any)?.[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -4090,9 +4090,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function getActiveItemSelector(): string {
-    if (currentMode === 'tabs') return '.tab-row';
-    if (currentMode === 'bookmarks') return '.bookmark-row';
-    if (currentMode === 'commands' || currentMode === 'power' || currentMode === 'websearch') return '.command-row';
+    if (currentMode === 'tabs') {return '.tab-row';}
+    if (currentMode === 'bookmarks') {return '.bookmark-row';}
+    if (currentMode === 'commands' || currentMode === 'power' || currentMode === 'websearch') {return '.command-row';}
     const isCards = resultsEl?.classList.contains('cards');
     return isCards ? '.result-card' : '.result';
   }
@@ -4146,24 +4146,24 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const key = e.key;
     const mod = e.ctrlKey || e.metaKey;
 
-    if (key === 'Escape' || key === 'Tab') return true;
+    if (key === 'Escape' || key === 'Tab') {return true;}
 
     // F-keys → browser (F5 reload, F12 devtools, etc.)
-    if (/^F\d{1,2}$/.test(key)) return false;
+    if (/^F\d{1,2}$/.test(key)) {return false;}
 
     // Alt combos → browser (Alt+Left/Right = back/forward, etc.)
-    if (e.altKey) return false;
+    if (e.altKey) {return false;}
 
     if (mod) {
       const lk = key.toLowerCase();
       // Ctrl+Shift+S = toggle overlay
-      if (e.shiftKey && lk === 's') return true;
+      if (e.shiftKey && lk === 's') {return true;}
       // Ctrl+Shift+Z = redo
-      if (e.shiftKey && lk === 'z') return true;
+      if (e.shiftKey && lk === 'z') {return true;}
       // Our text-editing Ctrl shortcuts
-      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) return true;
+      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) {return true;}
       // Ctrl+Backspace/Delete (word delete), Ctrl+Arrow (word jump), Ctrl+Home/End
-      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return true;
+      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) {return true;}
       // Any other Ctrl/Cmd combo (Ctrl+R, Ctrl+K, Ctrl+L, Ctrl+T, Ctrl+W,
       // Ctrl+N, Ctrl+E, Ctrl+H, Ctrl+J, Ctrl+D, Ctrl+P, Ctrl+F, Ctrl+G,
       // Ctrl+Shift+K, Ctrl+Shift+T, Ctrl+Tab, etc.) → pass to browser
@@ -4172,10 +4172,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Non-modifier navigation & editing keys
     if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-         'Backspace', 'Delete', 'Home', 'End'].includes(key)) return true;
+         'Backspace', 'Delete', 'Home', 'End'].includes(key)) {return true;}
 
     // Printable character (single char, no Ctrl/Alt/Meta)
-    if (key.length === 1) return true;
+    if (key.length === 1) {return true;}
 
     // Modifier-only presses (Shift, Control, CapsLock, etc.) — ignore
     return false;

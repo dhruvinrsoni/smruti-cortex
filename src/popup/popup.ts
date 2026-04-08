@@ -120,7 +120,7 @@ function showToast(message: string, type: ToastType = 'success', durationMs = 50
 
   function startDismiss() {
     dismissTimer = setTimeout(() => {
-      if (hovered) return;
+      if (hovered) {return;}
       toast.style.opacity = '0';
       toast.style.transform = 'translateX(-50%) translateY(-8px)';
       setTimeout(() => toast.remove(), 250);
@@ -366,12 +366,12 @@ function initializePopup() {
   const toggleBarEl = $local('toggle-bar') as HTMLDivElement | null;
 
   function renderToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     toggleBarEl.innerHTML = '';
     const visibleKeys = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
     for (const key of visibleKeys) {
       const def = getToggleDef(key);
-      if (!def) continue;
+      if (!def) {continue;}
 
       const chip = document.createElement('button');
       chip.className = 'toggle-chip';
@@ -403,13 +403,13 @@ function initializePopup() {
   }
 
   function syncToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
     chips.forEach(chip => {
       const key = chip.dataset.toggleKey as keyof AppSettings;
-      if (!key) return;
+      if (!key) {return;}
       const def = getToggleDef(key);
-      if (!def) return;
+      if (!def) {return;}
 
       const val = SettingsManager.getSetting(key);
 
@@ -514,14 +514,14 @@ function initializePopup() {
 
   function getPopupPaletteSelectableRows(): HTMLElement[] {
     const list = $local('results') as HTMLUListElement | null;
-    if (!list) return [];
+    if (!list) {return [];}
     return Array.from(list.querySelectorAll('.palette-selectable-row')) as HTMLElement[];
   }
 
   function applyPopupPaletteRowHighlight(): void {
     const rows = getPopupPaletteSelectableRows();
     const n = rows.length;
-    if (n === 0) return;
+    if (n === 0) {return;}
     if (popupSelectedIndex < 0 || popupSelectedIndex >= n) {
       popupSelectedIndex = 0;
     }
@@ -533,7 +533,7 @@ function initializePopup() {
 
   function handlePopupPaletteArrow(direction: 'up' | 'down'): void {
     const rows = getPopupPaletteSelectableRows();
-    if (rows.length === 0) return;
+    if (rows.length === 0) {return;}
     if (direction === 'down') {
       popupSelectedIndex = (popupSelectedIndex + 1) % rows.length;
     } else {
@@ -555,20 +555,20 @@ function initializePopup() {
     const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
     const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
 
-    if (!cpEnabled || !cpInPopup || !value) return { mode: 'history', query: value };
-    if (value === '?') return { mode: 'help', query: '' };
-    if (value.startsWith('??') && cpModes.includes('??')) return { mode: 'websearch', query: value.slice(2).trim() };
+    if (!cpEnabled || !cpInPopup || !value) {return { mode: 'history', query: value };}
+    if (value === '?') {return { mode: 'help', query: '' };}
+    if (value.startsWith('??') && cpModes.includes('??')) {return { mode: 'websearch', query: value.slice(2).trim() };}
 
     const prefixMap: Record<string, PopupPaletteMode> = { '/': 'commands', '>': 'power', '@': 'tabs', '#': 'bookmarks' };
     const first = value[0];
-    if (prefixMap[first] && cpModes.includes(first)) return { mode: prefixMap[first], query: value.slice(1).trim() };
+    if (prefixMap[first] && cpModes.includes(first)) {return { mode: prefixMap[first], query: value.slice(1).trim() };}
 
     return { mode: 'history', query: value };
   }
 
   function renderPopupHelpScreen(): void {
     const resultsList = $('results') as HTMLUListElement;
-    if (!resultsList) return;
+    if (!resultsList) {return;}
 
     popupSelectedIndex = -1;
     resultsList.innerHTML = '';
@@ -633,7 +633,7 @@ function initializePopup() {
 
   function renderPopupPaletteResults(mode: PopupPaletteMode, query: string): void {
     const resultsList = $('results') as HTMLUListElement;
-    if (!resultsList) return;
+    if (!resultsList) {return;}
 
     popupSelectedIndex = 0;
     resultsList.innerHTML = '';
@@ -925,7 +925,7 @@ function initializePopup() {
 
   function getPopupCurrentLabel(cmd: PaletteCommand): string | null {
     const settings = SettingsManager.getSettings();
-    if (cmd.action === 'toggle-boolean' && cmd.settingKey) return settings[cmd.settingKey] ? 'ON' : 'OFF';
+    if (cmd.action === 'toggle-boolean' && cmd.settingKey) {return settings[cmd.settingKey] ? 'ON' : 'OFF';}
     if (cmd.action === 'sub-command' && cmd.cycleValues && cmd.settingKey) {
       const current = String(settings[cmd.settingKey]);
       const match = cmd.cycleValues.find(cv => cv.value === current);
@@ -1118,7 +1118,7 @@ function initializePopup() {
 
   function handlePopupPaletteEnter(shiftKey = false): void {
     const resultsList = $('results') as HTMLUListElement;
-    if (!resultsList) return;
+    if (!resultsList) {return;}
     const input = $('search-input') as HTMLInputElement;
 
     if (popupPaletteMode === 'websearch') {
@@ -1142,7 +1142,7 @@ function initializePopup() {
 
     if (popupPaletteMode === 'tabs') {
       const items = resultsList.querySelectorAll('.palette-selectable-row');
-      if (items.length === 0) return;
+      if (items.length === 0) {return;}
       const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
       const tabId = selected.dataset.tabId;
       const windowId = selected.dataset.windowId;
@@ -1159,7 +1159,7 @@ function initializePopup() {
 
     if (popupPaletteMode === 'bookmarks') {
       const items = resultsList.querySelectorAll('.palette-selectable-row');
-      if (items.length === 0) return;
+      if (items.length === 0) {return;}
       const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
       const url = selected.dataset.bookmarkUrl;
       if (url) {
@@ -1200,7 +1200,7 @@ function initializePopup() {
     if (mode !== 'history') {
       resultsLocal = [];
       activeIndex = -1;
-      if (popupSpinner) popupSpinner.classList.remove('active');
+      if (popupSpinner) {popupSpinner.classList.remove('active');}
       renderPopupPaletteResults(mode, query);
       return;
     }
@@ -1300,7 +1300,7 @@ function initializePopup() {
         openUrl(entry.url, true, false);
       });
       item.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') item.click();
+        if (e.key === 'Enter') {item.click();}
       });
       container.appendChild(item);
     }
@@ -1760,7 +1760,7 @@ function initializePopup() {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           const rows = getPopupPaletteSelectableRows();
-          if (rows.length === 0) return;
+          if (rows.length === 0) {return;}
           if (popupSelectedIndex <= 0) {
             input.focus();
             return;
@@ -2103,7 +2103,7 @@ function initializePopup() {
     // Command Palette settings
     const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
     const cpEnabledInput = modal.querySelector('#modal-commandPaletteEnabled') as HTMLInputElement;
-    if (cpEnabledInput) cpEnabledInput.checked = cpEnabled;
+    if (cpEnabledInput) {cpEnabledInput.checked = cpEnabled;}
 
     const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
     const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
@@ -3321,7 +3321,7 @@ function initializePopup() {
     function updatePaletteDisabledState() {
       const enabled = cpMasterInput?.checked ?? true;
       cpModeCheckboxes.forEach(cb => { cb.disabled = !enabled; });
-      if (cpInPopupInput2) cpInPopupInput2.disabled = !enabled;
+      if (cpInPopupInput2) {cpInPopupInput2.disabled = !enabled;}
     }
 
     if (cpMasterInput) {
@@ -3335,7 +3335,7 @@ function initializePopup() {
     cpModeCheckboxes.forEach(cb => {
       cb.addEventListener('change', () => {
         const selected: string[] = [];
-        cpModeCheckboxes.forEach(c => { if (c.checked) selected.push(c.value); });
+        cpModeCheckboxes.forEach(c => { if (c.checked) {selected.push(c.value);} });
         SettingsManager.setSetting('commandPaletteModes', selected).catch(() => {});
         showToast(`Active modes: ${selected.join(' ') || 'none'}`, 'info');
       });
@@ -3398,7 +3398,7 @@ function initializePopup() {
         checkbox.addEventListener('change', () => {
           const allChecked: string[] = [];
           toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
-            if (cb.checked) allChecked.push(cb.dataset.toolbarKey!);
+            if (cb.checked) {allChecked.push(cb.dataset.toolbarKey!);}
           });
           SettingsManager.setSetting('toolbarToggles', allChecked).catch(() => {});
           renderToggleBar();
@@ -3566,7 +3566,7 @@ function initializePopup() {
       importBtn.addEventListener('click', () => importFileInput.click());
       importFileInput.addEventListener('change', async () => {
         const file = importFileInput.files?.[0];
-        if (!file) return;
+        if (!file) {return;}
         importFileInput.value = '';
         try {
           const text = await file.text();
@@ -3913,7 +3913,7 @@ function initializePopup() {
   }
 
   function applyRemoteSettingsChanges(settings: Record<string, unknown> | undefined): void {
-    if (!settings) return;
+    if (!settings) {return;}
     SettingsManager.applyRemoteSettings(settings).catch(() => {});
     const keys = Object.keys(settings);
 

@@ -35,7 +35,7 @@ async function readResponseWithLimit(response: Response, limitBytes: number = MA
   let result = '';
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {break;}
     total += value.byteLength;
     if (total > limitBytes) {
       reader.cancel();

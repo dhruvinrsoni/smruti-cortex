@@ -113,7 +113,7 @@ export function runTour(
     `);
 
     const getTarget = (selector: string): Element | null => {
-      if (resolveTarget) return resolveTarget(selector);
+      if (resolveTarget) {return resolveTarget(selector);}
       return root.querySelector(selector);
     };
 

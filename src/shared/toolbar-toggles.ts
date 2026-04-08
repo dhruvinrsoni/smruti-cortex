@@ -133,13 +133,13 @@ export function getToggleDef(key: string): ToolbarToggleDef | undefined {
 
 /** For a cycle toggle, get the icon and label for the current value */
 export function getCycleState(def: ToolbarToggleDef, currentValue: unknown): CycleValue | undefined {
-    if (def.type !== 'cycle' || !def.cycleValues) return undefined;
+    if (def.type !== 'cycle' || !def.cycleValues) {return undefined;}
     return def.cycleValues.find(cv => cv.value === currentValue) ?? def.cycleValues[0];
 }
 
 /** For a cycle toggle, get the next value after the current one */
 export function getNextCycleValue(def: ToolbarToggleDef, currentValue: unknown): string {
-    if (!def.cycleValues || def.cycleValues.length === 0) return String(currentValue);
+    if (!def.cycleValues || def.cycleValues.length === 0) {return String(currentValue);}
     const idx = def.cycleValues.findIndex(cv => cv.value === currentValue);
     const nextIdx = (idx + 1) % def.cycleValues.length;
     return def.cycleValues[nextIdx].value;

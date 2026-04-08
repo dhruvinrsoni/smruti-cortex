@@ -546,7 +546,7 @@ describe('search-engine', () => {
         }),
       );
 
-      let capturedInfoMessages: string[] = [];
+      const capturedInfoMessages: string[] = [];
 
       vi.resetModules();
       vi.doMock('../../../core/logger', () => ({
