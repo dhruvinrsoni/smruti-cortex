@@ -18,7 +18,7 @@ Complete checklist and content for publishing SmrutiCortex to Chrome and Edge ex
 
 - [ ] Build production zip: `npm run package` → `release/smruti-cortex-vX.Y.Z.zip`
 - [ ] Test in clean Chrome profile
-- [ ] Verify all features work (AI search, semantic, keyword telemetry badges)
+- [ ] Verify all features work (AI search, semantic, keyword telemetry badges, command palette, advanced browser commands)
 - [ ] Check privacy compliance
 - [ ] Prepare store assets (screenshots from `docs/screenshots/`)
 - [ ] Review store listing content below
@@ -65,6 +65,9 @@ Chrome's built-in history (Ctrl+H) reloads a whole page, only searches by title/
 💾 **Data Management** — Storage quota monitoring, one-click rebuild
 ⌨️ **Keyboard-First** — Ctrl+Shift+S instant access, full arrow key navigation
 🎨 **Clean UI** — Minimal, distraction-free interface
+🎛️ **Command Palette** — Prefix-based modes: / commands, > power, @ tabs, # bookmarks, ?? web search
+🔧 **Advanced Browser Commands** — ~45 opt-in tab, window, tab group, and browsing data commands
+🌐 **Web Search** — Search Google, YouTube, GitHub, GCP, Jira, Confluence from the overlay
 🤖 **AI Search** — Local keyword expansion via Ollama. 100% private, zero cloud
 🔄 **Dual-Phase Search** — Keyword results appear instantly; AI expansion runs in parallel
 🏷️ **Search Telemetry** — Every result shows how it was found: Keyword Match, AI Recalled, or AI Expanded
@@ -253,6 +256,8 @@ Chrome requires explaining why each permission is needed:
 | `alarms` | **Required** to keep service worker alive and schedule background indexing updates |
 | `scripting` | **Required** for zero-downtime extension updates. After Chrome/Edge auto-updates the extension, manifest-declared content scripts in already-open tabs become stale — the keyboard shortcut stops working until the user manually reloads every tab. The `scripting` permission lets us re-inject our own content script (`content_scripts/quick-search.js`) into those tabs so the shortcut keeps working instantly. We ONLY inject our own bundled file, NEVER run arbitrary code, and NEVER read or collect any page content. |
 | `activeTab` | **Required** as a companion to `scripting`. Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut (Ctrl+Shift+S). This allows `chrome.scripting.executeScript` to inject into the active tab without requiring broad host permissions. No background access — strictly user-initiated. |
+| `sessions` | **Required** for the command palette `@` tabs mode. Retrieves recently closed tabs so users can find and reopen them. Read-only — no session data is modified or stored. |
+| `windows` | **Required** for the command palette `@` tabs mode and advanced browser commands. Queries window state to list tabs across all windows, merge windows, and move tabs between windows. Read-only queries except when user explicitly triggers a command. |
 | `<all_urls>` (optional) | **Optional permission** - Users can optionally grant this to enable metadata extraction (page titles, keywords) for improved search relevance. This feature is OFF by default and must be enabled in Settings. The extension works fully without this permission. |
 
 ### Optional API permissions — Advanced Browser Commands (reviewer note)
@@ -284,6 +289,8 @@ Core Functionality:
 All features serve this single purpose:
 • Bookmark search — extends search to bookmarks (same search interface)
 • Inline overlay — alternative UI for the same search functionality
+• Command palette — prefix-based modes (/, >, @, #, ??) for quick access to tabs, bookmarks, settings, and web search without leaving the search UI
+• Advanced browser commands — opt-in tab/window management shortcuts (~45 commands) behind optional permissions
 • Content script re-injection (scripting) — after extension auto-updates, re-injects our own quick-search overlay into open tabs so the search shortcut keeps working without manual page reloads. Only injects our own bundled file, never arbitrary code.
 • Metadata extraction (optional) — improves search relevance locally
 • AI search (optional) — enhances queries with synonym expansion via local Ollama

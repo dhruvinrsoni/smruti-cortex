@@ -67,6 +67,9 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | 🔄 **Dual-Phase Search** | Keyword results in ~150ms, AI synonym expansion runs in parallel — never blocks |
 | 🏷️ **Search Telemetry** | Live status badges: `Keyword Match [LEXICAL]`, `AI Recalled [ENGRAM]`, `AI Expanded [NEURAL]` |
 | 🧠 **Semantic Search** | Find by meaning with AI embeddings — local only |
+| 🎛️ **Command Palette** | Prefix-based modes: `/` commands, `>` power, `@` tabs, `#` bookmarks, `??` web search, `?` help |
+| 🌐 **Web Search (`??`)** | Search Google, YouTube, GitHub, GCP, Jira, Confluence from the overlay |
+| 🔧 **Advanced Browser Commands** | ~45 opt-in tab/window/group/data commands (requires optional permissions) |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
 | 📊 **Performance Monitor** | Real-time search timing and cache stats |
 | 🔧 **Diagnostics Export** | Export system info for bug reports |
@@ -116,6 +119,19 @@ npm run build
 
 **Quick Access:**
 - Type `sc ` in address bar + query
+
+**Command Palette** (in quick-search overlay, optionally in popup):
+
+| Prefix | Mode | What It Does |
+|--------|------|-------------|
+| `/` | Commands | Everyday actions: toggle settings, page actions, navigation |
+| `>` | Power | Admin: rebuild index, clear data, diagnostics, factory reset |
+| `@` | Tabs | Switch between open tabs and recently closed |
+| `#` | Bookmarks | Search and open bookmarks with folder paths |
+| `??` | Web Search | Google, YouTube, GitHub, GCP, Jira (`?? j`), Confluence (`?? c`) |
+| `?` | Help | Shows all available prefix modes |
+
+Enable/disable modes in Settings → Command Palette. Advanced Browser Commands (~45 tab/window/group commands) available via Settings → General after accepting optional permissions.
 
 **Search Quality Controls (Vivek Search):**
 - **Graduated Match Classification**: Exact keyword > prefix > substring matching (not binary)
@@ -184,10 +200,10 @@ docker-compose run --rm build
 ```
 src/
 ├── background/      # Service worker, indexing, search engine
-├── content_scripts/ # Page metadata extraction
+├── content_scripts/ # Page metadata extraction, quick-search overlay
 ├── popup/           # Search UI
-├── core/            # Shared utilities
-└── shared/          # UI abstractions
+├── core/            # Settings, logger, constants
+└── shared/          # Command registry, web search, UI abstractions
 ```
 
 ### 🤖 AI Search (Optional)

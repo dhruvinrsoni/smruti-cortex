@@ -25,6 +25,10 @@ Navigate here first — don't broad-search when the location is known:
 | Settings schema | `src/core/settings.ts` (single source of truth) |
 | IndexedDB layer | `src/background/database.ts` |
 | Ollama client | `src/background/ollama-service.ts` |
+| Command palette registry | `src/shared/command-registry.ts` (all palette commands, tiers, modes) |
+| Web search module | `src/shared/web-search.ts` (`??` prefix engines, URL builders) |
+| Palette toast formatting | `src/shared/palette-messages.ts` |
+| CSP-safe img error handler | `src/shared/hide-img-on-error.ts` |
 | All test files | `src/**/__tests__/*.test.ts` |
 | Vitest config | `vitest.config.ts` |
 | Build scripts | `scripts/esbuild-*.mjs` |
@@ -36,7 +40,7 @@ Navigate here first — don't broad-search when the location is known:
 
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm test` | Run full test suite (1,073+ tests, 34 files) | ~28s |
+| `npm test` | Run full test suite (1,098+ tests, 43 files) | ~65s |
 | `npx vitest run --coverage --pool=forks` | Tests + v8 coverage report | ~30s |
 | `npm run lint` | ESLint check | ~5s |
 | `npm run build:prod` | Production build (minified) | ~30s |
@@ -58,6 +62,7 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | `search-engine` | Changing scorers, tokenizer, or ranking logic |
 | `ai-ollama` | Working on AI expansion, embeddings, circuit breaker |
 | `ui-components` | Touching popup, quick-search overlay, Shadow DOM |
+| `command-palette` | Adding/changing palette commands, prefix modes, web search engines |
 | `testing` | Writing or fixing tests |
 | `settings` | Changing any setting key, default, or validation |
 | `workflows-ci` | Modifying GitHub Actions or Docker |
@@ -92,7 +97,7 @@ Prefer in this order:
 - **Tests run fast:** `npm test` finishes in ~28s. Always run after code changes before committing.
 - **Build is slow:** `npm run build:prod` takes ~30s + pre-commit hook adds another run on commit. Verify logic via `npm test` first.
 - **Chrome APIs require mocking:** jsdom has no `chrome.*`. Every test that touches Chrome APIs must mock them. See `.github/skills/testing/SKILL.md` patterns.
-- **90%+ line coverage:** 1,073+ tests across 34 test files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
+- **90%+ line coverage:** 1,098+ tests across 43 test files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
 
 ### Parallelization
 
