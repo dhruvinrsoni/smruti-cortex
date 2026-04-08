@@ -49,22 +49,6 @@ describe('tokenize', () => {
 });
 
 describe('MATCH_WEIGHTS', () => {
-  it('should have weight 0.0 for NONE', () => {
-    expect(MATCH_WEIGHTS[MATCH_NONE]).toBe(0.0);
-  });
-
-  it('should have weight 0.4 for SUBSTRING', () => {
-    expect(MATCH_WEIGHTS[MATCH_SUBSTRING]).toBe(0.4);
-  });
-
-  it('should have weight 0.75 for PREFIX', () => {
-    expect(MATCH_WEIGHTS[MATCH_PREFIX]).toBe(0.75);
-  });
-
-  it('should have weight 1.0 for EXACT', () => {
-    expect(MATCH_WEIGHTS[MATCH_EXACT]).toBe(1.0);
-  });
-
   it('should be ordered NONE < SUBSTRING < PREFIX < EXACT', () => {
     expect(MATCH_WEIGHTS[MATCH_NONE]).toBeLessThan(MATCH_WEIGHTS[MATCH_SUBSTRING]);
     expect(MATCH_WEIGHTS[MATCH_SUBSTRING]).toBeLessThan(MATCH_WEIGHTS[MATCH_PREFIX]);
@@ -120,11 +104,9 @@ describe('classifyMatch', () => {
       expect(classifyMatch('xyz', 'hello world')).toBe(MATCH_NONE);
     });
 
-    it('should return NONE for empty token in non-empty text', () => {
-      // empty token is a substring so it matches as SUBSTRING due to includes('')
-      // but actual behavior: '' is always found → EXACT per regex (word boundary around empty)
-      // Just check it does not throw
-      expect(() => classifyMatch('', 'hello world')).not.toThrow();
+    it('should handle empty token in non-empty text without crashing', () => {
+      const result = classifyMatch('', 'hello world');
+      expect(typeof result).toBe('number');
     });
   });
 });

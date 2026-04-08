@@ -42,6 +42,19 @@ export interface AppSettings {
     showRecentSearches?: boolean;  // Show recent search queries when input is empty (default: true)
     // Toolbar toggle chip bar — which toggles are visible on the main screen
     toolbarToggles?: string[];
+    // Command Palette — prefix-based mode system for quick-search overlay
+    commandPaletteEnabled?: boolean;     // Master switch: OFF disables all prefix modes
+    commandPaletteModes?: string[];      // Which prefix modes are active: ['/', '>', '@', '#', '??']
+    commandPaletteInPopup?: boolean;     // Whether popup also gets prefix modes (off by default)
+    commandPaletteOnboarded?: boolean;   // True after user has seen the first-use hint
+    /** Default ?? engine when no prefix: google | youtube | github | gcp */
+    webSearchEngine?: string;
+    /** Jira site origin (e.g. https://jira.zebra.com) for ?? j */
+    jiraSiteUrl?: string;
+    /** Confluence site origin (e.g. https://confluence.zebra.com) for ?? c */
+    confluenceSiteUrl?: string;
+    // Advanced browser commands — opt-in for tab power, tab groups, browsing data
+    advancedBrowserCommands?: boolean;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -169,6 +182,110 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     toolbarToggles: {
         default: ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'],
         validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string'), // eslint-disable-line @typescript-eslint/no-explicit-any
+    },
+
+    // Command Palette settings
+    commandPaletteEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    commandPaletteModes: {
+        default: ['/', '>', '@', '#', '??'],
+        validate: (val) => Array.isArray(val) && val.every((v: any) => typeof v === 'string' && ['/', '>', '@', '#', '??'].includes(v)), // eslint-disable-line @typescript-eslint/no-explicit-any
+    },
+    commandPaletteInPopup: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    commandPaletteOnboarded: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    webSearchEngine: {
+        default: 'google',
+        validate: (val) => typeof val === 'string' && (
+            ['google', 'youtube', 'github', 'gcp'].includes(val)
+            || val === 'duckduckgo'
+            || val === 'bing'
+        ),
+        transform: (val) => {
+            if (val === 'duckduckgo' || val === 'bing') {
+                return 'google';
+            }
+            if (['google', 'youtube', 'github', 'gcp'].includes(val)) {
+                return val;
+            }
+            return 'google';
+        },
+    },
+    jiraSiteUrl: {
+        default: '',
+        validate: (val) => {
+            if (typeof val !== 'string') {
+                return false;
+            }
+            const t = val.trim();
+            if (t === '') {
+                return true;
+            }
+            try {
+                const u = new URL(t);
+                return u.protocol === 'http:' || u.protocol === 'https:';
+            } catch {
+                return false;
+            }
+        },
+        transform: (val) => {
+            if (typeof val !== 'string') {
+                return '';
+            }
+            const t = val.trim();
+            if (t === '') {
+                return '';
+            }
+            try {
+                return new URL(t).origin;
+            } catch {
+                return '';
+            }
+        },
+    },
+    confluenceSiteUrl: {
+        default: '',
+        validate: (val) => {
+            if (typeof val !== 'string') {
+                return false;
+            }
+            const t = val.trim();
+            if (t === '') {
+                return true;
+            }
+            try {
+                const u = new URL(t);
+                return u.protocol === 'http:' || u.protocol === 'https:';
+            } catch {
+                return false;
+            }
+        },
+        transform: (val) => {
+            if (typeof val !== 'string') {
+                return '';
+            }
+            const t = val.trim();
+            if (t === '') {
+                return '';
+            }
+            try {
+                return new URL(t).origin;
+            } catch {
+                return '';
+            }
+        },
+    },
+
+    advancedBrowserCommands: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
     },
 
     // Future settings (placeholders)
@@ -459,6 +576,19 @@ export class SettingsManager {
                         this.logger.debug('validateSettings', `ℹ️ ${key}: not found, using default:`, schema.default);
                     }
                 }
+            }
+
+            const raw = settings as Record<string, unknown>;
+            const legacyAtlassian = raw.atlassianSiteUrl;
+            const jiraU = (validated.jiraSiteUrl ?? '').trim();
+            const confU = (validated.confluenceSiteUrl ?? '').trim();
+            if (!jiraU && !confU && typeof legacyAtlassian === 'string' && legacyAtlassian.trim()) {
+                try {
+                    const o = new URL(legacyAtlassian.trim()).origin;
+                    validated.jiraSiteUrl = o;
+                    validated.confluenceSiteUrl = o;
+                    this.logger.debug('validateSettings', 'Migrated atlassianSiteUrl → jiraSiteUrl + confluenceSiteUrl:', o);
+                } catch { /* ignore bad legacy URL */ }
             }
 
             this.logger.debug('validateSettings', '✅ Validation complete:', validated);

@@ -40,6 +40,7 @@ function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
 const indexedItems: IndexedItem[] = [];
 vi.mock('../../database', () => ({
   getAllIndexedItems: vi.fn(async () => indexedItems),
+  loadEmbeddingsInto: vi.fn(async () => 0),
   saveIndexedItem: vi.fn(),
 }));
 
@@ -162,6 +163,7 @@ describe('search-engine', () => {
     }));
     vi.doMock('../../database', () => ({
       getAllIndexedItems: vi.fn(async () => indexedItems),
+      loadEmbeddingsInto: vi.fn(async () => 0),
       saveIndexedItem: vi.fn(),
     }));
     vi.doMock('../scorer-manager', () => ({
@@ -315,17 +317,14 @@ describe('search-engine', () => {
   });
 
   describe('showNonMatchingResults', () => {
-    it('should include non-matching items when enabled', async () => {
+    it('should still filter items below score threshold even when enabled', async () => {
       settingsMap.showNonMatchingResults = true;
       indexedItems.push(
         makeItem({ url: 'https://foo.com', title: 'Foo Page', hostname: 'foo.com' }),
       );
-      // scorer returns 0 for non-matching, but showNonMatchingResults bypasses match check
-      // Note: still needs score > 0.01, which our scorer gives 0 for non-match
       const { runSearch } = await importModule();
       const results = await runSearch('zzz');
-      // With our mock scorer returning 0 for non-matches, still filtered by score threshold
-      expect(Array.isArray(results)).toBe(true);
+      expect(results).toHaveLength(0);
     });
   });
 
@@ -344,7 +343,7 @@ describe('search-engine', () => {
   });
 
   describe('bookmark strict matching', () => {
-    it('should apply stricter matching for bookmarks', async () => {
+    it('should return matching bookmarks when query matches title/url', async () => {
       indexedItems.push(
         makeItem({
           url: 'https://github.com/repo',
@@ -355,28 +354,30 @@ describe('search-engine', () => {
       );
       const { runSearch } = await importModule();
       const results = await runSearch('github');
-      expect(results.length).toBeGreaterThanOrEqual(0);
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].url).toBe('https://github.com/repo');
     });
   });
 
   describe('scoring and boosting', () => {
-    it('should boost literal substring matches', async () => {
+    it('should return results for literal substring matches', async () => {
       indexedItems.push(
         makeItem({ url: 'https://react.dev/docs', title: 'React Documentation', hostname: 'react.dev' }),
         makeItem({ url: 'https://other.com', title: 'Other Page about react', hostname: 'other.com' }),
       );
       const { runSearch } = await importModule();
       const results = await runSearch('react');
-      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results.length).toBe(2);
     });
 
-    it('should handle multi-token queries', async () => {
+    it('should handle multi-token queries and return matches', async () => {
       indexedItems.push(
         makeItem({ url: 'https://docs.github.com/api', title: 'GitHub API Documentation', hostname: 'docs.github.com' }),
       );
       const { runSearch } = await importModule();
       const results = await runSearch('github api');
-      expect(results.length).toBeGreaterThanOrEqual(0);
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('GitHub API Documentation');
     });
 
     it('should search metadata description', async () => {
@@ -423,7 +424,7 @@ describe('search-engine', () => {
       expect(results.length).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle diversity filter for duplicate URLs', async () => {
+    it('should apply diversity filter for duplicate URLs', async () => {
       settingsMap.showDuplicateUrls = false;
       indexedItems.push(
         makeItem({ url: 'https://example.com?ref=1', title: 'Example', hostname: 'example.com' }),
@@ -431,7 +432,7 @@ describe('search-engine', () => {
       );
       const { runSearch } = await importModule();
       const results = await runSearch('example');
-      expect(Array.isArray(results)).toBe(true);
+      expect(results.length).toBeGreaterThanOrEqual(1);
     });
 
     it('should handle AI-enabled search with skipAI flag', async () => {
@@ -545,7 +546,7 @@ describe('search-engine', () => {
         }),
       );
 
-      let capturedInfoMessages: string[] = [];
+      const capturedInfoMessages: string[] = [];
 
       vi.resetModules();
       vi.doMock('../../../core/logger', () => ({

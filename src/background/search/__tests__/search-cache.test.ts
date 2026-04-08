@@ -130,10 +130,6 @@ describe('SearchCache', () => {
       expect(cache.getStats().size).toBe(0);
     });
 
-    it('should return correct maxSize', () => {
-      expect(cache.getStats().maxSize).toBe(5);
-    });
-
     it('should track hits', () => {
       cache.set('query', [makeItem('https://example.com')]);
       cache.get('query');

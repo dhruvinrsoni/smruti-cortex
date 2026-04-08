@@ -2,6 +2,57 @@
 
 All notable changes to SmrutiCortex are documented here.
 
+## [Unreleased]
+
+### Features
+- **Command palette** — Prefix-based modes transform the search overlay into a universal browser control surface (`/` commands, `>` power, `@` tabs, `#` bookmarks, `??` web search, `?` help)
+- **Advanced browser commands** — ~45 opt-in commands for tab/window management, tab groups, browsing-data cleanup, and Top Sites; gated behind optional permissions (`tabGroups`, `browsingData`, `topSites`)
+- **Web search mode (`??`)** — Search Google, YouTube, GitHub, GCP console, Jira, and Confluence directly from the palette with per-engine prefix shortcuts
+- **Palette discovery (`?`)** — Help mode listing all available prefix modes with descriptions
+- **Palette in popup** — Optional setting to enable prefix modes in the popup (useful on restricted `chrome://` pages)
+- **Jira & Confluence integration** — Configurable site URLs for `?? j` and `?? c` quick search
+- **Palette diagnostic toasts** — Formatted toast messages for palette command execution feedback
+
+### Bug Fixes
+- **CSP compliance** — Replace all `fav.onerror` / `closeBtn.onclick` IDL handlers with `addEventListener` to comply with Chrome MV3 `script-src 'self'`
+- **XSS prevention** — Escape user-derived strings in popup `innerHTML` assignments
+- **Search rate limiting** — Rate-limit search requests on the port handler; add bookmark walk depth guard
+- **Input validation** — Validate and sanitize all service-worker message handler inputs
+- **Scorer isolation** — Per-scorer `try/catch` in search loop prevents one scorer failure from breaking all results
+- **Error boundaries** — Wrap `renderResults` and `renderAIStatus` in popup and quick-search with error boundaries
+- **Unhandled rejections** — Add global error handler for unhandled promise rejections in service worker
+- **IndexedDB resilience** — Graceful degradation when IndexedDB or embedding hydration fails
+- **Ollama hardening** — Cap keyword expander timeout at 120s, wire circuit breaker, add response body size cap on fetch calls
+- **Memory pressure** — Strip embeddings from in-memory item cache; null `item.embedding` after `saveIndexedItem`; add session embedding counter fallback for memory pressure guard
+- **Logger safety** — Serialize and truncate data in logger buffer entries
+- **Storage efficiency** — Use `store.count()` in `getStorageQuotaInfo` to avoid loading full index
+- **Fingerprinting** — Reduce extension fingerprinting surface; add remote Ollama endpoint warning
+- **Settings side effects** — Apply theme, toolbar, and history side effects immediately on toggle chip click, palette command execution, and `SETTINGS_CHANGED` handler (popup and quick-search)
+- **Context recovery** — Skip futile context recovery on extension reload; show reconnect UI immediately
+- **Settings tab bar** — Convert vertical scroll to horizontal on settings tab bar overflow
+- **Text selection** — Allow text selection on toast notifications and Recently Visited section
+- **Recent history** — Always show recent history results; toggle only controls Recently Visited section
+- **Quick-search parity** — Command palette arrow keys and Tab navigation match quick-search overlay behaviour
+- **Footer typography** — Larger command palette footer hint text in popup
+- **Deprecation** — Deprecate `getIndexedItemsBatches` (returns all batches at once, replaced by streaming)
+
+### Testing
+- **1,098 tests across 43 files** — Up from 1,073 tests / 34 files in v8.1.0
+- Added `command-registry-core.test.ts` (21 tests) and `command-registry-advanced-browser.test.ts` (6 tests)
+- Added `web-search.test.ts` (15 tests), `palette-messages.test.ts` (4 tests), `hide-img-on-error.test.ts` (2 tests)
+- Added `toolbar-toggles.test.ts` (7 tests), `tour.test.ts` (13 tests), `recent-interactions.test.ts` (11 tests), `recent-searches.test.ts` (10 tests)
+- Expanded service-worker tests (50 → 95) with full coverage of advanced browser commands and omnibox palette
+- Removed redundant and trivial test cases across scorer and core test files
+
+### Other
+- New shared modules: `command-registry.ts`, `web-search.ts`, `palette-messages.ts`, `hide-img-on-error.ts`
+- New settings: `commandPaletteEnabled`, `commandPaletteModes`, `commandPaletteInPopup`, `webSearchEngine`, `jiraSiteUrl`, `confluenceSiteUrl`, `advancedBrowserCommands`
+- New manifest permissions: `sessions`, `windows` (required); `tabGroups`, `browsingData`, `topSites` (optional)
+- Settings tab for Command Palette configuration with per-mode toggles
+- Advanced Browser Commands permission prompt screenshot in docs
+
+---
+
 ## [8.1.0] — 2026-03-25
 
 ### Features

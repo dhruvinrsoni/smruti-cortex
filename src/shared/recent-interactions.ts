@@ -17,7 +17,7 @@ export async function getRecentInteractions(): Promise<RecentInteraction[]> {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
     const entries = result[STORAGE_KEY];
-    if (Array.isArray(entries)) return entries;
+    if (Array.isArray(entries)) {return entries;}
     return [];
   } catch {
     return [];
@@ -29,7 +29,7 @@ export async function addRecentInteraction(
   title: string,
   action: RecentInteraction['action']
 ): Promise<void> {
-  if (!url) return;
+  if (!url) {return;}
 
   try {
     const entries = await getRecentInteractions();

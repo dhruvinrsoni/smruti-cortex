@@ -417,8 +417,8 @@ describe('ingestHistory', () => {
   it('should skip indexing when version is the same and too recent', async () => {
     // Same version, just indexed
     vi.mocked(getSetting).mockImplementation(async (key: string, defaultValue: unknown) => {
-      if (key === 'lastIndexedVersion') return '3.0.0'; // same as manifest
-      if (key === 'lastIndexedTimestamp') return Date.now(); // just now
+      if (key === 'lastIndexedVersion') {return '3.0.0';} // same as manifest
+      if (key === 'lastIndexedTimestamp') {return Date.now();} // just now
       return defaultValue;
     });
 
@@ -429,8 +429,8 @@ describe('ingestHistory', () => {
 
   it('should trigger full re-index when version is newer', async () => {
     vi.mocked(getSetting).mockImplementation(async (key: string, defaultValue: unknown) => {
-      if (key === 'lastIndexedVersion') return '1.0.0'; // old version
-      if (key === 'lastIndexedTimestamp') return 0;
+      if (key === 'lastIndexedVersion') {return '1.0.0';} // old version
+      if (key === 'lastIndexedTimestamp') {return 0;}
       return defaultValue;
     });
 

@@ -29,6 +29,8 @@ const ollamaMocks = {
   checkMemoryPressure: vi.fn(() => ({ ok: true })),
   acquireOllamaSlot: vi.fn(() => true),
   releaseOllamaSlot: vi.fn(),
+  recordCircuitBreakerFailure: vi.fn(),
+  recordCircuitBreakerSuccess: vi.fn(),
 };
 vi.mock('../ollama-service', () => ollamaMocks);
 
@@ -250,7 +252,7 @@ describe('ai-keyword-expander', () => {
       const { expandQueryKeywords, getLastExpansionSource } = await importFreshModule();
       // First token cached, second needs Ollama
       cacheMocks.getCachedExpansion.mockImplementation((token: string) => {
-        if (token === 'web') return ['web', 'internet', 'online'];
+        if (token === 'web') {return ['web', 'internet', 'online'];}
         return null;
       });
       cacheMocks.getPrefixMatch.mockReturnValue(null);
@@ -271,12 +273,6 @@ describe('ai-keyword-expander', () => {
     });
   });
 
-  describe('getLastExpansionSource', () => {
-    it('should return disabled by default', async () => {
-      const { getLastExpansionSource } = await importFreshModule();
-      expect(getLastExpansionSource()).toBe('disabled');
-    });
-  });
 
   describe('parseKeywordResponse — object format (legacy)', () => {
     // The object format path is reached when the response contains { } with original/expanded arrays

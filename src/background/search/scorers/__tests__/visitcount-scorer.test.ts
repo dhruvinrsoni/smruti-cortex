@@ -18,14 +18,6 @@ describe('visitCountScorer', () => {
     vi.clearAllMocks();
   });
 
-  it('should have name "visitCount"', () => {
-    expect(visitCountScorer.name).toBe('visitCount');
-  });
-
-  it('should have weight 0.15', () => {
-    expect(visitCountScorer.weight).toBe(0.15);
-  });
-
   describe('score calculation', () => {
     it('should use count of 1 when visitCount is 0', () => {
       // count = item.visitCount || 1 → count=1

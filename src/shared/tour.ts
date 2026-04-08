@@ -37,6 +37,12 @@ export const POPUP_TOUR_STEPS: TourStep[] = [
     position: 'bottom',
   },
   {
+    target: '#search-input',
+    title: 'Command Palette',
+    description: 'Type / for commands, > for admin, @ to switch tabs, # to search bookmarks, ?? to search the web. Your keyboard is the remote control for the entire browser.',
+    position: 'bottom',
+  },
+  {
     target: '.footer',
     title: 'Keyboard Shortcuts',
     description: 'Enter opens in new tab. Ctrl+Shift+S opens quick-search overlay. Type "sc " in the address bar for omnibox access.',
@@ -107,7 +113,7 @@ export function runTour(
     `);
 
     const getTarget = (selector: string): Element | null => {
-      if (resolveTarget) return resolveTarget(selector);
+      if (resolveTarget) {return resolveTarget(selector);}
       return root.querySelector(selector);
     };
 

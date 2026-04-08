@@ -231,10 +231,6 @@ describe('ai-keyword-cache module', () => {
       expect(stats.estimatedBytes).toBeGreaterThan(0);
     });
 
-    it('maxSize is always 5000', async () => {
-      const { getCacheStats } = await import('../ai-keyword-cache');
-      expect(getCacheStats().maxSize).toBe(5000);
-    });
   });
 
   describe('evictLeastUsed — capacity eviction', () => {

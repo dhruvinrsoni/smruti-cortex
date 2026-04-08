@@ -78,16 +78,64 @@ export async function getAllIndexedItems(): Promise<IndexedItem[]> {
         const req = store.getAll();
 
         req.onsuccess = () => {
-            cachedItems = req.result as IndexedItem[];
+            const items = req.result as IndexedItem[];
+            // Strip embedding arrays from the in-memory cache to prevent
+            // sustained multi-MB retention. Embeddings are persisted in IndexedDB
+            // and loaded on-demand by the embedding scorer / search engine.
+            for (const item of items) {
+                item.embedding = undefined;
+            }
+            cachedItems = items;
             resolve(cachedItems);
         };
         req.onerror = () => reject(req.error);
     });
 }
 
+/**
+ * Load stored embeddings from IndexedDB into an items array (by URL key).
+ * Called by the search engine before scoring so pre-computed embeddings
+ * are available without keeping them permanently in the cachedItems cache.
+ */
+export async function loadEmbeddingsInto(items: IndexedItem[]): Promise<number> {
+    const db = dbInstance || await openDatabase();
+    const urlToItem = new Map<string, IndexedItem>();
+    for (const item of items) { urlToItem.set(item.url, item); }
+
+    return new Promise((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readonly');
+        const store = txn.objectStore(STORE_NAME);
+        const request = store.openCursor();
+        let loaded = 0;
+
+        request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            if (cursor) {
+                const row = cursor.value as IndexedItem;
+                if (row.embedding && row.embedding.length > 0) {
+                    const target = urlToItem.get(row.url);
+                    if (target) {
+                        target.embedding = row.embedding;
+                        loaded++;
+                    }
+                }
+                cursor.continue();
+            } else {
+                resolve(loaded);
+            }
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
 // ------------------------------
 // Cursor-based pagination for large datasets
 // ------------------------------
+/**
+ * @deprecated Returns ALL batches at once, defeating the purpose of batching.
+ * Callers still get every item in RAM. Prefer cursor-based iteration
+ * (getItemsWithoutEmbeddingsBatch) or getAllIndexedItems + loadEmbeddingsInto.
+ */
 export async function getIndexedItemsBatches(batchSize = 1000): Promise<IndexedItem[][]> {
     const db = dbInstance || await openDatabase();
     const txn = db.transaction(STORE_NAME, 'readonly');
@@ -356,9 +404,15 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
     logger.debug('getStorageQuotaInfo', 'Retrieving storage quota information');
     
     try {
-        // Get IndexedDB item count
-        const items = await getAllIndexedItems();
-        const itemCount = items.length;
+        // Use store.count() instead of getAllIndexedItems() to avoid
+        // materializing every row just for a length check.
+        const db = dbInstance || await openDatabase();
+        const itemCount = await new Promise<number>((resolve, reject) => {
+            const txn = db.transaction(STORE_NAME, 'readonly');
+            const req = txn.objectStore(STORE_NAME).count();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
         
         // Try to get storage estimate (modern browsers)
         let used = 0;

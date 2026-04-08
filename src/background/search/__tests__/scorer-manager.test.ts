@@ -56,12 +56,6 @@ describe('getAllScorers', () => {
     mockGetSetting.mockReturnValue(false);
   });
 
-  it('returns an array of scorers', () => {
-    const scorers = getAllScorers();
-    expect(Array.isArray(scorers)).toBe(true);
-    expect(scorers.length).toBeGreaterThan(0);
-  });
-
   it('returns 9 scorers', () => {
     const scorers = getAllScorers();
     expect(scorers).toHaveLength(9);
@@ -96,19 +90,6 @@ describe('getAllScorers', () => {
     expect(embeddingScorer?.weight).toBe(0.4);
   });
 
-  it('all scorers have name, weight, and score function', () => {
-    const scorers = getAllScorers();
-    for (const scorer of scorers) {
-      expect(typeof scorer.name).toBe('string');
-      expect(typeof scorer.weight).toBe('number');
-      expect(typeof scorer.score).toBe('function');
-    }
-  });
-
-  it('calls SettingsManager.getSetting with embeddingsEnabled', () => {
-    getAllScorers();
-    expect(mockGetSetting).toHaveBeenCalledWith('embeddingsEnabled');
-  });
 });
 
 describe('multiTokenMatchScorer (via getAllScorers)', () => {

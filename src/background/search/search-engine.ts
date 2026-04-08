@@ -1,6 +1,6 @@
 // search-engine.ts — SmrutiCortex Vivek Search Engine
 
-import { getAllIndexedItems } from '../database';
+import { getAllIndexedItems, loadEmbeddingsInto } from '../database';
 import { getAllScorers } from './scorer-manager';
 import { IndexedItem } from '../schema';
 import {
@@ -191,8 +191,26 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         }
     }
 
-    // Get all indexed items
-    const items = await getAllIndexedItems();
+    // Get all indexed items (cache does NOT hold embeddings to save RAM)
+    let items: IndexedItem[];
+    try {
+        items = await getAllIndexedItems();
+    } catch (dbErr) {
+        logger.error('runSearch', 'IndexedDB failed — falling back to chrome.history.search', undefined, dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+        items = [];
+    }
+
+    // Hydrate pre-computed embeddings from IndexedDB when semantic search is active
+    if (items.length > 0 && embeddingsEnabled && !skipEmbeddingThisPhase) {
+        try {
+            const loaded = await loadEmbeddingsInto(items);
+            if (loaded > 0) {
+                logger.debug('runSearch', `Loaded ${loaded} pre-computed embeddings from IndexedDB`);
+            }
+        } catch (embErr) {
+            logger.warn('runSearch', 'Embedding hydration failed — continuing with keyword search only', { error: embErr });
+        }
+    }
 
     // Pre-compute domain visit counts once (O(n)) instead of per-item (O(n^2))
     const domainVisitCounts = new Map<string, number>();
@@ -372,9 +390,14 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         const scorerDetails: Array<{ name: string; score: number; weight: number }> = [];
         
         for (const scorer of scorers) {
-            const scorerScore = scorer.weight * scorer.score(item, q, items, context);
-            score += scorerScore;
-            scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
+            try {
+                const scorerScore = scorer.weight * scorer.score(item, q, items, context);
+                score += scorerScore;
+                scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
+            } catch (err) {
+                logger.error('runSearch', `Scorer "${scorer.name}" threw — treating as 0`, undefined, err instanceof Error ? err : new Error(String(err)));
+                scorerDetails.push({ name: scorer.name, score: 0, weight: scorer.weight });
+            }
         }
 
         // ─── Vivek Search Post-Score Boosters ────────────────────────────

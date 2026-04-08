@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // Service worker tests await real init + dynamic imports; v8 coverage slows that enough
+    // to exceed the default 5s occasionally (e.g. CLEAR_FAVICON_CACHE after init gate).
+    testTimeout: 15_000,
     globals: true,
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],

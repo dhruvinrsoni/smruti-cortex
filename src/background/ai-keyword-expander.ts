@@ -19,10 +19,45 @@
 
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot } from './ollama-service';
+import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess } from './ollama-service';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
 
 const COMPONENT = 'AIKeywordExpander';
+
+// Keyword expansion responses are small text; 1 MB is generous.
+const MAX_RESPONSE_BYTES = 1 * 1024 * 1024;
+
+async function readResponseText(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<string> {
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (!body || typeof body.getReader !== 'function') {
+    // No streaming body (e.g. in tests). Prefer .text(), fallback to .json().
+    const resp = response as { text?: () => Promise<string>; json?: () => Promise<unknown> };
+    if (typeof resp.text === 'function') {
+      const t = await resp.text();
+      if (t) {return t;}
+    }
+    if (typeof resp.json === 'function') {
+      return JSON.stringify(await resp.json());
+    }
+    return '';
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let result = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {break;}
+    total += value.byteLength;
+    if (total > limitBytes) {
+      reader.cancel();
+      throw new Error(`Response exceeded ${limitBytes} bytes — aborting`);
+    }
+    result += decoder.decode(value, { stream: true });
+  }
+  result += decoder.decode();
+  return result;
+}
 const logger = Logger.forComponent(COMPONENT);
 
 // Tracks the source of the last expansion for UI feedback
@@ -253,8 +288,9 @@ async function callOllamaForKeywords(
   });
 
   const controller = new AbortController();
-  const hasTimeout = timeout > 0;
-  const timeoutId = hasTimeout ? setTimeout(() => controller.abort(), timeout) : undefined;
+  // Mirror the embedding guard: never allow an unbounded fetch.
+  const effectiveTimeout = timeout > 0 ? timeout : 120_000;
+  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
 
   // Propagate search abort signal so Ollama fetch is cancelled when the search is superseded.
   // This releases the Ollama slot immediately, preventing the next search's embedding from
@@ -262,7 +298,7 @@ async function callOllamaForKeywords(
   const onSearchAbort = () => controller.abort();
   if (searchSignal) {
     if (searchSignal.aborted) {
-      if (hasTimeout && timeoutId) {clearTimeout(timeoutId);}
+      clearTimeout(timeoutId);
       throw new Error('Search aborted before Ollama call');
     }
     searchSignal.addEventListener('abort', onSearchAbort, { once: true });
@@ -278,18 +314,17 @@ async function callOllamaForKeywords(
       signal: controller.signal
     });
 
-    if (hasTimeout && timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    clearTimeout(timeoutId);
 
     const duration = Date.now() - startTime;
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
+      const errorText = await readResponseText(response, 64 * 1024).catch(() => '');
       throw new Error(`Ollama API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
+    const rawText = await readResponseText(response);
+    const data = JSON.parse(rawText);
     // /api/chat returns { message: { content: "..." } }, /api/generate returns { response: "..." }
     const generatedText = data.message?.content || data.response || '';
 
@@ -301,21 +336,21 @@ async function callOllamaForKeywords(
     // Parse the JSON response, handling various edge cases
     const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
     if (searchSignal) {searchSignal.removeEventListener('abort', onSearchAbort);}
-    if (hasTimeout && timeoutId) {clearTimeout(timeoutId);}
+    clearTimeout(timeoutId);
+    recordCircuitBreakerSuccess();
     return expandedKeywords;
 
   } catch (error: unknown) {
-    if (hasTimeout && timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    clearTimeout(timeoutId);
     if (searchSignal) {
       searchSignal.removeEventListener('abort', onSearchAbort);
     }
 
     if (error instanceof Error && error.name === 'AbortError') {
-      // Could be timeout OR search abort — either way, propagate as abort so caller skips gracefully
+      // Abort errors are intentional (timeout or search superseded) — don't trip the breaker.
       throw new Error('Aborted (timeout or search superseded)');
     }
+    recordCircuitBreakerFailure();
     throw error;
   }
 }

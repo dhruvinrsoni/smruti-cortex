@@ -16,6 +16,42 @@ import { Logger } from '../core/logger';
 const COMPONENT = 'OllamaService';
 const logger = Logger.forComponent(COMPONENT);
 
+// Hard cap on Ollama response body size to prevent a misconfigured
+// or malicious endpoint from allocating multi-GB strings in memory.
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+async function readResponseWithLimit(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<string> {
+  // Prefer streaming reader when available; falls back to .text() for
+  // environments without ReadableStream (e.g. test mocks).
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (!body || typeof body.getReader !== 'function') {
+    return (response as { text?: () => Promise<string> }).text
+      ? response.text()
+      : JSON.stringify(await (response as { json: () => Promise<unknown> }).json());
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let result = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {break;}
+    total += value.byteLength;
+    if (total > limitBytes) {
+      reader.cancel();
+      throw new Error(`Response body exceeded ${limitBytes} bytes — aborting to prevent memory exhaustion`);
+    }
+    result += decoder.decode(value, { stream: true });
+  }
+  result += decoder.decode();
+  return result;
+}
+
+async function readJsonWithLimit<T = unknown>(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<T> {
+  const text = await readResponseWithLimit(response, limitBytes);
+  return JSON.parse(text) as T;
+}
+
 export interface OllamaConfig {
   endpoint: string;          // Default: 'http://localhost:11434'
   model: string;             // Default: 'nomic-embed-text:latest'
@@ -101,8 +137,8 @@ export class OllamaService {
       logger.trace('checkAvailability', `Response received: ${response.status} ${response.statusText}`);
 
       if (response.ok) {
-      const data = await response.json();
-      const models = Array.isArray(data.models) ? data.models as Array<{ name?: string }> : [];
+      const data = await readJsonWithLimit<{ models?: Array<{ name?: string }>; version?: string }>(response, MAX_RESPONSE_BYTES);
+      const models = Array.isArray(data.models) ? data.models : [];
       const modelNames = models.map(m => m.name || 'unknown');
       const hasModel = models.some(m => m.name === this.config.model);
 
@@ -284,7 +320,7 @@ export class OllamaService {
       logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'No error details');
+        const errorText = await readResponseWithLimit(response, 1024 * 64).catch(() => 'No error details');
 
         // === Handle 400 "context length exceeded" — input problem, NOT server failure ===
         // Don't trip circuit breaker for input validation errors.
@@ -333,7 +369,7 @@ export class OllamaService {
 
       logger.debug('generateEmbedding', '📄 Parsing JSON response...');
       const parseStartTime = Date.now();
-      const data = await response.json();
+      const data = await readJsonWithLimit<{ embeddings?: number[][] }>(response);
       const parseDuration = Date.now() - parseStartTime;
       const duration = Date.now() - startTime;
 
@@ -359,6 +395,7 @@ export class OllamaService {
       });
 
       circuitBreaker.recordSuccess();
+      sessionEmbeddingCount++;
 
       return {
         embedding,  // Use the extracted embedding, not data.embedding
@@ -526,6 +563,14 @@ export function isCircuitBreakerOpen(): boolean {
   return circuitBreaker.isOpen();
 }
 
+export function recordCircuitBreakerFailure(): void {
+  circuitBreaker.recordFailure();
+}
+
+export function recordCircuitBreakerSuccess(): void {
+  circuitBreaker.recordSuccess();
+}
+
 // === CONCURRENT REQUEST LIMITER ===
 // Ollama processes requests sequentially; concurrent calls just queue and waste memory.
 // This semaphore prevents multiple in-flight Ollama calls from stacking up.
@@ -553,6 +598,10 @@ export function releaseOllamaSlot(): void { requestSemaphore.release(); }
 // === MEMORY PRESSURE GUARD ===
 // Chrome extensions have limited memory; prevent embedding generation from consuming it all
 const MEMORY_LIMIT_MB = 512;  // Hard cap: stop AI features if extension exceeds 512MB
+const MAX_SESSION_EMBEDDINGS = 5000; // Fallback cap when performance.memory is unavailable
+let sessionEmbeddingCount = 0;
+
+export function incrementSessionEmbeddingCount(): void { sessionEmbeddingCount++; }
 
 export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: number } {
   try {
@@ -567,6 +616,12 @@ export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: n
       return { ok, usedMB, limitMB: MEMORY_LIMIT_MB };
     }
   } catch { /* ignore */ }
+
+  // Fallback: use session embedding counter when performance.memory is unavailable.
+  if (sessionEmbeddingCount >= MAX_SESSION_EMBEDDINGS) {
+    logger.warn('memoryGuard', `🔴 Session embedding cap reached: ${sessionEmbeddingCount}/${MAX_SESSION_EMBEDDINGS} — blocking AI operations`);
+    return { ok: false, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
+  }
   return { ok: true, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
 }
 
@@ -585,9 +640,13 @@ export async function getOllamaConfigFromSettings(forEmbeddings = false): Promis
     const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
     const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
 
-    // Use the correct model based on purpose:
-    // - forEmbeddings=true → use embeddingModel (nomic-embed-text, all-minilm, etc.)
-    // - forEmbeddings=false → use ollamaModel (llama3.2:1b, etc. for text generation)
+    try {
+      const host = new URL(endpoint).hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+        logger.warn('getOllamaConfigFromSettings', `⚠️ Ollama endpoint "${host}" is not localhost — search queries will be sent to a remote host`);
+      }
+    } catch { /* invalid URL handled downstream */ }
+
     const model = forEmbeddings
       ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text:latest')
       : (SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');

@@ -12,6 +12,28 @@ import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shar
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import {
+  type PaletteCommand,
+  ALL_COMMANDS,
+  preparePaletteCommandList,
+  getPowerSettingsPatch,
+  getAvailableCommands,
+  getCycleValueFromCommand,
+  saveRecentCommand,
+  getWebSearchPrefixHintLines,
+  getWebSearchEngineDisplayName,
+  formatPaletteCategoryHeader,
+  parseWebSearchQuery,
+  buildWebSearchUrl,
+  webSearchSiteUrlToastMessage,
+  webSearchSiteUrlPreviewLabel,
+} from '../shared/command-registry';
+import {
+  formatPaletteDiagnosticToast,
+  isPaletteDiagnosticMessageType,
+  PALETTE_DIAGNOSTIC_TOAST_MS,
+} from '../shared/palette-messages';
+import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import type { AppSettings } from '../core/settings';
 import {
   type SearchResult,
@@ -98,7 +120,7 @@ function showToast(message: string, type: ToastType = 'success', durationMs = 50
 
   function startDismiss() {
     dismissTimer = setTimeout(() => {
-      if (hovered) return;
+      if (hovered) {return;}
       toast.style.opacity = '0';
       toast.style.transform = 'translateX(-50%) translateY(-8px)';
       setTimeout(() => toast.remove(), 250);
@@ -278,7 +300,11 @@ function initializePopup() {
 
   // Thin wrapper — delegates to shared renderAIStatus with this popup's container
   function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
-    renderAIStatusShared(aiStatusBarEl, aiStatus);
+    try {
+      renderAIStatusShared(aiStatusBarEl, aiStatus);
+    } catch (err) {
+      console.error('[SmrutiCortex] renderAIStatus error:', err);
+    }
   }
 
   /**
@@ -340,37 +366,34 @@ function initializePopup() {
   const toggleBarEl = $local('toggle-bar') as HTMLDivElement | null;
 
   function renderToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     toggleBarEl.innerHTML = '';
     const visibleKeys = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
     for (const key of visibleKeys) {
       const def = getToggleDef(key);
-      if (!def) continue;
+      if (!def) {continue;}
 
       const chip = document.createElement('button');
       chip.className = 'toggle-chip';
       chip.dataset.toggleKey = key;
       chip.type = 'button';
 
-      chip.addEventListener('click', async () => {
+      chip.addEventListener('click', () => {
         if (def.type === 'boolean') {
           const cur = SettingsManager.getSetting(def.key) as boolean;
-          await SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]);
+          SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]).catch(() => {});
         } else if (def.type === 'cycle') {
           const cur = SettingsManager.getSetting(def.key);
           const next = getNextCycleValue(def, cur);
-          await SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]);
-          if (def.key === 'theme') {
-            applyTheme(next as 'light' | 'dark' | 'auto');
-          }
+          SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]).catch(() => {});
         }
-        syncToggleBar();
-        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
-          renderResults();
-        } else if (currentQuery?.trim()) {
-          debounceSearch(currentQuery);
-        } else {
-          loadRecentHistory();
+        applyPopupSettingSideEffects(def.key);
+        if (def.key !== 'displayMode' && def.key !== 'highlightMatches' && def.key !== 'loadFavicons') {
+          if (currentQuery?.trim()) {
+            debounceSearch(currentQuery);
+          } else if (def.key !== 'showRecentHistory' && def.key !== 'showRecentSearches') {
+            loadRecentHistory();
+          }
         }
       });
 
@@ -380,13 +403,13 @@ function initializePopup() {
   }
 
   function syncToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
     chips.forEach(chip => {
       const key = chip.dataset.toggleKey as keyof AppSettings;
-      if (!key) return;
+      if (!key) {return;}
       const def = getToggleDef(key);
-      if (!def) return;
+      if (!def) {return;}
 
       const val = SettingsManager.getSetting(key);
 
@@ -421,11 +444,10 @@ function initializePopup() {
     sortBySelect.value = savedSort;
     
     // Handle sort change
-    sortBySelect.addEventListener('change', async () => {
+    sortBySelect.addEventListener('change', () => {
       const newSort = sortBySelect.value;
-      await SettingsManager.setSetting('sortBy', newSort);
+      SettingsManager.setSetting('sortBy', newSort).catch(() => {});
       
-      // Re-sort current results without re-searching
       if (resultsLocal.length > 0) {
         sortResults(resultsLocal, newSort);
         activeIndex = resultsLocal.length ? 0 : -1;
@@ -484,35 +506,829 @@ function initializePopup() {
     if (btn) { btn.classList.toggle('visible', (inp?.value?.length ?? 0) > 0); }
   }
 
+  // Popup command palette state
+  type PopupPaletteMode = 'history' | 'commands' | 'power' | 'tabs' | 'bookmarks' | 'websearch' | 'help';
+  let popupPaletteMode: PopupPaletteMode = 'history';
+  let popupSelectedIndex = 0;
+  let popupConfirmingCommand: PaletteCommand | null = null;
+  let popupWindowPickerActive = false;
+
+  function getPopupPaletteSelectableRows(): HTMLElement[] {
+    const list = $local('results') as HTMLUListElement | null;
+    if (!list) {return [];}
+    return Array.from(list.querySelectorAll('.palette-selectable-row')) as HTMLElement[];
+  }
+
+  function applyPopupPaletteRowHighlight(): void {
+    const rows = getPopupPaletteSelectableRows();
+    const n = rows.length;
+    if (n === 0) {return;}
+    if (popupSelectedIndex < 0 || popupSelectedIndex >= n) {
+      popupSelectedIndex = 0;
+    }
+    rows.forEach((el, i) => {
+      el.style.background = i === popupSelectedIndex ? 'var(--hover)' : 'var(--card)';
+    });
+    rows[popupSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function handlePopupPaletteArrow(direction: 'up' | 'down'): void {
+    const rows = getPopupPaletteSelectableRows();
+    if (rows.length === 0) {return;}
+    if (direction === 'down') {
+      popupSelectedIndex = (popupSelectedIndex + 1) % rows.length;
+    } else {
+      popupSelectedIndex = (popupSelectedIndex - 1 + rows.length) % rows.length;
+    }
+    applyPopupPaletteRowHighlight();
+  }
+
+  function focusPopupPaletteRowAt(index: number): void {
+    const rows = getPopupPaletteSelectableRows();
+    const el = rows[index];
+    if (el) {
+      try { el.focus(); } catch { /* ignore */ }
+    }
+  }
+
+  function detectPopupMode(value: string): { mode: PopupPaletteMode; query: string } {
+    const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
+    const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
+    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+
+    if (!cpEnabled || !cpInPopup || !value) {return { mode: 'history', query: value };}
+    if (value === '?') {return { mode: 'help', query: '' };}
+    if (value.startsWith('??') && cpModes.includes('??')) {return { mode: 'websearch', query: value.slice(2).trim() };}
+
+    const prefixMap: Record<string, PopupPaletteMode> = { '/': 'commands', '>': 'power', '@': 'tabs', '#': 'bookmarks' };
+    const first = value[0];
+    if (prefixMap[first] && cpModes.includes(first)) {return { mode: prefixMap[first], query: value.slice(1).trim() };}
+
+    return { mode: 'history', query: value };
+  }
+
+  function renderPopupHelpScreen(): void {
+    const resultsList = $('results') as HTMLUListElement;
+    if (!resultsList) {return;}
+
+    popupSelectedIndex = -1;
+    resultsList.innerHTML = '';
+    resultsList.className = 'results list';
+
+    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+
+    const modes = [
+      { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
+      { prefix: '>',  label: 'Power / Admin',  desc: 'Index management, diagnostics, data export' },
+      { prefix: '@',  label: 'Tab Switcher',   desc: 'Search & switch open tabs, reopen closed' },
+      { prefix: '#',  label: 'Bookmarks',      desc: 'Recent bookmarks when empty; type to search all' },
+      { prefix: '??', label: 'Web Search',     desc: 'Default engine + optional prefix (g, d, …) then query' },
+    ];
+
+    modes.forEach(m => {
+      const enabled = cpModes.includes(m.prefix);
+      const li = document.createElement('li');
+      li.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);${!enabled ? 'opacity:0.4;' : ''}`;
+      li.innerHTML = `
+        <span style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;color:var(--accent,#3b82f6);width:28px;text-align:center;">${m.prefix}</span>
+        <span style="flex:1;font-size:13px;font-weight:500;">${m.label}${!enabled ? ' <span style="font-size:10px;color:var(--muted);">[disabled]</span>' : ''}</span>
+        <span style="font-size:9px;color:var(--muted);">${m.desc}</span>
+      `;
+      if (enabled) {
+        li.addEventListener('click', () => {
+          const input = $('search-input') as HTMLInputElement;
+          if (input) {
+            input.value = m.prefix;
+            input.dispatchEvent(new Event('input'));
+            input.focus();
+          }
+        });
+      }
+      resultsList.appendChild(li);
+    });
+
+    const divider = document.createElement('li');
+    divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);cursor:default;border-top:1px solid var(--border,#e5e7eb);margin-top:4px;';
+    divider.textContent = 'Tips';
+    resultsList.appendChild(divider);
+
+    const tips = [
+      { icon: '⌨️', label: 'Keyboard Shortcut', desc: 'Ctrl+Shift+S to open quick-search' },
+      { icon: '🔍', label: 'Omnibox', desc: 'Type "sc " in the address bar' },
+      { icon: '🎯', label: 'Guided Tour', desc: 'Type /tour to start the interactive tour' },
+    ];
+
+    tips.forEach(t => {
+      const li = document.createElement('li');
+      li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:var(--card);cursor:default;';
+      li.innerHTML = `
+        <span style="font-size:16px;width:24px;text-align:center;">${t.icon}</span>
+        <span style="flex:1;font-size:13px;font-weight:500;">${t.label}</span>
+        <span style="font-size:9px;color:var(--muted);">${t.desc}</span>
+      `;
+      resultsList.appendChild(li);
+    });
+
+    resultCountNode.textContent = '';
+  }
+
+  function renderPopupPaletteResults(mode: PopupPaletteMode, query: string): void {
+    const resultsList = $('results') as HTMLUListElement;
+    if (!resultsList) {return;}
+
+    popupWindowPickerActive = false;
+    popupSelectedIndex = 0;
+    resultsList.innerHTML = '';
+    resultsList.className = 'results list';
+
+    if (mode === 'commands' || mode === 'power') {
+      const tier = mode === 'power' ? 'power' as const : 'everyday' as const;
+      const settings = SettingsManager.getSettings();
+      const commands = getAvailableCommands(tier, settings);
+
+      const displayList = preparePaletteCommandList(tier, query, commands, settings);
+
+      resultCountNode.textContent = `${displayList.length} command${displayList.length !== 1 ? 's' : ''}`;
+      if (displayList.length === 0) {
+        resultsList.innerHTML = '<li style="text-align:center;padding:24px;color:var(--muted);">No matching commands</li>';
+        return;
+      }
+
+      const rowBaseStyle = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);';
+      const emptyQuery = !query.trim();
+      if (emptyQuery) {
+        const tip = document.createElement('li');
+        tip.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+        tip.setAttribute('role', 'presentation');
+        tip.textContent = tier === 'power'
+          ? 'Tabs, data, AI, diagnostics, presets — type to filter.'
+          : 'Toggles, sort, page actions, navigation, tabs — type to filter.';
+        resultsList.appendChild(tip);
+      }
+
+      let lastCategory = '';
+      displayList.forEach((cmd, idx) => {
+        if (emptyQuery && cmd.category !== lastCategory) {
+          lastCategory = cmd.category;
+          const h = document.createElement('li');
+          h.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
+          h.setAttribute('role', 'presentation');
+          h.textContent = formatPaletteCategoryHeader(cmd.category, tier);
+          resultsList.appendChild(h);
+        }
+
+        const li = document.createElement('li');
+        li.className = 'palette-selectable-row';
+        li.tabIndex = 0;
+        li.style.cssText = rowBaseStyle;
+
+        const currentLabel = getPopupCurrentLabel(cmd);
+        const hintBlock = cmd.hint
+          ? `<div style="font-size:11px;color:var(--muted);line-height:1.25;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cmd.hint)}</div>`
+          : '';
+        li.innerHTML = `
+          <span style="font-size:16px;width:24px;text-align:center;flex-shrink:0;">${cmd.icon}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+            <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cmd.label}${currentLabel ? ` <span style="font-size:10px;color:var(--accent,#3b82f6);font-weight:600;">[${currentLabel}]</span>` : ''}</span>
+            ${hintBlock}
+          </div>
+          <span style="font-size:9px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:1px 6px;border-radius:3px;flex-shrink:0;">${cmd.category}</span>
+          ${cmd.dangerous ? '<span>⚠️</span>' : ''}
+          ${cmd.shortcut ? `<span style="font-size:9px;color:var(--muted);background:var(--chip);padding:1px 5px;border-radius:3px;">${cmd.shortcut}</span>` : ''}
+        `;
+
+        li.addEventListener('click', () => {
+          popupSelectedIndex = idx;
+          executePopupCommand(cmd);
+        });
+        li.addEventListener('mouseenter', () => {
+          popupSelectedIndex = idx;
+          applyPopupPaletteRowHighlight();
+        });
+        resultsList.appendChild(li);
+      });
+      applyPopupPaletteRowHighlight();
+      return;
+    }
+
+    if (mode === 'tabs') {
+      resultCountNode.textContent = 'Loading tabs...';
+      sendMessage({ type: 'GET_OPEN_TABS' }).then((resp: { tabs?: chrome.tabs.Tab[] }) => {
+        if (!resp?.tabs) { resultCountNode.textContent = '0 tabs'; return; }
+        const tabs = query
+          ? resp.tabs.filter(t => t.title?.toLowerCase().includes(query.toLowerCase()) || t.url?.toLowerCase().includes(query.toLowerCase()))
+          : resp.tabs;
+        resultCountNode.textContent = `${tabs.length} tab${tabs.length !== 1 ? 's' : ''}`;
+        resultsList.innerHTML = '';
+        const hint = document.createElement('li');
+        hint.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+        hint.setAttribute('role', 'presentation');
+        hint.textContent = 'Enter: switch tab · Shift+Enter: open URL in background.';
+        resultsList.appendChild(hint);
+        tabs.forEach((tab, idx) => {
+          const li = document.createElement('li');
+          li.className = 'palette-selectable-row';
+          li.tabIndex = 0;
+          li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
+          if (typeof tab.id === 'number') {
+            li.dataset.tabId = String(tab.id);
+          }
+          if (typeof tab.windowId === 'number') {
+            li.dataset.windowId = String(tab.windowId);
+          }
+          if (tab.url) {
+            li.dataset.tabUrl = tab.url;
+          }
+          const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          li.innerHTML = `
+            <img src="${tab.favIconUrl || ''}" alt="" style="width:16px;height:16px;border-radius:3px;">
+            <div style="flex:1;overflow:hidden;">
+              <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.title || 'Untitled')}</div>
+              <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.url || '')}</div>
+            </div>
+            ${tab.pinned ? '<span>📌</span>' : ''}${tab.active ? '<span>●</span>' : ''}
+          `;
+          wireHideImgOnError(li.querySelector('img'));
+          li.addEventListener('click', (ev) => {
+            const sk = (ev as MouseEvent).shiftKey;
+            const url = tab.url || '';
+            if (sk && url) {
+              chrome.tabs.create({ url, active: false });
+            } else if (typeof tab.id === 'number' && typeof tab.windowId === 'number') {
+              void sendMessage({ type: 'SWITCH_TO_TAB', tabId: tab.id, windowId: tab.windowId });
+            }
+          });
+          li.addEventListener('mouseenter', () => {
+            popupSelectedIndex = idx;
+            applyPopupPaletteRowHighlight();
+          });
+          resultsList.appendChild(li);
+        });
+        applyPopupPaletteRowHighlight();
+      }).catch(() => { resultCountNode.textContent = 'Error loading tabs'; });
+      return;
+    }
+
+    if (mode === 'bookmarks') {
+      resultCountNode.textContent = 'Searching bookmarks...';
+      const msgType = query ? 'SEARCH_BOOKMARKS' : 'GET_RECENT_BOOKMARKS';
+      const payload = query ? { type: msgType, query } : { type: msgType };
+      sendMessage(payload).then((resp: { bookmarks?: chrome.bookmarks.BookmarkTreeNode[] }) => {
+        if (!resp?.bookmarks) { resultCountNode.textContent = '0 bookmarks'; return; }
+        const bms = resp.bookmarks.filter(b => b.url);
+        resultCountNode.textContent = `${bms.length} bookmark${bms.length !== 1 ? 's' : ''}`;
+        resultsList.innerHTML = '';
+        if (!query.trim() && bms.length > 0) {
+          const header = document.createElement('li');
+          header.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
+          header.setAttribute('role', 'presentation');
+          header.textContent = 'Recent bookmarks';
+          resultsList.appendChild(header);
+          const tip = document.createElement('li');
+          tip.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+          tip.setAttribute('role', 'presentation');
+          tip.textContent = 'Type to search all bookmarks by title or URL.';
+          resultsList.appendChild(tip);
+        }
+        bms.forEach((bm, idx) => {
+          const li = document.createElement('li');
+          li.className = 'palette-selectable-row';
+          li.tabIndex = 0;
+          li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
+          if (bm.url) {
+            li.dataset.bookmarkUrl = bm.url;
+          }
+          const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          li.innerHTML = `
+            <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" style="width:16px;height:16px;border-radius:3px;">
+            <div style="flex:1;overflow:hidden;">
+              <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.title || 'Untitled')}</div>
+              <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.url || '')}</div>
+            </div>
+          `;
+          wireHideImgOnError(li.querySelector('img'));
+          li.addEventListener('click', (ev) => {
+            const sk = (ev as MouseEvent).shiftKey;
+            chrome.tabs.create({ url: bm.url!, active: !sk });
+          });
+          li.addEventListener('mouseenter', () => {
+            popupSelectedIndex = idx;
+            applyPopupPaletteRowHighlight();
+          });
+          resultsList.appendChild(li);
+        });
+        applyPopupPaletteRowHighlight();
+      }).catch(() => { resultCountNode.textContent = 'Error'; });
+      return;
+    }
+
+    if (mode === 'websearch') {
+      if (!query) {
+        resultsList.innerHTML = '';
+        const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+        const intro = document.createElement('li');
+        intro.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+        intro.setAttribute('role', 'presentation');
+        intro.textContent = `Default engine: ${getWebSearchEngineDisplayName(defaultKey)} (change in settings). Type a query, then Enter. For Jira and Confluence, set each site URL in settings.`;
+        resultsList.appendChild(intro);
+        const prefixTitle = document.createElement('li');
+        prefixTitle.style.cssText = 'list-style:none;padding:6px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);cursor:default;';
+        prefixTitle.setAttribute('role', 'presentation');
+        prefixTitle.textContent = 'Prefix + space + query';
+        resultsList.appendChild(prefixTitle);
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        for (const line of getWebSearchPrefixHintLines()) {
+          const row = document.createElement('li');
+          row.style.cssText = 'list-style:none;padding:5px 12px 5px 16px;font-size:11px;color:var(--muted);line-height:1.4;cursor:default;';
+          row.setAttribute('role', 'presentation');
+          row.innerHTML = `<code style='font-family:ui-monospace,monospace;font-size:10px;background:var(--chip);padding:1px 5px;border-radius:3px'>?? ${esc(line.prefix)}</code> — ${esc(line.engineLabel)} <span style='opacity:0.85'>(e.g. <code style='font-family:ui-monospace,monospace;font-size:10px;background:var(--chip);padding:1px 5px;border-radius:3px'>?? ${esc(line.prefix)} cats</code>)</span>`;
+          resultsList.appendChild(row);
+        }
+        resultCountNode.textContent = '';
+        return;
+      }
+      const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+      const settings = SettingsManager.getSettings();
+      const parsed = parseWebSearchQuery(query, defaultKey);
+      const engineName = getWebSearchEngineDisplayName(parsed.engineKey);
+      const jiraOrigin = (settings.jiraSiteUrl ?? '').trim();
+      const confluenceOrigin = (settings.confluenceSiteUrl ?? '').trim();
+      const missingSiteForEngine =
+        (parsed.engineKey === 'jira' && !jiraOrigin)
+        || (parsed.engineKey === 'confluence' && !confluenceOrigin);
+      const built = buildWebSearchUrl(parsed, settings);
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      const li = document.createElement('li');
+      li.className = 'palette-selectable-row';
+      li.tabIndex = 0;
+      li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--hover);';
+
+      if (parsed.usedPrefix && parsed.searchTerms === '') {
+        const mp = parsed.matchedPrefix ?? '';
+        if (missingSiteForEngine) {
+          const siteHint = parsed.engineKey === 'jira' ? 'Jira' : 'Confluence';
+          li.innerHTML = `
+            <span style="font-size:16px;">🔍</span>
+            <span style="flex:1;font-size:13px;font-weight:500;">${esc(engineName)} — set ${siteHint} site URL in settings, then add terms (e.g. ?? ${esc(mp)} PROJ-1)</span>
+            <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
+          `;
+          li.addEventListener('click', () => {
+            showToast(
+              webSearchSiteUrlToastMessage(parsed.engineKey === 'jira' ? 'no-jira-site' : 'no-confluence-site'),
+              'warning',
+            );
+          });
+        } else {
+          li.innerHTML = `
+            <span style="font-size:16px;">🔍</span>
+            <span style="flex:1;font-size:13px;font-weight:500;">${esc(engineName)} — type terms after a space (e.g. ?? ${esc(mp)} query)</span>
+            <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
+          `;
+          li.addEventListener('click', () => {
+            showToast('Add search text after the prefix.', 'info');
+          });
+        }
+      } else if ('error' in built) {
+        const msg =
+          built.error === 'no-jira-site' || built.error === 'no-confluence-site'
+            ? webSearchSiteUrlPreviewLabel(built.error, engineName)
+            : 'Cannot open search';
+        li.innerHTML = `
+          <span style="font-size:16px;">🔍</span>
+          <span style="flex:1;font-size:13px;font-weight:500;">${esc(msg)}</span>
+          <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
+        `;
+        li.addEventListener('click', () => {
+          if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+          } else {
+            showToast('Add search text after the prefix.', 'info');
+          }
+        });
+      } else {
+        li.innerHTML = `
+          <span style="font-size:16px;">🔍</span>
+          <span style="flex:1;font-size:13px;font-weight:500;">Search ${esc(engineName)} for "${esc(parsed.searchTerms)}"</span>
+          <span style="font-size:10px;color:var(--muted);">Enter to search</span>
+        `;
+        li.addEventListener('click', (ev) => {
+          const sk = (ev as MouseEvent).shiftKey;
+          chrome.tabs.create({ url: built.url, active: !sk });
+        });
+      }
+      resultsList.appendChild(li);
+      popupSelectedIndex = 0;
+      applyPopupPaletteRowHighlight();
+      resultCountNode.textContent = '';
+      return;
+    }
+  }
+
+  function getPopupCurrentLabel(cmd: PaletteCommand): string | null {
+    const settings = SettingsManager.getSettings();
+    if (cmd.action === 'toggle-boolean' && cmd.settingKey) {return settings[cmd.settingKey] ? 'ON' : 'OFF';}
+    if (cmd.action === 'sub-command' && cmd.cycleValues && cmd.settingKey) {
+      const current = String(settings[cmd.settingKey]);
+      const match = cmd.cycleValues.find(cv => cv.value === current);
+      return match?.label ?? null;
+    }
+    if (cmd.action === 'cycle' && cmd.settingKey) {
+      const parent = ALL_COMMANDS.find(c => c.subCommands?.some(sub => sub.id === cmd.id));
+      if (parent?.cycleValues) {
+        const current = String(settings[parent.settingKey!]);
+        const thisValue = getCycleValueFromCommand(cmd);
+        return String(thisValue) === current ? 'current' : null;
+      }
+    }
+    return null;
+  }
+
+  function applyPopupSettingSideEffects(key: string): void {
+    syncToggleBar();
+    if (key === 'theme') {
+      applyTheme((SettingsManager.getSetting('theme') ?? 'auto') as 'light' | 'dark' | 'auto');
+    }
+    if (key === 'displayMode' || key === 'highlightMatches' || key === 'loadFavicons') {
+      renderResults();
+    }
+    if (key === 'showRecentHistory' || key === 'showRecentSearches') {
+      if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+    if (key === 'maxResults' || key === 'defaultResultCount') {
+      if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+    if ((key === 'jiraSiteUrl' || key === 'confluenceSiteUrl') && popupPaletteMode === 'websearch') {
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        const { query } = detectPopupMode(input.value.trim());
+        renderPopupPaletteResults('websearch', query);
+      }
+    }
+  }
+
+  interface WindowInfo {
+    id: number;
+    tabCount: number;
+    activeTabTitle: string;
+    activeTabFavicon: string;
+    isCurrent: boolean;
+  }
+
+  async function showWindowPicker(): Promise<void> {
+    const resultsList = $('results') as HTMLUListElement;
+    const resultCountNode = $('result-count') as HTMLDivElement;
+    if (!resultsList) { return; }
+
+    popupWindowPickerActive = true;
+    resultsList.innerHTML = '';
+    if (resultCountNode) { resultCountNode.textContent = 'Loading windows...'; }
+
+    let resp: { windows?: WindowInfo[] };
+    try {
+      resp = await sendMessage({ type: 'GET_WINDOWS' }) as { windows?: WindowInfo[] };
+    } catch {
+      showToast('Failed to fetch windows', 'error');
+      return;
+    }
+
+    const windows = resp?.windows;
+    if (!windows || windows.length === 0) {
+      if (resultCountNode) { resultCountNode.textContent = '0 windows'; }
+      showToast('No windows found', 'error');
+      return;
+    }
+
+    const otherWindows = windows.filter(w => !w.isCurrent);
+    if (otherWindows.length === 0) {
+      if (resultCountNode) { resultCountNode.textContent = '1 window'; }
+      showToast('Only one window open — nothing to move to', 'info');
+      return;
+    }
+
+    if (resultCountNode) {
+      resultCountNode.textContent = `${otherWindows.length} window${otherWindows.length !== 1 ? 's' : ''}`;
+    }
+
+    const hint = document.createElement('li');
+    hint.style.cssText = 'list-style:none;padding:8px 12px;font-size:12px;color:var(--muted);line-height:1.35;cursor:default;';
+    hint.setAttribute('role', 'presentation');
+    hint.textContent = 'Select a window to move this tab to:';
+    resultsList.appendChild(hint);
+
+    const rowStyle = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:var(--card);';
+    popupSelectedIndex = 0;
+
+    otherWindows.forEach((win, idx) => {
+      const li = document.createElement('li');
+      li.className = 'palette-selectable-row';
+      li.tabIndex = 0;
+      li.style.cssText = rowStyle;
+
+      const tabLabel = win.tabCount === 1 ? '1 tab' : `${win.tabCount} tabs`;
+      const title = escapeHtml(win.activeTabTitle);
+
+      li.innerHTML = `
+        <span style="font-size:16px;width:24px;text-align:center;flex-shrink:0;">🪟</span>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+          <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${title}</span>
+          <span style="font-size:11px;color:var(--muted);">${tabLabel}</span>
+        </div>
+        <span style="font-size:9px;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:1px 6px;border-radius:3px;flex-shrink:0;">window</span>
+      `;
+
+      li.addEventListener('click', () => {
+        void moveTabToWindow(win.id, win.activeTabTitle);
+      });
+      li.addEventListener('mouseenter', () => {
+        popupSelectedIndex = idx;
+        applyPopupPaletteRowHighlight();
+      });
+      resultsList.appendChild(li);
+    });
+
+    applyPopupPaletteRowHighlight();
+  }
+
+  async function moveTabToWindow(targetWindowId: number, windowTitle: string): Promise<void> {
+    try {
+      const resp = await sendMessage({ type: 'MOVE_TAB_TO_WINDOW', targetWindowId }) as Record<string, unknown>;
+      if (resp?.error) {
+        showToast(`Error: ${resp.error}`, 'error');
+      } else {
+        showToast(`↗️ Moved tab to: ${windowTitle}`, 'success');
+      }
+    } catch {
+      showToast('Failed to move tab', 'error');
+    }
+  }
+
+  function executePopupCommand(cmd: PaletteCommand): void {
+    saveRecentCommand(cmd.id);
+    if (cmd.action === 'toggle-boolean' && cmd.settingKey) {
+      const current = SettingsManager.getSetting(cmd.settingKey);
+      const newVal = !current;
+      SettingsManager.setSetting(cmd.settingKey, newVal as never);
+      applyPopupSettingSideEffects(cmd.settingKey);
+      showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`, 'info');
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        const { query } = detectPopupMode(input.value.trim());
+        renderPopupPaletteResults(popupPaletteMode, query);
+      }
+      return;
+    }
+    if (cmd.action === 'cycle' && cmd.settingKey) {
+      const value = getCycleValueFromCommand(cmd);
+      if (value !== undefined) {
+        SettingsManager.setSetting(cmd.settingKey, value as never);
+        applyPopupSettingSideEffects(cmd.settingKey);
+        showToast(`${cmd.label}`, 'info');
+        const input = $('search-input') as HTMLInputElement;
+        if (input) {
+          const { query } = detectPopupMode(input.value.trim());
+          renderPopupPaletteResults(popupPaletteMode, query);
+        }
+      }
+      return;
+    }
+    if (cmd.action === 'message' && cmd.messageType) {
+      if (cmd.messageType === 'SETTINGS_CHANGED') {
+        const patch = getPowerSettingsPatch(cmd.id);
+        if (patch) {
+          void SettingsManager.updateSettings(patch).then(() => {
+            (Object.keys(patch) as (keyof AppSettings)[]).forEach(k => applyPopupSettingSideEffects(k));
+            showToast(`${cmd.label} — saved`, 'info');
+            const input = $('search-input') as HTMLInputElement;
+            if (input) {
+              debounceSearch(input.value);
+            }
+          });
+        }
+        return;
+      }
+
+      if (cmd.id === 'search-debug') {
+        void (async () => {
+          try {
+            const g = await sendMessage({ type: 'GET_SEARCH_DEBUG_ENABLED' }) as { enabled?: boolean };
+            const next = !g?.enabled;
+            await sendMessage({ type: 'SET_SEARCH_DEBUG_ENABLED', enabled: next });
+            showToast(`Search debug: ${next ? 'ON' : 'OFF'}`, 'info');
+            const input = $('search-input') as HTMLInputElement;
+            if (input) {
+              const { query } = detectPopupMode(input.value.trim());
+              renderPopupPaletteResults(popupPaletteMode, query);
+            }
+          } catch {
+            showToast('Error', 'error');
+          }
+        })();
+        return;
+      }
+
+      if (cmd.id === 'move-tab-to-window') {
+        void showWindowPicker();
+        return;
+      }
+
+      const payload: Record<string, unknown> = { type: cmd.messageType };
+      if (cmd.id === 'zoom-in') {
+        payload.direction = 'in';
+      } else if (cmd.id === 'zoom-out') {
+        payload.direction = 'out';
+      } else if (cmd.id === 'zoom-reset') {
+        payload.direction = 'reset';
+      } else if (cmd.id === 'new-tab') {
+        payload.windowType = 'tab';
+      } else if (cmd.id === 'new-window') {
+        payload.windowType = 'window';
+      } else if (cmd.id === 'new-incognito') {
+        payload.windowType = 'incognito';
+      } else if (cmd.id.startsWith('color-group-')) {
+        payload.color = cmd.id.replace('color-group-', '');
+      }
+
+      const diagnostic = isPaletteDiagnosticMessageType(cmd.messageType);
+      const toastMs = diagnostic ? PALETTE_DIAGNOSTIC_TOAST_MS : 5000;
+
+      void sendMessage(payload)
+        .then((resp: Record<string, unknown>) => {
+          if (resp?.error) {
+            showToast(`Error: ${resp.error}`, 'error');
+            return;
+          }
+          const formatted =
+            cmd.messageType && resp
+              ? formatPaletteDiagnosticToast(cmd.messageType, resp)
+              : null;
+          if (formatted) {
+            showToast(formatted, 'info', toastMs);
+            return;
+          }
+          const ok = resp?.status === 'OK' || resp?.status === 'ok' || resp?.success;
+          if (ok) {
+            showToast(`${cmd.icon} ${cmd.label} — done`, 'success', toastMs);
+            return;
+          }
+          if (resp?.data !== undefined) {
+            const slice =
+              typeof resp.data === 'string'
+                ? resp.data.slice(0, 280)
+                : JSON.stringify(resp.data).slice(0, 280);
+            showToast(`${cmd.icon} ${cmd.label}:\n${slice}`, 'info', toastMs);
+          }
+        })
+        .catch(() => showToast('Error', 'error'));
+      return;
+    }
+    if (cmd.action === 'open-url' && cmd.url) {
+      chrome.tabs.create({ url: cmd.url, active: true });
+      return;
+    }
+    if (cmd.action === 'page-action') {
+      if (cmd.id === 'tour') {
+        runTour(POPUP_TOUR_STEPS, document);
+      } else if (cmd.id === 'about') {
+        const manifest = chrome.runtime.getManifest();
+        showToast(`SmrutiCortex v${manifest.version}\nInstant browser history search`);
+      } else if (cmd.id === 'shortcuts') {
+        showToast('Enter: open · Shift+Enter: background · ↑↓: navigate · Esc: clear');
+      } else if (cmd.id === 'shortcut-toggle-bookmarks-bar') {
+        showToast('Toggle Bookmarks / Favorites Bar\n\nCtrl + Shift + B\n\nWorks in Chrome, Edge & Firefox.\nShortcuts may vary by browser version.', 'info', 8000);
+      } else if (cmd.id === 'shortcut-toggle-vertical-tabs') {
+        showToast('Toggle Vertical Tabs (Edge only)\n\nCtrl + Shift + , (comma)\n\nSwitches between vertical and horizontal tab layout.\nNote: No shortcut exists to collapse/expand the sidebar pane — use the UI button.\nShortcuts may vary by browser version.', 'info', 10000);
+      } else if (cmd.id === 'copy-ollama-endpoint') {
+        const url = SettingsManager.getSetting('ollamaEndpoint') ?? '';
+        if (!url) {
+          showToast('No Ollama endpoint set', 'warning');
+        } else {
+          void navigator.clipboard.writeText(url).then(() => showToast('Ollama endpoint copied', 'info')).catch(() => showToast('Failed to copy', 'error'));
+        }
+      } else if (cmd.id === 'copy-ollama-model') {
+        const m = SettingsManager.getSetting('ollamaModel') ?? '';
+        if (!m) {
+          showToast('No keyword model set', 'warning');
+        } else {
+          void navigator.clipboard.writeText(m).then(() => showToast('Ollama model copied', 'info')).catch(() => showToast('Failed to copy', 'error'));
+        }
+      } else if (cmd.id === 'copy-embedding-model') {
+        const m = SettingsManager.getSetting('embeddingModel') ?? '';
+        if (!m) {
+          showToast('No embedding model set', 'warning');
+        } else {
+          void navigator.clipboard.writeText(m).then(() => showToast('Embedding model copied', 'info')).catch(() => showToast('Failed to copy', 'error'));
+        }
+      }
+    }
+  }
+
+  function handlePopupPaletteEnter(shiftKey = false): void {
+    const resultsList = $('results') as HTMLUListElement;
+    if (!resultsList) {return;}
+    const input = $('search-input') as HTMLInputElement;
+
+    if (popupPaletteMode === 'websearch') {
+      const { query } = detectPopupMode((input?.value ?? '').trim());
+      if (query) {
+        const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+        const parsed = parseWebSearchQuery(query, defaultKey);
+        const built = buildWebSearchUrl(parsed, SettingsManager.getSettings());
+        if ('error' in built) {
+          if (built.error === 'no-terms') {
+            showToast('Add search text after the prefix.', 'info');
+          } else if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+          }
+          return;
+        }
+        chrome.tabs.create({ url: built.url, active: !shiftKey });
+      }
+      return;
+    }
+
+    if (popupPaletteMode === 'tabs') {
+      const items = resultsList.querySelectorAll('.palette-selectable-row');
+      if (items.length === 0) {return;}
+      const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
+      const tabId = selected.dataset.tabId;
+      const windowId = selected.dataset.windowId;
+      const url = selected.dataset.tabUrl || '';
+      if (tabId && windowId) {
+        if (shiftKey && url) {
+          chrome.tabs.create({ url, active: false });
+        } else {
+          void sendMessage({ type: 'SWITCH_TO_TAB', tabId: Number(tabId), windowId: Number(windowId) });
+        }
+      }
+      return;
+    }
+
+    if (popupPaletteMode === 'bookmarks') {
+      const items = resultsList.querySelectorAll('.palette-selectable-row');
+      if (items.length === 0) {return;}
+      const selected = items[Math.min(popupSelectedIndex, items.length - 1)] as HTMLElement;
+      const url = selected.dataset.bookmarkUrl;
+      if (url) {
+        chrome.tabs.create({ url, active: !shiftKey });
+      }
+      return;
+    }
+
+    if (popupWindowPickerActive) {
+      const rows = getPopupPaletteSelectableRows();
+      if (rows.length > 0 && popupSelectedIndex >= 0 && popupSelectedIndex < rows.length) {
+        rows[popupSelectedIndex].click();
+      }
+      return;
+    }
+
+    if (popupPaletteMode === 'commands' || popupPaletteMode === 'power') {
+      const { query } = detectPopupMode((input?.value ?? '').trim());
+      const tier = popupPaletteMode === 'power' ? 'power' as const : 'everyday' as const;
+      const settings = SettingsManager.getSettings();
+      const commands = getAvailableCommands(tier, settings);
+      const list = preparePaletteCommandList(tier, query, commands, settings);
+      if (list.length > 0 && popupSelectedIndex >= 0 && popupSelectedIndex < list.length) {
+        executePopupCommand(list[popupSelectedIndex]);
+      }
+    }
+  }
+
   function debounceSearchLocal(q: string) {
     syncClearButton();
+    popupConfirmingCommand = null;
 
-    // Typing "?" triggers the feature tour
-    if (q.trim() === '?') {
-      const input = $('search-input') as HTMLInputElement;
-      if (input) { input.value = ''; }
-      syncClearButton();
-      runTour(POPUP_TOUR_STEPS, document);
+    const { mode, query } = detectPopupMode(q.trim());
+    popupPaletteMode = mode;
+
+    if (mode === 'help') {
+      renderPopupHelpScreen();
       return;
     }
 
     if (debounceTimer) {clearTimeout(debounceTimer);}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined;}
-    if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;} // Cancel pending focus shift
+    if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;}
 
-    // Determine AI state for this search cycle
+    // Non-history modes: route to palette rendering
+    if (mode !== 'history') {
+      resultsLocal = [];
+      activeIndex = -1;
+      if (popupSpinner) {popupSpinner.classList.remove('active');}
+      renderPopupPaletteResults(mode, query);
+      return;
+    }
+
+    // --- Original history search flow ---
     const aiEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
     aiSearchPending = aiEnabled;
 
-    // Show spinner + loading text immediately
     if (popupSpinner) {popupSpinner.classList.add('active');}
     resultCountNode.textContent = 'Searching...';
 
-    // Phase 1: Fast non-AI search
     debounceTimer = window.setTimeout(() => doSearch(q, true), 150);
 
-    // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
-    // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
     if (aiEnabled) {
       const aiDelayMs = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
       aiDebounceTimer = window.setTimeout(() => {
@@ -549,7 +1365,7 @@ function initializePopup() {
       item.className = 'recent-search-item';
       item.tabIndex = 0;
       item.title = entry.selectedUrl ? `Search: "${entry.query}" → ${entry.selectedUrl}` : `Search: "${entry.query}"`;
-      item.innerHTML = `<span class="recent-search-icon">🔍</span><span class="recent-search-query">${entry.query}</span>`;
+      item.innerHTML = `<span class="recent-search-icon">🔍</span><span class="recent-search-query">${escapeHtml(entry.query)}</span>`;
       item.addEventListener('click', () => {
         const input = $('search-input') as HTMLInputElement;
         if (input) {
@@ -594,12 +1410,12 @@ function initializePopup() {
       item.title = entry.title || entry.url;
 
       const icon = entry.action === 'copy' ? '📋' : '🔗';
-      item.innerHTML = `<span class="recent-search-icon">${icon}</span><span class="recent-search-query">${entry.title || entry.url}</span>`;
+      item.innerHTML = `<span class="recent-search-icon">${icon}</span><span class="recent-search-query">${escapeHtml(entry.title || entry.url)}</span>`;
       item.addEventListener('click', () => {
         openUrl(entry.url, true, false);
       });
       item.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') item.click();
+        if (e.key === 'Enter') {item.click();}
       });
       container.appendChild(item);
     }
@@ -620,28 +1436,23 @@ function initializePopup() {
       return;
     }
 
-    const showHistory = SettingsManager.getSetting('showRecentHistory') ?? true;
+    const showRecentlyVisited = SettingsManager.getSetting('showRecentHistory') ?? true;
     const showSearches = SettingsManager.getSetting('showRecentSearches') ?? true;
 
     try {
-      // Load recent browsing history if enabled
-      if (showHistory) {
-        const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
-        const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
-        resultsLocal = (resp && resp.results) ? resp.results : [];
-        const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
-        sortResults(resultsLocal, sortBy);
-      } else {
-        resultsLocal = [];
-      }
+      const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
+      const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
+      resultsLocal = (resp && resp.results) ? resp.results : [];
+      const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
+      sortResults(resultsLocal, sortBy);
 
       currentAIExpandedKeywords = [];
       renderAIStatus(null);
       activeIndex = -1;
       renderResults();
 
-      // Show recently visited entries (gated by showRecentHistory)
-      if (showHistory) {
+      // "⚡ Recently Visited" section — gated by showRecentHistory toggle
+      if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
         if (interactions.length > 0) {
           const section = renderRecentInteractionsSection(interactions.slice(0, 5));
@@ -658,9 +1469,6 @@ function initializePopup() {
         }
       }
 
-      if (!showHistory && !showSearches) {
-        resultCountNode.textContent = 'Type to search';
-      }
     } catch {
       resultsLocal = [];
       activeIndex = -1;
@@ -750,6 +1558,7 @@ function initializePopup() {
 
   // Fast rendering
   function renderResults() {
+    try {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true; // Default: true
     resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
@@ -779,7 +1588,7 @@ function initializePopup() {
         fav.className = 'card-favicon';
         const cardFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         fav.src = cardFavFallback;
-        fav.onerror = () => { fav.src = cardFavFallback; };
+        fav.addEventListener('error', () => { fav.src = cardFavFallback; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;
@@ -833,7 +1642,7 @@ function initializePopup() {
         fav.className = 'favicon';
         const listFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         fav.src = listFavFallback;
-        fav.onerror = () => { fav.src = listFavFallback; };
+        fav.addEventListener('error', () => { fav.src = listFavFallback; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;
@@ -876,6 +1685,10 @@ function initializePopup() {
 
         resultsNode.appendChild(li);
       });
+    }
+    } catch (err) {
+      resultsNode.innerHTML = '<div style="padding:12px;color:#ef4444;">Render error — try a new search</div>';
+      console.error('[SmrutiCortex] renderResults error:', err);
     }
   }
 
@@ -934,6 +1747,15 @@ function initializePopup() {
           name: 'results',
           element: null, // Custom handling
           onFocus: () => {
+            if (popupPaletteMode !== 'history') {
+              const rows = getPopupPaletteSelectableRows();
+              if (rows.length > 0) {
+                popupSelectedIndex = 0;
+                applyPopupPaletteRowHighlight();
+                rows[0].focus();
+              }
+              return;
+            }
             if (resultsLocal.length > 0) {
               const firstResult = resultsNode.querySelector(selector) as HTMLElement;
               if (firstResult) {
@@ -943,7 +1765,12 @@ function initializePopup() {
               }
             }
           },
-          shouldSkip: () => resultsLocal.length === 0 // Skip if no results
+          shouldSkip: () => {
+            if (popupPaletteMode !== 'history') {
+              return getPopupPaletteSelectableRows().length === 0;
+            }
+            return resultsLocal.length === 0;
+          },
         },
         {
           name: 'settings',
@@ -966,6 +1793,14 @@ function initializePopup() {
 
     // Handle search input specific keys
     if (currentElement === input) {
+      if (popupPaletteMode !== 'history' && popupPaletteMode !== 'help') {
+        const pRows = getPopupPaletteSelectableRows();
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && pRows.length > 0) {
+          e.preventDefault();
+          handlePopupPaletteArrow(e.key === 'ArrowDown' ? 'down' : 'up');
+          return;
+        }
+      }
       if (e.key === 'ArrowDown' && resultsLocal.length > 0) {
         e.preventDefault();
         // Move focus to first result item if not already focused
@@ -990,18 +1825,28 @@ function initializePopup() {
         return;
       }
       if (e.key === 'Escape') {
+        if (popupWindowPickerActive) {
+          e.preventDefault();
+          popupWindowPickerActive = false;
+          const { query } = detectPopupMode(input.value.trim());
+          renderPopupPaletteResults(popupPaletteMode, query);
+          return;
+        }
         if (input.value.length > 0) {
           e.preventDefault();
           input.value = '';
           syncClearButton();
           currentQuery = '';
-          resultsLocal = [];
-          activeIndex = -1;
-          renderResults();
-          loadRecentHistory();
+          debounceSearch('');
           return;
         }
         // Input already empty — let Escape bubble up to close the popup
+        return;
+      }
+      // Command palette: Enter in non-history mode
+      if (e.key === 'Enter' && popupPaletteMode !== 'history') {
+        e.preventDefault();
+        handlePopupPaletteEnter(e.shiftKey);
         return;
       }
       // Ctrl+A in input: select only the input text, not the whole popup document
@@ -1026,6 +1871,57 @@ function initializePopup() {
 
     // Handle result item navigation
     if (resultsNode.contains(currentElement)) {
+      const paletteRow = (currentElement as HTMLElement).closest?.('.palette-selectable-row');
+      if (popupPaletteMode !== 'history' && paletteRow) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          handlePopupPaletteArrow('down');
+          focusPopupPaletteRowAt(popupSelectedIndex);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const rows = getPopupPaletteSelectableRows();
+          if (rows.length === 0) {return;}
+          if (popupSelectedIndex <= 0) {
+            input.focus();
+            return;
+          }
+          handlePopupPaletteArrow('up');
+          focusPopupPaletteRowAt(popupSelectedIndex);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handlePopupPaletteEnter(e.shiftKey);
+          return;
+        }
+        if (e.key === 'Escape') {
+          if (popupWindowPickerActive) {
+            e.preventDefault();
+            popupWindowPickerActive = false;
+            const { query } = detectPopupMode(input.value.trim());
+            renderPopupPaletteResults(popupPaletteMode, query);
+            input.focus();
+            return;
+          }
+          if (input.value.length > 0) {
+            e.preventDefault();
+            input.value = '';
+            syncClearButton();
+            currentQuery = '';
+            debounceSearch('');
+            input.focus();
+            return;
+          }
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          return;
+        }
+      }
+
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (resultsLocal.length === 0) {return;}
@@ -1117,10 +2013,7 @@ function initializePopup() {
           input.value = '';
           syncClearButton();
           currentQuery = '';
-          resultsLocal = [];
-          activeIndex = -1;
-          renderResults();
-          loadRecentHistory();
+          debounceSearch('');
           input.focus();
           return;
         }
@@ -1313,6 +2206,12 @@ function initializePopup() {
       indexBookmarksInput.checked = SettingsManager.getSetting('indexBookmarks') ?? true;
     }
 
+    // Advanced Browser Commands setting
+    const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
+    if (advBrowserInput) {
+      advBrowserInput.checked = SettingsManager.getSetting('advancedBrowserCommands') ?? false;
+    }
+
     // Search result diversity setting
     const showDuplicateUrlsInput = modal.querySelector('#modal-showDuplicateUrls') as HTMLInputElement;
     if (showDuplicateUrlsInput) {
@@ -1329,6 +2228,52 @@ function initializePopup() {
     if (sensitiveUrlBlacklistInput) {
       const blacklist = SettingsManager.getSetting('sensitiveUrlBlacklist') || [];
       sensitiveUrlBlacklistInput.value = blacklist.join('\n');
+    }
+
+    // Command Palette settings
+    const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
+    const cpEnabledInput = modal.querySelector('#modal-commandPaletteEnabled') as HTMLInputElement;
+    if (cpEnabledInput) {cpEnabledInput.checked = cpEnabled;}
+
+    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+    const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
+    const cpInPopupInput = modal.querySelector('#modal-commandPaletteInPopup') as HTMLInputElement;
+    if (cpInPopupInput) {
+      cpInPopupInput.checked = cpInPopup;
+      cpInPopupInput.disabled = !cpEnabled;
+    }
+
+    const modeMap: Record<string, string> = { '/': 'slash', '>': 'angle', '@': 'at', '#': 'hash', '??': 'web' };
+    for (const [prefix, suffix] of Object.entries(modeMap)) {
+      const el = modal.querySelector(`#modal-palette-mode-${suffix}`) as HTMLInputElement;
+      if (el) {
+        el.checked = cpModes.includes(prefix);
+        el.disabled = !cpEnabled;
+      }
+    }
+
+    const currentWebEngine = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+    const webEngineInputs = modal.querySelectorAll('input[name="modal-webSearchEngine"]');
+    webEngineInputs.forEach(input => {
+      (input as HTMLInputElement).checked = (input as HTMLInputElement).value === currentWebEngine;
+    });
+
+    const jiraUrlInput = modal.querySelector('#modal-jiraSiteUrl') as HTMLInputElement | null;
+    if (jiraUrlInput) {
+      jiraUrlInput.value = SettingsManager.getSetting('jiraSiteUrl') ?? '';
+    }
+    const confluenceUrlInput = modal.querySelector('#modal-confluenceSiteUrl') as HTMLInputElement | null;
+    if (confluenceUrlInput) {
+      confluenceUrlInput.value = SettingsManager.getSetting('confluenceSiteUrl') ?? '';
+    }
+
+    // Sync toolbar toggle checkboxes with current settings
+    const toolbarOptionsContainer = modal.querySelector('#toolbar-toggle-options') as HTMLDivElement | null;
+    if (toolbarOptionsContainer) {
+      const currentToggles = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
+      toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
+        cb.checked = currentToggles.includes(cb.dataset.toolbarKey!);
+      });
     }
 
     // Initialize bookmark button in settings modal
@@ -1974,15 +2919,27 @@ function initializePopup() {
       });
     });
 
+    // Convert vertical mouse wheel to horizontal scroll on settings tab bar
+    const tabBar = modal.querySelector('.settings-tabs') as HTMLElement | null;
+    if (tabBar) {
+      tabBar.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          tabBar.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    }
+
     // Theme changes
     const themeInputs = modal.querySelectorAll('input[name="modal-theme"]');
     themeInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           const value = target.value as 'light' | 'dark' | 'auto';
-          await SettingsManager.setSetting('theme', value);
+          SettingsManager.setSetting('theme', value).catch(() => {});
           applyTheme(value);
+          syncToggleBar();
           showToast(`Theme set to ${value}`, 'info');
         }
       });
@@ -1991,11 +2948,12 @@ function initializePopup() {
     // Display mode changes
     const displayInputs = modal.querySelectorAll('input[name="modal-displayMode"]');
     displayInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
-          await SettingsManager.setSetting('displayMode', target.value as DisplayMode);
-          renderResults(); // Re-render results with new display mode
+          SettingsManager.setSetting('displayMode', target.value as DisplayMode).catch(() => {});
+          syncToggleBar();
+          renderResults();
           showToast('Display mode updated', 'info');
         }
       });
@@ -2004,12 +2962,12 @@ function initializePopup() {
     // Log level changes
     const logInputs = modal.querySelectorAll('input[name="modal-logLevel"]');
     logInputs.forEach(input => {
-      input.addEventListener('change', async (e) => {
+      input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           const level = parseInt(target.value);
-          await SettingsManager.setSetting('logLevel', level);
-          await Logger.setLevel(level);
+          SettingsManager.setSetting('logLevel', level).catch(() => {});
+          Logger.setLevel(level).catch(() => {});
           showToast('Log level updated', 'info');
         }
       });
@@ -2018,10 +2976,11 @@ function initializePopup() {
     // Highlight matches toggle
     const highlightInput = modal.querySelector('#modal-highlightMatches') as HTMLInputElement;
     if (highlightInput) {
-      highlightInput.addEventListener('change', async (e) => {
+      highlightInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('highlightMatches', target.checked);
-        renderResults(); // Re-render results with/without highlighting
+        SettingsManager.setSetting('highlightMatches', target.checked).catch(() => {});
+        syncToggleBar();
+        renderResults();
         showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
@@ -2029,11 +2988,11 @@ function initializePopup() {
     // Focus delay changes
     const focusDelayInput = modal.querySelector('#modal-focusDelayMs') as HTMLInputElement;
     if (focusDelayInput) {
-      focusDelayInput.addEventListener('change', async () => {
+      focusDelayInput.addEventListener('change', () => {
         let val = parseInt(focusDelayInput.value);
         if (isNaN(val) || val < 0) {val = 0;}
         if (val > 2000) {val = 2000;}
-        await SettingsManager.setSetting('focusDelayMs', val);
+        SettingsManager.setSetting('focusDelayMs', val).catch(() => {});
         focusDelayInput.value = String(val);
         showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`, 'info');
       });
@@ -2042,9 +3001,10 @@ function initializePopup() {
     // Select all on focus toggle
     const selectAllOnFocusInput = modal.querySelector('#modal-selectAllOnFocus') as HTMLInputElement;
     if (selectAllOnFocusInput) {
-      selectAllOnFocusInput.addEventListener('change', async (e) => {
+      selectAllOnFocusInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('selectAllOnFocus', target.checked);
+        SettingsManager.setSetting('selectAllOnFocus', target.checked).catch(() => {});
+        syncToggleBar();
         showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end', 'info');
       });
     }
@@ -2052,9 +3012,10 @@ function initializePopup() {
     // Recent history toggle
     const showRecentHistoryInput2 = modal.querySelector('#modal-showRecentHistory') as HTMLInputElement;
     if (showRecentHistoryInput2) {
-      showRecentHistoryInput2.addEventListener('change', async (e) => {
+      showRecentHistoryInput2.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showRecentHistory', target.checked);
+        SettingsManager.setSetting('showRecentHistory', target.checked).catch(() => {});
+        syncToggleBar();
         showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
@@ -2063,9 +3024,10 @@ function initializePopup() {
     // Recent searches toggle
     const showRecentSearchesInput2 = modal.querySelector('#modal-showRecentSearches') as HTMLInputElement;
     if (showRecentSearchesInput2) {
-      showRecentSearchesInput2.addEventListener('change', async (e) => {
+      showRecentSearchesInput2.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showRecentSearches', target.checked);
+        SettingsManager.setSetting('showRecentSearches', target.checked).catch(() => {});
+        syncToggleBar();
         showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
       });
@@ -2074,9 +3036,10 @@ function initializePopup() {
     // Ollama enabled toggle
     const ollamaEnabledInput = modal.querySelector('#modal-ollamaEnabled') as HTMLInputElement;
     if (ollamaEnabledInput) {
-      ollamaEnabledInput.addEventListener('change', async (e) => {
+      ollamaEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('ollamaEnabled', target.checked);
+        SettingsManager.setSetting('ollamaEnabled', target.checked).catch(() => {});
+        syncToggleBar();
         console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
@@ -2085,10 +3048,10 @@ function initializePopup() {
     // Ollama endpoint changes
     const ollamaEndpointInput = modal.querySelector('#modal-ollamaEndpoint') as HTMLInputElement;
     if (ollamaEndpointInput) {
-      ollamaEndpointInput.addEventListener('change', async () => {
+      ollamaEndpointInput.addEventListener('change', () => {
         const val = ollamaEndpointInput.value.trim();
         if (val) {
-          await SettingsManager.setSetting('ollamaEndpoint', val);
+          SettingsManager.setSetting('ollamaEndpoint', val).catch(() => {});
           showToast('Ollama endpoint updated', 'info');
         }
       });
@@ -2097,10 +3060,10 @@ function initializePopup() {
     // Ollama model changes (hidden input synced by custom model select)
     const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
     if (ollamaModelInput) {
-      ollamaModelInput.addEventListener('change', async () => {
+      ollamaModelInput.addEventListener('change', () => {
         const val = ollamaModelInput.value.trim();
         if (val) {
-          await SettingsManager.setSetting('ollamaModel', val);
+          SettingsManager.setSetting('ollamaModel', val).catch(() => {});
           showToast(`Model set to: ${val}`, 'info');
         }
       });
@@ -2152,22 +3115,19 @@ function initializePopup() {
     // Ollama timeout changes
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
-      ollamaTimeoutInput.addEventListener('change', async () => {
+      ollamaTimeoutInput.addEventListener('change', () => {
         let val = parseInt(ollamaTimeoutInput.value);
         
-        // Handle special cases
         if (val === -1) {
-          // Infinite timeout (no timeout)
-          await SettingsManager.setSetting('ollamaTimeout', -1);
+          SettingsManager.setSetting('ollamaTimeout', -1).catch(() => {});
           ollamaTimeoutInput.value = '-1';
           showToast('Timeout disabled (infinite wait)', 'info');
           return;
         }
         
-        // Validate range for non-infinite timeouts
-        if (isNaN(val) || val < 5000) {val = 5000;}  // Minimum 5s
-        if (val > 120000) {val = 120000;}  // Maximum 2min
-        await SettingsManager.setSetting('ollamaTimeout', val);
+        if (isNaN(val) || val < 5000) {val = 5000;}
+        if (val > 120000) {val = 120000;}
+        SettingsManager.setSetting('ollamaTimeout', val).catch(() => {});
         ollamaTimeoutInput.value = String(val);
         showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`, 'info');
       });
@@ -2176,9 +3136,9 @@ function initializePopup() {
     // Semantic search settings
     const embeddingsEnabledInput = modal.querySelector('#modal-embeddingsEnabled') as HTMLInputElement;
     if (embeddingsEnabledInput) {
-      embeddingsEnabledInput.addEventListener('change', async (e) => {
+      embeddingsEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('embeddingsEnabled', target.checked);
+        SettingsManager.setSetting('embeddingsEnabled', target.checked).catch(() => {});
         console.info(`[Settings] Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
         if (target.checked) {
@@ -2189,10 +3149,10 @@ function initializePopup() {
 
     const embeddingModelHidden = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
     if (embeddingModelHidden) {
-      embeddingModelHidden.addEventListener('change', async () => {
+      embeddingModelHidden.addEventListener('change', () => {
         const val = embeddingModelHidden.value.trim();
         if (val) {
-          await SettingsManager.setSetting('embeddingModel', val);
+          SettingsManager.setSetting('embeddingModel', val).catch(() => {});
           showToast(`Embedding model set to: ${val}`, 'info');
         }
       });
@@ -2243,11 +3203,12 @@ function initializePopup() {
     // Privacy settings - Load Favicons
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
     if (loadFaviconsInput) {
-      loadFaviconsInput.addEventListener('change', async (e) => {
+      loadFaviconsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('loadFavicons', target.checked);
+        SettingsManager.setSetting('loadFavicons', target.checked).catch(() => {});
+        syncToggleBar();
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`, 'info');
-        renderResults(); // Re-render to apply changes immediately
+        renderResults();
       });
     }
 
@@ -2373,12 +3334,12 @@ function initializePopup() {
     // Bookmarks indexing
     const indexBookmarksInput = modal.querySelector('#modal-indexBookmarks') as HTMLInputElement;
     if (indexBookmarksInput) {
-      indexBookmarksInput.addEventListener('change', async (e) => {
+      indexBookmarksInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('indexBookmarks', target.checked);
+        SettingsManager.setSetting('indexBookmarks', target.checked).catch(() => {});
+        syncToggleBar();
         if (target.checked) {
           showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
-          // Trigger bookmark indexing via service worker
           chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' });
         } else {
           showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.', 'info');
@@ -2386,14 +3347,69 @@ function initializePopup() {
       });
     }
 
+    // Advanced Browser Commands: optional permissions must be granted before the setting turns on
+    const ADV_BROWSER_OPTIONAL_PERMS = ['tabGroups', 'browsingData', 'topSites'] as const;
+    const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
+    if (advBrowserInput) {
+      advBrowserInput.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        if (!target.checked) {
+          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+          syncToggleBar();
+          showToast('Advanced Browser Commands disabled', 'info');
+          return;
+        }
+        target.disabled = true;
+        try {
+          const resp = await sendMessage({
+            type: 'REQUEST_OPTIONAL_PERMISSIONS',
+            permissions: [...ADV_BROWSER_OPTIONAL_PERMS],
+          }) as { status?: string; granted?: boolean; error?: string };
+          if (resp?.error) {
+            target.checked = false;
+            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+            showToast(
+              'Advanced Browser Commands stay off (permission request failed). Try again from chrome://extensions → SmrutiCortex → Details → Permissions.',
+              'warning',
+            );
+            return;
+          }
+          if (resp?.granted) {
+            await SettingsManager.setSetting('advancedBrowserCommands', true).catch(() => {});
+            showToast(
+              'Advanced Browser Commands enabled. Tab groups, browsing data cleanup, and Top Sites are allowed.',
+              'info',
+            );
+          } else {
+            target.checked = false;
+            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+            showToast(
+              'Advanced Browser Commands stay off because optional permissions were not granted. Chrome was asked for: tab groups, browsing data cleanup, and Top Sites. To try again: chrome://extensions → SmrutiCortex → Details → Permissions.',
+              'warning',
+            );
+          }
+        } catch {
+          target.checked = false;
+          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+          showToast(
+            'Advanced Browser Commands stay off (could not complete permission request). Try again from chrome://extensions → SmrutiCortex → Details.',
+            'warning',
+          );
+        } finally {
+          target.disabled = false;
+          syncToggleBar();
+        }
+      });
+    }
+
     // Search result diversity - Show Duplicate URLs
     const showDuplicateUrlsInput = modal.querySelector('#modal-showDuplicateUrls') as HTMLInputElement;
     if (showDuplicateUrlsInput) {
-      showDuplicateUrlsInput.addEventListener('change', async (e) => {
+      showDuplicateUrlsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showDuplicateUrls', target.checked);
+        SettingsManager.setSetting('showDuplicateUrls', target.checked).catch(() => {});
+        syncToggleBar();
         showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`, 'info');
-        // Trigger re-search to apply diversity filter
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
           doSearch(searchInput.value);
@@ -2404,11 +3420,11 @@ function initializePopup() {
     // Strict matching - Show Non-Matching Results
     const showNonMatchingResultsInput = modal.querySelector('#modal-showNonMatchingResults') as HTMLInputElement;
     if (showNonMatchingResultsInput) {
-      showNonMatchingResultsInput.addEventListener('change', async (e) => {
+      showNonMatchingResultsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        await SettingsManager.setSetting('showNonMatchingResults', target.checked);
+        SettingsManager.setSetting('showNonMatchingResults', target.checked).catch(() => {});
+        syncToggleBar();
         showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`, 'info');
-        // Trigger re-search to apply strict matching
         const searchInput = $('search-input') as HTMLInputElement;
         if (searchInput && searchInput.value.trim()) {
           doSearch(searchInput.value);
@@ -2419,11 +3435,74 @@ function initializePopup() {
     // Privacy settings - Sensitive URL Blacklist
     const sensitiveUrlBlacklistInput = modal.querySelector('#modal-sensitiveUrlBlacklist') as HTMLTextAreaElement;
     if (sensitiveUrlBlacklistInput) {
-      sensitiveUrlBlacklistInput.addEventListener('change', async () => {
+      sensitiveUrlBlacklistInput.addEventListener('change', () => {
         const val = sensitiveUrlBlacklistInput.value.trim();
         const blacklist = val ? val.split('\n').map(s => s.trim()).filter(Boolean) : [];
-        await SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist);
+        SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist).catch(() => {});
         showToast(`Blacklist updated (${blacklist.length} entries)`, 'info');
+      });
+    }
+
+    // --- Command Palette settings ---
+    const cpMasterInput = modal.querySelector('#modal-commandPaletteEnabled') as HTMLInputElement;
+    const cpInPopupInput2 = modal.querySelector('#modal-commandPaletteInPopup') as HTMLInputElement;
+    const cpModeCheckboxes = modal.querySelectorAll<HTMLInputElement>('[id^="modal-palette-mode-"]');
+
+    function updatePaletteDisabledState() {
+      const enabled = cpMasterInput?.checked ?? true;
+      cpModeCheckboxes.forEach(cb => { cb.disabled = !enabled; });
+      if (cpInPopupInput2) {cpInPopupInput2.disabled = !enabled;}
+    }
+
+    if (cpMasterInput) {
+      cpMasterInput.addEventListener('change', () => {
+        SettingsManager.setSetting('commandPaletteEnabled', cpMasterInput.checked).catch(() => {});
+        updatePaletteDisabledState();
+        showToast('Command Palette ' + (cpMasterInput.checked ? 'enabled' : 'disabled'), 'info');
+      });
+    }
+
+    cpModeCheckboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const selected: string[] = [];
+        cpModeCheckboxes.forEach(c => { if (c.checked) {selected.push(c.value);} });
+        SettingsManager.setSetting('commandPaletteModes', selected).catch(() => {});
+        showToast(`Active modes: ${selected.join(' ') || 'none'}`, 'info');
+      });
+    });
+
+    if (cpInPopupInput2) {
+      cpInPopupInput2.addEventListener('change', () => {
+        SettingsManager.setSetting('commandPaletteInPopup', cpInPopupInput2.checked).catch(() => {});
+        showToast('Popup command palette ' + (cpInPopupInput2.checked ? 'enabled' : 'disabled'), 'info');
+      });
+    }
+
+    const webEngineInputs = modal.querySelectorAll('input[name="modal-webSearchEngine"]');
+    webEngineInputs.forEach(input => {
+      input.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+          SettingsManager.setSetting('webSearchEngine', target.value).catch(() => {});
+          showToast(`Web search engine set to ${target.value}`, 'info');
+        }
+      });
+    });
+
+    const jiraUrlInput2 = modal.querySelector('#modal-jiraSiteUrl') as HTMLInputElement | null;
+    if (jiraUrlInput2) {
+      jiraUrlInput2.addEventListener('change', () => {
+        const raw = jiraUrlInput2.value.trim();
+        SettingsManager.setSetting('jiraSiteUrl', raw).catch(() => {});
+        showToast(raw ? 'Jira site URL saved' : 'Jira site URL cleared', 'info');
+      });
+    }
+    const confluenceUrlInput2 = modal.querySelector('#modal-confluenceSiteUrl') as HTMLInputElement | null;
+    if (confluenceUrlInput2) {
+      confluenceUrlInput2.addEventListener('change', () => {
+        const raw = confluenceUrlInput2.value.trim();
+        SettingsManager.setSetting('confluenceSiteUrl', raw).catch(() => {});
+        showToast(raw ? 'Confluence site URL saved' : 'Confluence site URL cleared', 'info');
       });
     }
 
@@ -2446,12 +3525,12 @@ function initializePopup() {
           </div>
         `;
         const checkbox = label.querySelector('input') as HTMLInputElement;
-        checkbox.addEventListener('change', async () => {
+        checkbox.addEventListener('change', () => {
           const allChecked: string[] = [];
           toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
-            if (cb.checked) allChecked.push(cb.dataset.toolbarKey!);
+            if (cb.checked) {allChecked.push(cb.dataset.toolbarKey!);}
           });
-          await SettingsManager.setSetting('toolbarToggles', allChecked);
+          SettingsManager.setSetting('toolbarToggles', allChecked).catch(() => {});
           renderToggleBar();
           showToast(`Toolbar updated (${allChecked.length} toggle${allChecked.length !== 1 ? 's' : ''})`, 'info');
         });
@@ -2617,7 +3696,7 @@ function initializePopup() {
       importBtn.addEventListener('click', () => importFileInput.click());
       importFileInput.addEventListener('change', async () => {
         const file = importFileInput.files?.[0];
-        if (!file) return;
+        if (!file) {return;}
         importFileInput.value = '';
         try {
           const text = await file.text();
@@ -2963,6 +4042,34 @@ function initializePopup() {
     }
   }
 
+  function applyRemoteSettingsChanges(settings: Record<string, unknown> | undefined): void {
+    if (!settings) {return;}
+    SettingsManager.applyRemoteSettings(settings).catch(() => {});
+    const keys = Object.keys(settings);
+
+    if (keys.includes('theme')) {
+      applyTheme(String(settings.theme ?? 'auto') as 'light' | 'dark' | 'auto');
+    }
+    if (keys.includes('toolbarToggles')) {
+      renderToggleBar();
+    } else {
+      syncToggleBar();
+    }
+    if (keys.some(k => ['displayMode', 'highlightMatches', 'loadFavicons'].includes(k))) {
+      renderResults();
+    }
+    if (keys.some(k => ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'].includes(k))) {
+      if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+    if (keys.some(k => k === 'jiraSiteUrl' || k === 'confluenceSiteUrl' || k === 'webSearchEngine') && popupPaletteMode === 'websearch') {
+      const input = $('search-input') as HTMLInputElement;
+      if (input) {
+        const { query } = detectPopupMode(input.value.trim());
+        renderPopupPaletteResults('websearch', query);
+      }
+    }
+  }
+
   // Apply theme immediately from stored setting
   applyTheme((SettingsManager.getSetting('theme') ?? 'auto') as 'light' | 'dark' | 'auto');
 
@@ -3023,12 +4130,7 @@ function initializePopup() {
       } else if (message.type === 'PING') {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
-        if (message.settings) {
-          // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
-          SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
-        }
-        syncToggleBar();
-        renderResults();
+        applyRemoteSettingsChanges(message.settings);
         sendResponse({ status: 'ok' });
       }
     });
@@ -3040,12 +4142,7 @@ function initializePopup() {
       } else if (message.type === 'PING') {
         sendResponse({ status: 'ok' });
       } else if (message.type === 'SETTINGS_CHANGED') {
-        if (message.settings) {
-          // Use applyRemoteSettings — does NOT re-broadcast (breaks infinite loop)
-          SettingsManager.applyRemoteSettings(message.settings).catch(() => {});
-        }
-        syncToggleBar();
-        renderResults();
+        applyRemoteSettingsChanges(message.settings);
         sendResponse({ status: 'ok' });
       }
     });
@@ -3075,7 +4172,7 @@ function initializePopup() {
           topQueriesDiv.innerHTML = analytics.topQueries
             .map(({ query, count }) => `
               <div class="query-item">
-                <span class="query-text">"${query}"</span>
+                <span class="query-text">"${escapeHtml(query)}"</span>
                 <span class="query-count">${count}x</span>
               </div>
             `)
@@ -3112,7 +4209,7 @@ function initializePopup() {
             .reverse()
             .map((entry: SearchDebugEntry) => `
               <div class="search-entry">
-                <div class="search-query">"${entry.query}"</div>
+                <div class="search-query">"${escapeHtml(entry.query)}"</div>
                 <div class="search-meta">
                   ${entry.resultCount} results · ${entry.duration.toFixed(2)}ms · 
                   ${new Date(entry.timestamp).toLocaleTimeString()}
@@ -3128,12 +4225,13 @@ function initializePopup() {
       console.error('Failed to load analytics:', err);
     }
 
-    // Close button (use onclick to avoid stacking listeners)
     const closeBtn = modal.querySelector('#analytics-close') as HTMLElement;
     if (closeBtn) {
-      closeBtn.onclick = () => {
+      const newClose = closeBtn.cloneNode(true) as HTMLElement;
+      closeBtn.replaceWith(newClose);
+      newClose.addEventListener('click', () => {
         modal.classList.add('hidden');
-      };
+      });
     }
   }
 }

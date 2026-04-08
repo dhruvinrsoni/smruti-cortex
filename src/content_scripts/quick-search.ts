@@ -42,6 +42,30 @@ import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shar
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
 import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import {
+  type PaletteCommand,
+  ALL_COMMANDS,
+  preparePaletteCommandList,
+  getPowerSettingsPatch,
+  getCommandsByTier,
+  getAvailableCommands,
+  getCycleValueFromCommand,
+  getCurrentValueLabel,
+  saveRecentCommand,
+  getWebSearchPrefixHintLines,
+  getWebSearchEngineDisplayName,
+  formatPaletteCategoryHeader,
+  parseWebSearchQuery,
+  buildWebSearchUrl,
+  webSearchSiteUrlToastMessage,
+  webSearchSiteUrlPreviewLabel,
+} from '../shared/command-registry';
+import {
+  formatPaletteDiagnosticToast,
+  isPaletteDiagnosticMessageType,
+  PALETTE_DIAGNOSTIC_TOAST_MS,
+} from '../shared/palette-messages';
+import { wireHideImgOnError } from '../shared/hide-img-on-error';
 
 // Extend window interface for our extension
 declare global {
@@ -138,6 +162,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
   const SPINNER_TIMEOUT_MS = 15_000; // Hide spinner after 15s if no response
+
+  // Command palette state
+  type PaletteMode = 'history' | 'commands' | 'power' | 'tabs' | 'bookmarks' | 'websearch' | 'help';
+  let currentMode: PaletteMode = 'history';
+  let modeBadgeEl: HTMLDivElement | null = null;
+  let confirmingCommand: PaletteCommand | null = null;
+  let qsWindowPickerActive = false;
+  let cachedTabs: chrome.tabs.Tab[] | null = null;
+  let cachedBookmarks: chrome.bookmarks.BookmarkTreeNode[] | null = null;
+  let firstUseHintEl: HTMLDivElement | null = null;
+  let firstUseHintTimer: number | null = null;
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
     try {
@@ -160,35 +195,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // Track context invalidation recovery attempts
   let contextRecoveryAttempts = 0;
-  const MAX_CONTEXT_RECOVERY_ATTEMPTS = 3;
-  const CONTEXT_RECOVERY_DELAY = 500; // ms
-
-  // Helper: Attempt to recover from context invalidation
-  async function attemptContextRecovery(): Promise<boolean> {
-    if (contextRecoveryAttempts >= MAX_CONTEXT_RECOVERY_ATTEMPTS) {
-      return false;
-    }
-    
-    contextRecoveryAttempts++;
-    
-    // Wait before checking again (exponential backoff)
-    const delay = CONTEXT_RECOVERY_DELAY * Math.pow(2, contextRecoveryAttempts - 1);
-    await new Promise(resolve => setTimeout(resolve, delay));
-    
-    // Check if context is now valid
-    if (isExtensionContextValid()) {
-      contextRecoveryAttempts = 0; // Reset on success
-      // Try to reopen search port
-      if (!searchPort) {
-        openSearchPort();
-      }
-      return true;
-    }
-    
-    return false;
-  }
 
   // No-reload reconnect: re-establish port and retry search without reloading
   // the page. After an extension update, the service worker re-injects this
@@ -231,6 +238,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     { target: '.search-input', title: 'Search', description: 'Type anything — title, URL, or keywords. Results appear instantly.', position: 'bottom' },
     { target: '.sort-btn', title: 'Sort', description: 'Switch between Best Match, Most Recent, Most Visited, or Alphabetical.', position: 'bottom' },
     { target: '.ai-status-bar', title: 'AI Status', description: 'When Ollama AI is enabled in Settings, a status bar appears here showing search sources: Keyword [LEXICAL], AI Cache [ENGRAM], or AI Live [NEURAL].', position: 'bottom' },
+    { target: '.palette-hints', title: 'Command Palette', description: 'Type / for commands, > for admin, @ to switch tabs, # to search bookmarks. Your keyboard is the remote control for the entire browser.', position: 'top' },
     { target: '.footer', title: 'Keyboard Shortcuts', description: 'Enter opens in new tab. Shift+Enter opens in background. Use arrow keys to navigate results. Esc closes the overlay.', position: 'top' },
     { target: '.help-link', title: 'Help', description: 'Click "?" anytime to replay this tour. Press Ctrl+Shift+S to open/close the overlay.', position: 'top' },
   ];
@@ -262,6 +270,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       --bg-container: #ffffff;
       --bg-header: #f8f9fa;
       --bg-hover: #e9ecef;
+      --bg-card: #f8f9fa;
       --bg-kbd: #e9ecef;
       --border-color: #dee2e6;
       --text-primary: #212529;
@@ -275,11 +284,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     @media (prefers-color-scheme: dark) {
-      :host {
+      :host(:not([data-theme="light"])) {
         --bg-overlay: rgba(0, 0, 0, 0.6);
         --bg-container: #1e1e2e;
         --bg-header: #181825;
         --bg-hover: #313244;
+        --bg-card: #252536;
         --bg-kbd: #313244;
         --border-color: #313244;
         --text-primary: #cdd6f4;
@@ -291,6 +301,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         --highlight-ai-bg: #14532d;
         --highlight-ai-text: #dcfce7;
       }
+    }
+    :host([data-theme="dark"]) {
+      --bg-overlay: rgba(0, 0, 0, 0.6);
+      --bg-container: #1e1e2e;
+      --bg-header: #181825;
+      --bg-hover: #313244;
+      --bg-card: #252536;
+      --bg-kbd: #313244;
+      --border-color: #313244;
+      --text-primary: #cdd6f4;
+      --text-secondary: #a6adc8;
+      --text-url: #6c7086;
+      --accent-color: #89b4fa;
+      --highlight-bg: #fab387;
+      --highlight-text: #1e1e2e;
+      --highlight-ai-bg: #14532d;
+      --highlight-ai-text: #dcfce7;
     }
     
     .overlay {
@@ -641,6 +668,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     @keyframes sc-spin {
       to { transform: rotate(360deg); }
     }
+    .result-count {
+      padding: 2px 16px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      min-height: 0;
+    }
+    .result-count:empty { display: none; }
     /* AI status bar below the header */
     .ai-status-bar {
       padding: 3px 16px;
@@ -791,6 +825,238 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    /* Command Palette — mode badge */
+    .mode-badge {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .mode-badge.mode-commands  { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .mode-badge.mode-power     { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .mode-badge.mode-tabs      { background: rgba(16,185,129,0.15); color: #10b981; }
+    .mode-badge.mode-bookmarks { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+    .mode-badge.mode-websearch { background: rgba(234,88,12,0.15);  color: #ea580c; }
+    .mode-badge.mode-help      { background: rgba(107,114,128,0.15); color: #6b7280; }
+
+    /* Command Palette — command rows */
+    .command-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: var(--bg-card);
+      transition: all 0.15s ease;
+    }
+    .command-row:hover, .command-row.selected {
+      background: var(--bg-hover);
+      border-color: var(--border-color);
+    }
+    .cmd-icon { font-size: 16px; flex-shrink: 0; width: 24px; text-align: center; margin-top: 1px; }
+    .cmd-label { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cmd-current { font-size: 10px; color: var(--accent-color, #3b82f6); font-weight: 600; }
+    .cmd-category {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      background: var(--bg-header);
+      padding: 1px 6px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .cmd-danger { flex-shrink: 0; }
+    .cmd-shortcut {
+      font-size: 10px;
+      color: var(--text-secondary);
+      background: var(--bg-kbd, rgba(0,0,0,0.06));
+      padding: 1px 5px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .cmd-alias {
+      font-size: 9px;
+      color: var(--text-secondary);
+      opacity: 0.6;
+      flex-shrink: 0;
+    }
+    .cmd-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .cmd-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .cmd-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      opacity: 0.9;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .palette-category-header {
+      list-style: none;
+      padding: 8px 12px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      cursor: default;
+      margin-top: 4px;
+    }
+    .palette-category-header:first-child { margin-top: 0; }
+
+    .palette-discovery-tip {
+      list-style: none;
+      padding: 8px 12px 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      cursor: default;
+    }
+    .palette-hint-line {
+      list-style: none;
+      padding: 5px 12px 5px 16px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      cursor: default;
+    }
+    .palette-hint-line code {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 10px;
+      background: var(--bg-kbd, rgba(0,0,0,0.06));
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .palette-hint-muted { opacity: 0.85; }
+
+    /* Command Palette — confirmation view */
+    .confirm-view {
+      text-align: center;
+      padding: 32px 16px;
+    }
+    .confirm-icon { font-size: 32px; margin-bottom: 8px; }
+    .confirm-title { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+    .confirm-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+    .confirm-actions {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .confirm-actions kbd {
+      background: var(--bg-kbd, rgba(0,0,0,0.06));
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    /* Command Palette — tab results */
+    .tab-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: var(--bg-card);
+      transition: all 0.15s ease;
+    }
+    .tab-row:hover, .tab-row.selected {
+      background: var(--bg-hover);
+      border-color: var(--border-color);
+    }
+    .tab-favicon { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
+    .tab-details { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+    .tab-title { font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tab-url { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, monospace; }
+    .tab-badges { font-size: 11px; flex-shrink: 0; color: var(--text-secondary); }
+    .tab-window-sep {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      padding: 6px 12px 2px;
+      font-weight: 600;
+      cursor: default;
+    }
+    .recently-closed-sep { border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 8px; }
+    .recently-closed-row { opacity: 0.7; }
+
+    /* Command Palette — bookmark results */
+    .bookmark-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: var(--bg-card);
+      transition: all 0.15s ease;
+    }
+    .bookmark-row:hover, .bookmark-row.selected {
+      background: var(--bg-hover);
+      border-color: var(--border-color);
+    }
+    .bookmark-folder {
+      font-size: 10px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Command Palette — empty state */
+    .empty-state {
+      text-align: center;
+      padding: 24px 16px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      cursor: default;
+    }
+
+    /* Command Palette — first-use hint */
+    .first-use-hint {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      margin-bottom: 4px;
+      background: rgba(59,130,246,0.08);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--accent-color, #3b82f6);
+      cursor: default;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Command Palette — footer prefix hints */
+    .palette-hints {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .palette-hints kbd {
+      background: var(--bg-kbd, rgba(0,0,0,0.06));
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-family: inherit;
+    }
   `;
 
   // ===== FETCH LOG LEVEL FROM SETTINGS =====
@@ -833,6 +1099,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
             } catch { /* ignore */ }
             searchDebounceMs = DEBOUNCE_MS;
+            applyQSTheme(settings?.theme);
             log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
             if (currentResults.length > 0) {
               try { renderResults(currentResults); } catch { /* ignore */ }
@@ -846,6 +1113,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         resolve();
       }
     });
+  }
+
+  function applyQSTheme(theme?: string): void {
+    if (!shadowHost) {return;}
+    if (theme === 'light' || theme === 'dark') {
+      shadowHost.dataset.theme = theme;
+    } else {
+      delete shadowHost.dataset.theme;
+    }
   }
 
   // ===== SERVICE WORKER PRE-WARMING =====
@@ -872,7 +1148,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Check extension context validity first
     if (!isExtensionContextValid()) {
-      log.warn('port', 'Cannot open port: extension context invalidated');
+      log.debug('port', 'Cannot open port: extension context invalidated');
       return;
     }
     
@@ -884,15 +1160,28 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       searchPort.onMessage.addListener((response) => {
         // Handle error responses from service worker
         if (response?.error) {
+          if (response.error === 'Service worker not ready') {
+            log.debug('port', 'Service worker still initializing — will retry');
+            const query = inputEl?.value?.trim() || '';
+            if (query.length > 0) {
+              setTimeout(() => performSearch(query, true), 500);
+            } else {
+              setTimeout(() => loadRecentHistory(), 500);
+            }
+            return;
+          }
           log.warn('port', 'Error response from service worker:', response.error);
           aiSearchPending = false;
           hideSpinner();
-          // Don't render error as results — just clear spinner and log it
-          // The error badge will show via aiStatus if it's an AI error
           return;
         }
 
         if (response?.results) {
+          // Mode guard: ignore port responses when in a palette mode
+          if (currentMode !== 'history') {
+            log.debug('port', `Ignoring port response — currently in palette mode: ${currentMode}`);
+            return;
+          }
           // Staleness guard: ignore responses for old queries
           // Compare both sides lowercased to avoid case mismatch
           const currentInputQuery = (inputEl?.value?.trim() || '').toLowerCase();
@@ -1085,8 +1374,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       }
     });
 
+    modeBadgeEl = document.createElement('div');
+    modeBadgeEl.className = 'mode-badge';
+    modeBadgeEl.style.display = 'none';
+    modeBadgeEl.setAttribute('aria-label', 'Current mode');
+
     const inputWrapper = document.createElement('div');
     inputWrapper.className = 'search-input-wrapper';
+    inputWrapper.appendChild(modeBadgeEl);
     inputWrapper.appendChild(inputEl);
     inputWrapper.appendChild(clearBtnEl);
 
@@ -1175,7 +1470,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     settingsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!chrome.runtime?.id) {
-        log.warn('settings', 'Cannot open settings: extension context invalidated');
+        log.debug('settings', 'Cannot open settings: extension context invalidated');
         return;
       }
       // Open the extension popup page in a new tab
@@ -1193,6 +1488,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     header.appendChild(sortBtn);
     // header.appendChild(selectAllBadge); // hidden to reduce UI clutter for LTS
     header.appendChild(settingsBtn);
+
+    // Result count (palette mode result count display)
+    const resultCountEl = document.createElement('div');
+    resultCountEl.className = 'result-count';
+    resultCountEl.setAttribute('aria-live', 'polite');
 
     // AI status bar (below header, shows AI feedback)
     aiStatusBarEl = document.createElement('div');
@@ -1240,6 +1540,27 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       footer.appendChild(span);
     });
 
+    // Command palette prefix hints
+    const paletteHints = document.createElement('div');
+    paletteHints.className = 'palette-hints';
+    const hintPrefixes = [
+      ['/', 'Commands'],
+      ['>', 'Power'],
+      ['@', 'Tabs'],
+      ['#', 'Bookmarks'],
+      ['??', 'Web Search'],
+      ['?', 'Help'],
+    ];
+    hintPrefixes.forEach(([prefix, label]) => {
+      const span = document.createElement('span');
+      const kbd = document.createElement('kbd');
+      kbd.textContent = prefix;
+      span.appendChild(kbd);
+      span.appendChild(document.createTextNode(` ${label}`));
+      paletteHints.appendChild(span);
+    });
+    footer.appendChild(paletteHints);
+
     // Help/tour button — triggers in-extension tour
     const helpLink = document.createElement('button');
     helpLink.textContent = '?';
@@ -1259,6 +1580,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     container.appendChild(header);
     container.appendChild(toggleBarEl);
+    container.appendChild(resultCountEl);
     container.appendChild(aiStatusBarEl);
     container.appendChild(resultsEl);
     container.appendChild(footer);
@@ -1324,21 +1646,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     // Maintain focus behaviour on mousedown
     // Only force focus when clicking the backdrop (overlay background).
-    // Do NOT force-focus when clicking interactive elements (results, settings, input).
+    // Do NOT force-focus when clicking interactive elements or selectable text.
     overlayEl.addEventListener('mousedown', (e) => {
       const target = e.target as Element | null;
       if (!target) { return; }
 
-      // If clicking on the overlay backdrop itself (outside the container), close overlay.
-      if (target === overlayEl) {
-        // Allow the click handler above to close; do not refocus.
-        return;
-      }
+      if (target === overlayEl) { return; }
 
-      // If click landed directly on a non-interactive area inside overlay (rare),
-      // prefer focusing the input. But avoid forcing focus for interactive elements.
       const tag = target.tagName?.toLowerCase();
-      const isInteractive = tag === 'input' || tag === 'button' || tag === 'a' || target.classList?.contains('result') || target.closest && Boolean(target.closest('button, a, input'));
+      const isInteractive = tag === 'input' || tag === 'button' || tag === 'a'
+        || target.classList?.contains('result')
+        || target.closest?.('.toast, .recent-searches-section, .result, .command-row, .tab-row, .bookmark-row, .help-row')
+        || target.closest?.('button, a, input');
       if (!isInteractive) {
         setTimeout(() => inputEl?.focus(), 0);
       }
@@ -1401,8 +1720,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     currentResults = [];
     selectedIndex = 0;
     
+    // Reset palette mode
+    currentMode = 'history';
+    if (modeBadgeEl) { modeBadgeEl.style.display = 'none'; }
+    if (inputEl) { inputEl.style.paddingLeft = '12px'; inputEl.placeholder = 'Search your browsing history...'; }
+
     // Await fresh settings before loading defaults so toggles are respected
-    fetchSettings().then(() => { renderQSToggleBar(); loadRecentHistory(); }).catch(() => loadRecentHistory());
+    fetchSettings().then(() => {
+      renderQSToggleBar();
+      loadRecentHistory();
+      showFirstUseHint();
+    }).catch(() => loadRecentHistory());
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
     // Strategy 1: Blur active element (likely the omnibox with selected text)
@@ -1508,89 +1836,1428 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (clearBtnEl) { clearBtnEl.classList.toggle('visible', (inputEl?.value?.length ?? 0) > 0); }
   }
 
+  // ===== COMMAND PALETTE: MODE DETECTION =====
+
+  function detectMode(value: string): { mode: PaletteMode; query: string } {
+    const paletteEnabled = cachedSettings?.commandPaletteEnabled ?? true;
+    const enabledModes = cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'];
+
+    if (!paletteEnabled || !value) {
+      return { mode: 'history', query: value };
+    }
+
+    if (value === '?') {
+      return { mode: 'help', query: '' };
+    }
+
+    if (value.startsWith('??') && enabledModes.includes('??')) {
+      return { mode: 'websearch', query: value.slice(2).trim() };
+    }
+
+    const firstChar = value[0];
+    const prefixMap: Record<string, PaletteMode> = {
+      '/': 'commands',
+      '>': 'power',
+      '@': 'tabs',
+      '#': 'bookmarks',
+    };
+
+    if (prefixMap[firstChar] && enabledModes.includes(firstChar)) {
+      return { mode: prefixMap[firstChar], query: value.slice(1).trim() };
+    }
+
+    return { mode: 'history', query: value };
+  }
+
+  function updateModeBadge(mode: PaletteMode): void {
+    if (!modeBadgeEl || !inputEl) {return;}
+
+    const labels: Record<PaletteMode, string> = {
+      history: '',
+      commands: '/ CMD',
+      power: '> PWR',
+      tabs: '@ TABS',
+      bookmarks: '# MARK',
+      websearch: '?? WEB',
+      help: '? HELP',
+    };
+
+    const classes: Record<PaletteMode, string> = {
+      history: '',
+      commands: 'mode-commands',
+      power: 'mode-power',
+      tabs: 'mode-tabs',
+      bookmarks: 'mode-bookmarks',
+      websearch: 'mode-websearch',
+      help: 'mode-help',
+    };
+
+    const placeholders: Record<PaletteMode, string> = {
+      history: 'Search your browsing history...',
+      commands: 'Type a command...',
+      power: 'Admin command...',
+      tabs: 'Search open tabs...',
+      bookmarks: 'Search bookmarks...',
+      websearch: 'Search the web...',
+      help: '',
+    };
+
+    if (mode === 'history') {
+      modeBadgeEl.style.display = 'none';
+      inputEl.style.paddingLeft = '12px';
+    } else {
+      modeBadgeEl.textContent = labels[mode];
+      modeBadgeEl.className = `mode-badge ${classes[mode]}`;
+      modeBadgeEl.style.display = 'block';
+      inputEl.style.paddingLeft = '64px';
+    }
+    inputEl.placeholder = placeholders[mode];
+  }
+
   function handleInput(): void {
     syncClearButton();
+    confirmingCommand = null;
 
-    // Typing "?" triggers the feature tour
-    const raw = inputEl?.value?.trim();
-    if (raw === '?' && shadowRoot) {
-      if (inputEl) { inputEl.value = ''; }
-      runTour(QUICK_SEARCH_TOUR_STEPS, shadowRoot, (sel) => shadowRoot!.querySelector(sel));
+    const raw = inputEl?.value ?? '';
+    const { mode, query } = detectMode(raw.trim());
+
+    // Mode changed — update badge and reset state
+    if (mode !== currentMode) {
+      currentMode = mode;
+      updateModeBadge(mode);
+      cachedTabs = null;
+      cachedBookmarks = null;
+    }
+
+    if (mode === 'help') {
+      renderHelpScreen();
       return;
     }
 
     if (debounceTimer) {clearTimeout(debounceTimer);}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
-    if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;} // Cancel pending focus shift
+    if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;}
 
-    // Early check: If extension context is already invalid, attempt recovery immediately
-    if (!isExtensionContextValid()) {
-      log.warn('handleInput', 'Extension context invalid — attempting recovery');
-      attemptContextRecovery().then(recovered => {
-        if (recovered) {
-          log.info('handleInput', 'Context recovered successfully');
-          // Continue with search after recovery
-          const query = inputEl?.value?.trim() || '';
-          if (query.length > 0) {
-            performSearch(query, true);
-          }
-        } else {
-          renderErrorResults(
-            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-            attemptNoReloadReconnect
-          );
-        }
-      }).catch(() => {
-        renderErrorResults(
-          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-          attemptNoReloadReconnect
-        );
-      });
+    // Non-history modes: route to command palette handlers
+    if (mode !== 'history') {
+      dismissFirstUseHint();
+      handlePaletteMode(mode, query);
       return;
     }
 
-    // Determine AI state for this search cycle
+    // --- Original history search flow ---
+
+    if (!isExtensionContextValid()) {
+      log.debug('handleInput', 'Extension context invalid — showing reconnect UI');
+      renderErrorResults(
+        '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+        attemptNoReloadReconnect
+      );
+      return;
+    }
+
     const aiEnabled = cachedSettings?.ollamaEnabled ?? false;
-    aiSearchPending = aiEnabled; // Track: AI response still expected for this query
+    aiSearchPending = aiEnabled;
     log.trace('handleInput', `Input changed, aiEnabled=${aiEnabled}, aiSearchPending=${aiSearchPending}`);
 
-    // Don't show spinner yet — Phase 1 results render first.
-    // Spinner only appears after Phase 1 completes if AI is still pending.
-    // Clear previous AI status (new search starting)
     renderAIStatus(null);
 
-    // Phase 1: Fast non-AI search (short debounce)
     debounceTimer = window.setTimeout(() => {
-      const query = inputEl?.value?.trim() || '';
-      if (query.length === 0) {
-        // Load recent history when query is cleared
+      const q = inputEl?.value?.trim() || '';
+      if (q.length === 0) {
         log.debug('handleInput', 'Query empty — loading recent history');
         aiSearchPending = false;
         hideSpinner();
         loadRecentHistory();
         return;
       }
-      log.debug('handleInput', `Phase 1 (LEXICAL) firing for "${query}"`);
-      performSearch(query, true); // skipAI=true for instant results
+      log.debug('handleInput', `Phase 1 (LEXICAL) firing for "${q}"`);
+      performSearch(q, true);
     }, searchDebounceMs);
 
-    // Phase 2: AI expansion (longer debounce — waits for user to finish typing)
-    // Delay is user-configurable via aiSearchDelayMs setting (default 500ms)
     if (aiEnabled) {
       const aiDelayMs = cachedSettings?.aiSearchDelayMs ?? 500;
       aiDebounceTimer = window.setTimeout(() => {
         aiDebounceTimer = null;
-        const query = inputEl?.value?.trim() || '';
-        if (query.length === 0) {
+        const q = inputEl?.value?.trim() || '';
+        if (q.length === 0) {
           log.debug('handleInput', 'Phase 2 skipped — query empty');
           aiSearchPending = false;
           hideSpinner();
           return;
         }
-        perfLog(`AI Phase 2 triggered for: "${query}" (delay: ${aiDelayMs}ms)`);
-        performSearch(query, false); // skipAI=false for full AI expansion
+        perfLog(`AI Phase 2 triggered for: "${q}" (delay: ${aiDelayMs}ms)`);
+        performSearch(q, false);
       }, aiDelayMs);
     }
+  }
+
+  // ===== COMMAND PALETTE: HELP SCREEN =====
+
+  function renderHelpScreen(): void {
+    if (!resultsEl) {return;}
+
+    selectedIndex = -1;
+    resultsEl.innerHTML = '';
+    resultsEl.className = 'results list';
+
+    const modes = [
+      { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
+      { prefix: '>',  label: 'Power / Admin',  desc: 'Index, diagnostics, tuning presets, AI copy, data tools' },
+      { prefix: '@',  label: 'Tab Switcher',   desc: 'Search & switch open tabs, reopen closed' },
+      { prefix: '#',  label: 'Bookmarks',      desc: 'Recent bookmarks when empty; type to search all' },
+      { prefix: '??', label: 'Web Search',     desc: 'Default engine + optional prefix (g, d, …) then query' },
+    ];
+
+    const enabledModes = cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'];
+
+    modes.forEach(m => {
+      const enabled = enabledModes.includes(m.prefix);
+      const li = document.createElement('li');
+      li.className = 'command-row';
+      if (!enabled) {li.style.opacity = '0.4';}
+      li.innerHTML = `
+        <span class="cmd-icon" style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:14px;font-weight:700;color:var(--accent-color);width:28px;text-align:center;">${m.prefix}</span>
+        <span class="cmd-label">${m.label}${!enabled ? ' <span class="cmd-current">[disabled]</span>' : ''}</span>
+        <span class="cmd-category">${m.desc}</span>
+      `;
+      if (enabled) {
+        li.addEventListener('click', () => {
+          if (inputEl) {
+            inputEl.value = m.prefix;
+            inputEl.dispatchEvent(new Event('input'));
+            inputEl.focus();
+          }
+        });
+      }
+      resultsEl!.appendChild(li);
+    });
+
+    const divider = document.createElement('li');
+    divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);cursor:default;border-top:1px solid var(--border-color);margin-top:4px;';
+    divider.textContent = 'Tips';
+    resultsEl.appendChild(divider);
+
+    const tips = [
+      { icon: '⌨️', label: 'Keyboard Shortcut', desc: 'Ctrl+Shift+S to open quick-search' },
+      { icon: '🔍', label: 'Omnibox', desc: 'Type "sc " in the address bar' },
+      { icon: '🎯', label: 'Guided Tour', desc: 'Type /tour to start the interactive tour' },
+    ];
+
+    tips.forEach(t => {
+      const li = document.createElement('li');
+      li.className = 'command-row';
+      li.innerHTML = `
+        <span class="cmd-icon">${t.icon}</span>
+        <span class="cmd-label">${t.label}</span>
+        <span class="cmd-category">${t.desc}</span>
+      `;
+      resultsEl!.appendChild(li);
+    });
+
+    updateResultCount('');
+  }
+
+  // ===== COMMAND PALETTE: PALETTE MODE HANDLER =====
+
+  function handlePaletteMode(mode: PaletteMode, query: string): void {
+    hideSpinner();
+    renderAIStatus(null);
+
+    switch (mode) {
+      case 'commands':
+        renderCommandResults(query, 'everyday');
+        break;
+      case 'power':
+        renderCommandResults(query, 'power');
+        break;
+      case 'tabs':
+        handleTabMode(query);
+        break;
+      case 'bookmarks':
+        handleBookmarkMode(query);
+        break;
+      case 'websearch':
+        renderWebSearchPreview(query);
+        break;
+    }
+  }
+
+  // ===== COMMAND PALETTE: RENDER COMMANDS =====
+
+  function renderCommandResults(query: string, tier: 'everyday' | 'power'): void {
+    if (!resultsEl) {return;}
+    qsWindowPickerActive = false;
+
+    const commands = cachedSettings
+      ? getAvailableCommands(tier, cachedSettings)
+      : getCommandsByTier(tier);
+
+    const displayList = preparePaletteCommandList(tier, query, commands, cachedSettings ?? undefined);
+
+    selectedIndex = 0;
+    resultsEl.innerHTML = '';
+    resultsEl.className = 'results list';
+    resultsEl.setAttribute('role', 'listbox');
+    resultsEl.setAttribute('aria-label', tier === 'power' ? 'Power commands' : 'Commands');
+
+    if (displayList.length === 0) {
+      resultsEl.innerHTML = '<li class="empty-state">No matching commands</li>';
+      updateResultCount('0 commands');
+      return;
+    }
+
+    updateResultCount(`${displayList.length} command${displayList.length !== 1 ? 's' : ''}`);
+
+    const emptyQuery = !query.trim();
+    const showCategoryHeaders = emptyQuery;
+    let lastCategory = '';
+
+    if (emptyQuery) {
+      const tip = document.createElement('li');
+      tip.className = 'palette-discovery-tip';
+      tip.setAttribute('role', 'presentation');
+      tip.textContent = tier === 'power'
+        ? 'Tabs, data, AI, diagnostics, presets — type to filter.'
+        : 'Toggles, sort, page actions, navigation, tabs — type to filter.';
+      resultsEl.appendChild(tip);
+    }
+
+    displayList.forEach((cmd, idx) => {
+      if (showCategoryHeaders && cmd.category !== lastCategory) {
+        lastCategory = cmd.category;
+        const header = document.createElement('li');
+        header.className = 'palette-category-header';
+        header.setAttribute('role', 'presentation');
+        header.textContent = formatPaletteCategoryHeader(cmd.category, tier);
+        resultsEl!.appendChild(header);
+      }
+
+      const li = document.createElement('li');
+      li.className = 'command-row';
+      li.dataset.commandId = cmd.id;
+      if (idx === 0) {li.classList.add('selected');}
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+
+      const currentLabel = getCurrentLabel(cmd);
+      const hintHtml = cmd.hint
+        ? `<div class="cmd-hint">${escapeHtml(cmd.hint)}</div>`
+        : '';
+
+      li.innerHTML = `
+        <span class="cmd-icon">${cmd.icon}</span>
+        <div class="cmd-main">
+          <div class="cmd-label-row">
+            <span class="cmd-label">${cmd.label}${currentLabel ? ` <span class="cmd-current">[${currentLabel}]</span>` : ''}</span>
+          </div>
+          ${hintHtml}
+        </div>
+        <span class="cmd-category">${cmd.category}</span>
+        ${cmd.dangerous ? '<span class="cmd-danger">⚠️</span>' : ''}
+        ${cmd.shortcut ? `<span class="cmd-shortcut">${cmd.shortcut}</span>` : ''}
+        ${cmd.aliases?.length ? `<span class="cmd-alias">${cmd.aliases[0]}</span>` : ''}
+      `;
+
+      li.addEventListener('click', () => {
+        selectedIndex = idx;
+        executeSelectedCommand(displayList);
+      });
+      resultsEl!.appendChild(li);
+    });
+  }
+
+  function getCurrentLabel(cmd: PaletteCommand): string | null {
+    if (!cachedSettings) {return null;}
+    if (cmd.action === 'toggle-boolean' && cmd.settingKey) {
+      return cachedSettings[cmd.settingKey] ? 'ON' : 'OFF';
+    }
+    if (cmd.action === 'sub-command' && cmd.cycleValues && cmd.settingKey) {
+      const current = String(cachedSettings[cmd.settingKey]);
+      const match = cmd.cycleValues.find(cv => cv.value === current);
+      return match?.label ?? null;
+    }
+    if (cmd.action === 'cycle' && cmd.settingKey) {
+      const parent = ALL_COMMANDS.find(c => c.subCommands?.some(sub => sub.id === cmd.id));
+      if (parent?.cycleValues) {
+        const current = String(cachedSettings[parent.settingKey!]);
+        const thisValue = getCycleValueFromCommand(cmd);
+        return String(thisValue) === current ? 'current' : null;
+      }
+    }
+    return null;
+  }
+
+  function updateResultCount(text: string): void {
+    if (!resultsEl?.parentElement) {return;}
+    const countEl = resultsEl.parentElement.querySelector('.result-count');
+    if (countEl) {countEl.textContent = text;}
+  }
+
+  // ===== COMMAND PALETTE: EXECUTION =====
+
+  function executeSelectedCommand(commands: PaletteCommand[]): void {
+    const cmd = commands[selectedIndex];
+    if (!cmd) {return;}
+
+    if (cmd.dangerous && !confirmingCommand) {
+      showConfirmation(cmd, commands);
+      return;
+    }
+
+    confirmingCommand = null;
+    executeCommand(cmd);
+  }
+
+  function showConfirmation(cmd: PaletteCommand, commands: PaletteCommand[]): void {
+    if (!resultsEl) {return;}
+    confirmingCommand = cmd;
+
+    resultsEl.innerHTML = `
+      <li class="confirm-view">
+        <div class="confirm-icon">⚠️</div>
+        <div class="confirm-title">Are you sure?</div>
+        <div class="confirm-label">${cmd.label} — this action cannot be undone.</div>
+        <div class="confirm-actions">
+          <span>Press <kbd>Enter</kbd> to confirm</span>
+          <span>Press <kbd>Esc</kbd> to cancel</span>
+        </div>
+      </li>
+    `;
+
+    const cancelOnEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        confirmingCommand = null;
+        inputEl?.removeEventListener('keydown', cancelOnEsc);
+        renderCommandResults(inputEl?.value?.slice(1).trim() ?? '', cmd.tier);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        inputEl?.removeEventListener('keydown', cancelOnEsc);
+        confirmingCommand = null;
+        executeCommand(cmd);
+      }
+    };
+    inputEl?.addEventListener('keydown', cancelOnEsc);
+  }
+
+  function applySettingSideEffects(key: keyof AppSettings): void {
+    syncQSToggleBar();
+    if (key === 'theme') {
+      applyQSTheme(cachedSettings?.theme);
+    }
+    if (key === 'selectAllOnFocus') {
+      updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
+      try { if (shadowHost) {shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus));} } catch { /* ignore */ }
+    }
+    if (key === 'displayMode' || key === 'highlightMatches') {
+      if (currentResults.length > 0 && currentMode === 'history') {
+        renderResults(currentResults);
+      }
+    }
+    if (key === 'maxResults' || key === 'defaultResultCount') {
+      if (currentMode === 'history' && !(inputEl?.value?.trim())) {
+        loadRecentHistory();
+      }
+    }
+  }
+
+  function applySettingsPatchSideEffects(patch: Partial<AppSettings>): void {
+    (Object.keys(patch) as (keyof AppSettings)[]).forEach(k => applySettingSideEffects(k));
+  }
+
+  interface QsWindowInfo {
+    id: number;
+    tabCount: number;
+    activeTabTitle: string;
+    activeTabFavicon: string;
+    isCurrent: boolean;
+  }
+
+  function showQsWindowPicker(): void {
+    if (!resultsEl) { return; }
+    qsWindowPickerActive = true;
+    selectedIndex = 0;
+    updateResultCount('Loading windows...');
+    resultsEl.innerHTML = '';
+
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_WINDOWS' }, (resp) => {
+        if (chrome.runtime.lastError || !resp) {
+          qsWindowPickerActive = false;
+          showToast('Failed to fetch windows', 'error');
+          return;
+        }
+        const windows = (resp as { windows?: QsWindowInfo[] }).windows;
+        if (!windows || windows.length === 0) {
+          qsWindowPickerActive = false;
+          updateResultCount('0 windows');
+          showToast('No windows found', 'error');
+          return;
+        }
+        const otherWindows = windows.filter(w => !w.isCurrent);
+        if (otherWindows.length === 0) {
+          qsWindowPickerActive = false;
+          updateResultCount('1 window');
+          showToast('Only one window open — nothing to move to', 'info');
+          return;
+        }
+        if (!resultsEl) { return; }
+        updateResultCount(`${otherWindows.length} window${otherWindows.length !== 1 ? 's' : ''}`);
+        resultsEl.innerHTML = '';
+        selectedIndex = 0;
+
+        const hint = document.createElement('li');
+        hint.className = 'palette-discovery-tip';
+        hint.setAttribute('role', 'presentation');
+        hint.textContent = 'Enter: move tab · Esc: back to commands · ↑↓: navigate';
+        resultsEl.appendChild(hint);
+
+        otherWindows.forEach((win, idx) => {
+          const row = document.createElement('li');
+          row.className = `command-row${idx === 0 ? ' selected' : ''}`;
+          row.setAttribute('role', 'option');
+          row.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+          row.dataset.windowId = String(win.id);
+          row.dataset.windowTitle = win.activeTabTitle;
+          const tabLabel = win.tabCount === 1 ? '1 tab' : `${win.tabCount} tabs`;
+          row.innerHTML = `
+            <span class="cmd-icon">🪟</span>
+            <span class="cmd-label">${escapeHtml(win.activeTabTitle)}</span>
+            <span class="cmd-hint">${tabLabel}</span>
+          `;
+          row.addEventListener('click', () => {
+            moveTabToWindowQs(win.id, win.activeTabTitle);
+          });
+          resultsEl!.appendChild(row);
+        });
+      });
+    } catch {
+      qsWindowPickerActive = false;
+      showToast('Extension context lost — please reopen', 'error');
+    }
+  }
+
+  function moveTabToWindowQs(targetWindowId: number, windowTitle: string): void {
+    try {
+      chrome.runtime.sendMessage({ type: 'MOVE_TAB_TO_WINDOW', targetWindowId }, (moveResp) => {
+        if (chrome.runtime.lastError) {
+          showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+          return;
+        }
+        const r = moveResp as Record<string, unknown> | undefined;
+        if (r?.error) {
+          showToast(`Error: ${r.error}`, 'error');
+        } else {
+          showToast(`↗️ Moved tab to: ${windowTitle}`, 'success');
+          hideOverlay();
+        }
+      });
+    } catch {
+      showToast('Extension context lost — please reopen', 'error');
+    }
+  }
+
+  function executeCommand(cmd: PaletteCommand): void {
+    log.info('executeCommand', `Executing: ${cmd.id} (action: ${cmd.action})`);
+    saveRecentCommand(cmd.id);
+
+    switch (cmd.action) {
+      case 'toggle-boolean':
+        if (cmd.settingKey && cachedSettings) {
+          const newVal = !cachedSettings[cmd.settingKey];
+          cachedSettings = { ...cachedSettings, [cmd.settingKey]: newVal };
+          try {
+            chrome.runtime.sendMessage({
+              type: 'SETTINGS_CHANGED',
+              settings: { [cmd.settingKey]: newVal },
+            });
+          } catch { /* context invalidated */ }
+          applySettingSideEffects(cmd.settingKey);
+          showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`);
+          const raw = inputEl?.value ?? '';
+          const { query } = detectMode(raw.trim());
+          renderCommandResults(query, cmd.tier);
+        }
+        break;
+
+      case 'cycle':
+        if (cmd.settingKey) {
+          const value = getCycleValueFromCommand(cmd);
+          if (value !== undefined && cachedSettings) {
+            cachedSettings = { ...cachedSettings, [cmd.settingKey]: value as never };
+            try {
+              chrome.runtime.sendMessage({
+                type: 'SETTINGS_CHANGED',
+                settings: { [cmd.settingKey]: value },
+              });
+            } catch { /* context invalidated */ }
+            applySettingSideEffects(cmd.settingKey);
+            showToast(`${cmd.label}`);
+            const raw = inputEl?.value ?? '';
+            const { query } = detectMode(raw.trim());
+            renderCommandResults(query, cmd.tier);
+          }
+        }
+        break;
+
+      case 'message':
+        if (cmd.messageType) {
+          if (cmd.messageType === 'SETTINGS_CHANGED') {
+            const patch = getPowerSettingsPatch(cmd.id);
+            if (patch && cachedSettings) {
+              cachedSettings = { ...cachedSettings, ...patch };
+              try {
+                chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: patch });
+              } catch { /* context invalidated */ }
+              applySettingsPatchSideEffects(patch);
+              showToast(`${cmd.label} — saved`);
+              inputEl?.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            break;
+          }
+
+          if (cmd.id === 'search-debug') {
+            showToast(`${cmd.icon} ${cmd.label}...`);
+            try {
+              chrome.runtime.sendMessage({ type: 'GET_SEARCH_DEBUG_ENABLED' }, (gResp) => {
+                if (chrome.runtime.lastError) {
+                  showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+                  return;
+                }
+                const cur = Boolean((gResp as { enabled?: boolean })?.enabled);
+                const next = !cur;
+                chrome.runtime.sendMessage({ type: 'SET_SEARCH_DEBUG_ENABLED', enabled: next }, (sResp) => {
+                  if (chrome.runtime.lastError) {
+                    showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+                    return;
+                  }
+                  if ((sResp as { error?: string })?.error) {
+                    showToast(`Error: ${(sResp as { error: string }).error}`, 'error');
+                    return;
+                  }
+                  showToast(`Search debug: ${next ? 'ON' : 'OFF'}`);
+                  const raw = inputEl?.value ?? '';
+                  const { query } = detectMode(raw.trim());
+                  renderCommandResults(query, cmd.tier);
+                });
+              });
+            } catch {
+              showToast('Extension context lost — please reopen', 'error');
+            }
+            break;
+          }
+
+          if (cmd.id === 'move-tab-to-window') {
+            showQsWindowPicker();
+            break;
+          }
+
+          const payload: Record<string, unknown> = { type: cmd.messageType };
+          if (cmd.id === 'zoom-in') {payload.direction = 'in';}
+          else if (cmd.id === 'zoom-out') {payload.direction = 'out';}
+          else if (cmd.id === 'zoom-reset') {payload.direction = 'reset';}
+          else if (cmd.id === 'new-tab') {payload.windowType = 'tab';}
+          else if (cmd.id === 'new-window') {payload.windowType = 'window';}
+          else if (cmd.id === 'new-incognito') {payload.windowType = 'incognito';}
+          else if (cmd.id.startsWith('color-group-')) {payload.color = cmd.id.replace('color-group-', '');}
+
+          const diagnostic = isPaletteDiagnosticMessageType(cmd.messageType);
+          const toastMs = diagnostic ? PALETTE_DIAGNOSTIC_TOAST_MS : 5000;
+
+          showToast(`${cmd.icon} ${cmd.label}...`);
+          try {
+            chrome.runtime.sendMessage(payload, (resp) => {
+              if (chrome.runtime.lastError) {
+                showToast(`Error: ${chrome.runtime.lastError.message}`, 'error');
+                return;
+              }
+              const r = resp as Record<string, unknown> | undefined;
+              if (r?.error) {
+                showToast(`Error: ${r.error}`, 'error');
+                return;
+              }
+              const ok = r?.status === 'OK' || r?.status === 'ok' || r?.success;
+              const formatted =
+                cmd.messageType && r
+                  ? formatPaletteDiagnosticToast(cmd.messageType, r)
+                  : null;
+              if (formatted) {
+                showToast(formatted, 'info', toastMs);
+              } else if (ok) {
+                showToast(`${cmd.icon} ${cmd.label} — done`, 'success', toastMs);
+                if (cmd.id === 'close-tab') {hideOverlay();}
+              } else if (r?.data !== undefined) {
+                const slice =
+                  typeof r.data === 'string'
+                    ? r.data.slice(0, 280)
+                    : JSON.stringify(r.data).slice(0, 280);
+                showToast(`${cmd.icon} ${cmd.label}:\n${slice}`, 'info', toastMs);
+              }
+            });
+          } catch {
+            showToast('Extension context lost — please reopen', 'error');
+          }
+
+          const keepOverlayOpen =
+            diagnostic ||
+            cmd.dangerous ||
+            cmd.messageType === 'CLOSE_TAB';
+          if (!keepOverlayOpen) {
+            hideOverlay();
+          }
+        }
+        break;
+
+      case 'open-url':
+        if (cmd.url) {
+          try {
+            chrome.runtime.sendMessage({
+              type: 'WINDOW_CREATE',
+              windowType: 'tab',
+              url: cmd.url,
+            });
+          } catch {
+            window.open(cmd.url, '_blank');
+          }
+          hideOverlay();
+        }
+        break;
+
+      case 'page-action':
+        executePageAction(cmd);
+        break;
+
+      case 'sub-command':
+        break;
+    }
+  }
+
+  function executePageAction(cmd: PaletteCommand): void {
+    switch (cmd.id) {
+      case 'copy-url':
+        navigator.clipboard.writeText(window.location.href)
+          .then(() => showToast('URL copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      case 'copy-title':
+        navigator.clipboard.writeText(document.title)
+          .then(() => showToast('Title copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      case 'copy-markdown': {
+        const mdLink = `[${document.title}](${window.location.href})`;
+        navigator.clipboard.writeText(mdLink)
+          .then(() => showToast('Markdown link copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
+      case 'share':
+        if (navigator.share) {
+          navigator.share({ title: document.title, url: window.location.href })
+            .catch(() => { /* user cancelled */ });
+        }
+        break;
+      case 'print':
+        hideOverlay();
+        window.print();
+        break;
+      case 'fullscreen':
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+        break;
+      case 'tour':
+        if (shadowRoot) {
+          runTour(QUICK_SEARCH_TOUR_STEPS, shadowRoot, (sel) => shadowRoot!.querySelector(sel));
+        }
+        break;
+      case 'shortcuts':
+        showToast('Enter: open · Shift+Enter: background · Ctrl+C: copy · ↑↓: navigate · Esc: close');
+        break;
+      case 'shortcut-toggle-bookmarks-bar':
+        showToast('Toggle Bookmarks / Favorites Bar\n\nCtrl + Shift + B\n\nWorks in Chrome, Edge & Firefox.\nShortcuts may vary by browser version.', 'info', 8000);
+        break;
+      case 'shortcut-toggle-vertical-tabs':
+        showToast('Toggle Vertical Tabs (Edge only)\n\nCtrl + Shift + , (comma)\n\nSwitches between vertical and horizontal tab layout.\nNote: No shortcut exists to collapse/expand the sidebar pane — use the UI button.\nShortcuts may vary by browser version.', 'info', 10000);
+        break;
+      case 'about': {
+        const manifest = chrome.runtime.getManifest();
+        showToast(`SmrutiCortex v${manifest.version}\nInstant browser history search\ngithub.com/dhruvinrsoni/smruti-cortex`);
+        break;
+      }
+      case 'import-index':
+        triggerFileImport();
+        break;
+      case 'copy-ollama-endpoint': {
+        const url = cachedSettings?.ollamaEndpoint ?? '';
+        if (!url) {
+          showToast('No Ollama endpoint set — open extension settings', 'warning');
+          break;
+        }
+        navigator.clipboard.writeText(url)
+          .then(() => showToast('Ollama endpoint copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
+      case 'copy-ollama-model': {
+        const m = cachedSettings?.ollamaModel ?? '';
+        if (!m) {
+          showToast('No keyword model set — open extension settings', 'warning');
+          break;
+        }
+        navigator.clipboard.writeText(m)
+          .then(() => showToast('Ollama model copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
+      case 'copy-embedding-model': {
+        const m = cachedSettings?.embeddingModel ?? '';
+        if (!m) {
+          showToast('No embedding model set — open extension settings', 'warning');
+          break;
+        }
+        navigator.clipboard.writeText(m)
+          .then(() => showToast('Embedding model copied'))
+          .catch(() => showToast('Failed to copy', 'error'));
+        break;
+      }
+    }
+  }
+
+  function triggerFileImport(): void {
+    if (!shadowRoot) {return;}
+    let fileInput = shadowRoot.querySelector('#palette-file-import') as HTMLInputElement;
+    if (!fileInput) {
+      fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.json';
+      fileInput.id = 'palette-file-import';
+      fileInput.style.display = 'none';
+      shadowRoot.appendChild(fileInput);
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) {return;}
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result as string) as { items?: unknown } | unknown[];
+            const items = Array.isArray(parsed) ? parsed : parsed?.items;
+            if (!Array.isArray(items)) {
+              showToast('Invalid file: expected { items: [...] } or a top-level array', 'error');
+              return;
+            }
+            chrome.runtime.sendMessage({ type: 'IMPORT_INDEX', items }, (resp) => {
+              if (resp?.status === 'OK') {
+                showToast('Index imported successfully');
+              } else {
+                showToast('Import failed: ' + (resp?.message || 'Unknown error'), 'error');
+              }
+            });
+          } catch {
+            showToast('Invalid JSON file', 'error');
+          }
+        };
+        reader.readAsText(file);
+        fileInput.value = '';
+      });
+    }
+    fileInput.click();
+  }
+
+  // ===== COMMAND PALETTE: TAB SWITCHER =====
+
+  function handleTabMode(query: string): void {
+    if (!resultsEl) {return;}
+
+    if (!cachedTabs) {
+      resultsEl.innerHTML = '<li class="empty-state">Loading tabs...</li>';
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_OPEN_TABS' }, (resp) => {
+          if (chrome.runtime.lastError || !resp?.tabs) {
+            resultsEl!.innerHTML = '<li class="empty-state">Could not load tabs</li>';
+            return;
+          }
+          cachedTabs = resp.tabs;
+          renderTabResults(query);
+        });
+      } catch {
+        resultsEl.innerHTML = '<li class="empty-state">Extension context lost</li>';
+      }
+      return;
+    }
+
+    renderTabResults(query);
+  }
+
+  function renderTabResults(query: string): void {
+    if (!resultsEl || !cachedTabs) {return;}
+
+    let tabs = cachedTabs;
+    if (query) {
+      const lq = query.toLowerCase();
+      tabs = tabs.filter(t =>
+        (t.title?.toLowerCase().includes(lq)) ||
+        (t.url?.toLowerCase().includes(lq))
+      );
+    }
+
+    selectedIndex = 0;
+    resultsEl.innerHTML = '';
+    resultsEl.className = 'results list';
+    resultsEl.setAttribute('role', 'listbox');
+    resultsEl.setAttribute('aria-label', 'Open tabs');
+
+    if (tabs.length === 0) {
+      resultsEl.innerHTML = '<li class="empty-state">No matching tabs</li>';
+      updateResultCount('0 tabs');
+      return;
+    }
+
+    const windowIds = [...new Set(tabs.map(t => t.windowId))];
+    updateResultCount(`${tabs.length} tab${tabs.length !== 1 ? 's' : ''} across ${windowIds.length} window${windowIds.length !== 1 ? 's' : ''}`);
+
+    const tabHint = document.createElement('li');
+    tabHint.className = 'palette-discovery-tip';
+    tabHint.setAttribute('role', 'presentation');
+    tabHint.textContent = 'Enter: switch tab · Shift+Enter: open URL in background · Recently closed appears below when available.';
+    resultsEl.appendChild(tabHint);
+
+    let globalIdx = 0;
+    for (const wid of windowIds) {
+      if (windowIds.length > 1) {
+        const sep = document.createElement('li');
+        sep.className = 'tab-window-sep';
+        sep.textContent = `Window ${windowIds.indexOf(wid) + 1}`;
+        resultsEl.appendChild(sep);
+      }
+
+      const windowTabs = tabs.filter(t => t.windowId === wid);
+      for (const tab of windowTabs) {
+        const li = document.createElement('li');
+        li.className = 'tab-row';
+        li.dataset.tabId = String(tab.id);
+        if (globalIdx === 0) {li.classList.add('selected');}
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', globalIdx === 0 ? 'true' : 'false');
+
+        const badges = [
+          tab.pinned ? '📌' : '',
+          tab.audible ? (tab.mutedInfo?.muted ? '🔇' : '🔊') : '',
+          tab.active ? '●' : '',
+        ].filter(Boolean).join(' ');
+
+        const rawFaviconUrl = tab.favIconUrl || '';
+        const faviconUrl = (location.protocol === 'https:' && rawFaviconUrl.startsWith('http://')) ? '' : rawFaviconUrl;
+        li.innerHTML = `
+          <img class="tab-favicon" src="${faviconUrl}" alt="">
+          <div class="tab-details">
+            <span class="tab-title">${escapeHtml(tab.title || 'Untitled')}</span>
+            <span class="tab-url">${escapeHtml(truncateUrl(tab.url || ''))}</span>
+          </div>
+          ${badges ? `<span class="tab-badges">${badges}</span>` : ''}
+        `;
+        wireHideImgOnError(li.querySelector('img'));
+
+        const tabId = tab.id!;
+        const windowId = tab.windowId!;
+        const tabUrl = tab.url || '';
+        li.dataset.tabId = String(tabId);
+        li.dataset.windowId = String(windowId);
+        if (tabUrl) {li.dataset.tabUrl = tabUrl;}
+        li.addEventListener('click', (ev) => {
+          const sk = (ev as MouseEvent).shiftKey;
+          if (sk && tabUrl) {
+            try {
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl });
+            } catch { window.open(tabUrl); }
+            hideOverlay();
+          } else {
+            switchToTab(tabId, windowId);
+          }
+        });
+        resultsEl!.appendChild(li);
+        globalIdx++;
+      }
+    }
+
+    // Recently closed section
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_RECENTLY_CLOSED' }, (resp) => {
+        if (chrome.runtime.lastError || !resp?.sessions?.length) {return;}
+        appendRecentlyClosedTabs(resp.sessions, query);
+      });
+    } catch { /* ignore */ }
+  }
+
+  function appendRecentlyClosedTabs(
+    sessions: Array<{ tab?: chrome.tabs.Tab; lastModified: number; sessionId?: string }>,
+    query: string
+  ): void {
+    if (!resultsEl) {return;}
+
+    const closedTabs = sessions
+      .filter(s => s.tab)
+      .map(s => ({
+        ...s.tab!,
+        lastModified: s.lastModified,
+        sessionId: s.sessionId,
+      }));
+
+    let filtered = closedTabs;
+    if (query) {
+      const lq = query.toLowerCase();
+      filtered = closedTabs.filter(t =>
+        (t.title?.toLowerCase().includes(lq)) ||
+        (t.url?.toLowerCase().includes(lq))
+      );
+    }
+
+    if (filtered.length === 0) {return;}
+
+    const sep = document.createElement('li');
+    sep.className = 'tab-window-sep recently-closed-sep';
+    sep.textContent = 'Recently Closed';
+    resultsEl.appendChild(sep);
+
+    for (const tab of filtered) {
+      const li = document.createElement('li');
+      li.className = 'tab-row recently-closed-row';
+      li.setAttribute('role', 'option');
+
+      const ago = formatTimeAgo((tab as unknown as { lastModified: number }).lastModified);
+      const rawClosedFavicon = tab.favIconUrl || '';
+      const closedFavicon = (location.protocol === 'https:' && rawClosedFavicon.startsWith('http://')) ? '' : rawClosedFavicon;
+      li.innerHTML = `
+        <img class="tab-favicon" src="${closedFavicon}" alt="">
+        <div class="tab-details">
+          <span class="tab-title">${escapeHtml(tab.title || 'Untitled')}</span>
+          <span class="tab-url">${escapeHtml(truncateUrl(tab.url || ''))}</span>
+        </div>
+        <span class="tab-badges">${ago}</span>
+      `;
+      wireHideImgOnError(li.querySelector('img'));
+
+      const sessionId = tab.sessionId;
+      const closedUrl = tab.url || '';
+      if (sessionId) {li.dataset.sessionId = sessionId;}
+      if (closedUrl) {li.dataset.closedUrl = closedUrl;}
+      li.addEventListener('click', (ev) => {
+        const sk = (ev as MouseEvent).shiftKey;
+        if (sessionId && !sk) {
+          try {
+            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId });
+          } catch { /* ignore */ }
+        } else if (closedUrl) {
+          if (sk) {
+            try {
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl });
+            } catch { window.open(closedUrl); }
+          } else {
+            window.open(closedUrl, '_blank');
+          }
+        }
+        hideOverlay();
+      });
+      resultsEl.appendChild(li);
+    }
+  }
+
+  function switchToTab(tabId: number, windowId: number): void {
+    try {
+      chrome.runtime.sendMessage({ type: 'SWITCH_TO_TAB', tabId, windowId });
+    } catch { /* ignore */ }
+    hideOverlay();
+  }
+
+  function formatTimeAgo(timestamp: number): string {
+    const seconds = Math.floor(Date.now() / 1000 - timestamp);
+    if (seconds < 60) {return 'just now';}
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {return `${minutes} min ago`;}
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {return `${hours}h ago`;}
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+
+  function escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function truncateUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      const path = u.pathname + u.search;
+      return u.host + (path.length > 50 ? path.slice(0, 50) + '...' : path);
+    } catch { return url.slice(0, 60); }
+  }
+
+  // ===== COMMAND PALETTE: BOOKMARK SEARCH =====
+
+  function handleBookmarkMode(query: string): void {
+    if (!resultsEl) {return;}
+
+    if (!query && !cachedBookmarks) {
+      resultsEl.innerHTML = '<li class="empty-state">Loading bookmarks...</li>';
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_RECENT_BOOKMARKS' }, (resp) => {
+          if (chrome.runtime.lastError || !resp?.bookmarks) {
+            resultsEl!.innerHTML = '<li class="empty-state">Could not load bookmarks</li>';
+            return;
+          }
+          cachedBookmarks = resp.bookmarks;
+          renderBookmarkResults(query);
+        });
+      } catch {
+        resultsEl.innerHTML = '<li class="empty-state">Extension context lost</li>';
+      }
+      return;
+    }
+
+    if (query) {
+      try {
+        chrome.runtime.sendMessage({ type: 'SEARCH_BOOKMARKS', query }, (resp) => {
+          if (chrome.runtime.lastError || !resp?.bookmarks) {
+            resultsEl!.innerHTML = '<li class="empty-state">No matching bookmarks</li>';
+            updateResultCount('0 bookmarks');
+            return;
+          }
+          cachedBookmarks = resp.bookmarks;
+          renderBookmarkResults(query);
+        });
+      } catch {
+        resultsEl!.innerHTML = '<li class="empty-state">Extension context lost</li>';
+      }
+      return;
+    }
+
+    renderBookmarkResults(query);
+  }
+
+  function renderBookmarkResults(query: string): void {
+    if (!resultsEl || !cachedBookmarks) {return;}
+
+    selectedIndex = 0;
+    resultsEl.innerHTML = '';
+    resultsEl.className = 'results list';
+    resultsEl.setAttribute('role', 'listbox');
+    resultsEl.setAttribute('aria-label', 'Bookmarks');
+
+    const bookmarks = cachedBookmarks.filter(b => b.url);
+
+    if (bookmarks.length === 0) {
+      resultsEl.innerHTML = '<li class="empty-state">No matching bookmarks</li>';
+      updateResultCount('0 bookmarks');
+      return;
+    }
+
+    updateResultCount(`${bookmarks.length} bookmark${bookmarks.length !== 1 ? 's' : ''}`);
+
+    if (!query.trim()) {
+      const header = document.createElement('li');
+      header.className = 'palette-category-header';
+      header.setAttribute('role', 'presentation');
+      header.textContent = 'Recent bookmarks';
+      resultsEl.appendChild(header);
+      const tip = document.createElement('li');
+      tip.className = 'palette-discovery-tip';
+      tip.setAttribute('role', 'presentation');
+      tip.textContent = 'Type to search all bookmarks by title or URL.';
+      resultsEl.appendChild(tip);
+    }
+
+    bookmarks.forEach((bm, idx) => {
+      const li = document.createElement('li');
+      li.className = 'bookmark-row';
+      if (idx === 0) {li.classList.add('selected');}
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+
+      const folderPath = (bm as unknown as { folderPath?: string }).folderPath || '';
+      li.innerHTML = `
+        <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="">
+        <div class="tab-details">
+          <span class="tab-title">${escapeHtml(bm.title || 'Untitled')}</span>
+          ${folderPath ? `<span class="bookmark-folder">📁 ${escapeHtml(folderPath)}</span>` : ''}
+          <span class="tab-url">${escapeHtml(truncateUrl(bm.url || ''))}</span>
+        </div>
+      `;
+      wireHideImgOnError(li.querySelector('img'));
+
+      li.addEventListener('click', (e) => {
+        const url = bm.url!;
+        if ((e as MouseEvent).shiftKey) {
+          try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url }); } catch { window.open(url); }
+        } else {
+          try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'tab', url }); } catch { window.open(url, '_blank'); }
+        }
+        hideOverlay();
+      });
+      resultsEl!.appendChild(li);
+    });
+  }
+
+  // ===== COMMAND PALETTE: WEB SEARCH =====
+
+  function showFirstUseHint(): void {
+    if (!resultsEl || !cachedSettings) {return;}
+    if (!cachedSettings.commandPaletteEnabled) {return;}
+    if (cachedSettings.commandPaletteOnboarded) {return;}
+
+    if (firstUseHintEl) {return;}
+
+    firstUseHintEl = document.createElement('div');
+    firstUseHintEl.className = 'first-use-hint';
+    firstUseHintEl.textContent = 'New: Type / for commands, @ for tabs, # for bookmarks';
+
+    resultsEl.parentElement?.insertBefore(firstUseHintEl, resultsEl);
+
+    firstUseHintTimer = window.setTimeout(() => {
+      dismissFirstUseHint();
+    }, 5000) as unknown as number;
+  }
+
+  function dismissFirstUseHint(): void {
+    if (firstUseHintTimer) { clearTimeout(firstUseHintTimer); firstUseHintTimer = null; }
+    if (firstUseHintEl) {
+      firstUseHintEl.remove();
+      firstUseHintEl = null;
+    }
+    if (cachedSettings && !cachedSettings.commandPaletteOnboarded) {
+      cachedSettings = { ...cachedSettings, commandPaletteOnboarded: true };
+      try {
+        chrome.runtime.sendMessage({
+          type: 'SETTINGS_CHANGED',
+          settings: { commandPaletteOnboarded: true },
+        });
+      } catch { /* ignore */ }
+    }
+  }
+
+  function handlePaletteEnter(shiftKey = false): void {
+    if (!resultsEl) {return;}
+
+    if (currentMode === 'websearch') {
+      const raw = inputEl?.value ?? '';
+      const { query } = detectMode(raw.trim());
+      if (query) {
+        const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
+        const parsed = parseWebSearchQuery(query, defaultKey);
+        const built = buildWebSearchUrl(parsed, cachedSettings ?? {});
+        if ('error' in built) {
+          if (built.error === 'no-terms') {
+            showToast('Add search text after the prefix.', 'info');
+          } else if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+          }
+          return;
+        }
+        window.open(built.url, '_blank');
+        hideOverlay();
+      }
+      return;
+    }
+
+    if (currentMode === 'tabs') {
+      const selected = resultsEl.querySelector('.tab-row.selected') as HTMLElement | null;
+      if (!selected) {return;}
+      if (selected.classList.contains('recently-closed-row')) {
+        const sessionId = selected.dataset.sessionId;
+        const closedUrl = selected.dataset.closedUrl || '';
+        if (sessionId && !shiftKey) {
+          try {
+            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId });
+          } catch { /* ignore */ }
+        } else if (closedUrl) {
+          if (shiftKey) {
+            try {
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl });
+            } catch { window.open(closedUrl); }
+          } else {
+            window.open(closedUrl, '_blank');
+          }
+        }
+        hideOverlay();
+        return;
+      }
+      const tabId = selected.dataset.tabId ? Number(selected.dataset.tabId) : NaN;
+      const windowId = selected.dataset.windowId ? Number(selected.dataset.windowId) : NaN;
+      const tabUrl = selected.dataset.tabUrl || '';
+      if (Number.isFinite(tabId) && Number.isFinite(windowId)) {
+        if (shiftKey && tabUrl) {
+          try {
+            chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl });
+          } catch { window.open(tabUrl); }
+          hideOverlay();
+        } else {
+          switchToTab(tabId, windowId);
+        }
+      }
+      return;
+    }
+
+    if (currentMode === 'bookmarks') {
+      const selected = resultsEl.querySelector('.bookmark-row.selected') as HTMLElement;
+      if (selected) {
+        selected.click();
+      }
+      return;
+    }
+
+    if (qsWindowPickerActive) {
+      const rows = resultsEl.querySelectorAll('.command-row');
+      if (rows.length > 0 && selectedIndex >= 0 && selectedIndex < rows.length) {
+        const row = rows[selectedIndex] as HTMLElement;
+        row.click();
+      }
+      return;
+    }
+
+    if (currentMode === 'commands' || currentMode === 'power') {
+      const raw = inputEl?.value ?? '';
+      const { query } = detectMode(raw.trim());
+      const tier = currentMode === 'power' ? 'power' as const : 'everyday' as const;
+      const commands = cachedSettings
+        ? getAvailableCommands(tier, cachedSettings)
+        : getCommandsByTier(tier);
+      const list = preparePaletteCommandList(tier, query, commands, cachedSettings ?? undefined);
+      if (list.length > 0 && selectedIndex >= 0 && selectedIndex < list.length) {
+        executeSelectedCommand(list);
+      }
+    }
+  }
+
+  function handlePaletteArrow(direction: 'up' | 'down'): void {
+    if (!resultsEl) {return;}
+
+    const rowSelector = currentMode === 'tabs' ? '.tab-row' :
+      currentMode === 'bookmarks' ? '.bookmark-row' : '.command-row';
+    const rows = resultsEl.querySelectorAll(rowSelector);
+    if (rows.length === 0) {return;}
+
+    rows[selectedIndex]?.classList.remove('selected');
+    rows[selectedIndex]?.setAttribute('aria-selected', 'false');
+
+    if (direction === 'down') {
+      selectedIndex = (selectedIndex + 1) % rows.length;
+    } else {
+      selectedIndex = (selectedIndex - 1 + rows.length) % rows.length;
+    }
+
+    rows[selectedIndex]?.classList.add('selected');
+    rows[selectedIndex]?.setAttribute('aria-selected', 'true');
+    (rows[selectedIndex] as HTMLElement)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function renderWebSearchPreview(query: string): void {
+    if (!resultsEl) {return;}
+
+    selectedIndex = 0;
+    resultsEl.innerHTML = '';
+    resultsEl.className = 'results list';
+
+    if (!query) {
+      resultsEl.setAttribute('role', 'listbox');
+      resultsEl.setAttribute('aria-label', 'Web search hints');
+      const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
+      const defaultLabel = getWebSearchEngineDisplayName(defaultKey);
+      const intro = document.createElement('li');
+      intro.className = 'palette-discovery-tip';
+      intro.setAttribute('role', 'presentation');
+      intro.textContent = `Default engine: ${defaultLabel} (change in settings). Type a query, then Enter. For Jira and Confluence, set each site URL in settings.`;
+      resultsEl.appendChild(intro);
+      const prefixTitle = document.createElement('li');
+      prefixTitle.className = 'palette-category-header';
+      prefixTitle.setAttribute('role', 'presentation');
+      prefixTitle.textContent = 'Prefix + space + query';
+      resultsEl.appendChild(prefixTitle);
+      for (const line of getWebSearchPrefixHintLines()) {
+        const row = document.createElement('li');
+        row.className = 'palette-hint-line';
+        row.setAttribute('role', 'presentation');
+        row.innerHTML = `<code>?? ${escapeHtml(line.prefix)}</code> — ${escapeHtml(line.engineLabel)} <span class="palette-hint-muted">(e.g. <code>?? ${escapeHtml(line.prefix)} cats</code>)</span>`;
+        resultsEl.appendChild(row);
+      }
+      updateResultCount('');
+      return;
+    }
+
+    const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
+    const parsed = parseWebSearchQuery(query, defaultKey);
+    const engineName = getWebSearchEngineDisplayName(parsed.engineKey);
+    const jiraOrigin = (cachedSettings?.jiraSiteUrl ?? '').trim();
+    const confluenceOrigin = (cachedSettings?.confluenceSiteUrl ?? '').trim();
+    const missingSiteForEngine =
+      (parsed.engineKey === 'jira' && !jiraOrigin)
+      || (parsed.engineKey === 'confluence' && !confluenceOrigin);
+    const built = buildWebSearchUrl(parsed, cachedSettings ?? {});
+
+    const li = document.createElement('li');
+    li.className = 'command-row selected';
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', 'true');
+
+    if (parsed.usedPrefix && parsed.searchTerms === '') {
+      const mp = parsed.matchedPrefix ?? '';
+      if (missingSiteForEngine) {
+        const siteHint = parsed.engineKey === 'jira' ? 'Jira' : 'Confluence';
+        li.innerHTML = `
+          <span class="cmd-icon">🔍</span>
+          <span class="cmd-label">${escapeHtml(engineName)} — set ${siteHint} site URL in settings, then add terms (e.g. <code>?? ${escapeHtml(mp)} PROJ-1</code>)</span>
+          <span class="cmd-shortcut">Enter: n/a</span>
+        `;
+        li.addEventListener('click', () => {
+          showToast(
+            webSearchSiteUrlToastMessage(parsed.engineKey === 'jira' ? 'no-jira-site' : 'no-confluence-site'),
+            'warning',
+          );
+        });
+      } else {
+        li.innerHTML = `
+          <span class="cmd-icon">🔍</span>
+          <span class="cmd-label">${escapeHtml(engineName)} — type search terms after a space (e.g. <code>?? ${escapeHtml(mp)} query</code>)</span>
+          <span class="cmd-shortcut">Enter: n/a</span>
+        `;
+        li.addEventListener('click', () => {
+          showToast('Add search text after the prefix.', 'info');
+        });
+      }
+    } else if ('error' in built) {
+      const msg =
+        built.error === 'no-jira-site' || built.error === 'no-confluence-site'
+          ? webSearchSiteUrlPreviewLabel(built.error, engineName)
+          : 'Cannot open search';
+      li.innerHTML = `
+        <span class="cmd-icon">🔍</span>
+        <span class="cmd-label">${escapeHtml(msg)}</span>
+        <span class="cmd-shortcut">Enter: n/a</span>
+      `;
+      li.addEventListener('click', () => {
+        if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+          showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
+        } else {
+          showToast('Add search text after the prefix.', 'info');
+        }
+      });
+    } else {
+      li.innerHTML = `
+        <span class="cmd-icon">🔍</span>
+        <span class="cmd-label">Search ${escapeHtml(engineName)} for "${escapeHtml(parsed.searchTerms)}"</span>
+        <span class="cmd-shortcut">Enter to search</span>
+      `;
+      li.addEventListener('click', () => {
+        window.open(built.url, '_blank');
+        hideOverlay();
+      });
+    }
+
+    resultsEl.appendChild(li);
+    updateResultCount('');
   }
 
   // ===== LOADING SPINNER & AI STATUS =====
@@ -1621,13 +3288,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // Thin wrapper — delegates to shared renderAIStatus with this overlay's container
   function renderAIStatus(aiStatus: AIStatus | null | undefined): void {
-    log.debug('aiStatus', 'Rendering AI status:', aiStatus ? {
-      aiKeywords: aiStatus.aiKeywords,
-      semantic: aiStatus.semantic,
-      expandedCount: aiStatus.expandedCount,
-      searchTimeMs: aiStatus.searchTimeMs,
-    } : 'cleared');
-    renderAIStatusShared(aiStatusBarEl, aiStatus);
+    try {
+      log.debug('aiStatus', 'Rendering AI status:', aiStatus ? {
+        aiKeywords: aiStatus.aiKeywords,
+        semantic: aiStatus.semantic,
+        expandedCount: aiStatus.expandedCount,
+        searchTimeMs: aiStatus.searchTimeMs,
+      } : 'cleared');
+      renderAIStatusShared(aiStatusBarEl, aiStatus);
+    } catch (err) {
+      console.error('[SmrutiCortex] renderAIStatus error:', err);
+    }
   }
 
   function buildRecentSearchesSection(entries: Array<{ query: string; timestamp: number; selectedUrl?: string }>): HTMLElement {
@@ -1673,11 +3344,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           inputEl.value = entry.query;
           syncClearButton();
           inputEl.focus();
-          performSearch(entry.query, true);
+          handleInput();
         }
       });
       item.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') item.click();
+        if (ev.key === 'Enter') {item.click();}
       });
       container.appendChild(item);
     }
@@ -1727,7 +3398,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         window.open(entry.url, '_blank');
       });
       item.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') item.click();
+        if (ev.key === 'Enter') {item.click();}
       });
       container.appendChild(item);
     }
@@ -1736,12 +3407,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // --- Toggle Chip Bar for Quick-Search ---
   function renderQSToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     toggleBarEl.innerHTML = '';
     const visibleKeys = cachedSettings?.toolbarToggles ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
     for (const key of visibleKeys) {
       const def = getToggleDef(key);
-      if (!def) continue;
+      if (!def) {continue;}
 
       const chip = document.createElement('button');
       chip.className = 'toggle-chip';
@@ -1766,13 +3437,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
           } catch { /* context invalidated */ }
         }
-        syncQSToggleBar();
-        if (def.key === 'displayMode' || def.key === 'highlightMatches') {
-          renderResults(currentResults);
-        } else if (inputEl?.value?.trim()) {
-          handleInput();
-        } else {
-          loadRecentHistory();
+        applySettingSideEffects(def.key);
+        if (def.key !== 'displayMode' && def.key !== 'highlightMatches') {
+          if (inputEl?.value?.trim()) {
+            handleInput();
+          } else {
+            loadRecentHistory();
+          }
         }
       });
 
@@ -1782,13 +3453,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function syncQSToggleBar() {
-    if (!toggleBarEl) return;
+    if (!toggleBarEl) {return;}
     const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
     chips.forEach(chip => {
       const key = chip.dataset.toggleKey;
-      if (!key) return;
+      if (!key) {return;}
       const def = getToggleDef(key);
-      if (!def) return;
+      if (!def) {return;}
 
       const val = (cachedSettings as any)?.[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -1823,39 +3494,38 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     try {
-      const showHistory = cachedSettings?.showRecentHistory ?? true;
+      const showRecentlyVisited = cachedSettings?.showRecentHistory ?? true;
       const showSearches = cachedSettings?.showRecentSearches ?? true;
 
-      // Load recent browsing history if enabled
-      if (showHistory) {
-        const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
-        const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
-            (resp) => {
-              if (chrome.runtime.lastError) {
-                perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
-                resolve({ results: [] });
-              } else {
-                resolve(resp || { results: [] });
-              }
+      const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
+      const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
+          (resp) => {
+            if (chrome.runtime.lastError) {
+              perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
+              resolve({ results: [] });
+            } else {
+              resolve(resp || { results: [] });
             }
-          );
-        });
+          }
+        );
+      });
 
-        let recentItems: SearchResult[] = response.results || [];
-        const sortBy = cachedSettings?.sortBy || 'most-recent';
-        recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        currentResults = recentItems;
-      } else {
-        currentResults = [];
+      if (currentMode !== 'history') {
+        perfLog('loadRecentHistory — aborting, palette mode active: ' + currentMode);
+        return;
       }
+      let recentItems: SearchResult[] = response.results || [];
+      const sortBy = cachedSettings?.sortBy || 'most-recent';
+      recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      currentResults = recentItems;
 
       selectedIndex = -1;
       renderResults(currentResults);
 
-      // Show recently visited entries (gated by showRecentHistory)
-      if (showHistory && resultsEl) {
+      // "⚡ Recently Visited" section — gated by showRecentHistory toggle
+      if (showRecentlyVisited && resultsEl) {
         getRecentInteractions().then(entries => {
           if (entries.length > 0 && resultsEl) {
             const section = buildRecentInteractionsSection(entries.slice(0, 5));
@@ -1901,31 +3571,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Spinner is NOT shown here — it's managed by response handlers.
     // Phase 1 results render without spinner; spinner appears only when AI is pending.
 
-    // Check extension context validity first
     if (!isExtensionContextValid()) {
-      log.warn('performSearch', 'Extension context invalid — attempting recovery');
+      log.debug('performSearch', 'Extension context invalid — showing reconnect UI');
       currentResults = [];
-
-      // Attempt silent recovery first
-      attemptContextRecovery().then(recovered => {
-        if (recovered) {
-          log.info('performSearch', 'Context recovered — retrying search');
-          showToast('Extension reconnected', 'success');
-          performSearch(query);
-        } else {
-          log.error('performSearch', 'Context recovery failed after all attempts');
-          renderErrorResults(
-            '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-            attemptNoReloadReconnect
-          );
-        }
-      }).catch(() => {
-        log.error('performSearch', 'Context recovery threw an error');
-        renderErrorResults(
-          '🔄 Extension was updated. Click reconnect or press the shortcut again.',
-          attemptNoReloadReconnect
-        );
-      });
+      renderErrorResults(
+        '🔄 Extension was updated. Click reconnect or press the shortcut again.',
+        attemptNoReloadReconnect
+      );
       return;
     }
 
@@ -2065,6 +3717,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== RENDER RESULTS (card + list mode, mirrors popup.ts renderResults) =====
   function renderResults(results: SearchResult[]): void {
     if (!resultsEl) {return;}
+    try {
     const t0 = performance.now();
 
     const isCards = cachedSettings?.displayMode === DisplayMode.CARDS;
@@ -2102,7 +3755,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         fav.className = 'card-favicon';
         const qsFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         fav.src = qsFavFallback;
-        fav.onerror = () => { fav.src = qsFavFallback; };
+        fav.addEventListener('error', () => { fav.src = qsFavFallback; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;
@@ -2193,6 +3846,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     perfLog(`renderResults (${results.length} items, ${isCards ? 'cards' : 'list'})`, t0);
+    } catch (err) {
+      if (resultsEl) {
+        resultsEl.innerHTML = '<div style="padding:12px;color:#ef4444;">Render error — try a new search</div>';
+      }
+      console.error('[SmrutiCortex] renderResults error:', err);
+    }
   }
 
   // ===== RENDER ERROR MESSAGE =====
@@ -2319,26 +3978,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       },
       {
         name: 'results',
-        element: null, // Custom handling
+        element: null,
         onFocus: () => {
-          // Focus the selected result or first result (card or list aware)
-          if (currentResults.length > 0) {
-            const isCards = resultsEl?.classList.contains('cards');
-            const itemSel = isCards ? '.result-card' : '.result';
-            const selectedResult = resultsEl?.querySelector(`${itemSel}.selected`) as HTMLElement;
-            if (selectedResult) {
-              selectedResult.focus();
-            } else {
-              const firstResult = resultsEl?.querySelector(itemSel) as HTMLElement;
-              if (firstResult) {
-                selectedIndex = 0;
-                updateSelection();
-                firstResult.focus();
-              }
+          const itemSel = getActiveItemSelector();
+          const selectedResult = resultsEl?.querySelector(`${itemSel}.selected`) as HTMLElement;
+          if (selectedResult) {
+            selectedResult.focus();
+          } else {
+            const firstResult = resultsEl?.querySelector(itemSel) as HTMLElement;
+            if (firstResult) {
+              selectedIndex = 0;
+              updateSelection();
+              firstResult.focus();
             }
           }
         },
-        shouldSkip: () => currentResults.length === 0 // Skip if no results
+        shouldSkip: () => {
+          const itemSel = getActiveItemSelector();
+          return !resultsEl?.querySelector(itemSel);
+        }
       }
     ];
 
@@ -2370,8 +4028,24 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
+        if (qsWindowPickerActive) {
+          qsWindowPickerActive = false;
+          const raw = inputEl?.value ?? '';
+          const { query } = detectMode(raw.trim());
+          renderCommandResults(query, currentMode === 'power' ? 'power' : 'everyday');
+          return;
+        }
+        if (confirmingCommand) {
+          confirmingCommand = null;
+          const raw = inputEl?.value ?? '';
+          const { query } = detectMode(raw.trim());
+          renderCommandResults(query, currentMode === 'power' ? 'power' : 'everyday');
+          return;
+        }
         if (inputEl && inputEl.value.length > 0) {
           inputEl.value = '';
+          currentMode = 'history';
+          updateModeBadge('history');
           inputEl.dispatchEvent(new Event('input', { bubbles: true }));
           syncClearButton();
           return;
@@ -2379,19 +4053,50 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         hideOverlay();
         return;
       }
-      if (e.key === 'Enter' && currentResults.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = selectedIndex >= 0 ? selectedIndex : 0;
-        openResult(idx, !e.shiftKey);
-        return;
+      if (e.key === 'Enter') {
+        if (currentMode !== 'history') {
+          e.preventDefault();
+          e.stopPropagation();
+          handlePaletteEnter(e.shiftKey);
+          return;
+        }
+        if (currentResults.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          const idx = selectedIndex >= 0 ? selectedIndex : 0;
+          openResult(idx, !e.shiftKey);
+          return;
+        }
       }
-      if (e.key === 'ArrowDown' && currentResults.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        selectedIndex = 0;
-        updateSelection();
-        return;
+      if (e.key === 'ArrowDown') {
+        if (currentMode !== 'history') {
+          e.preventDefault();
+          e.stopPropagation();
+          handlePaletteArrow('down');
+          return;
+        }
+        if (currentResults.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          selectedIndex = (selectedIndex + 1) % currentResults.length;
+          updateSelection();
+          return;
+        }
+      }
+      if (e.key === 'ArrowUp') {
+        if (currentMode !== 'history') {
+          e.preventDefault();
+          e.stopPropagation();
+          handlePaletteArrow('up');
+          return;
+        }
+        if (currentResults.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+          updateSelection();
+          return;
+        }
       }
       if (e.key === 'Tab') {
         e.preventDefault();
@@ -2435,9 +4140,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         break;
       
       case KeyboardAction.NAVIGATE_DOWN:
-        if (currentResults.length > 0) {
+        if (currentMode !== 'history') {
+          handlePaletteArrow('down');
+        } else if (currentResults.length > 0) {
           if (focusedIndex !== null) {
-            // If a result is focused, move relative to it
             selectedIndex = (focusedIndex + 1) % currentResults.length;
           } else {
             selectedIndex = (selectedIndex + 1) % currentResults.length;
@@ -2447,7 +4153,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         break;
       
       case KeyboardAction.NAVIGATE_UP:
-        if (currentResults.length > 0) {
+        if (currentMode !== 'history') {
+          handlePaletteArrow('up');
+        } else if (currentResults.length > 0) {
           if (focusedIndex !== null) {
             selectedIndex = (focusedIndex - 1 + currentResults.length) % currentResults.length;
           } else {
@@ -2502,17 +4210,22 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  function getActiveItemSelector(): string {
+    if (currentMode === 'tabs') {return '.tab-row';}
+    if (currentMode === 'bookmarks') {return '.bookmark-row';}
+    if (currentMode === 'commands' || currentMode === 'power' || currentMode === 'websearch') {return '.command-row';}
+    const isCards = resultsEl?.classList.contains('cards');
+    return isCards ? '.result-card' : '.result';
+  }
+
   function updateSelection(): void {
     if (!resultsEl) {return;}
-    const isCards = resultsEl.classList.contains('cards');
-    const itemSel = isCards ? '.result-card' : '.result';
+    const itemSel = getActiveItemSelector();
     resultsEl.querySelectorAll(itemSel).forEach((el, i) => {
       el.classList.toggle('selected', i === selectedIndex);
     });
-    // Scroll selected item into view (inline:nearest handles horizontal card scroll)
     const selected = resultsEl.querySelector(`${itemSel}.selected`);
     selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    // If a result is selected and currently not focused, move focus to it so arrow keys operate there
     const currentlyFocused = getFocusedElement();
     if (selected && currentlyFocused !== selected) {
       try {
@@ -2554,24 +4267,24 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const key = e.key;
     const mod = e.ctrlKey || e.metaKey;
 
-    if (key === 'Escape' || key === 'Tab') return true;
+    if (key === 'Escape' || key === 'Tab') {return true;}
 
     // F-keys → browser (F5 reload, F12 devtools, etc.)
-    if (/^F\d{1,2}$/.test(key)) return false;
+    if (/^F\d{1,2}$/.test(key)) {return false;}
 
     // Alt combos → browser (Alt+Left/Right = back/forward, etc.)
-    if (e.altKey) return false;
+    if (e.altKey) {return false;}
 
     if (mod) {
       const lk = key.toLowerCase();
       // Ctrl+Shift+S = toggle overlay
-      if (e.shiftKey && lk === 's') return true;
+      if (e.shiftKey && lk === 's') {return true;}
       // Ctrl+Shift+Z = redo
-      if (e.shiftKey && lk === 'z') return true;
+      if (e.shiftKey && lk === 'z') {return true;}
       // Our text-editing Ctrl shortcuts
-      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) return true;
+      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) {return true;}
       // Ctrl+Backspace/Delete (word delete), Ctrl+Arrow (word jump), Ctrl+Home/End
-      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return true;
+      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) {return true;}
       // Any other Ctrl/Cmd combo (Ctrl+R, Ctrl+K, Ctrl+L, Ctrl+T, Ctrl+W,
       // Ctrl+N, Ctrl+E, Ctrl+H, Ctrl+J, Ctrl+D, Ctrl+P, Ctrl+F, Ctrl+G,
       // Ctrl+Shift+K, Ctrl+Shift+T, Ctrl+Tab, etc.) → pass to browser
@@ -2580,10 +4293,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     // Non-modifier navigation & editing keys
     if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-         'Backspace', 'Delete', 'Home', 'End'].includes(key)) return true;
+         'Backspace', 'Delete', 'Home', 'End'].includes(key)) {return true;}
 
     // Printable character (single char, no Ctrl/Alt/Meta)
-    if (key.length === 1) return true;
+    if (key.length === 1) {return true;}
 
     // Modifier-only presses (Shift, Control, CapsLock, etc.) — ignore
     return false;
@@ -2641,7 +4354,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
-    if (focusedElement && (focusedElement.classList?.contains('result') || focusedElement.classList?.contains('result-card') || focusedElement === settingsBtn)) {
+    if (focusedElement && (
+      focusedElement.classList?.contains('result') ||
+      focusedElement.classList?.contains('result-card') ||
+      focusedElement.classList?.contains('command-row') ||
+      focusedElement.classList?.contains('tab-row') ||
+      focusedElement.classList?.contains('bookmark-row') ||
+      focusedElement === settingsBtn
+    )) {
       handleKeydown(e);
       return;
     }
@@ -2908,17 +4628,31 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
-    if (key === 'ArrowDown' && currentResults.length > 0) {
-      selectedIndex = 0;
-      updateSelection();
+    if (key === 'ArrowDown') {
+      if (currentMode !== 'history') {
+        handlePaletteArrow('down');
+      } else if (currentResults.length > 0) {
+        selectedIndex = (selectedIndex + 1) % currentResults.length;
+        updateSelection();
+      }
       return;
     }
 
     if (key === 'ArrowUp') {
+      if (currentMode !== 'history') {
+        handlePaletteArrow('up');
+      } else if (currentResults.length > 0) {
+        selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+        updateSelection();
+      }
       return;
     }
 
     if (key === 'Enter') {
+      if (currentMode !== 'history') {
+        handlePaletteEnter(e.shiftKey);
+        return;
+      }
       if (currentResults.length > 0) {
         const idx = selectedIndex >= 0 ? selectedIndex : 0;
         openResult(idx, !e.shiftKey);
@@ -2959,16 +4693,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Update cached settings when background notifies of changes
     if (message?.type === 'SETTINGS_CHANGED' && message?.settings) {
       try {
+        const changedKeys = Object.keys(message.settings) as (keyof AppSettings)[];
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
-        try {
-          updateSelectAllBadge(Boolean(cachedSettings?.selectAllOnFocus));
-        } catch { /* ignore */ }
-        try {
-          if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(cachedSettings?.selectAllOnFocus)); }
-        } catch { /* ignore */ }
-        // Search debounce is separate from focusDelayMs
         searchDebounceMs = DEBOUNCE_MS;
-        syncQSToggleBar();
+
+        // Apply visual side effects for each changed key
+        for (const key of changedKeys) {
+          applySettingSideEffects(key);
+        }
+
+        // If toolbarToggles changed, re-render the whole chip bar (not just sync)
+        if (changedKeys.includes('toolbarToggles' as keyof AppSettings)) {
+          renderQSToggleBar();
+        }
+
+        // Reload recent history if relevant settings changed while input is empty
+        const historyKeys: string[] = ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'];
+        if (changedKeys.some(k => historyKeys.includes(k)) && !inputEl?.value?.trim()) {
+          loadRecentHistory();
+        }
       } catch {
         // ignore
       }

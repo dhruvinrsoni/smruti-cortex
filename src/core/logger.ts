@@ -153,13 +153,25 @@ export class Logger {
     private static log(level: LogLevel, context: LogContext, message: string, data?: unknown, error?: Error): void {
         if (!this.shouldLog(level)) {return;}
 
+        // Eagerly serialize `data` to a bounded string so the buffer
+        // does not retain references to large live objects (e.g. search results).
+        let snapshotData: unknown = undefined;
+        if (data !== undefined) {
+            try {
+                const json = JSON.stringify(data);
+                snapshotData = json && json.length > 500 ? json.substring(0, 500) + '…' : json;
+            } catch {
+                snapshotData = String(data);
+            }
+        }
+
         const entry: LogEntry = {
             timestamp: this.formatLocalTimestamp(),
             level,
             levelName: LogLevel[level],
             context,
             message,
-            data,
+            data: snapshotData,
             error
         };
 

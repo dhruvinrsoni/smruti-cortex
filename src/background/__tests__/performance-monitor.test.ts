@@ -26,28 +26,14 @@ describe('performanceTracker', () => {
   });
 
   describe('initial state', () => {
-    it('should start with zero searchCount', () => {
-      expect(performanceTracker.getMetrics().searchCount).toBe(0);
-    });
-
-    it('should start with zero restarts', () => {
-      expect(performanceTracker.getMetrics().serviceWorkerRestarts).toBe(0);
-    });
-
-    it('should start with zero healthCheckCount', () => {
-      expect(performanceTracker.getMetrics().healthCheckCount).toBe(0);
-    });
-
-    it('should start with zero selfHealCount', () => {
-      expect(performanceTracker.getMetrics().selfHealCount).toBe(0);
-    });
-
-    it('should start with null lastRestartTime', () => {
-      expect(performanceTracker.getMetrics().lastRestartTime).toBeNull();
-    });
-
-    it('should have a non-zero startTime', () => {
-      expect(performanceTracker.getMetrics().startTime).toBeGreaterThan(0);
+    it('should have correct defaults after reset', () => {
+      const metrics = performanceTracker.getMetrics();
+      expect(metrics.searchCount).toBe(0);
+      expect(metrics.serviceWorkerRestarts).toBe(0);
+      expect(metrics.healthCheckCount).toBe(0);
+      expect(metrics.selfHealCount).toBe(0);
+      expect(metrics.lastRestartTime).toBeNull();
+      expect(metrics.startTime).toBeGreaterThan(0);
     });
   });
 

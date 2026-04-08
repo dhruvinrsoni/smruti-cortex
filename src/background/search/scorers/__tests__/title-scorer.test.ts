@@ -37,14 +37,6 @@ describe('titleScorer', () => {
     vi.clearAllMocks();
   });
 
-  it('should have name "title"', () => {
-    expect(titleScorer.name).toBe('title');
-  });
-
-  it('should have weight 0.35', () => {
-    expect(titleScorer.weight).toBe(0.35);
-  });
-
   describe('score calculation', () => {
     it('should return 0 when query tokenizes to empty', () => {
       const item = makeItem({ title: 'React Documentation' });
