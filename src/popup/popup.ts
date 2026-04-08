@@ -1194,6 +1194,10 @@ function initializePopup() {
         showToast(`SmrutiCortex v${manifest.version}\nInstant browser history search`);
       } else if (cmd.id === 'shortcuts') {
         showToast('Enter: open · Shift+Enter: background · ↑↓: navigate · Esc: clear');
+      } else if (cmd.id === 'shortcut-toggle-bookmarks-bar') {
+        showToast('Toggle Bookmarks / Favorites Bar\n\nCtrl + Shift + B\n\nWorks in Chrome, Edge & Firefox.\nShortcuts may vary by browser version.', 'info', 8000);
+      } else if (cmd.id === 'shortcut-toggle-vertical-tabs') {
+        showToast('Toggle Vertical Tabs (Edge only)\n\nCtrl + Shift + , (comma)\n\nSwitches between vertical and horizontal tab layout.\nNote: No shortcut exists to collapse/expand the sidebar pane — use the UI button.\nShortcuts may vary by browser version.', 'info', 10000);
       } else if (cmd.id === 'copy-ollama-endpoint') {
         const url = SettingsManager.getSetting('ollamaEndpoint') ?? '';
         if (!url) {

@@ -2579,6 +2579,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       case 'shortcuts':
         showToast('Enter: open · Shift+Enter: background · Ctrl+C: copy · ↑↓: navigate · Esc: close');
         break;
+      case 'shortcut-toggle-bookmarks-bar':
+        showToast('Toggle Bookmarks / Favorites Bar\n\nCtrl + Shift + B\n\nWorks in Chrome, Edge & Firefox.\nShortcuts may vary by browser version.', 'info', 8000);
+        break;
+      case 'shortcut-toggle-vertical-tabs':
+        showToast('Toggle Vertical Tabs (Edge only)\n\nCtrl + Shift + , (comma)\n\nSwitches between vertical and horizontal tab layout.\nNote: No shortcut exists to collapse/expand the sidebar pane — use the UI button.\nShortcuts may vary by browser version.', 'info', 10000);
+        break;
       case 'about': {
         const manifest = chrome.runtime.getManifest();
         showToast(`SmrutiCortex v${manifest.version}\nInstant browser history search\ngithub.com/dhruvinrsoni/smruti-cortex`);

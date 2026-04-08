@@ -525,6 +525,26 @@ const EVERYDAY_COMMANDS: PaletteCommand[] = [
         keywords: ['shortcuts', 'keyboard', 'hotkeys', 'keys'],
         action: 'page-action',
     },
+    {
+        id: 'shortcut-toggle-bookmarks-bar',
+        label: 'Toggle Bookmarks / Favorites Bar',
+        icon: '🔖',
+        tier: 'everyday',
+        category: 'browser',
+        keywords: ['bookmarks', 'favorites', 'bar', 'toggle', 'hide', 'show', 'screenshot', 'clean'],
+        hint: 'Shows the browser shortcut — not executable by extensions',
+        action: 'page-action',
+    },
+    {
+        id: 'shortcut-toggle-vertical-tabs',
+        label: 'Toggle Vertical Tabs (Edge)',
+        icon: '📐',
+        tier: 'everyday',
+        category: 'browser',
+        keywords: ['vertical', 'tabs', 'sidebar', 'pane', 'pin', 'unpin', 'collapse', 'edge', 'screenshot', 'clean'],
+        hint: 'Shows the browser shortcut — Edge only, not executable by extensions',
+        action: 'page-action',
+    },
 
     // --- Advanced Tab Management (gated by advancedBrowserCommands) ---
     {
