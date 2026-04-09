@@ -100,14 +100,10 @@ export async function setSearchDebugEnabled(enabled: boolean): Promise<void> {
 }
 
 /**
- * Record a search for debugging
+ * Record a search for analytics (always recorded — lightweight, capped at 50).
+ * Full debug snapshots (scorer breakdowns etc.) are gated on searchDebugEnabled separately.
  */
 export function recordSearchDebug(query: string, resultCount: number, duration: number): void {
-    // Only record if search debug is enabled
-    if (!searchDebugEnabled) {
-        return;
-    }
-    
     searchHistory.push({
         timestamp: Date.now(),
         query,
@@ -115,7 +111,6 @@ export function recordSearchDebug(query: string, resultCount: number, duration: 
         duration,
     });
     
-    // Keep only last 50
     if (searchHistory.length > MAX_SEARCH_HISTORY) {
         searchHistory.shift();
     }
@@ -152,11 +147,14 @@ export function getSearchAnalytics() {
             totalSearches: 0,
             averageResults: 0,
             averageDuration: 0,
-            topQueries: [],
+            topQueries: [] as { query: string; count: number }[],
+            recentSearches: [] as SearchDebugEntry[],
+            queryLengthDistribution: {} as Record<number, number>,
         };
     }
     
     const queryCounts = new Map<string, number>();
+    const lengthDistribution: Record<number, number> = {};
     let totalResults = 0;
     let totalDuration = 0;
     
@@ -165,6 +163,8 @@ export function getSearchAnalytics() {
         queryCounts.set(normalized, (queryCounts.get(normalized) || 0) + 1);
         totalResults += entry.resultCount;
         totalDuration += entry.duration;
+        const len = entry.query.trim().length;
+        lengthDistribution[len] = (lengthDistribution[len] || 0) + 1;
     });
     
     const topQueries = Array.from(queryCounts.entries())
@@ -178,6 +178,7 @@ export function getSearchAnalytics() {
         averageDuration: totalDuration / searchHistory.length,
         topQueries,
         recentSearches: searchHistory.slice(-20).reverse(),
+        queryLengthDistribution: lengthDistribution,
     };
 }
 

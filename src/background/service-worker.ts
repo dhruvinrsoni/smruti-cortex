@@ -396,7 +396,7 @@ setupPortBasedMessaging();
             try {
               const { getSearchAnalytics } = await import('./diagnostics');
               const analytics = getSearchAnalytics();
-              sendResponse({ status: 'OK', ...analytics });
+              sendResponse({ status: 'OK', analytics });
             } catch (error) {
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }

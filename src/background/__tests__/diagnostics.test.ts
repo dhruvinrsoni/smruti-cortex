@@ -96,15 +96,8 @@ describe('diagnostics module', () => {
   });
 
   describe('recordSearchDebug', () => {
-    it('does not record when debug is disabled', async () => {
+    it('always records regardless of debug flag', async () => {
       const { recordSearchDebug, getSearchHistory } = await import('../diagnostics');
-      recordSearchDebug('test query', 5, 20);
-      expect(getSearchHistory()).toHaveLength(0);
-    });
-
-    it('records when debug is enabled', async () => {
-      const { recordSearchDebug, getSearchHistory, setSearchDebugEnabled } = await import('../diagnostics');
-      await setSearchDebugEnabled(true);
       recordSearchDebug('test query', 5, 20);
       const history = getSearchHistory();
       expect(history).toHaveLength(1);
@@ -114,8 +107,7 @@ describe('diagnostics module', () => {
     });
 
     it('limits history to 50 entries', async () => {
-      const { recordSearchDebug, getSearchHistory, setSearchDebugEnabled } = await import('../diagnostics');
-      await setSearchDebugEnabled(true);
+      const { recordSearchDebug, getSearchHistory } = await import('../diagnostics');
       for (let i = 0; i < 55; i++) {
         recordSearchDebug(`query ${i}`, i, i * 10);
       }
@@ -130,8 +122,7 @@ describe('diagnostics module', () => {
     });
 
     it('returns a copy (not internal reference)', async () => {
-      const { getSearchHistory, setSearchDebugEnabled, recordSearchDebug } = await import('../diagnostics');
-      await setSearchDebugEnabled(true);
+      const { getSearchHistory, recordSearchDebug } = await import('../diagnostics');
       recordSearchDebug('query', 1, 10);
       const h1 = getSearchHistory();
       const h2 = getSearchHistory();
@@ -147,11 +138,11 @@ describe('diagnostics module', () => {
       expect(analytics.averageResults).toBe(0);
       expect(analytics.averageDuration).toBe(0);
       expect(analytics.topQueries).toEqual([]);
+      expect(analytics.queryLengthDistribution).toEqual({});
     });
 
     it('calculates analytics from recorded searches', async () => {
-      const { getSearchAnalytics, setSearchDebugEnabled, recordSearchDebug } = await import('../diagnostics');
-      await setSearchDebugEnabled(true);
+      const { getSearchAnalytics, recordSearchDebug } = await import('../diagnostics');
       recordSearchDebug('react', 10, 30);
       recordSearchDebug('react', 6, 20);
       recordSearchDebug('vue', 4, 10);
@@ -162,8 +153,7 @@ describe('diagnostics module', () => {
     });
 
     it('lists top queries by frequency', async () => {
-      const { getSearchAnalytics, setSearchDebugEnabled, recordSearchDebug } = await import('../diagnostics');
-      await setSearchDebugEnabled(true);
+      const { getSearchAnalytics, recordSearchDebug } = await import('../diagnostics');
       recordSearchDebug('react', 5, 10);
       recordSearchDebug('react', 5, 10);
       recordSearchDebug('vue', 5, 10);
@@ -173,12 +163,23 @@ describe('diagnostics module', () => {
     });
 
     it('includes recentSearches', async () => {
-      const { getSearchAnalytics, setSearchDebugEnabled, recordSearchDebug } = await import('../diagnostics');
-      await setSearchDebugEnabled(true);
+      const { getSearchAnalytics, recordSearchDebug } = await import('../diagnostics');
       recordSearchDebug('last query', 3, 15);
       const analytics = getSearchAnalytics();
       expect(analytics.recentSearches).toBeDefined();
       expect(Array.isArray(analytics.recentSearches)).toBe(true);
+    });
+
+    it('computes queryLengthDistribution', async () => {
+      const { getSearchAnalytics, recordSearchDebug } = await import('../diagnostics');
+      recordSearchDebug('hi', 1, 5);
+      recordSearchDebug('hey', 2, 10);
+      recordSearchDebug('hi', 1, 5);
+      recordSearchDebug('hello world', 3, 15);
+      const analytics = getSearchAnalytics();
+      expect(analytics.queryLengthDistribution[2]).toBe(2);
+      expect(analytics.queryLengthDistribution[3]).toBe(1);
+      expect(analytics.queryLengthDistribution[11]).toBe(1);
     });
   });
 

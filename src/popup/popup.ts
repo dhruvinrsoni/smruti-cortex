@@ -4292,26 +4292,30 @@ function initializePopup() {
   // Show search analytics modal
   async function showSearchAnalyticsModal() {
     const modal = document.getElementById('search-analytics-modal');
-    if (!modal) {return;}
+    if (!modal) { return; }
 
     modal.classList.remove('hidden');
 
-    // Load analytics data
+    const analyticsIds = ['analytics-total', 'analytics-avg-results', 'analytics-avg-duration'];
+    for (const id of analyticsIds) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = '...'; }
+    }
+
     try {
       const response = await sendMessage({ type: 'GET_SEARCH_ANALYTICS' });
-      if (response?.status === 'OK') {
-        const { analytics, history } = response;
+      if (response?.status === 'OK' && response.analytics) {
+        const a = response.analytics;
 
-        // Update summary stats
-        document.getElementById('analytics-total')!.textContent = analytics.totalSearches.toString(); // eslint-disable-line @typescript-eslint/no-non-null-assertion
-        document.getElementById('analytics-avg-results')!.textContent = analytics.averageResultCount.toFixed(1); // eslint-disable-line @typescript-eslint/no-non-null-assertion
-        document.getElementById('analytics-avg-duration')!.textContent = `${analytics.averageSearchDuration.toFixed(2)} ms`; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        updatePerfElement('analytics-total', a.totalSearches.toString());
+        updatePerfElement('analytics-avg-results', a.averageResults.toFixed(1));
+        updatePerfElement('analytics-avg-duration', `${a.averageDuration.toFixed(2)} ms`);
 
         // Top queries
         const topQueriesDiv = document.getElementById('analytics-top-queries');
-        if (topQueriesDiv && analytics.topQueries.length > 0) {
-          topQueriesDiv.innerHTML = analytics.topQueries
-            .map(({ query, count }) => `
+        if (topQueriesDiv && a.topQueries && a.topQueries.length > 0) {
+          topQueriesDiv.innerHTML = a.topQueries
+            .map(({ query, count }: { query: string; count: number }) => `
               <div class="query-item">
                 <span class="query-text">"${escapeHtml(query)}"</span>
                 <span class="query-count">${count}x</span>
@@ -4319,50 +4323,65 @@ function initializePopup() {
             `)
             .join('');
         } else if (topQueriesDiv) {
-          topQueriesDiv.innerHTML = '<p style="text-align:center;color:#666;">No queries yet</p>';
+          topQueriesDiv.innerHTML = '<p style="text-align:center;color:var(--muted);">No queries yet</p>';
         }
 
         // Query length distribution
         const queryLengthDiv = document.getElementById('analytics-query-length');
-        if (queryLengthDiv) {
-          const lengths = Object.keys(analytics.queryLengthDistribution).map(Number).sort((a, b) => a - b);
-          queryLengthDiv.innerHTML = lengths
-            .map((len) => {
-              const count = analytics.queryLengthDistribution[len];
-              const percent = (count / analytics.totalSearches) * 100;
-              return `
-                <div class="length-bar">
-                  <span class="length-label">${len} chars</span>
-                  <div class="length-bar-bg">
-                    <div class="length-bar-fill" style="width: ${percent}%"></div>
+        if (queryLengthDiv && a.queryLengthDistribution) {
+          const lengths = Object.keys(a.queryLengthDistribution).map(Number).sort((a2, b) => a2 - b);
+          if (lengths.length > 0) {
+            queryLengthDiv.innerHTML = lengths
+              .map((len) => {
+                const count = a.queryLengthDistribution[len];
+                const percent = a.totalSearches > 0 ? (count / a.totalSearches) * 100 : 0;
+                return `
+                  <div class="length-bar">
+                    <span class="length-label">${len} chars</span>
+                    <div class="length-bar-bg">
+                      <div class="length-bar-fill" style="width: ${percent}%"></div>
+                    </div>
+                    <span class="length-count">${count}</span>
                   </div>
-                  <span class="length-count">${count}</span>
-                </div>
-              `;
-            })
-            .join('');
+                `;
+              })
+              .join('');
+          } else {
+            queryLengthDiv.innerHTML = '<p style="text-align:center;color:var(--muted);">No data yet</p>';
+          }
         }
 
         // Recent searches
         const recentDiv = document.getElementById('analytics-recent-searches');
-        if (recentDiv && history.length > 0) {
-          recentDiv.innerHTML = [...history]
-            .reverse()
+        const recentSearches = a.recentSearches || [];
+        if (recentDiv && recentSearches.length > 0) {
+          recentDiv.innerHTML = recentSearches
             .map((entry: SearchDebugEntry) => `
               <div class="search-entry">
                 <div class="search-query">"${escapeHtml(entry.query)}"</div>
                 <div class="search-meta">
-                  ${entry.resultCount} results · ${entry.duration.toFixed(2)}ms · 
+                  ${entry.resultCount} results · ${entry.duration.toFixed(2)}ms ·
                   ${new Date(entry.timestamp).toLocaleTimeString()}
                 </div>
               </div>
             `)
             .join('');
         } else if (recentDiv) {
-          recentDiv.innerHTML = '<p style="text-align:center;color:#666;">No recent searches</p>';
+          recentDiv.innerHTML = '<p style="text-align:center;color:var(--muted);">No recent searches</p>';
         }
+      } else {
+        for (const id of analyticsIds) {
+          const el = document.getElementById(id);
+          if (el) { el.textContent = '--'; }
+        }
+        showToast('Failed to load search analytics', 'error');
       }
     } catch (err) {
+      for (const id of analyticsIds) {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = '--'; }
+      }
+      showToast('Error loading search analytics', 'error');
       console.error('Failed to load analytics:', err);
     }
 
