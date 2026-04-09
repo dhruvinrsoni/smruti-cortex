@@ -3617,14 +3617,14 @@ function initializePopup() {
       for (const def of TOOLBAR_TOGGLE_DEFS) {
         const isChecked = currentToggles.includes(def.key as string);
         const label = document.createElement('label');
-        label.className = 'setting-option';
+        label.className = 'toggle-row';
         label.innerHTML = `
           <input type="checkbox" data-toolbar-key="${def.key}" ${isChecked ? 'checked' : ''}>
-          <span class="option-indicator"></span>
-          <div class="option-content">
+          <div class="toggle-content">
             <strong>${def.icon} ${def.label}</strong>
             <small>${def.tooltipOn}</small>
           </div>
+          <span class="toggle-switch"><span class="toggle-thumb"></span></span>
         `;
         const checkbox = label.querySelector('input') as HTMLInputElement;
         checkbox.addEventListener('change', () => {

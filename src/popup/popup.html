@@ -132,66 +132,33 @@
         <div class="settings-section" data-tab="general">
           <h3>Theme</h3>
           <p>Choose the color scheme for SmrutiCortex.</p>
-          <div class="setting-options">
-            <label class="setting-option">
-              <input type="radio" name="modal-theme" value="auto">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Auto</strong>
-                <small>Follow your system preference</small>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-theme" value="light">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Light</strong>
-                <small>Always use light theme</small>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-theme" value="dark">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Dark</strong>
-                <small>Always use dark theme</small>
-              </div>
-            </label>
+          <div class="segmented-control" data-segments="3">
+            <label class="segment"><input type="radio" name="modal-theme" value="auto"><span>☀️ Auto</span></label>
+            <label class="segment"><input type="radio" name="modal-theme" value="light"><span>🌤 Light</span></label>
+            <label class="segment"><input type="radio" name="modal-theme" value="dark"><span>🌙 Dark</span></label>
+            <span class="segment-slider"></span>
           </div>
         </div>
         <div class="settings-section" data-tab="general">
           <h3>Display Mode</h3>
           <p>Choose how search results are displayed.</p>
-          <div class="setting-options">
-            <label class="setting-option">
-              <input type="radio" name="modal-displayMode" value="list">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>List View</strong>
-                <small>Vertical list layout - compact</small>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-displayMode" value="cards">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Card View</strong>
-                <small>Horizontal cards - shows full URLs</small>
-              </div>
-            </label>
+          <div class="segmented-control" data-segments="2">
+            <label class="segment"><input type="radio" name="modal-displayMode" value="list"><span>☰ List</span></label>
+            <label class="segment"><input type="radio" name="modal-displayMode" value="cards"><span>▦ Cards</span></label>
+            <span class="segment-slider"></span>
           </div>
         </div>
         <div class="settings-section" data-tab="general">
           <h3>Advanced Browser Commands</h3>
           <p>Turns on ~45 power commands (tab/window management, tab groups, browsing data cleanup, Top Sites, and more). <strong>Off by default.</strong> When you enable this, Chrome will prompt for optional permissions: <strong>tab groups</strong>, <strong>browsing data</strong>, and <strong>top sites</strong>. If you deny the prompt, Advanced Browser Commands <strong>stay off</strong>. This toggle does <strong>not</strong> request broad website access (<code>&lt;all_urls&gt;</code>); that is separate and used only for other optional features such as favicons.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-advancedBrowserCommands">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Enable Advanced Browser Commands</strong>
                 <small>Requires accepting the optional permission prompt (tab groups, browsing data, Top Sites)</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -199,73 +166,45 @@
           <h3>Search Result Diversity</h3>
           <p>Control how duplicate URLs are handled in search results.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-showDuplicateUrls">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Show duplicate URLs</strong>
                 <small>Include same pages with different query params (e.g., ?utm_source, ?ref). Off = diverse results.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-showNonMatchingResults">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Show non-matching results</strong>
                 <small>Include results without query matches. Off = only show results containing your search terms.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
         <div class="settings-section" data-tab="advanced">
           <h3>Log Level</h3>
           <p>Control extension logging verbosity.</p>
-          <div class="setting-options">
-            <label class="setting-option">
-              <input type="radio" name="modal-logLevel" value="0">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Error</strong>
-                <small>Show only errors</small>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-logLevel" value="2">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Info</strong>
-                <small>Show general information</small>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-logLevel" value="3">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Debug</strong>
-                <small>Show detailed debugging info</small>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-logLevel" value="4">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Trace</strong>
-                <small>Maximum verbosity - AI layer details, all operations</small>
-              </div>
-            </label>
+          <div class="pill-group">
+            <label class="pill-chip"><input type="radio" name="modal-logLevel" value="0"><span class="pill-label">Error</span></label>
+            <label class="pill-chip"><input type="radio" name="modal-logLevel" value="2"><span class="pill-label">Info</span></label>
+            <label class="pill-chip"><input type="radio" name="modal-logLevel" value="3"><span class="pill-label">Debug</span></label>
+            <label class="pill-chip"><input type="radio" name="modal-logLevel" value="4"><span class="pill-label">Trace</span></label>
           </div>
         </div>
         <div class="settings-section" data-tab="general">
           <h3>Match Highlighting</h3>
           <p>Highlight matching parts in search results.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-highlightMatches">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Enable highlighting</strong>
                 <small>Show what parts of titles and URLs match your search</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -294,13 +233,13 @@ ollama pull nomic-embed-text:latest
           <p>Enable semantic search using local AI embeddings.<br>
           <b>Requires:</b> Ollama running locally with embedding model.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-ollamaEnabled">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Enable AI search</strong>
                 <small>Uses local Ollama for semantic understanding (privacy-first)</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
             <label class="setting-option">
               <input type="text" id="modal-ollamaEndpoint" placeholder="http://localhost:11434" style="width:200px;">
@@ -346,13 +285,13 @@ ollama pull nomic-embed-text:latest
           <p>Find pages by meaning, not just keywords. Uses local AI to understand content.<br>
           <b>Requires:</b> Ollama + embedding model. <b>Storage:</b> ~4KB per page. <b>Privacy:</b> 100% local.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-embeddingsEnabled">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Enable semantic search</strong>
                 <small>Find pages by meaning (e.g., "ML tutorials" finds "machine learning guides")</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
             <label class="setting-option">
               <div style="display:flex; gap:8px; align-items:center;">
@@ -443,13 +382,13 @@ ollama pull nomic-embed-text:latest
                 <small>Time to wait after typing before focusing results (0 disables)</small>
               </div>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-selectAllOnFocus">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Select all on Tab focus</strong>
                 <small>When pressing Tab to return to search, select all text for fresh typing. If off, cursor goes to end.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -457,13 +396,13 @@ ollama pull nomic-embed-text:latest
           <h3>Privacy</h3>
           <p>Control external connections and sensitive site handling.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-loadFavicons">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Load favicons from Google</strong>
                 <small>Fetches site icons via Google API. Disable for maximum privacy (uses fallback icons).</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
             <div class="favicon-cache-status" id="favicon-cache-status">
               <div class="cache-info">
@@ -488,13 +427,13 @@ ollama pull nomic-embed-text:latest
           <h3>Bookmarks</h3>
           <p>Include your bookmarks in search results.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-indexBookmarks">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Index bookmarks</strong>
                 <small>Include bookmarked pages in search results. Bookmarks show with a ★ indicator.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -502,21 +441,21 @@ ollama pull nomic-embed-text:latest
           <h3>Empty-Input Defaults</h3>
           <p>What to show when you open SmrutiCortex or clear the search input.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-showRecentHistory">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Show recent browsing history</strong>
                 <small>List your most recently visited pages. Controlled by the "Default result count" setting above.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-showRecentSearches">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Show recent searches</strong>
                 <small>Display your last search queries so you can re-run them with one click. Up to 20 queries are remembered.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -575,13 +514,13 @@ ollama pull nomic-embed-text:latest
           <h3>Command Palette</h3>
           <p>Transform the quick-search overlay into a universal browser control surface with prefix-based modes.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-commandPaletteEnabled">
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Enable Command Palette</strong>
                 <small>Master switch — enables prefix modes in the quick-search overlay. OFF = all prefixes trigger normal history search.</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -589,45 +528,45 @@ ollama pull nomic-embed-text:latest
           <h3>Active Modes</h3>
           <p>Choose which prefix modes are available. Greyed out when master switch is off.</p>
           <div class="setting-options" id="palette-mode-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-palette-mode-slash" value="/" disabled>
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>/ Commands</strong>
                 <small>Everyday actions: toggles, page actions, navigation</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-palette-mode-angle" value=">" disabled>
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>> Power</strong>
                 <small>Admin: rebuild index, clear data, diagnostics, factory reset</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-palette-mode-at" value="@" disabled>
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>@ Tabs</strong>
                 <small>Switch between open tabs + recently closed</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-palette-mode-hash" value="#" disabled>
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong># Bookmarks</strong>
                 <small>Search and open bookmarks with folder paths</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-palette-mode-web" value="??" disabled>
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>?? Web Search</strong>
                 <small>Search the web from the palette</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
@@ -635,48 +574,24 @@ ollama pull nomic-embed-text:latest
           <h3>Popup Access</h3>
           <p>By default, command palette modes are only available in the quick-search overlay. Enable this to also use them in the popup.</p>
           <div class="setting-options">
-            <label class="setting-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-commandPaletteInPopup" disabled>
-              <span class="option-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Also enable in Popup</strong>
                 <small>Useful on restricted pages (chrome://, edge://) where quick-search can't inject</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
         </div>
         <div class="settings-section" data-tab="palette">
           <h3>Web Search Engine</h3>
           <p>Default search engine for the ?? web search mode when you do not use a prefix (<code>g</code>, <code>y</code>, <code>gc</code>, …).</p>
-          <div class="setting-options">
-            <label class="setting-option">
-              <input type="radio" name="modal-webSearchEngine" value="google">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Google</strong>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-webSearchEngine" value="youtube">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>YouTube</strong>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-webSearchEngine" value="github">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>GitHub</strong>
-              </div>
-            </label>
-            <label class="setting-option">
-              <input type="radio" name="modal-webSearchEngine" value="gcp">
-              <span class="option-indicator"></span>
-              <div class="option-content">
-                <strong>Google Cloud console</strong>
-              </div>
-            </label>
+          <div class="pill-group">
+            <label class="pill-chip"><input type="radio" name="modal-webSearchEngine" value="google"><span class="pill-label">Google</span></label>
+            <label class="pill-chip"><input type="radio" name="modal-webSearchEngine" value="youtube"><span class="pill-label">YouTube</span></label>
+            <label class="pill-chip"><input type="radio" name="modal-webSearchEngine" value="github"><span class="pill-label">GitHub</span></label>
+            <label class="pill-chip"><input type="radio" name="modal-webSearchEngine" value="gcp"><span class="pill-label">GCP Console</span></label>
           </div>
           <h3 style="margin-top:1.25rem">Jira &amp; Confluence</h3>
           <p>Used for <code>?? j</code> (Jira quick search) and <code>?? c</code> (Confluence). Enter each site origin only — Cloud or Data Center, e.g. <code>https://jira.example.com</code> and <code>https://confluence.example.com</code></p>
@@ -704,13 +619,13 @@ ollama pull nomic-embed-text:latest
           <h3>🔍 Search Debug Mode</h3>
           <p>Capture search queries, results, and scoring details for algorithm analysis.</p>
           <div class="setting-options">
-            <label class="setting-option checkbox-option">
+            <label class="toggle-row">
               <input type="checkbox" id="modal-searchDebugEnabled">
-              <span class="checkbox-indicator"></span>
-              <div class="option-content">
+              <div class="toggle-content">
                 <strong>Enable Search Debug Logging</strong>
                 <small>Records all searches with scoring details and performance metrics</small>
               </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
             </label>
           </div>
           <div class="setting-options">

@@ -517,6 +517,177 @@ input[type="checkbox"] {
   /* NOTE: Do NOT use pointer-events:none here — it breaks label click propagation in Chromium */
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Toggle Switch — iOS-style track + thumb for checkboxes
+   ═══════════════════════════════════════════════════════════ */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 4px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-row:hover { background: rgba(59, 130, 246, 0.03); }
+
+.toggle-content {
+  flex: 1;
+  min-width: 0;
+}
+.toggle-content strong {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 1px;
+}
+.toggle-content small {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.toggle-switch {
+  width: 40px;
+  height: 22px;
+  background: var(--border);
+  border-radius: 11px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s ease;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.toggle-row:has(input:checked) .toggle-switch {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.35);
+}
+.toggle-row:has(input:checked) .toggle-thumb {
+  transform: translateX(18px);
+}
+.toggle-row:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Segmented Control — sliding pill for 2-3 option radio groups
+   ═══════════════════════════════════════════════════════════ */
+.segmented-control {
+  display: inline-grid;
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 3px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.segmented-control[data-segments="2"] { grid-template-columns: 1fr 1fr; }
+.segmented-control[data-segments="3"] { grid-template-columns: 1fr 1fr 1fr; }
+
+.segment {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.25s ease;
+  border-radius: 7px;
+  text-align: center;
+  user-select: none;
+  gap: 5px;
+}
+.segment:hover { color: var(--text); }
+.segment:has(input:checked) { color: #fff; }
+
+.segment-slider {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.25);
+  z-index: 0;
+}
+
+/* 2-segment slider positions */
+.segmented-control[data-segments="2"] .segment:nth-child(1):has(input:checked) ~ .segment-slider {
+  left: 3px; width: calc(50% - 3px);
+}
+.segmented-control[data-segments="2"] .segment:nth-child(2):has(input:checked) ~ .segment-slider {
+  left: calc(50%); width: calc(50% - 3px);
+}
+
+/* 3-segment slider positions */
+.segmented-control[data-segments="3"] .segment:nth-child(1):has(input:checked) ~ .segment-slider {
+  left: 3px; width: calc(33.333% - 3px);
+}
+.segmented-control[data-segments="3"] .segment:nth-child(2):has(input:checked) ~ .segment-slider {
+  left: calc(33.333%); width: calc(33.333%);
+}
+.segmented-control[data-segments="3"] .segment:nth-child(3):has(input:checked) ~ .segment-slider {
+  left: calc(66.666%); width: calc(33.333% - 3px);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Pill Chips — rounded pills for multi-option radio groups
+   ═══════════════════════════════════════════════════════════ */
+.pill-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pill-chip {
+  cursor: pointer;
+  position: relative;
+}
+.pill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1.5px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.pill-chip:hover .pill-label {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.pill-chip:has(input:checked) .pill-label {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
 .setting-actions {
   display: flex;
   gap: 8px; /* Reduced from 12px */
