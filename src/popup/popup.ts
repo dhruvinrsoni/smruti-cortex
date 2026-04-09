@@ -4307,9 +4307,9 @@ function initializePopup() {
       if (response?.status === 'OK' && response.analytics) {
         const a = response.analytics;
 
-        updatePerfElement('analytics-total', a.totalSearches.toString());
-        updatePerfElement('analytics-avg-results', a.averageResults.toFixed(1));
-        updatePerfElement('analytics-avg-duration', `${a.averageDuration.toFixed(2)} ms`);
+        updatePerfElement('analytics-total', String(a.totalSearches ?? 0));
+        updatePerfElement('analytics-avg-results', Number(a.averageResults ?? 0).toFixed(1));
+        updatePerfElement('analytics-avg-duration', `${Number(a.averageDuration ?? 0).toFixed(2)} ms`);
 
         // Top queries
         const topQueriesDiv = document.getElementById('analytics-top-queries');
