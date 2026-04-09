@@ -3457,8 +3457,12 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         if (!target.checked) {
           await SettingsManager.setSetting('advancedBrowserCommands', false).catch(() => {});
+          await sendMessage({
+            type: 'REMOVE_OPTIONAL_PERMISSIONS',
+            permissions: [...ADV_BROWSER_OPTIONAL_PERMS],
+          }).catch(() => {});
           syncToggleBar();
-          showToast('Advanced Browser Commands disabled', 'info');
+          showToast('Advanced Browser Commands disabled — optional permissions revoked.', 'info');
           return;
         }
         target.disabled = true;

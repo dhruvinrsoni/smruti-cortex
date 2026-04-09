@@ -32,6 +32,12 @@ function requestOptionalPermissions(perms: string[]): Promise<boolean> {
   });
 }
 
+function removeOptionalPermissions(perms: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    (browserAPI as typeof chrome).permissions.remove({ permissions: perms }, (removed) => resolve(removed ?? false));
+  });
+}
+
 function getTopSites(): Promise<chrome.topSites.MostVisitedURL[]> {
   return new Promise((resolve) => {
     (browserAPI as typeof chrome).topSites.get(resolve);
@@ -1580,6 +1586,16 @@ setupPortBasedMessaging();
                   const permsToCheck: string[] = msg.permissions ?? [];
                   const results = await Promise.all(permsToCheck.map((p: string) => hasOptionalPermission(p)));
                   sendResponse({ status: 'OK', granted: results.every(Boolean) });
+                } catch (err) {
+                  sendResponse({ error: (err as Error).message });
+                }
+                break;
+              }
+
+              case 'REMOVE_OPTIONAL_PERMISSIONS': {
+                try {
+                  const removed = await removeOptionalPermissions(msg.permissions ?? []);
+                  sendResponse({ status: 'OK', removed });
                 } catch (err) {
                   sendResponse({ error: (err as Error).message });
                 }
