@@ -1255,17 +1255,18 @@ input[type="checkbox"] {
   border-radius: 2px;
   transition: width 0.3s;
 }
-.action-btn {
+#search-analytics-modal .action-btn {
   padding: 5px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
   background: var(--bg);
+  color: var(--text);
 }
-.action-btn.secondary:hover { background: var(--card); }
-.action-btn.danger { background: var(--bg); color: #ef4444; border-color: #ef4444; }
-.action-btn.danger:hover { background: var(--error-light); }
+#search-analytics-modal .action-btn.secondary:hover { background: var(--card); }
+#search-analytics-modal .action-btn.danger { background: var(--bg); color: #ef4444; border-color: #ef4444; }
+#search-analytics-modal .action-btn.danger:hover { background: var(--error-light); }
 
 /* Recent Searches section */
 .recent-searches-section {
