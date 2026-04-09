@@ -100,6 +100,7 @@ vi.mock('../query-expansion', () => ({
 
 vi.mock('../../diagnostics', () => ({
   recordSearchDebug: vi.fn(),
+  recordSearchSnapshot: vi.fn(),
 }));
 
 const mockCache = {
@@ -210,7 +211,7 @@ describe('search-engine', () => {
     vi.doMock('../query-expansion', () => ({
       getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
     }));
-    vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+    vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
     vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => mockCache) }));
     vi.doMock('../../embedding-processor', () => ({
       embeddingProcessor: { setSearchActive: vi.fn() },
@@ -615,7 +616,7 @@ describe('search-engine', () => {
       vi.doMock('../query-expansion', () => ({
         getExpandedTerms: vi.fn(() => ['widget']),
       }));
-      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
       vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => mockCache) }));
       vi.doMock('../../embedding-processor', () => ({
         embeddingProcessor: { setSearchActive: vi.fn() },
@@ -711,7 +712,7 @@ describe('search-engine', () => {
       vi.doMock('../query-expansion', () => ({
         getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
       }));
-      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
       vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => mockCache) }));
       vi.doMock('../../embedding-processor', () => ({
         embeddingProcessor: { setSearchActive: vi.fn() },
@@ -772,7 +773,7 @@ describe('search-engine', () => {
         expandQuerySynonyms: vi.fn((tokens: string[]) => tokens),
         getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
       }));
-      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
       vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
       vi.doMock('../../embedding-processor', () => ({
         embeddingProcessor: { setSearchActive: vi.fn() },
@@ -829,7 +830,7 @@ describe('search-engine', () => {
         expandQuerySynonyms: vi.fn((tokens: string[]) => tokens),
         getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
       }));
-      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
       vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
       vi.doMock('../../embedding-processor', () => ({
         embeddingProcessor: { setSearchActive: vi.fn() },
@@ -906,7 +907,7 @@ describe('search-engine', () => {
       vi.doMock('../query-expansion', () => ({
         getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
       }));
-      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn() }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
       vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
       vi.doMock('../../embedding-processor', () => ({
         embeddingProcessor: { setSearchActive: vi.fn() },
@@ -1019,6 +1020,99 @@ describe('search-engine', () => {
 
       expect(results.length).toBe(1);
       expect(results[0].title).toBe('Error Log Viewer');
+    });
+
+    it('should rank "confluence pto" — items matching both tokens above single-token matches regardless of sortBy', async () => {
+      settingsMap.sortBy = 'most-recent';
+      const now = Date.now();
+      const items = [
+        makeItem({
+          url: 'https://confluence.zebra.com/pages/Dashboard',
+          title: 'Dashboard - Zebra Confluence',
+          hostname: 'confluence.zebra.com',
+          tokens: ['dashboard', 'confluence'],
+          visitCount: 200,
+          lastVisit: now,
+        }),
+        makeItem({
+          url: 'https://login.example.com/sso',
+          title: 'Sign In - SSO',
+          hostname: 'login.example.com',
+          tokens: ['sign', 'sso'],
+          visitCount: 500,
+          lastVisit: now - 1000,
+        }),
+        makeItem({
+          url: 'https://confluence.zebra.com/PTO-Calendar',
+          title: 'PTO Calendar - Zebra Confluence',
+          hostname: 'confluence.zebra.com',
+          tokens: ['pto', 'calendar', 'confluence'],
+          visitCount: 5,
+          lastVisit: now - 86400000 * 7,
+        }),
+      ];
+      setupMocksForRanking(items, ['confluence', 'pto']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('confluence pto');
+
+      // PTO Calendar matches BOTH tokens → must be first regardless of sortBy=most-recent
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].title).toBe('PTO Calendar - Zebra Confluence');
+
+      settingsMap.sortBy = 'best-match';
+    });
+
+    it('should preserve relevance tiers even with sortBy=most-visited', async () => {
+      settingsMap.sortBy = 'most-visited';
+      const items = [
+        makeItem({
+          url: 'https://example.com/login',
+          title: 'Login Page',
+          hostname: 'example.com',
+          tokens: ['login'],
+          visitCount: 1000,
+          lastVisit: Date.now(),
+        }),
+        makeItem({
+          url: 'https://docs.example.com/api-guide',
+          title: 'API Guide Documentation',
+          hostname: 'docs.example.com',
+          tokens: ['api', 'guide'],
+          visitCount: 3,
+          lastVisit: Date.now() - 86400000,
+        }),
+      ];
+      setupMocksForRanking(items, ['api', 'guide']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('api guide');
+
+      // API Guide matches both tokens; Login matches neither
+      // Even though Login has 1000 visits, it should rank below API Guide
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].title).toBe('API Guide Documentation');
+
+      settingsMap.sortBy = 'best-match';
+    });
+
+    it('should attach debugScores to returned items', async () => {
+      const items = [
+        makeItem({
+          url: 'https://example.com/test',
+          title: 'Test Page',
+          tokens: ['test', 'page'],
+        }),
+      ];
+      setupMocksForRanking(items, ['test']);
+
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('test');
+
+      expect(results.length).toBe(1);
+      const debugScores = (results[0] as unknown as { debugScores?: { finalScore: number } }).debugScores;
+      expect(debugScores).toBeDefined();
+      expect(debugScores!.finalScore).toBeGreaterThan(0);
     });
   });
 });

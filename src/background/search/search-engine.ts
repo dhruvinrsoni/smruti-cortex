@@ -19,7 +19,8 @@ import { expandQueryKeywords, getLastExpansionSource } from '../ai-keyword-expan
 import { applyDiversityFilter, ScoredItem } from './diversity-filter';
 import { performanceTracker } from '../performance-monitor';
 import { getExpandedTerms } from './query-expansion';
-import { recordSearchDebug } from '../diagnostics';
+import { recordSearchDebug, recordSearchSnapshot } from '../diagnostics';
+import type { SearchDebugResultEntry, SearchDebugSnapshot } from '../diagnostics';
 import { getSearchCache } from './search-cache';
 import { embeddingProcessor } from '../embedding-processor';
 import { buildEmbeddingText } from '../embedding-text';
@@ -526,6 +527,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 titleUrlQuality,
                 splitFieldCoverage,
                 originalMatchCount: originalMatchedInHaystack,
+                scorerBreakdown: scorerDetails,
             });
         }
     }
@@ -542,8 +544,11 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         total: results.length
     });
 
-    // Sort by user intent first, then by score.
-    // This ensures deliberate multi-token title+url matches rank above incidental high-recency matches.
+    // Sort by user intent first, then by score (or user-chosen sortBy within tiers).
+    // Relevance tiers (matchCount, intent) are ALWAYS respected — sortBy only affects
+    // ordering within the same tier so "most-recent" never pushes irrelevant items above
+    // highly relevant ones.
+    const userSortBy = SettingsManager.getSetting('sortBy') ?? 'best-match';
     results.sort((a, b) => {
         // TIER 0: Original token match count — items matching more query terms always rank higher
         const matchCountDelta = (b.originalMatchCount || 0) - (a.originalMatchCount || 0);
@@ -560,6 +565,17 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
 
         const qualityDelta = (b.titleUrlQuality || 0) - (a.titleUrlQuality || 0);
         if (qualityDelta !== 0) { return qualityDelta; }
+
+        // Within the same relevance tier, respect user's sortBy preference
+        if (userSortBy === 'most-recent') {
+            return (b.item.lastVisit || 0) - (a.item.lastVisit || 0);
+        }
+        if (userSortBy === 'most-visited') {
+            return (b.item.visitCount || 0) - (a.item.visitCount || 0);
+        }
+        if (userSortBy === 'alphabetical') {
+            return (a.item.title || '').localeCompare(b.item.title || '');
+        }
 
         return b.finalScore - a.finalScore;
     });
@@ -591,7 +607,18 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         diversityEnabled: enableDiversity
     });
 
-    const finalResults = diversified.slice(0, 100).map(r => r.item); // Return top 100 instead of 50
+    const finalResults = diversified.slice(0, 100).map(r => {
+        const item = r.item;
+        // Attach debug scores for ranking report pipeline
+        (item as IndexedItem & { debugScores?: unknown }).debugScores = {
+            finalScore: r.finalScore,
+            originalMatchCount: r.originalMatchCount ?? 0,
+            intentPriority: r.intentPriority ?? 0,
+            titleUrlCoverage: r.titleUrlCoverage ?? 0,
+            scorerBreakdown: r.scorerBreakdown ?? [],
+        };
+        return item;
+    });
 
     // === MEMORY CLEANUP: Release embedding arrays from items ===
     // Embeddings are persisted to IndexedDB during generation. We don't need them in memory
@@ -621,6 +648,39 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
 
     // Record search debug (always - lightweight)
     recordSearchDebug(q, finalResults.length, searchDuration);
+
+    // Record full search snapshot for ranking reports (always, overwrites previous)
+    const snapshotResults: SearchDebugResultEntry[] = diversified.slice(0, 100).map((r, idx) => ({
+        rank: idx + 1,
+        url: r.item.url,
+        title: r.item.title,
+        hostname: r.item.hostname,
+        finalScore: r.finalScore,
+        originalMatchCount: r.originalMatchCount ?? 0,
+        intentPriority: r.intentPriority ?? 0,
+        titleUrlCoverage: r.titleUrlCoverage ?? 0,
+        titleUrlQuality: r.titleUrlQuality ?? 0,
+        splitFieldCoverage: r.splitFieldCoverage ?? 0,
+        keywordMatch: r.keywordMatch ?? false,
+        aiMatch: r.aiMatch ?? false,
+        scorerBreakdown: r.scorerBreakdown ?? [],
+    }));
+    const snapshot: SearchDebugSnapshot = {
+        timestamp: Date.now(),
+        query: q,
+        tokens: originalTokens,
+        aiExpandedKeywords: aiStatus.aiExpandedKeywords ?? [],
+        duration: searchDuration,
+        sortBy: SettingsManager.getSetting('sortBy') ?? 'best-match',
+        showNonMatchingResults: showNonMatchingResults,
+        showDuplicateUrls: SettingsManager.getSetting('showDuplicateUrls') ?? false,
+        ollamaEnabled: SettingsManager.getSetting('ollamaEnabled') ?? false,
+        embeddingsEnabled: embeddingsEnabled,
+        resultCount: finalResults.length,
+        totalIndexedItems: items.length,
+        results: snapshotResults,
+    };
+    recordSearchSnapshot(snapshot);
 
     // Enhanced logging with AI breakdown
     if (aiOnlyMatches > 0 || hybridMatches > 0) {

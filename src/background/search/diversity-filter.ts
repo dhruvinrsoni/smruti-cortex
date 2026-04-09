@@ -39,6 +39,15 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
+ * Per-scorer score entry for debug/reporting
+ */
+export interface ScorerBreakdownEntry {
+    name: string;
+    score: number;
+    weight: number;
+}
+
+/**
  * Result item with score for diversity filtering
  */
 export interface ScoredItem {
@@ -51,6 +60,7 @@ export interface ScoredItem {
     titleUrlQuality?: number;
     splitFieldCoverage?: number;
     originalMatchCount?: number;
+    scorerBreakdown?: ScorerBreakdownEntry[];
 }
 
 /**
