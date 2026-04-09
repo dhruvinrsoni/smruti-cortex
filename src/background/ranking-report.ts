@@ -265,6 +265,8 @@ export function buildGitHubIssueUrl(report: RankingReport): string {
         '',
         '',
         '',
+        '',
+        '',
         '### What\'s Wrong with the Ranking?',
         '',
         '_Describe which results are misranked and where you expected them._',
