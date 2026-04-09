@@ -3936,6 +3936,7 @@ function initializePopup() {
     const perfModal = document.getElementById('performance-modal');
     const perfCloseBtn = perfModal?.querySelector('#performance-close');
     const perfRefreshBtn = perfModal?.querySelector('#perf-refresh');
+    const perfResetBtn = perfModal?.querySelector('#perf-reset') as HTMLButtonElement | null;
     let perfPollingInterval: ReturnType<typeof setInterval> | null = null;
 
     // Stop polling and cleanup
@@ -3998,6 +3999,21 @@ function initializePopup() {
 
       if (perfRefreshBtn) {
         perfRefreshBtn.addEventListener('click', loadPerformanceMetrics);
+      }
+
+      if (perfResetBtn) {
+        perfResetBtn.addEventListener('click', async () => {
+          if (!confirm('Reset all performance counters?\n\nThis clears lifetime stats (total searches, restarts, etc.). Session metrics will start fresh.')) { return; }
+          perfResetBtn.disabled = true;
+          try {
+            await sendMessage({ type: 'RESET_PERFORMANCE_METRICS' });
+            showToast('Performance stats reset', 'info');
+            await loadPerformanceMetrics();
+          } catch {
+            showToast('Failed to reset stats', 'error');
+          }
+          perfResetBtn.disabled = false;
+        });
       }
     }
 
@@ -4113,31 +4129,50 @@ function initializePopup() {
     }
   }
 
-  // Load performance metrics from service worker
+  const PERF_ELEMENT_IDS = [
+    'perf-search-count', 'perf-avg-time', 'perf-min-max', 'perf-last-time',
+    'perf-items-indexed', 'perf-index-time', 'perf-storage',
+    'perf-uptime', 'perf-restarts', 'perf-self-heals', 'perf-health-checks',
+  ];
+
+  function setPerfValues(value: string) {
+    for (const id of PERF_ELEMENT_IDS) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = value; }
+    }
+  }
+
   async function loadPerformanceMetrics() {
+    setPerfValues('...');
     try {
       const response = await sendMessage({ type: 'GET_PERFORMANCE_METRICS' });
       if (response?.status === 'OK' && response.formatted) {
         const f = response.formatted;
-        updatePerfElement('perf-search-count', f['Search Count']);
+        updatePerfElement('perf-search-count', f['Total Searches']);
         updatePerfElement('perf-avg-time', f['Avg Search Time']);
         updatePerfElement('perf-min-max', f['Min/Max Search']);
         updatePerfElement('perf-last-time', f['Last Search']);
         updatePerfElement('perf-items-indexed', f['Items Indexed']);
         updatePerfElement('perf-index-time', f['Last Index Time']);
-        updatePerfElement('perf-memory', f['Memory Used']);
+        updatePerfElement('perf-storage', f['Storage Used']);
         updatePerfElement('perf-uptime', f['Uptime']);
         updatePerfElement('perf-restarts', f['SW Restarts']);
         updatePerfElement('perf-self-heals', f['Self-Heals']);
+        updatePerfElement('perf-health-checks', f['Health Checks']);
+      } else {
+        setPerfValues('--');
+        showToast('Failed to load performance metrics', 'error');
       }
     } catch (err) {
+      setPerfValues('--');
+      showToast('Error loading performance metrics', 'error');
       console.error('Failed to load performance metrics:', err);
     }
   }
 
   function updatePerfElement(id: string, value: string) {
     const el = document.getElementById(id);
-    if (el) {el.textContent = value;}
+    if (el) { el.textContent = value; }
   }
 
   function applyTheme(theme: 'light' | 'dark' | 'auto') {

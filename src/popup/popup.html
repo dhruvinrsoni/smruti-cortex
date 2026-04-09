@@ -650,7 +650,7 @@ ollama pull nomic-embed-text:latest
           <h3>🔍 Search Performance</h3>
           <div class="perf-grid">
             <div class="perf-stat">
-              <span class="perf-label">Searches</span>
+              <span class="perf-label">Total Searches</span>
               <span class="perf-value" id="perf-search-count">--</span>
             </div>
             <div class="perf-stat">
@@ -668,7 +668,7 @@ ollama pull nomic-embed-text:latest
           </div>
         </div>
         <div class="perf-section">
-          <h3>📚 Index Status</h3>
+          <h3>📚 Index & Storage</h3>
           <div class="perf-grid">
             <div class="perf-stat">
               <span class="perf-label">Items Indexed</span>
@@ -678,32 +678,37 @@ ollama pull nomic-embed-text:latest
               <span class="perf-label">Last Index Time</span>
               <span class="perf-value" id="perf-index-time">-- s</span>
             </div>
+            <div class="perf-stat perf-stat-wide">
+              <span class="perf-label">Storage Used</span>
+              <span class="perf-value" id="perf-storage">--</span>
+            </div>
           </div>
         </div>
         <div class="perf-section">
-          <h3>💾 Memory & System</h3>
+          <h3>💾 System Health</h3>
           <div class="perf-grid">
             <div class="perf-stat">
-              <span class="perf-label">Memory Used</span>
-              <span class="perf-value" id="perf-memory">-- MB</span>
-            </div>
-            <div class="perf-stat">
-              <span class="perf-label">Uptime</span>
+              <span class="perf-label">Session Uptime</span>
               <span class="perf-value" id="perf-uptime">--</span>
             </div>
             <div class="perf-stat">
-              <span class="perf-label">SW Restarts</span>
+              <span class="perf-label">Total Restarts</span>
               <span class="perf-value" id="perf-restarts">--</span>
             </div>
             <div class="perf-stat">
               <span class="perf-label">Self-Heals</span>
               <span class="perf-value" id="perf-self-heals">--</span>
             </div>
+            <div class="perf-stat">
+              <span class="perf-label">Health Checks</span>
+              <span class="perf-value" id="perf-health-checks">--</span>
+            </div>
           </div>
         </div>
         <div class="perf-section">
           <div class="perf-actions">
             <button class="action-btn secondary" id="perf-refresh" title="Refresh metrics">🔄 Refresh</button>
+            <button class="action-btn danger" id="perf-reset" title="Reset all performance counters">🗑️ Reset Stats</button>
           </div>
         </div>
       </div>

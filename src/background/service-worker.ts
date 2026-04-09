@@ -352,11 +352,28 @@ setupPortBasedMessaging();
             logger.debug('onMessage', 'GET_PERFORMANCE_METRICS requested');
             try {
               const { getPerformanceMetrics, formatMetricsForDisplay } = await import('./performance-monitor');
-              const metrics = getPerformanceMetrics();
-              const formatted = formatMetricsForDisplay(metrics);
+              const { getStorageQuotaInfo } = await import('./database');
+              const [metrics, storageInfo] = await Promise.all([
+                getPerformanceMetrics(),
+                getStorageQuotaInfo().catch(() => null),
+              ]);
+              const storage = storageInfo ? { usedFormatted: storageInfo.usedFormatted, totalFormatted: storageInfo.totalFormatted } : undefined;
+              const formatted = formatMetricsForDisplay(metrics, storage);
               sendResponse({ status: 'OK', metrics, formatted });
             } catch (error) {
               logger.error('onMessage', 'GET_PERFORMANCE_METRICS failed:', error);
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
+          case 'RESET_PERFORMANCE_METRICS': {
+            logger.info('onMessage', 'RESET_PERFORMANCE_METRICS requested');
+            try {
+              const { performanceTracker } = await import('./performance-monitor');
+              await performanceTracker.reset();
+              sendResponse({ status: 'OK' });
+            } catch (error) {
+              logger.error('onMessage', 'RESET_PERFORMANCE_METRICS failed:', error);
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }
             break;

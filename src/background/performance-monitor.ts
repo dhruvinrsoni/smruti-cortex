@@ -1,167 +1,275 @@
-// performance-monitor.ts — Real-time performance metrics tracking
+// performance-monitor.ts — Real-time performance metrics tracking with persistence
 
 import { Logger } from '../core/logger';
+import { browserAPI } from '../core/helpers';
 
 const logger = Logger.forComponent('PerformanceMonitor');
 
+const STORAGE_KEY = 'smruticortex_performance_metrics';
+const PERSIST_DEBOUNCE_MS = 5000;
+const PERSISTED_SCHEMA_VERSION = 1;
+
 /**
- * Performance metrics data structure
+ * Schema for data persisted to chrome.storage.local.
+ * Cumulative counters that survive service worker restarts.
+ */
+export interface PersistedMetrics {
+    totalSearchCount: number;
+    totalRestarts: number;
+    totalSelfHeals: number;
+    totalHealthChecks: number;
+    totalItemsIndexed: number;
+    lastIndexDurationMs: number;
+    version: number;
+}
+
+/**
+ * Performance metrics data structure returned by getMetrics()
  */
 export interface PerformanceMetrics {
     // Search performance
-    searchCount: number;
+    totalSearchCount: number;
+    recentSearchCount: number;
     averageSearchTimeMs: number;
     minSearchTimeMs: number;
     maxSearchTimeMs: number;
     lastSearchTimeMs: number;
-    
+
     // Indexing performance
     lastIndexDurationMs: number;
     totalItemsIndexed: number;
-    
-    // Memory usage
-    memoryUsedMB: number;
-    memoryTotalMB: number;
-    
+
+    // Storage (populated externally by the SW handler)
+    storageUsed: string;
+    storageTotal: string;
+
     // Service worker stats
     serviceWorkerRestarts: number;
     lastRestartTime: number | null;
-    
-    // Uptime
+
+    // Uptime (current session)
     startTime: number;
     uptimeMs: number;
-    
+
     // Health
     healthCheckCount: number;
     selfHealCount: number;
 }
 
+function isValidPersistedMetrics(data: unknown): data is PersistedMetrics {
+    if (!data || typeof data !== 'object') { return false; }
+    const d = data as Record<string, unknown>;
+    return typeof d.version === 'number'
+        && typeof d.totalSearchCount === 'number'
+        && typeof d.totalRestarts === 'number'
+        && typeof d.totalSelfHeals === 'number'
+        && typeof d.totalHealthChecks === 'number'
+        && typeof d.totalItemsIndexed === 'number'
+        && typeof d.lastIndexDurationMs === 'number';
+}
+
+function defaultPersistedMetrics(): PersistedMetrics {
+    return {
+        totalSearchCount: 0,
+        totalRestarts: 0,
+        totalSelfHeals: 0,
+        totalHealthChecks: 0,
+        totalItemsIndexed: 0,
+        lastIndexDurationMs: 0,
+        version: PERSISTED_SCHEMA_VERSION,
+    };
+}
+
 /**
- * Performance tracker (singleton pattern)
+ * Performance tracker with persistence (singleton pattern)
  */
 class PerformanceTracker {
+    // Session-only state (resets on SW restart — expected)
     private searchTimes: number[] = [];
-    private indexDuration: number = 0;
-    private itemsIndexed: number = 0;
-    private restartCount: number = 0;
     private lastRestart: number | null = null;
     private startTime: number = Date.now();
-    private healthChecks: number = 0;
-    private selfHeals: number = 0;
-    
+
+    // Persisted state (survives restarts)
+    private persisted: PersistedMetrics = defaultPersistedMetrics();
+    private restored = false;
+    private persistTimer: ReturnType<typeof setTimeout> | null = null;
+
     private static instance: PerformanceTracker;
-    
+
     static getInstance(): PerformanceTracker {
         if (!PerformanceTracker.instance) {
             PerformanceTracker.instance = new PerformanceTracker();
         }
         return PerformanceTracker.instance;
     }
-    
+
     /**
      * Record a search operation time
      */
     recordSearch(durationMs: number): void {
         this.searchTimes.push(durationMs);
-        // Keep only last 100 searches for averaging
         if (this.searchTimes.length > 100) {
             this.searchTimes.shift();
         }
+        this.persisted.totalSearchCount++;
+        this.schedulePersist();
         logger.trace('recordSearch', `Search completed in ${durationMs.toFixed(2)}ms`);
     }
-    
+
     /**
      * Record indexing operation
      */
     recordIndexing(durationMs: number, itemCount: number): void {
-        this.indexDuration = durationMs;
-        this.itemsIndexed = itemCount;
+        this.persisted.lastIndexDurationMs = durationMs;
+        this.persisted.totalItemsIndexed = itemCount;
+        this.schedulePersist();
         logger.debug('recordIndexing', `Indexed ${itemCount} items in ${durationMs}ms`);
     }
-    
+
     /**
      * Record service worker restart
      */
     recordRestart(): void {
-        this.restartCount++;
+        this.persisted.totalRestarts++;
         this.lastRestart = Date.now();
-        logger.info('recordRestart', `Service worker restart #${this.restartCount}`);
+        this.persistNow();
+        logger.info('recordRestart', `Service worker restart #${this.persisted.totalRestarts}`);
     }
-    
+
     /**
      * Record health check
      */
     recordHealthCheck(): void {
-        this.healthChecks++;
+        this.persisted.totalHealthChecks++;
+        this.schedulePersist();
     }
-    
+
     /**
      * Record self-heal attempt
      */
     recordSelfHeal(): void {
-        this.selfHeals++;
-        logger.info('recordSelfHeal', `Self-heal attempt #${this.selfHeals}`);
+        this.persisted.totalSelfHeals++;
+        this.schedulePersist();
+        logger.info('recordSelfHeal', `Self-heal attempt #${this.persisted.totalSelfHeals}`);
     }
-    
+
     /**
-     * Get current performance metrics
+     * Get current performance metrics.
+     * Triggers lazy restore from storage on first call.
      */
-    getMetrics(): PerformanceMetrics {
-        const memory = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
+    async getMetrics(): Promise<PerformanceMetrics> {
+        if (!this.restored) {
+            await this.restore();
+        }
+
         const now = Date.now();
-        
-        // Calculate search statistics
-        const searchCount = this.searchTimes.length;
-        const avgSearchTime = searchCount > 0 
-            ? this.searchTimes.reduce((a, b) => a + b, 0) / searchCount 
+        const recentCount = this.searchTimes.length;
+        const avgSearchTime = recentCount > 0
+            ? this.searchTimes.reduce((a, b) => a + b, 0) / recentCount
             : 0;
-        const minSearchTime = searchCount > 0 ? Math.min(...this.searchTimes) : 0;
-        const maxSearchTime = searchCount > 0 ? Math.max(...this.searchTimes) : 0;
-        const lastSearchTime = searchCount > 0 ? this.searchTimes[this.searchTimes.length - 1] : 0;
-        
+        const minSearchTime = recentCount > 0 ? Math.min(...this.searchTimes) : 0;
+        const maxSearchTime = recentCount > 0 ? Math.max(...this.searchTimes) : 0;
+        const lastSearchTime = recentCount > 0 ? this.searchTimes[this.searchTimes.length - 1] : 0;
+
         return {
-            // Search metrics
-            searchCount,
+            totalSearchCount: this.persisted.totalSearchCount,
+            recentSearchCount: recentCount,
             averageSearchTimeMs: Math.round(avgSearchTime * 100) / 100,
             minSearchTimeMs: Math.round(minSearchTime * 100) / 100,
             maxSearchTimeMs: Math.round(maxSearchTime * 100) / 100,
             lastSearchTimeMs: Math.round(lastSearchTime * 100) / 100,
-            
-            // Indexing metrics
-            lastIndexDurationMs: this.indexDuration,
-            totalItemsIndexed: this.itemsIndexed,
-            
-            // Memory metrics
-            memoryUsedMB: memory ? Math.round(memory.usedJSHeapSize / 1024 / 1024 * 10) / 10 : 0,
-            memoryTotalMB: memory ? Math.round(memory.totalJSHeapSize / 1024 / 1024 * 10) / 10 : 0,
-            
-            // Service worker metrics
-            serviceWorkerRestarts: this.restartCount,
+
+            lastIndexDurationMs: this.persisted.lastIndexDurationMs,
+            totalItemsIndexed: this.persisted.totalItemsIndexed,
+
+            storageUsed: '',
+            storageTotal: '',
+
+            serviceWorkerRestarts: this.persisted.totalRestarts,
             lastRestartTime: this.lastRestart,
-            
-            // Uptime
+
             startTime: this.startTime,
             uptimeMs: now - this.startTime,
-            
-            // Health metrics
-            healthCheckCount: this.healthChecks,
-            selfHealCount: this.selfHeals,
+
+            healthCheckCount: this.persisted.totalHealthChecks,
+            selfHealCount: this.persisted.totalSelfHeals,
         };
     }
-    
+
     /**
-     * Reset all metrics (for testing/debugging)
+     * Reset all metrics (for testing/debugging) — clears persisted data too
      */
-    reset(): void {
+    async reset(): Promise<void> {
         this.searchTimes = [];
-        this.indexDuration = 0;
-        this.itemsIndexed = 0;
-        this.restartCount = 0;
         this.lastRestart = null;
         this.startTime = Date.now();
-        this.healthChecks = 0;
-        this.selfHeals = 0;
+        this.persisted = defaultPersistedMetrics();
+        if (this.persistTimer) {
+            clearTimeout(this.persistTimer);
+            this.persistTimer = null;
+        }
+        try {
+            await new Promise<void>((resolve) => {
+                browserAPI.storage.local.remove(STORAGE_KEY, () => resolve());
+            });
+        } catch {
+            // Non-critical — in-memory state is already cleared
+        }
         logger.info('reset', 'Performance metrics reset');
+    }
+
+    /**
+     * Restore persisted metrics from chrome.storage.local (lazy, called once)
+     */
+    async restore(): Promise<void> {
+        if (this.restored) { return; }
+        this.restored = true;
+        try {
+            const result = await new Promise<Record<string, unknown>>((resolve) => {
+                browserAPI.storage.local.get([STORAGE_KEY], (r: Record<string, unknown>) => resolve(r));
+            });
+            const stored = result[STORAGE_KEY];
+            if (isValidPersistedMetrics(stored)) {
+                this.persisted = { ...stored };
+                logger.info('restore', `Restored persisted metrics (${stored.totalSearchCount} total searches, ${stored.totalRestarts} restarts)`);
+            } else if (stored !== undefined) {
+                logger.warn('restore', 'Stored metrics failed validation, starting fresh');
+            }
+        } catch (err) {
+            logger.warn('restore', 'Failed to restore metrics, starting fresh', { error: err });
+        }
+    }
+
+    // --- internal helpers for testing ---
+    /** @internal */
+    _getRestoredFlag(): boolean { return this.restored; }
+    /** @internal */
+    _setRestoredFlag(v: boolean): void { this.restored = v; }
+    /** @internal */
+    _getPersisted(): PersistedMetrics { return this.persisted; }
+
+    private schedulePersist(): void {
+        if (this.persistTimer) { return; }
+        this.persistTimer = setTimeout(() => {
+            this.persistTimer = null;
+            this.persistNow();
+        }, PERSIST_DEBOUNCE_MS);
+    }
+
+    private persistNow(): void {
+        if (this.persistTimer) {
+            clearTimeout(this.persistTimer);
+            this.persistTimer = null;
+        }
+        try {
+            browserAPI.storage.local.set({ [STORAGE_KEY]: { ...this.persisted } }, () => {
+                if (browserAPI.runtime?.lastError) {
+                    logger.warn('persist', 'Storage write failed', { error: browserAPI.runtime.lastError.message });
+                }
+            });
+        } catch (err) {
+            logger.warn('persist', 'Failed to persist metrics', { error: err });
+        }
     }
 }
 
@@ -169,9 +277,9 @@ class PerformanceTracker {
 export const performanceTracker = PerformanceTracker.getInstance();
 
 /**
- * Get current performance metrics
+ * Get current performance metrics (async — triggers lazy restore)
  */
-export function getPerformanceMetrics(): PerformanceMetrics {
+export async function getPerformanceMetrics(): Promise<PerformanceMetrics> {
     return performanceTracker.getMetrics();
 }
 
@@ -183,7 +291,7 @@ export function formatUptime(uptimeMs: number): string {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) {
         return `${days}d ${hours % 24}h ${minutes % 60}m`;
     } else if (hours > 0) {
@@ -196,17 +304,25 @@ export function formatUptime(uptimeMs: number): string {
 }
 
 /**
+ * Optional storage info passed from the service worker handler
+ */
+export interface StorageDisplayInfo {
+    usedFormatted: string;
+    totalFormatted: string;
+}
+
+/**
  * Format metrics as display-friendly object
  */
-export function formatMetricsForDisplay(metrics: PerformanceMetrics): Record<string, string> {
+export function formatMetricsForDisplay(metrics: PerformanceMetrics, storage?: StorageDisplayInfo): Record<string, string> {
     return {
-        'Search Count': metrics.searchCount.toString(),
+        'Total Searches': metrics.totalSearchCount.toLocaleString(),
         'Avg Search Time': `${metrics.averageSearchTimeMs.toFixed(2)} ms`,
         'Min/Max Search': `${metrics.minSearchTimeMs.toFixed(2)} / ${metrics.maxSearchTimeMs.toFixed(2)} ms`,
         'Last Search': `${metrics.lastSearchTimeMs.toFixed(2)} ms`,
         'Items Indexed': metrics.totalItemsIndexed.toLocaleString(),
         'Last Index Time': `${(metrics.lastIndexDurationMs / 1000).toFixed(1)} s`,
-        'Memory Used': `${metrics.memoryUsedMB} / ${metrics.memoryTotalMB} MB`,
+        'Storage Used': storage ? `${storage.usedFormatted} / ${storage.totalFormatted}` : 'N/A',
         'SW Restarts': metrics.serviceWorkerRestarts.toString(),
         'Uptime': formatUptime(metrics.uptimeMs),
         'Health Checks': metrics.healthCheckCount.toString(),

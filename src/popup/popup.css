@@ -1041,9 +1041,13 @@ input[type="checkbox"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
+.perf-stat-wide {
+  grid-column: 1 / -1;
+}
 .perf-actions {
   display: flex;
   justify-content: center;
+  gap: 8px;
   padding-top: 8px;
 }
 
