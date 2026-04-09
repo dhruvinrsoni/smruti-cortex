@@ -87,38 +87,75 @@ export function maskTitle(title: string, queryTokens: string[], level: MaskingLe
 }
 
 /**
- * Well-known public domains that don't need masking.
+ * Known internal / non-routable TLDs — always treat as private infrastructure.
  */
-const PUBLIC_DOMAINS = new Set([
-    'google', 'github', 'stackoverflow', 'wikipedia', 'youtube',
-    'microsoft', 'apple', 'amazon', 'reddit', 'twitter', 'linkedin',
-    'facebook', 'mozilla', 'npm', 'gitlab', 'bitbucket', 'docker',
-    'cloudflare', 'netlify', 'vercel', 'heroku', 'azure', 'aws',
+const INTERNAL_TLDS = new Set([
+    'local', 'internal', 'corp', 'lan', 'intranet',
+    'home', 'localdomain', 'test', 'invalid', 'localhost',
 ]);
 
 /**
- * Mask hostname parts: keep TLD, keep query-matching parts, keep well-known
- * public domains, redact the rest (e.g. company-specific subdomains).
+ * Second-level labels that form compound TLDs when followed by a
+ * 2-letter country code (e.g. .co.uk, .com.au, .ac.jp).
+ */
+const COMPOUND_TLD_PREFIXES = new Set([
+    'co', 'com', 'org', 'net', 'ac', 'edu', 'gov',
+]);
+
+/**
+ * How many trailing dot-separated parts form the effective TLD.
+ * Returns 2 for compound TLDs like .co.uk, 1 for simple TLDs like .com.
+ */
+function effectiveTldLength(parts: string[]): number {
+    if (parts.length >= 3) {
+        const cc = parts[parts.length - 1];
+        const prefix = parts[parts.length - 2];
+        if (cc.length === 2 && COMPOUND_TLD_PREFIXES.has(prefix.toLowerCase())) {
+            return 2;
+        }
+    }
+    return 1;
+}
+
+/**
+ * Structurally mask a hostname without relying on a public-domain whitelist.
  *
- * jira.zebra.com + tokens=["jira"] → jira.z••ra.com
- * confluence.zebra.com + tokens=["confluence"] → confluence.z••ra.com
- * github.com → github.com (public, not redacted)
+ * Strategy — position-based, no whitelist needed:
+ *   TLD (.com, .co.uk)            → always visible
+ *   2-part domains (github.com)   → keep as-is (SLD is the site identity)
+ *   3+ parts (jira.zebra.com)     → SLD is the org name → redact
+ *   Internal TLDs (.local, .corp) → redact all non-TLD parts
+ *   Query-matching parts          → always preserved
+ *
+ * Examples:
+ *   jira.zebra.com   + ["jira"]       → jira.z••ra.com
+ *   github.com       + ["test"]       → github.com         (2-part, kept)
+ *   app.company.co.uk + ["app"]       → app.co••••y.co.uk  (compound TLD)
+ *   wiki.acme.local  + []             → ••••.••••.local    (internal TLD)
  */
 function maskHostname(hostname: string, queryTokens: string[]): string {
     const parts = hostname.split('.');
     if (parts.length <= 1) { return hostname; }
-    const lowerTokens = new Set(queryTokens.map(t => t.toLowerCase()));
-    const tld = parts[parts.length - 1]; // com, org, etc.
 
-    return parts.map((part, i) => {
-        if (i === parts.length - 1) { return tld; }
+    const lowerTokens = new Set(queryTokens.map(t => t.toLowerCase()));
+    const isInternal = INTERNAL_TLDS.has(parts[parts.length - 1].toLowerCase());
+    const tldLen = effectiveTldLength(parts);
+    const tldParts = parts.slice(-tldLen);
+    const hostParts = parts.slice(0, -tldLen);
+
+    if (!isInternal && hostParts.length <= 1) {
+        return hostname;
+    }
+
+    const masked = hostParts.map(part => {
         if (lowerTokens.has(part.toLowerCase())) { return part; }
-        if (PUBLIC_DOMAINS.has(part.toLowerCase())) { return part; }
         for (const token of lowerTokens) {
             if (part.toLowerCase().includes(token)) { return part; }
         }
         return redactWord(part);
-    }).join('.');
+    });
+
+    return [...masked, ...tldParts].join('.');
 }
 
 /**

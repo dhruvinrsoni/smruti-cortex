@@ -100,7 +100,6 @@ describe('maskUrl', () => {
   describe('level = partial', () => {
     it('redacts company domain parts and path for full URLs', () => {
       const result = maskUrl('https://confluence.zebra.com/spaces/RAR/pages/123', tokens, 'partial');
-      // "confluence" matches query token → kept; "zebra" → redacted; "com" → TLD kept
       expect(result).toContain('confluence.');
       expect(result).not.toContain('zebra');
       expect(result).toContain('.com/•••');
@@ -113,15 +112,46 @@ describe('maskUrl', () => {
       expect(result).toContain('.com');
     });
 
-    it('keeps well-known public domains unchanged', () => {
+    it('keeps 2-part domains as-is (SLD is site identity)', () => {
       const result = maskUrl('https://github.com/owner/repo', ['test'], 'partial');
       expect(result).toBe('github.com/•••');
+    });
+
+    it('keeps any 2-part domain unchanged even without whitelist', () => {
+      const result = maskUrl('https://zebra.com/about', ['test'], 'partial');
+      expect(result).toBe('zebra.com/•••');
     });
 
     it('keeps query-matching domain parts visible', () => {
       const result = maskUrl('jira.zebra.com', ['jira'], 'partial');
       expect(result).toContain('jira.');
       expect(result).not.toContain('zebra');
+    });
+
+    it('handles compound TLDs like .co.uk', () => {
+      const result = maskUrl('https://app.company.co.uk/dashboard', ['app'], 'partial');
+      expect(result).toContain('app.');
+      expect(result).not.toContain('company');
+      expect(result).toContain('.co.uk/•••');
+    });
+
+    it('keeps 2-part compound TLD domains as-is', () => {
+      const result = maskUrl('https://example.co.uk/page', ['test'], 'partial');
+      expect(result).toBe('example.co.uk/•••');
+    });
+
+    it('redacts all non-TLD parts for internal TLDs', () => {
+      const result = maskUrl('wiki.acme.local', ['test'], 'partial');
+      expect(result).not.toContain('wiki');
+      expect(result).not.toContain('acme');
+      expect(result).toContain('.local');
+    });
+
+    it('keeps query-matching parts even with internal TLDs', () => {
+      const result = maskUrl('jira.acme.corp', ['jira'], 'partial');
+      expect(result).toContain('jira.');
+      expect(result).not.toContain('acme');
+      expect(result).toContain('.corp');
     });
   });
 
