@@ -8,6 +8,44 @@ import { checkHealth } from './resilience';
 const logger = Logger.forComponent('Diagnostics');
 
 /**
+ * Per-result debug entry with scorer breakdown
+ */
+export interface SearchDebugResultEntry {
+    rank: number;
+    url: string;
+    title: string;
+    hostname: string;
+    finalScore: number;
+    originalMatchCount: number;
+    intentPriority: number;
+    titleUrlCoverage: number;
+    titleUrlQuality: number;
+    splitFieldCoverage: number;
+    keywordMatch: boolean;
+    aiMatch: boolean;
+    scorerBreakdown: Array<{ name: string; score: number; weight: number }>;
+}
+
+/**
+ * Full snapshot of one search for ranking analysis
+ */
+export interface SearchDebugSnapshot {
+    timestamp: number;
+    query: string;
+    tokens: string[];
+    aiExpandedKeywords: string[];
+    duration: number;
+    sortBy: string;
+    showNonMatchingResults: boolean;
+    showDuplicateUrls: boolean;
+    ollamaEnabled: boolean;
+    embeddingsEnabled: boolean;
+    resultCount: number;
+    totalIndexedItems: number;
+    results: SearchDebugResultEntry[];
+}
+
+/**
  * Search debug history for tracking queries and results
  */
 export interface SearchDebugEntry {
@@ -20,6 +58,9 @@ export interface SearchDebugEntry {
 // In-memory search history (limited to last 50 searches)
 const searchHistory: SearchDebugEntry[] = [];
 const MAX_SEARCH_HISTORY = 50;
+
+// Last search snapshot for ranking report (always kept, only one)
+let lastSearchSnapshot: SearchDebugSnapshot | null = null;
 
 // Search debug enabled flag (persisted via chrome.storage.local)
 let searchDebugEnabled = false;
@@ -78,6 +119,21 @@ export function recordSearchDebug(query: string, resultCount: number, duration: 
     if (searchHistory.length > MAX_SEARCH_HISTORY) {
         searchHistory.shift();
     }
+}
+
+/**
+ * Store the last search snapshot (always stored, regardless of debug flag).
+ * This powers the ranking bug report feature.
+ */
+export function recordSearchSnapshot(snapshot: SearchDebugSnapshot): void {
+    lastSearchSnapshot = snapshot;
+}
+
+/**
+ * Get the last search snapshot for ranking reports
+ */
+export function getLastSearchSnapshot(): SearchDebugSnapshot | null {
+    return lastSearchSnapshot;
 }
 
 /**

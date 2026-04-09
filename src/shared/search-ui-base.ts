@@ -12,6 +12,17 @@
 import { SortBy } from '../core/constants';
 
 /**
+ * Scoring metadata attached to search results when developer reporting is active
+ */
+export interface DebugScores {
+  finalScore: number;
+  originalMatchCount: number;
+  intentPriority: number;
+  titleUrlCoverage: number;
+  scorerBreakdown: Array<{ name: string; score: number; weight: number }>;
+}
+
+/**
  * Interface for search result items (matches IndexedItem from database schema)
  */
 export interface SearchResult {
@@ -25,6 +36,7 @@ export interface SearchResult {
   tokens?: string[];
   isBookmark?: boolean;
   bookmarkFolders?: string[];
+  debugScores?: DebugScores;
 }
 
 /**

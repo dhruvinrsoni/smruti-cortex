@@ -158,6 +158,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let spinnerEl: HTMLDivElement | null = null;
   let clearBtnEl: HTMLButtonElement | null = null;
   let aiStatusBarEl: HTMLDivElement | null = null;
+  let footerEl: HTMLDivElement | null = null;
   let toggleBarEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
@@ -1287,6 +1288,59 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     startToastDismissTimer();
   }
 
+  function showReportConfirmation(issueUrl: string): void {
+    if (!shadowRoot) { return; }
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;border-radius:12px;';
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-container,#fff);color:var(--text-primary,#1a1a1a);border-radius:12px;padding:20px 24px;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.3);text-align:center;font-family:inherit;';
+
+    const icon = document.createElement('div');
+    icon.textContent = '\u2705';
+    icon.style.cssText = 'font-size:32px;margin-bottom:8px;';
+
+    const titleEl = document.createElement('div');
+    titleEl.textContent = 'Report copied to clipboard';
+    titleEl.style.cssText = 'font-size:14px;font-weight:700;margin-bottom:8px;';
+
+    const msg = document.createElement('div');
+    msg.textContent = 'A new GitHub issue will open. Paste the report into the "Debug Data" section, describe what\'s wrong, and submit.';
+    msg.style.cssText = 'font-size:12px;color:var(--text-secondary,#666);line-height:1.5;margin-bottom:16px;';
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'padding:6px 18px;font-size:12px;font-weight:600;border:1px solid #d1d5db;color:var(--text-primary,#333);background:transparent;border-radius:6px;cursor:pointer;';
+    cancelBtn.addEventListener('click', () => { overlay.remove(); });
+
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Open GitHub';
+    okBtn.style.cssText = 'padding:6px 18px;font-size:12px;font-weight:600;border:none;color:#fff;background:#3b82f6;border-radius:6px;cursor:pointer;';
+    okBtn.addEventListener('click', () => {
+      window.open(issueUrl, '_blank');
+      overlay.remove();
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(okBtn);
+    dialog.appendChild(icon);
+    dialog.appendChild(titleEl);
+    dialog.appendChild(msg);
+    dialog.appendChild(btnRow);
+    overlay.appendChild(dialog);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); } });
+
+    const container = shadowRoot.querySelector('.container');
+    if (container) {
+      (container as HTMLElement).style.position = 'relative';
+      container.appendChild(overlay);
+    }
+    okBtn.focus();
+  }
+
   function updateSelectAllBadge(enabled: boolean): void {
     try {
       if (!selectAllBadge) { return; }
@@ -1518,8 +1572,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     emptyDiv.textContent = 'Type to search your history...';
     resultsEl.appendChild(emptyDiv);
     
-    // Footer with all shortcuts
-    const footer = document.createElement('div');
+    footerEl = document.createElement('div');
+    const footer = footerEl;
     footer.className = 'footer';
     
     const shortcuts = [
@@ -3301,6 +3355,57 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  function updateOverlayReportButton(hasResults: boolean): void {
+    if (!footerEl) { return; }
+    let btn = footerEl.querySelector('.report-ranking-btn') as HTMLButtonElement | null;
+    if (!hasResults) {
+      if (btn) { btn.remove(); }
+      return;
+    }
+    if (btn) { return; }
+    btn = document.createElement('button');
+    btn.className = 'report-ranking-btn';
+    btn.textContent = 'Report';
+    btn.title = 'Report ranking issue to GitHub';
+    btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
+    btn.addEventListener('click', () => {
+      btn!.disabled = true;
+      btn!.textContent = 'Sending...';
+      const method = cachedSettings?.developerGithubPat ? 'api' : 'url';
+      chrome.runtime.sendMessage({
+        type: 'GENERATE_RANKING_REPORT',
+        maskingLevel: 'partial',
+        method,
+      }, (resp) => {
+        if (resp?.status === 'OK') {
+          if (resp.method === 'api') {
+            btn!.textContent = 'Filed!';
+            btn!.style.color = '#10b981';
+            btn!.style.borderColor = '#10b981';
+          } else {
+            navigator.clipboard.writeText(resp.reportBody || '').catch(() => {});
+            btn!.textContent = 'Copied!';
+            btn!.style.color = '#10b981';
+            btn!.style.borderColor = '#10b981';
+            showReportConfirmation(resp.issueUrl);
+          }
+        } else {
+          btn!.textContent = resp?.message || 'Error';
+          btn!.style.color = '#ef4444';
+        }
+        setTimeout(() => {
+          if (btn) {
+            btn.textContent = 'Report';
+            btn.style.color = '#ef4444';
+            btn.style.borderColor = '#ef4444';
+            btn.disabled = false;
+          }
+        }, 3000);
+      });
+    });
+    footerEl.appendChild(btn);
+  }
+
   function buildRecentSearchesSection(entries: Array<{ query: string; timestamp: number; selectedUrl?: string }>): HTMLElement {
     const container = document.createElement('div');
     container.className = 'recent-searches-section';
@@ -3731,6 +3836,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const query = inputEl?.value?.trim() || '';
     const tokens = tokenizeQuery(query);
     const emptyMessage = query ? 'No results found' : 'Type to search your history...';
+
+    updateOverlayReportButton(results.length > 0);
 
     if (results.length === 0) {
       const emptyDiv = document.createElement('div');

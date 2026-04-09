@@ -429,6 +429,37 @@ setupPortBasedMessaging();
             }
             break;
           }
+          case 'GENERATE_RANKING_REPORT': {
+            logger.info('onMessage', '📋 GENERATE_RANKING_REPORT requested');
+            try {
+              const { generateRankingReport, createGitHubIssue, buildGitHubIssueUrl } = await import('./ranking-report');
+              const report = generateRankingReport({
+                maskingLevel: msg.maskingLevel || 'partial',
+                userNote: msg.userNote,
+              });
+              if (!report) {
+                sendResponse({ status: 'ERROR', message: 'No search snapshot available. Run a search first.' });
+                break;
+              }
+              // Hybrid: try GitHub API first, fall back to URL
+              if (msg.method === 'api') {
+                try {
+                  const issueUrl = await createGitHubIssue(report);
+                  sendResponse({ status: 'OK', method: 'api', issueUrl, reportBody: report.body });
+                } catch (apiErr) {
+                  const fallbackUrl = buildGitHubIssueUrl(report);
+                  sendResponse({ status: 'OK', method: 'url', issueUrl: fallbackUrl, reportBody: report.body, apiError: (apiErr as Error).message });
+                }
+              } else {
+                const issueUrl = buildGitHubIssueUrl(report);
+                sendResponse({ status: 'OK', method: 'url', issueUrl, reportBody: report.body });
+              }
+            } catch (error) {
+              logger.error('onMessage', 'GENERATE_RANKING_REPORT failed:', error);
+              sendResponse({ status: 'ERROR', message: (error as Error).message });
+            }
+            break;
+          }
           case 'GET_SETTINGS': {
             // Settings are available immediately after SettingsManager.init() (before full init)
             const settings = SettingsManager.getSettings();

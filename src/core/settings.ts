@@ -55,6 +55,7 @@ export interface AppSettings {
     confluenceSiteUrl?: string;
     // Advanced browser commands — opt-in for tab power, tab groups, browsing data
     advancedBrowserCommands?: boolean;
+    developerGithubPat?: string;        // GitHub PAT for direct issue creation (optional, falls back to URL)
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -286,6 +287,11 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     advancedBrowserCommands: {
         default: false,
         validate: (val) => typeof val === 'boolean',
+    },
+
+    developerGithubPat: {
+        default: '',
+        validate: (val) => typeof val === 'string',
     },
 
     // Future settings (placeholders)

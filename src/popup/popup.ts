@@ -139,6 +139,53 @@ function showToast(message: string, type: ToastType = 'success', durationMs = 50
   startDismiss();
 }
 
+function showReportConfirmation(issueUrl: string) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = 'background:var(--bg,#fff);color:var(--text,#1a1a1a);border-radius:12px;padding:20px 24px;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.3);text-align:center;font-family:inherit;';
+
+  const icon = document.createElement('div');
+  icon.textContent = '\u2705';
+  icon.style.cssText = 'font-size:32px;margin-bottom:8px;';
+
+  const title = document.createElement('div');
+  title.textContent = 'Report copied to clipboard';
+  title.style.cssText = 'font-size:14px;font-weight:700;margin-bottom:8px;';
+
+  const msg = document.createElement('div');
+  msg.textContent = 'A new GitHub issue will open. Paste the report into the "Debug Data" section, describe what\'s wrong, and submit.';
+  msg.style.cssText = 'font-size:12px;color:var(--muted,#666);line-height:1.5;margin-bottom:16px;';
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:6px 18px;font-size:12px;font-weight:600;border:1px solid #d1d5db;color:var(--text,#333);background:transparent;border-radius:6px;cursor:pointer;';
+  cancelBtn.addEventListener('click', () => { overlay.remove(); });
+
+  const okBtn = document.createElement('button');
+  okBtn.textContent = 'Open GitHub';
+  okBtn.style.cssText = 'padding:6px 18px;font-size:12px;font-weight:600;border:none;color:#fff;background:#3b82f6;border-radius:6px;cursor:pointer;';
+  okBtn.addEventListener('click', () => {
+    window.open(issueUrl, '_blank');
+    overlay.remove();
+  });
+
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(okBtn);
+  dialog.appendChild(icon);
+  dialog.appendChild(title);
+  dialog.appendChild(msg);
+  dialog.appendChild(btnRow);
+  overlay.appendChild(dialog);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); } });
+  document.body.appendChild(overlay);
+  okBtn.focus();
+}
+
 // Fast initialization - prioritize speed over logging
 let logger: ComponentLogger;
 let settingsManager: typeof SettingsManager; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -269,6 +316,7 @@ function initializePopup() {
   const resultCountNode = $local('result-count') as HTMLDivElement;
   const popupSpinner = $local('search-spinner') as HTMLDivElement | null;
   const aiStatusBarEl = $local('ai-status-bar') as HTMLDivElement | null;
+  const footerEl = document.querySelector('.footer') as HTMLElement | null;
   const settingsButton = $local('settings-button') as HTMLButtonElement; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   let resultsLocal: IndexedItem[] = [];
@@ -305,6 +353,59 @@ function initializePopup() {
     } catch (err) {
       console.error('[SmrutiCortex] renderAIStatus error:', err);
     }
+  }
+
+  function updateReportButton(hasResults: boolean): void {
+    if (!footerEl) { return; }
+    let btn = footerEl.querySelector('.report-ranking-btn') as HTMLButtonElement | null;
+    if (!hasResults) {
+      if (btn) { btn.remove(); }
+      return;
+    }
+    if (btn) { return; }
+    btn = document.createElement('button');
+    btn.className = 'report-ranking-btn';
+    btn.textContent = 'Report';
+    btn.title = 'Report ranking issue to GitHub';
+    btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
+    btn.addEventListener('click', async () => {
+      btn!.disabled = true;
+      btn!.textContent = 'Sending...';
+      try {
+        const resp = await sendMessage({
+          type: 'GENERATE_RANKING_REPORT',
+          maskingLevel: 'partial',
+          method: SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url',
+        });
+        if (resp?.status === 'OK') {
+          if (resp.method === 'api') {
+            btn!.textContent = 'Filed!';
+            btn!.style.color = '#10b981';
+            btn!.style.borderColor = '#10b981';
+          } else {
+            await navigator.clipboard.writeText(resp.reportBody || '');
+            btn!.textContent = 'Copied!';
+            btn!.style.color = '#10b981';
+            btn!.style.borderColor = '#10b981';
+            showReportConfirmation(resp.issueUrl);
+          }
+        } else {
+          btn!.textContent = resp?.message || 'Error';
+          btn!.style.color = '#ef4444';
+        }
+      } catch {
+        btn!.textContent = 'Error';
+      }
+      setTimeout(() => {
+        if (btn) {
+          btn.textContent = 'Report';
+          btn.style.color = '#ef4444';
+          btn.style.borderColor = '#ef4444';
+          btn.disabled = false;
+        }
+      }, 3000);
+    });
+    footerEl.appendChild(btn);
   }
 
   /**
@@ -1565,6 +1666,7 @@ function initializePopup() {
 
     resultsNode.innerHTML = '';
     resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
+    updateReportButton(resultsLocal.length > 0);
 
     if (resultsLocal.length === 0) {
       const empty = document.createElement('div');

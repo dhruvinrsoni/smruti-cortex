@@ -1,0 +1,82 @@
+name: Ranking Report
+description: Report a search ranking issue (auto-generated or manual)
+title: "[Ranking]: "
+labels: ["ranking-bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Search Ranking Report
+        Use this template to report search results that are incorrectly ranked.
+        **Tip:** The extension's built-in Report button auto-fills most of this.
+
+  - type: dropdown
+    id: report-source
+    attributes:
+      label: Report Source
+      description: How was this report generated?
+      options:
+        - Auto-generated via Report button
+        - Manual (filled by hand)
+    validations:
+      required: true
+
+  - type: input
+    id: query
+    attributes:
+      label: Search Query
+      description: The exact query you searched for.
+      placeholder: "confluence pto"
+    validations:
+      required: true
+
+  - type: textarea
+    id: ranking-problem
+    attributes:
+      label: What's Wrong with the Ranking?
+      description: Describe which results are misranked and where you expected them.
+      placeholder: |
+        Result #8 "Confluence PTO Policy" matches both tokens but appeared below
+        Result #2 "Confluence Login" which only matches one token.
+    validations:
+      required: true
+
+  - type: textarea
+    id: debug-data
+    attributes:
+      label: Debug Data (auto-filled by Report button)
+      description: "Paste the auto-generated report here, or leave blank for manual reports."
+      render: markdown
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension Version
+      description: "Found in popup footer or manifest.json"
+      placeholder: "8.1.0"
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser & Version
+      description: "e.g., Chrome 122.0.6261.69, Edge 122.0.2365.52"
+      placeholder: "Edge 122.0.2365.52"
+
+  - type: dropdown
+    id: sort-mode
+    attributes:
+      label: Sort Mode
+      description: What sort preference was active?
+      options:
+        - Best Match
+        - Most Recent
+        - Most Visited
+        - Alphabetical
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any extra info — screenshots, expected ordering, settings, etc.
