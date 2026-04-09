@@ -341,6 +341,9 @@ html,body { margin:0; padding:0; width:800px; height:400px; min-height:0; color:
   overflow-x: auto;
   scrollbar-width: none;
   flex-shrink: 0;
+  scroll-padding-inline: 20px;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
 }
 
 .settings-tabs::-webkit-scrollbar {

@@ -2194,12 +2194,17 @@ function initializePopup() {
     if (!modal) {return;}
     activeSettingsTab = tabName;
 
-    // Update tab buttons
+    // Update tab buttons and scroll the active one into view
+    let activeBtn: HTMLElement | null = null;
     modal.querySelectorAll('.settings-tab').forEach(btn => {
       const isActive = (btn as HTMLElement).dataset.tab === tabName;
       btn.classList.toggle('active', isActive);
       btn.setAttribute('aria-selected', String(isActive));
+      if (isActive) { activeBtn = btn as HTMLElement; }
     });
+    if (activeBtn) {
+      (activeBtn as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
 
     // Show/hide sections based on active tab
     modal.querySelectorAll('.settings-section[data-tab]').forEach(section => {
