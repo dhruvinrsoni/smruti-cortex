@@ -1051,7 +1051,7 @@ function initializePopup() {
       applyTheme((SettingsManager.getSetting('theme') ?? 'auto') as 'light' | 'dark' | 'auto');
     }
     if (key === 'displayMode' || key === 'highlightMatches' || key === 'loadFavicons') {
-      if (!currentQuery?.trim()) { loadRecentHistory(); } else { renderResults(); }
+      renderResults();
     }
     if (key === 'showRecentHistory' || key === 'showRecentSearches') {
       if (!currentQuery?.trim()) { loadRecentHistory(); }
@@ -1550,7 +1550,10 @@ function initializePopup() {
       currentAIExpandedKeywords = [];
       renderAIStatus(null);
       activeIndex = -1;
-      renderResults(true);
+      renderResults();
+
+      // Recent sections are always list-style; card grid breaks their layout
+      resultsNode.className = 'results list';
 
       // "⚡ Recently Visited" section — gated by showRecentHistory toggle
       if (showRecentlyVisited) {
@@ -1658,10 +1661,10 @@ function initializePopup() {
   }
 
   // Fast rendering
-  function renderResults(forceListLayout = false) {
+  function renderResults() {
     try {
-    const displayMode = forceListLayout ? DisplayMode.LIST : (SettingsManager.getSetting('displayMode') || DisplayMode.LIST);
-    const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true;
+    const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
+    const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true; // Default: true
     resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
 
     resultsNode.innerHTML = '';
@@ -3067,7 +3070,7 @@ function initializePopup() {
         if (target.checked) {
           SettingsManager.setSetting('displayMode', target.value as DisplayMode).catch(() => {});
           syncToggleBar();
-          if (!currentQuery?.trim()) { loadRecentHistory(); } else { renderResults(); }
+          renderResults();
           showToast('Display mode updated', 'info');
         }
       });
@@ -4209,7 +4212,7 @@ function initializePopup() {
       syncToggleBar();
     }
     if (keys.some(k => ['displayMode', 'highlightMatches', 'loadFavicons'].includes(k))) {
-      if (!currentQuery?.trim()) { loadRecentHistory(); } else { renderResults(); }
+      renderResults();
     }
     if (keys.some(k => ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'].includes(k))) {
       if (!currentQuery?.trim()) { loadRecentHistory(); }
