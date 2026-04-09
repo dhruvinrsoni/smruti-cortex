@@ -408,7 +408,16 @@ html,body { margin:0; padding:0; width:800px; height:400px; min-height:0; color:
 .setting-options {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Reduced from 12px */
+  gap: 8px;
+}
+.setting-options > .action-btn {
+  align-self: flex-start;
+  margin-right: 6px;
+}
+.setting-options:has(> .action-btn) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .setting-option {
@@ -690,8 +699,9 @@ input[type="checkbox"] {
 
 .setting-actions {
   display: flex;
-  gap: 8px; /* Reduced from 12px */
+  gap: 8px;
   flex-wrap: wrap;
+  margin-top: 6px;
 }
 
 .action-btn {
