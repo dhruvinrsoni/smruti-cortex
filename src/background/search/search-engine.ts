@@ -30,10 +30,11 @@ import { buildEmbeddingText } from '../embedding-text';
 export interface AISearchStatus {
     aiKeywords: 'disabled' | 'cache-hit' | 'prefix-hit' | 'expanded' | 'error' | 'no-new-keywords';
     semantic: 'disabled' | 'active' | 'error' | 'circuit-breaker';
+    semanticError?: string;
     expandedCount: number;
     embeddingsGenerated: number;
     searchTimeMs: number;
-    aiExpandedKeywords: string[];  // AI-generated keywords only (excludes original query tokens)
+    aiExpandedKeywords: string[];
 }
 let lastAIStatus: AISearchStatus | null = null;
 export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; }
@@ -183,10 +184,12 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                     logger.info('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
                 } else {
                     aiStatus.semantic = 'error';
+                    aiStatus.semanticError = `Embedding generation failed: ${embeddingResult.error || 'empty result'}`;
                     logger.warn('runSearch', `⚠️ Query embedding generation failed: ${embeddingResult.error || 'empty'}`);
                 }
             } catch (error) {
                 aiStatus.semantic = 'error';
+                aiStatus.semanticError = `Embedding request failed: ${(error as Error).message || 'unknown error'}`;
                 logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', { error });
             }
         }

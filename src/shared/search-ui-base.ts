@@ -551,6 +551,7 @@ export function highlightHtml(
 export interface AIStatus {
   aiKeywords?: string;
   semantic?: string;
+  semanticError?: string;
   expandedCount?: number;
   embeddingsGenerated?: number;
   searchTimeMs?: number;
@@ -628,6 +629,7 @@ export function renderAIStatus(
       case 'error':
         badge.classList.add('ai-error');
         badge.textContent = '\u{1F9E0} Semantic error';
+        badge.title = aiStatus.semanticError || 'Semantic search failed — check Ollama connection';
         break;
       case 'circuit-breaker':
         badge.classList.add('ai-error');

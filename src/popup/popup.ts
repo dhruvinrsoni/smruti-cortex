@@ -1552,6 +1552,9 @@ function initializePopup() {
       activeIndex = -1;
       renderResults();
 
+      // Recent sections are always list-style; card grid breaks their layout
+      resultsNode.className = 'results list';
+
       // "⚡ Recently Visited" section — gated by showRecentHistory toggle
       if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
@@ -1723,8 +1726,15 @@ function initializePopup() {
         const url = document.createElement('div');
         url.className = 'card-url';
         url.innerHTML = highlightMatches(item.url, currentQuery, currentAIExpandedKeywords);
-
         details.appendChild(url);
+
+        if (item.metaDescription) {
+          const meta = document.createElement('div');
+          meta.className = 'card-meta';
+          meta.textContent = item.metaDescription;
+          details.appendChild(meta);
+        }
+
         card.appendChild(fav);
         card.appendChild(details);
 
