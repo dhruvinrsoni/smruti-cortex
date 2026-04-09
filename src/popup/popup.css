@@ -771,6 +771,7 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin: 8px 0 12px 0;
   padding: 8px 12px;
   background: var(--card);
@@ -788,6 +789,9 @@ input[type="checkbox"] {
 .cache-label {
   font-weight: 500;
   color: var(--text);
+}
+.favicon-cache-status > .action-btn {
+  flex-shrink: 0;
 }
 
 #favicon-cache-count, #favicon-cache-size {
