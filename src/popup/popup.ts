@@ -200,7 +200,7 @@ try {
       type: 'POPUP_PERF_LOG',
       stage: 'entry',
       timestamp: __popupEntryTimestamp
-    });
+    }, () => void chrome.runtime.lastError);
   }
 } catch {
   // Ignore timing errors - not critical
@@ -454,7 +454,7 @@ function initializePopup() {
           stage: 'input-focus',
           timestamp: focusTimestamp,
           elapsedMs
-        });
+        }, () => void chrome.runtime.lastError);
       }
     } catch {
       // Ignore timing errors - not critical
@@ -3529,7 +3529,7 @@ function initializePopup() {
         syncToggleBar();
         if (target.checked) {
           showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
-          chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' });
+          chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' }, () => void chrome.runtime.lastError);
         } else {
           showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.', 'info');
         }
