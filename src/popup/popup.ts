@@ -1524,12 +1524,28 @@ function initializePopup() {
   }
 
   // Load default view (shown when popup opens or query is cleared)
+  function getRecentSectionsContainer(): HTMLElement {
+    let container = resultsNode.parentNode?.querySelector('#recent-sections-container') as HTMLElement | null;
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'recent-sections-container';
+      resultsNode.parentNode?.insertBefore(container, resultsNode);
+    }
+    return container;
+  }
+
+  function clearRecentSectionsContainer(): void {
+    const container = resultsNode.parentNode?.querySelector('#recent-sections-container') as HTMLElement | null;
+    if (container) { container.innerHTML = ''; }
+  }
+
   async function loadRecentHistory() {
     // Ensure settings are fully loaded from storage before reading toggles
     await SettingsManager.init();
 
     const isServiceWorkerReady = await checkServiceWorkerStatus();
     if (!isServiceWorkerReady) {
+      clearRecentSectionsContainer();
       resultsLocal = [];
       activeIndex = -1;
       renderResults();
@@ -1552,15 +1568,15 @@ function initializePopup() {
       activeIndex = -1;
       renderResults();
 
-      // Recent sections are always list-style; card grid breaks their layout
-      resultsNode.className = 'results list';
+      const recentContainer = getRecentSectionsContainer();
+      recentContainer.innerHTML = '';
 
       // "⚡ Recently Visited" section — gated by showRecentHistory toggle
       if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
         if (interactions.length > 0) {
           const section = renderRecentInteractionsSection(interactions.slice(0, 5));
-          resultsNode.insertBefore(section, resultsNode.firstChild);
+          recentContainer.appendChild(section);
         }
       }
 
@@ -1569,11 +1585,12 @@ function initializePopup() {
         const recentEntries = await getRecentSearches();
         if (recentEntries.length > 0) {
           const section = renderRecentSearches(recentEntries.slice(0, 5));
-          resultsNode.insertBefore(section, resultsNode.firstChild);
+          recentContainer.insertBefore(section, recentContainer.firstChild);
         }
       }
 
     } catch {
+      clearRecentSectionsContainer();
       resultsLocal = [];
       activeIndex = -1;
       renderResults();
@@ -1590,6 +1607,8 @@ function initializePopup() {
       loadRecentHistory();
       return;
     }
+
+    clearRecentSectionsContainer();
 
     const isServiceWorkerReady = await checkServiceWorkerStatus();
     if (!isServiceWorkerReady) {
@@ -1664,7 +1683,7 @@ function initializePopup() {
   function renderResults() {
     try {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
-    const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true; // Default: true
+    const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true;
     resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
 
     resultsNode.innerHTML = '';
