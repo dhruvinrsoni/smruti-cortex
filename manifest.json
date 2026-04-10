@@ -31,7 +31,7 @@
     "default_popup": "popup/popup.html",
     "default_title": "SmrutiCortex: Search Your Browser History",
     "default_popup_width": 800,
-    "default_popup_height": 580
+    "default_popup_height": 600
   },
   "browser_specific_settings": {
     "gecko": {

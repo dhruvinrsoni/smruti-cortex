@@ -10,8 +10,8 @@
   <style>
     /* Critical CSS - inlined for instant rendering */
     :root{--bg:#ffffff;--card:#f8fafc;--muted:#64748b;--accent:#3b82f6;--text:#1e293b;--chip:#e2e8f0;--hover:#f1f5f9;--border:#e2e8f0}
-    html,body{margin:0;padding:0;width:100%;height:100%;min-width:800px;min-height:400px;color:var(--text);background:var(--bg);font-size:14px;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}
-    .app{width:100%;height:100%;min-width:760px;min-height:350px;padding:16px;box-sizing:border-box;display:flex;flex-direction:column}
+    html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;color:var(--text);background:var(--bg);font-size:14px;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}
+    .app{width:100%;height:100%;padding:4px 10px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
     .header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 4px}
     .brand{display:flex;gap:8px;align-items:center}
     .logo-icon{width:32px;height:32px;display:block;flex-shrink:0}
@@ -762,6 +762,19 @@ ollama pull nomic-embed-text:latest
     </div>
   </div>
 
+  <script>
+  window.onerror=function(msg){
+    var el=document.getElementById('app');
+    if(el) el.innerHTML=
+      '<div style="padding:32px;text-align:center;font-family:system-ui">'+
+      '<h2 style="margin:0 0 8px">SmrutiCortex hit a hiccup</h2>'+
+      '<p style="color:#64748b;margin:0 0 16px">Something went wrong loading the popup.</p>'+
+      '<button onclick="location.reload()" style="padding:8px 20px;border-radius:8px;border:1px solid #e2e8f0;background:#3b82f6;color:#fff;cursor:pointer;font-size:14px">Reload</button>'+
+      '<p style="color:#94a3b8;font-size:11px;margin:12px 0 0">'+msg+'</p>'+
+      '</div>';
+  };
+  window.onunhandledrejection=function(e){window.onerror(e.reason||'Async error');};
+  </script>
   <script src="popup.js"></script>
 </body>
 </html>

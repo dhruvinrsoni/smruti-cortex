@@ -219,7 +219,20 @@ function fastInit() {
   logger = Logger.forComponent('PopupScript');
 
   // Start popup IMMEDIATELY - don't wait for anything
-  initializePopup();
+  try {
+    initializePopup();
+  } catch (err) {
+    const appEl = document.getElementById('app');
+    if (appEl) {
+      appEl.innerHTML = `<div style="padding:32px;text-align:center">
+        <h2 style="margin:0 0 8px">SmrutiCortex hit a hiccup</h2>
+        <p style="color:var(--muted);margin:0 0 16px">The popup failed to initialize.</p>
+        <button onclick="location.reload()" style="padding:8px 20px;border-radius:8px;border:1px solid #e2e8f0;background:#3b82f6;color:#fff;cursor:pointer;font-size:14px">Reload</button>
+        <p style="color:#94a3b8;font-size:11px;margin-top:12px">${err}</p>
+      </div>`;
+    }
+    console.error('[PopupCrash]', err);
+  }
 
   // Initialize settings in background (non-blocking)
   // Settings will use defaults until loaded
@@ -1575,7 +1588,7 @@ function initializePopup() {
       if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
         if (interactions.length > 0) {
-          const section = renderRecentInteractionsSection(interactions.slice(0, 5));
+          const section = renderRecentInteractionsSection(interactions.slice(0, 3));
           recentContainer.appendChild(section);
         }
       }
@@ -1584,7 +1597,7 @@ function initializePopup() {
       if (showSearches) {
         const recentEntries = await getRecentSearches();
         if (recentEntries.length > 0) {
-          const section = renderRecentSearches(recentEntries.slice(0, 5));
+          const section = renderRecentSearches(recentEntries.slice(0, 3));
           recentContainer.insertBefore(section, recentContainer.firstChild);
         }
       }
