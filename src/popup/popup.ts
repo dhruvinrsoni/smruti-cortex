@@ -2426,6 +2426,22 @@ function initializePopup() {
   }
 
   // ===== SEARCHABLE MODEL SELECT =====
+  function formatModelSize(bytes: number): string {
+    if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+    if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
+    return `${(bytes / 1e3).toFixed(0)} KB`;
+  }
+
+  function buildHintMap(defaults: Array<{ value: string; hint?: string }>): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const d of defaults) {
+      if (!d.hint) continue;
+      map.set(d.value, d.hint);
+      map.set(d.value.split(':')[0], d.hint);
+    }
+    return map;
+  }
+
   const MODEL_SELECT_DEFAULTS = [
     { value: 'llama3.2:1b',  hint: '1.3 GB · Fast ★' },
     { value: 'llama3.2:3b',  hint: '2.0 GB · Best balance ★' },
@@ -3228,7 +3244,13 @@ function initializePopup() {
           const models = data.models || [];
 
           if (models.length > 0) {
-            modelSelectOptions = models.map((m: { name: string }) => ({ value: m.name }));
+            const hintMap = buildHintMap(MODEL_SELECT_DEFAULTS);
+            modelSelectOptions = models.map((m: { name: string; size?: number }) => {
+              const hint = hintMap.get(m.name) || hintMap.get(m.name.split(':')[0]);
+              if (hint) return { value: m.name, hint };
+              const sizeStr = m.size ? formatModelSize(m.size) : '';
+              return { value: m.name, hint: sizeStr || undefined };
+            });
             if (renderModelSelectList) {renderModelSelectList();}
             showToast(`Found ${models.length} models`, 'info');
           } else {
@@ -3315,7 +3337,13 @@ function initializePopup() {
           const embedModels = allModels.filter(m => m.name.toLowerCase().includes('embed'));
 
           if (embedModels.length > 0) {
-            embedSelectOptions = embedModels.map(m => ({ value: m.name }));
+            const embedHintMap = buildHintMap(EMBED_SELECT_DEFAULTS);
+            embedSelectOptions = embedModels.map((m: { name: string; size?: number }) => {
+              const hint = embedHintMap.get(m.name) || embedHintMap.get(m.name.split(':')[0]);
+              if (hint) return { value: m.name, hint };
+              const sizeStr = m.size ? formatModelSize(m.size) : '';
+              return { value: m.name, hint: sizeStr || undefined };
+            });
             if (renderEmbedSelectList) {renderEmbedSelectList();}
             showToast(`Found ${embedModels.length} embedding model${embedModels.length > 1 ? 's' : ''}`, 'info');
           } else if (allModels.length > 0) {
