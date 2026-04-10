@@ -1600,7 +1600,7 @@ function initializePopup() {
       if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
         if (interactions.length > 0) {
-          const section = renderRecentInteractionsSection(interactions.slice(0, 3));
+          const section = renderRecentInteractionsSection(interactions.slice(0, 5));
           recentContainer.appendChild(section);
         }
       }
@@ -1609,7 +1609,7 @@ function initializePopup() {
       if (showSearches) {
         const recentEntries = await getRecentSearches();
         if (recentEntries.length > 0) {
-          const section = renderRecentSearches(recentEntries.slice(0, 3));
+          const section = renderRecentSearches(recentEntries.slice(0, 5));
           recentContainer.insertBefore(section, recentContainer.firstChild);
         }
       }
