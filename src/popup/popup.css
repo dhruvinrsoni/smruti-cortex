@@ -235,6 +235,11 @@ body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
 .results.list .result-title { font-size:14px; font-weight:500; color:var(--text); margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .results.list .result-url { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono"; }
 
+/* Unified scroll: sections + results flow naturally, .main is the only scroll point */
+.main.unified-scroll #recent-sections-container { max-height:none; overflow-y:visible; }
+.main.unified-scroll .results { flex:none; min-height:0; max-height:none; }
+.main.unified-scroll .results.list { overflow-y:visible; }
+
 /* Card view: 3-row grid with horizontal scroll */
 /* Cards flow into columns; width scales between 175px–270px based on viewport */
 .results.cards { display:grid; grid-template-rows:repeat(3, auto); grid-auto-flow:column; grid-auto-columns:clamp(175px, 27vw, 270px); overflow-x:auto; overflow-y:hidden; gap:10px; }

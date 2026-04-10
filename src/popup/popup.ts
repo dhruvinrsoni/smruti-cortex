@@ -544,8 +544,14 @@ function initializePopup() {
   // Pre-render empty state immediately
   renderResults();
   
-  // Render toggle bar after settings init
-  SettingsManager.init().then(() => renderToggleBar());
+  // Render toggle bar after settings init, apply unified scroll class
+  SettingsManager.init().then(() => {
+    renderToggleBar();
+    const mainEl = document.querySelector('.main');
+    if (mainEl && SettingsManager.getSetting('unifiedScroll')) {
+      mainEl.classList.add('unified-scroll');
+    }
+  });
 
   // Load recent history on popup open (show default results)
   loadRecentHistory();
@@ -1071,6 +1077,12 @@ function initializePopup() {
     }
     if (key === 'maxResults' || key === 'defaultResultCount') {
       if (!currentQuery?.trim()) { loadRecentHistory(); }
+    }
+    if (key === 'unifiedScroll') {
+      const mainEl = document.querySelector('.main');
+      if (mainEl) {
+        mainEl.classList.toggle('unified-scroll', !!SettingsManager.getSetting('unifiedScroll'));
+      }
     }
     if ((key === 'jiraSiteUrl' || key === 'confluenceSiteUrl') && popupPaletteMode === 'websearch') {
       const input = $('search-input') as HTMLInputElement;

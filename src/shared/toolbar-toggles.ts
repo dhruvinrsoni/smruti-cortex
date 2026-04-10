@@ -105,6 +105,14 @@ export const TOOLBAR_TOGGLE_DEFS: readonly ToolbarToggleDef[] = [
         tooltipOff: 'Recent searches hidden',
     },
     {
+        key: 'unifiedScroll',
+        type: 'boolean',
+        icon: '↕',
+        label: 'Unified',
+        tooltipOn: 'Single scroll: sections + results flow together',
+        tooltipOff: 'Split scroll: sections and results scroll separately',
+    },
+    {
         key: 'theme',
         type: 'cycle',
         icon: '🎨',

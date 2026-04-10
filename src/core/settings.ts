@@ -40,6 +40,7 @@ export interface AppSettings {
     defaultResultCount?: number;  // Number of recent results to show when popup opens with no query (default: 50)
     showRecentHistory?: boolean;   // Show recent browsing history when input is empty (default: true)
     showRecentSearches?: boolean;  // Show recent search queries when input is empty (default: true)
+    unifiedScroll?: boolean;       // Merge sections + results into single scroll (default: false)
     // Toolbar toggle chip bar — which toggles are visible on the main screen
     toolbarToggles?: string[];
     // Command Palette — prefix-based mode system for quick-search overlay
@@ -177,6 +178,10 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     },
     showRecentSearches: {
         default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    unifiedScroll: {
+        default: false,
         validate: (val) => typeof val === 'boolean',
     },
 
