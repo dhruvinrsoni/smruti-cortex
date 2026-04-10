@@ -331,7 +331,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       display: none;
       justify-content: center;
       align-items: flex-start;
-      padding-top: 10vh;
+      padding-top: 8vh;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       contain: layout style;
     }
@@ -339,14 +339,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       display: flex;
     }
     .container {
-      width: 600px;
-      max-width: 90vw;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 680px;
+      max-width: 92vw;
       background: var(--bg-container);
       border-radius: 12px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       overflow: hidden;
       contain: content;
       will-change: transform;
+    }
+    .container.user-resized .results {
+      max-height: none;
+    }
+    .container.user-resized .results.cards {
+      max-height: none;
     }
     .header {
       display: flex;
@@ -454,10 +463,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       color: var(--text-primary);
     }
     .results {
-      max-height: 60vh;
+      max-height: 65vh;
       overflow-y: auto;
       padding: 8px 0;
       contain: content;
+      flex: 1;
+      min-height: 0;
     }
     /* Card view: 3-row grid with horizontal scroll (mirrors popup card layout) */
     .results.cards {
@@ -468,7 +479,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       overflow-x: auto;
       overflow-y: auto;
       gap: 10px;
-      max-height: 50vh;
+      max-height: 55vh;
       padding: 8px;
       contain: layout style;
     }
@@ -610,6 +621,39 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     .toast.toast-error   { background: #ef4444; }
     .toast.toast-warning { background: #f59e0b; }
     .toast.toast-info    { background: #3b82f6; }
+    .resize-handle-bottom {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 14px;
+      height: 6px;
+      cursor: ns-resize;
+      z-index: 10;
+    }
+    .resize-handle-corner {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 14px;
+      height: 14px;
+      cursor: nwse-resize;
+      z-index: 11;
+    }
+    .resize-handle-corner::after {
+      content: '';
+      position: absolute;
+      right: 3px;
+      bottom: 3px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--text-secondary);
+      border-bottom: 2px solid var(--text-secondary);
+      opacity: 0.3;
+      transition: opacity 0.15s;
+    }
+    .container:hover .resize-handle-corner::after {
+      opacity: 0.6;
+    }
     .footer {
       display: flex;
       flex-wrap: wrap;
@@ -1362,6 +1406,109 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  // ===== RESIZE HANDLES FOR QUICK-SEARCH CONTAINER =====
+  const QS_SIZE_KEY = 'quickSearchSize';
+  const QS_MIN_W = 400;
+  const QS_MIN_H = 300;
+  const QS_DEFAULT_W = 680;
+
+  function clampWidth(w: number): number {
+    const maxW = window.innerWidth * 0.92;
+    return Math.max(QS_MIN_W, Math.min(w, maxW));
+  }
+  function clampHeight(h: number): number {
+    const maxH = window.innerHeight * 0.85;
+    return Math.max(QS_MIN_H, Math.min(h, maxH));
+  }
+
+  function persistSize(w: number, h: number): void {
+    try {
+      chrome.storage.local.set({ [QS_SIZE_KEY]: { width: Math.round(w), height: Math.round(h) } },
+        () => void chrome.runtime.lastError);
+    } catch { /* ignore */ }
+  }
+
+  function setupResizeHandles(container: HTMLElement, resultsEl: HTMLElement): void {
+    const handleBottom = document.createElement('div');
+    handleBottom.className = 'resize-handle-bottom';
+    const handleCorner = document.createElement('div');
+    handleCorner.className = 'resize-handle-corner';
+    container.appendChild(handleBottom);
+    container.appendChild(handleCorner);
+
+    let startX = 0, startY = 0, startW = 0, startH = 0;
+    let resizingAxis: 'y' | 'xy' = 'y';
+
+    function onPointerMove(e: PointerEvent): void {
+      e.preventDefault();
+      const dY = e.clientY - startY;
+      const newH = clampHeight(startH + dY);
+      container.style.height = newH + 'px';
+
+      if (resizingAxis === 'xy') {
+        const dX = e.clientX - startX;
+        const newW = clampWidth(startW + dX);
+        container.style.width = newW + 'px';
+      }
+
+      if (!container.classList.contains('user-resized')) {
+        container.classList.add('user-resized');
+      }
+    }
+
+    function onPointerUp(e: PointerEvent): void {
+      (e.target as Element)?.releasePointerCapture?.(e.pointerId);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+
+      const rect = container.getBoundingClientRect();
+      persistSize(rect.width, rect.height);
+    }
+
+    function startResize(e: PointerEvent, axis: 'y' | 'xy'): void {
+      e.preventDefault();
+      e.stopPropagation();
+      resizingAxis = axis;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = container.getBoundingClientRect();
+      startW = rect.width;
+      startH = rect.height;
+
+      (e.target as Element)?.setPointerCapture?.(e.pointerId);
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+    }
+
+    handleBottom.addEventListener('pointerdown', (e) => startResize(e, 'y'));
+    handleCorner.addEventListener('pointerdown', (e) => startResize(e, 'xy'));
+
+    function resetSize(): void {
+      container.style.width = '';
+      container.style.height = '';
+      container.classList.remove('user-resized');
+      try {
+        chrome.storage.local.remove(QS_SIZE_KEY, () => void chrome.runtime.lastError);
+      } catch { /* ignore */ }
+    }
+    handleBottom.addEventListener('dblclick', resetSize);
+    handleCorner.addEventListener('dblclick', resetSize);
+  }
+
+  function restoreSavedSize(container: HTMLElement): void {
+    try {
+      chrome.storage.local.get(QS_SIZE_KEY, (data) => {
+        if (chrome.runtime.lastError) return;
+        const saved = data?.[QS_SIZE_KEY];
+        if (saved && typeof saved.width === 'number' && typeof saved.height === 'number') {
+          container.style.width = clampWidth(saved.width) + 'px';
+          container.style.height = clampHeight(saved.height) + 'px';
+          container.classList.add('user-resized');
+        }
+      });
+    } catch { /* ignore */ }
+  }
+
   // ===== CREATE OVERLAY WITH SHADOW DOM (CSP-safe, no innerHTML) =====
   function createOverlay(): void {
     if (shadowHost) {return;}
@@ -1638,6 +1785,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     container.appendChild(aiStatusBarEl);
     container.appendChild(resultsEl);
     container.appendChild(footer);
+    setupResizeHandles(container, resultsEl);
+    restoreSavedSize(container);
     overlayEl.appendChild(container);
     
     // Toast for copy feedback
