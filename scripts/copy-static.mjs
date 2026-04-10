@@ -22,6 +22,9 @@ try { copyFileSync(resolve(root, "src/popup/popup.html"), resolve(outputDir, "po
 // copy popup.css (if present)
 try { copyFileSync(resolve(root, "src/popup/popup.css"), resolve(outputDir, "popup/popup.css")); } catch(e) { /* ignore */ }
 
+// copy error-guard.js (CSP-safe global error handler, must load before popup.js)
+try { copyFileSync(resolve(root, "src/popup/error-guard.js"), resolve(outputDir, "popup/error-guard.js")); } catch(e) { /* ignore */ }
+
 // copy assets
 try {
   const assetsDir = resolve(root, "src/assets");
