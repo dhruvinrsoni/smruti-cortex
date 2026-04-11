@@ -17,6 +17,7 @@ export default defineConfig({
         'src/**/*.test.ts',
         'src/**/*.spec.ts',
         'src/**/index.ts',
+        'src/__test-utils__/**',
         'src/popup/popup.ts',                // monolithic UI IIFE, no exports
         'src/content_scripts/quick-search.ts', // Shadow DOM IIFE, no exports
         'src/core/scorer-types.ts',           // type definitions only
