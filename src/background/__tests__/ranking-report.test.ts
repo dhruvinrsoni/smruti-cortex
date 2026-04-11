@@ -26,7 +26,8 @@ vi.mock('../diagnostics', () => {
 
 vi.stubGlobal('chrome', chromeMock().withRuntime().build());
 
-import { generateRankingReport, buildGitHubIssueUrl } from '../ranking-report';
+import { generateRankingReport, createGitHubIssue, buildGitHubIssueUrl } from '../ranking-report';
+import { SettingsManager } from '../../core/settings';
 import { recordSearchSnapshot } from '../diagnostics';
 import type { SearchDebugSnapshot } from '../diagnostics';
 
@@ -179,7 +180,6 @@ describe('buildGitHubIssueUrl', () => {
   });
 
   it('does not exceed URL length limits', () => {
-    // Create a snapshot with many results to test truncation
     const bigSnapshot = makeSnapshot();
     bigSnapshot.results = Array.from({ length: 50 }, (_, i) => ({
       rank: i + 1,
@@ -204,5 +204,153 @@ describe('buildGitHubIssueUrl', () => {
     const report = generateRankingReport({ maskingLevel: 'none' })!;
     const url = buildGitHubIssueUrl(report);
     expect(url.length).toBeLessThan(10000);
+  });
+
+  it('includes query, version, and timestamp in stub body', () => {
+    recordSearchSnapshot(makeSnapshot());
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    const url = buildGitHubIssueUrl(report);
+    const params = new URLSearchParams(url.split('?')[1]);
+    expect(params.get('body')).toContain('confluence pto');
+    expect(params.get('body')).toContain('8.1.0');
+    expect(params.get('labels')).toBe('ranking-bug,auto-report');
+  });
+});
+
+describe('generateRankingReport — edge cases', () => {
+  it('handles empty results array', () => {
+    recordSearchSnapshot(makeSnapshot({ results: [], resultCount: 0 }));
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report).not.toBeNull();
+    expect(report!.body).toContain('Top 0');
+    expect(report!.body).toContain('_No results to analyze._');
+  });
+
+  it('includes AI expanded keywords row when present', () => {
+    recordSearchSnapshot(makeSnapshot({
+      aiExpandedKeywords: ['leave', 'vacation', 'time-off'],
+    }));
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toContain('AI Expanded Keywords');
+    expect(report!.body).toContain('`leave`');
+    expect(report!.body).toContain('`vacation`');
+  });
+
+  it('omits AI expanded keywords row when array is empty', () => {
+    recordSearchSnapshot(makeSnapshot({ aiExpandedKeywords: [] }));
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).not.toContain('AI Expanded Keywords');
+  });
+
+  it('labels AI-only results as AI source', () => {
+    recordSearchSnapshot(makeSnapshot({
+      results: [makeSnapshot().results[0]],
+    }));
+    const snap = makeSnapshot({
+      results: [{
+        ...makeSnapshot().results[0],
+        keywordMatch: false,
+        aiMatch: true,
+      }],
+    });
+    recordSearchSnapshot(snap);
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toContain('| AI |');
+  });
+
+  it('labels hybrid results as hybrid source', () => {
+    const snap = makeSnapshot({
+      results: [{
+        ...makeSnapshot().results[0],
+        keywordMatch: true,
+        aiMatch: true,
+      }],
+    });
+    recordSearchSnapshot(snap);
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toContain('| hybrid |');
+  });
+
+  it('labels keyword-only results as keyword source', () => {
+    recordSearchSnapshot(makeSnapshot());
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toContain('| keyword |');
+  });
+
+  it('shows dash for token hits when no tokens match title+url', () => {
+    const snap = makeSnapshot({
+      tokens: ['nonexistent'],
+      results: [{
+        ...makeSnapshot().results[0],
+        title: 'Unrelated',
+        url: 'https://other.com',
+      }],
+    });
+    recordSearchSnapshot(snap);
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toContain('| - |');
+  });
+});
+
+describe('createGitHubIssue', () => {
+  const mockFetch = vi.fn();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  const sampleReport = {
+    title: '[Ranking] "test" — 5 results (v8.1.0)',
+    body: '## Ranking Bug Report',
+    version: '8.1.0',
+    timestamp: '2026-04-11T00:00:00.000Z',
+    query: 'test',
+  };
+
+  it('throws when no PAT is configured', async () => {
+    await expect(createGitHubIssue(sampleReport)).rejects.toThrow('No GitHub PAT configured');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('creates issue successfully with valid PAT', async () => {
+    vi.mocked(SettingsManager.getSetting).mockReturnValue('ghp_testtoken123');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ html_url: 'https://github.com/dhruvinrsoni/smruti-cortex/issues/42' }),
+    });
+
+    const url = await createGitHubIssue(sampleReport);
+    expect(url).toBe('https://github.com/dhruvinrsoni/smruti-cortex/issues/42');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('github.com/repos/dhruvinrsoni/smruti-cortex/issues'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Authorization': 'Bearer ghp_testtoken123',
+        }),
+      }),
+    );
+  });
+
+  it('throws with status on API error', async () => {
+    vi.mocked(SettingsManager.getSetting).mockReturnValue('ghp_testtoken123');
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () => 'Validation Failed',
+    });
+
+    await expect(createGitHubIssue(sampleReport)).rejects.toThrow('GitHub API 422: Validation Failed');
+  });
+
+  it('handles text() failure on error response', async () => {
+    vi.mocked(SettingsManager.getSetting).mockReturnValue('ghp_testtoken123');
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => { throw new Error('stream error'); },
+    });
+
+    await expect(createGitHubIssue(sampleReport)).rejects.toThrow('GitHub API 500: unknown');
   });
 });
