@@ -27,7 +27,7 @@ export interface RankingReport {
 /**
  * Get the stored GitHub PAT (empty string when not configured).
  */
-export function getGitHubPAT(): string {
+function getGitHubPAT(): string {
     const pat = SettingsManager.getSetting('developerGithubPat' as keyof ReturnType<typeof SettingsManager.getSettings>);
     return typeof pat === 'string' ? pat : '';
 }
@@ -181,8 +181,9 @@ function formatReportBody(
 }
 
 /**
- * Pick the most diagnostic items: top 5 + items near the boundary where
- * match count drops, plus the bottom 3 that have highest match count.
+ * Pick the most diagnostic items for the scorer breakdown table:
+ * top 5 results by rank, plus up to 3 additional results that share the
+ * global maximum originalMatchCount (if not already in the top 5).
  */
 function pickInterestingItems(results: SearchDebugResultEntry[]): SearchDebugResultEntry[] {
     if (results.length === 0) { return []; }
