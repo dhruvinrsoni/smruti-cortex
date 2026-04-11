@@ -1,14 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../../__test-utils__';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    forComponent: () => ({
-      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../core/logger', () => mockLogger());
 
 const settingsMock: Record<string, unknown> = { embeddingsEnabled: true };
 vi.mock('../../core/settings', () => ({

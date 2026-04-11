@@ -1,6 +1,7 @@
 // Tests for ai-keyword-cache.ts — loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion, clearAIKeywordCache, getCacheStats
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mockLogger } from '../../__test-utils__';
 
 // Must use vi.resetModules() for module-level state isolation (cache, loaded, saveTimer, dirty are module globals)
 // All imports must be dynamic inside each test
@@ -13,14 +14,7 @@ describe('ai-keyword-cache module', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
-    vi.doMock('../../core/logger', () => ({
-      Logger: {
-        info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-        forComponent: () => ({
-          info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-        }),
-      },
-    }));
+    vi.doMock('../../core/logger', () => mockLogger());
 
     vi.doMock('../../core/helpers', () => ({
       browserAPI: {

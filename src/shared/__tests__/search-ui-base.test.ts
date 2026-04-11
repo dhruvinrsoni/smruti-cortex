@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { makeResult } from '../../__test-utils__';
 import {
   truncateUrl,
   escapeRegex,
@@ -30,16 +31,6 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function makeResult(overrides: Partial<SearchResult> = {}): SearchResult {
-  return {
-    url: 'https://example.com',
-    title: 'Example',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    ...overrides,
-  };
-}
-
 const createKeyboardEvent = (key: string, modifiers: Partial<KeyboardEvent> = {}): KeyboardEvent => {
   return { key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...modifiers } as KeyboardEvent;
 };

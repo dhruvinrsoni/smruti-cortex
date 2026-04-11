@@ -1,37 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, makeItem as makeItemBase } from '../../../../__test-utils__';
 
-vi.mock('../../../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(),
-      debug: vi.fn(),
-      trace: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../../core/logger', () => mockLogger());
 
 import metaScorer from '../meta-scorer';
-import type { IndexedItem } from '../../../schema';
 
-function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Test Page',
-    hostname: 'example.com',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-    metaDescription: undefined,
-    metaKeywords: [],
-    ...overrides,
-  } as unknown as IndexedItem;
+function makeItem(overrides?: Record<string, unknown>) {
+  return makeItemBase({ metaDescription: undefined, metaKeywords: [], ...overrides });
 }
 
 describe('metaScorer', () => {

@@ -1,7 +1,8 @@
 /**
  * Unit tests for tour.ts
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { chromeMock } from '../../__test-utils__';
 import {
   POPUP_TOUR_STEPS,
   isTourCompleted,
@@ -11,21 +12,17 @@ import {
 } from '../tour';
 
 describe('tour', () => {
-  const storageGet = vi.fn();
-  const storageSet = vi.fn();
+  let storageGet: Mock;
+  let storageSet: Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    const chromeApi = chromeMock().withStorage().build();
+    storageGet = chromeApi.storage!.local.get as Mock;
+    storageSet = chromeApi.storage!.local.set as Mock;
     storageGet.mockResolvedValue({});
     storageSet.mockResolvedValue(undefined);
-    vi.stubGlobal('chrome', {
-      storage: {
-        local: {
-          get: storageGet,
-          set: storageSet,
-        },
-      },
-    });
+    vi.stubGlobal('chrome', chromeApi);
     document.body.innerHTML = '';
   });
 

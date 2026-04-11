@@ -57,7 +57,9 @@ export enum KeyboardAction {
 }
 
 /**
- * Abstract interface that both UIs implement
+ * Abstract interface for search UI implementations.
+ * @internal Currently aspirational — neither popup.ts nor quick-search.ts
+ * implements this yet. Retained as a target contract for future refactoring.
  */
 export interface ISearchUI {
   showUI(): void;

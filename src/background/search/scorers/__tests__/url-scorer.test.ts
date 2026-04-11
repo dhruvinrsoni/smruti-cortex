@@ -1,35 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../../../../__test-utils__';
+import { makeItem as makeItemBase } from '../../../../__test-utils__';
 
-vi.mock('../../../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(),
-      debug: vi.fn(),
-      trace: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../../core/logger', () => mockLogger());
 
 import urlScorer from '../url-scorer';
 import type { IndexedItem } from '../../../schema';
 
 function makeItem(url: string, hostname: string, overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url,
-    hostname,
-    title: 'Test Page',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-    ...overrides,
-  } as unknown as IndexedItem;
+  return makeItemBase({ url, hostname, ...overrides });
 }
 
 describe('urlScorer', () => {

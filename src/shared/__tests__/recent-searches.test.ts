@@ -1,27 +1,28 @@
 /**
  * Unit tests for recent-searches.ts (chrome.storage.local)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { chromeMock } from '../../__test-utils__';
 
 describe('recent-searches', () => {
-  const get = vi.fn();
-  const set = vi.fn();
-  const remove = vi.fn();
+  let get: Mock;
+  let set: Mock;
+  let remove: Mock;
 
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    const chromeApi = chromeMock().withStorage().build();
+    get = chromeApi.storage!.local.get as Mock;
+    set = chromeApi.storage!.local.set as Mock;
+    remove = chromeApi.storage!.local.remove as Mock;
     get.mockReset();
     set.mockReset();
     remove.mockReset();
     get.mockResolvedValue({});
     set.mockResolvedValue(undefined);
     remove.mockResolvedValue(undefined);
-    vi.stubGlobal('chrome', {
-      storage: {
-        local: { get, set, remove },
-      },
-    });
+    vi.stubGlobal('chrome', chromeApi);
   });
 
   it('getRecentSearches returns empty array when storage is empty', async () => {

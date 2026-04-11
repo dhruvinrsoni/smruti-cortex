@@ -1,18 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, makeItem } from '../../__test-utils__';
 
 // ── Mock Logger ────────────────────────────────────────────────────────────
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    trace: vi.fn(),
-    forComponent: () => ({
-      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../core/logger', () => mockLogger());
 
 // ── Mock browserAPI (chrome.storage.local) ─────────────────────────────────
 const storageMock = {
@@ -36,18 +26,6 @@ import type { IndexedItem } from '../schema';
 
 type Store = Map<string, IndexedItem>;
 let store: Store;
-
-function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Example',
-    hostname: 'example.com',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['example'],
-    ...overrides,
-  };
-}
 
 function mockRequest<T>(resultOrError: T | Error) {
   const req: Record<string, unknown> = { result: undefined, error: null };

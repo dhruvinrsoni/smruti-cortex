@@ -1,14 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, makeItem } from '../../../__test-utils__';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
-vi.mock('../../../core/logger', () => ({
-  Logger: {
-    forComponent: () => ({
-      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../core/logger', () => mockLogger());
 
 const settingsMap: Record<string, unknown> = {
   ollamaEnabled: false,
@@ -24,18 +19,6 @@ vi.mock('../../../core/settings', () => ({
 }));
 
 import type { IndexedItem } from '../../schema';
-
-function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Example Page',
-    hostname: 'example.com',
-    visitCount: 5,
-    lastVisit: Date.now(),
-    tokens: ['example', 'page'],
-    ...overrides,
-  };
-}
 
 const indexedItems: IndexedItem[] = [];
 vi.mock('../../database', () => ({

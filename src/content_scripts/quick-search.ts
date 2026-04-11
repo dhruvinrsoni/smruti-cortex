@@ -28,6 +28,7 @@ import {
   KeyboardAction,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
+  escapeHtml,
   handleCyclicTabNavigation,
   parseKeyboardAction,
   renderResults as renderResultsShared,
@@ -3086,10 +3087,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) {return `${hours}h ago`;}
     return `${Math.floor(hours / 24)}d ago`;
-  }
-
-  function escapeHtml(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function truncateUrl(url: string): string {

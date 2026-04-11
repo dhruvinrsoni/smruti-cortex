@@ -1,6 +1,7 @@
 // Tests for diagnostics.ts — module-level state functions
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, chromeMock } from '../../__test-utils__';
 
 // Must use vi.resetModules() for module-level state isolation
 // All setup must happen inside each test via dynamic imports
@@ -10,28 +11,18 @@ describe('diagnostics module', () => {
     vi.resetModules();
     vi.clearAllMocks();
 
-    vi.stubGlobal('chrome', {
-      runtime: {
-        getManifest: vi.fn(() => ({ name: 'Test', version: '1.0', manifest_version: 3 })),
-        lastError: null,
-      },
-      storage: {
-        local: {
-          get: vi.fn().mockResolvedValue({}),
-          set: vi.fn().mockResolvedValue(undefined),
-          remove: vi.fn().mockResolvedValue(undefined),
-        },
-      },
-    });
+    vi.stubGlobal(
+      'chrome',
+      chromeMock()
+        .withRuntime({
+          getManifest: vi.fn(() => ({ name: 'Test', version: '1.0', manifest_version: 3 })),
+          lastError: null,
+        })
+        .withStorage()
+        .build(),
+    );
 
-    vi.doMock('../../core/logger', () => ({
-      Logger: {
-        info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-        forComponent: () => ({
-          info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-        }),
-      },
-    }));
+    vi.doMock('../../core/logger', () => mockLogger());
 
     vi.doMock('../../core/settings', () => ({
       SettingsManager: {

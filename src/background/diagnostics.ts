@@ -368,7 +368,8 @@ export async function exportDiagnosticsAsJson(): Promise<string> {
 }
 
 /**
- * Export diagnostic report as formatted text (for copy/paste)
+ * Export diagnostic report as formatted text (for copy/paste).
+ * @internal Not used in production UI — retained for debugging / test utilities.
  */
 export async function exportDiagnosticsAsText(): Promise<string> {
     const report = await generateDiagnosticReport();

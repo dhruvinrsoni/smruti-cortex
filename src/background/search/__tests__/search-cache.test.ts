@@ -1,34 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, makeItem as makeIndexedItem } from '../../../__test-utils__';
 
-vi.mock('../../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(),
-      debug: vi.fn(),
-      trace: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../core/logger', () => mockLogger());
 
 import { SearchCache } from '../search-cache';
 import type { IndexedItem } from '../../schema';
 
 function makeItem(url: string): IndexedItem {
-  return {
-    url,
-    title: 'Test Page',
-    hostname: 'example.com',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-  } as IndexedItem;
+  return makeIndexedItem({ url });
 }
 
 describe('SearchCache', () => {

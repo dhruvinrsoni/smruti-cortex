@@ -1,15 +1,9 @@
 // Tests for scorer-manager.ts — crossDimensionalScorer, multiTokenMatchScorer, domainFamiliarityScorer, getAllScorers
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, makeItem } from '../../../__test-utils__';
 
-vi.mock('../../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../core/logger', () => mockLogger());
 
 const mockGetSetting = vi.fn();
 vi.mock('../../../core/settings', () => ({
@@ -26,20 +20,7 @@ vi.mock('../scorers/embedding-scorer', () => ({
 }));
 
 import { getAllScorers } from '../scorer-manager';
-import type { IndexedItem } from '../../schema';
 import type { ScorerContext } from '../../../core/scorer-types';
-
-function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com/article',
-    title: 'Test Article',
-    hostname: 'example.com',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-    ...overrides,
-  } as IndexedItem;
-}
 
 function makeContext(overrides?: Partial<ScorerContext>): ScorerContext {
   return {
