@@ -1,18 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeItem } from '../../../../__test-utils__';
 import recencyScorer from '../recency-scorer';
-import type { IndexedItem } from '../../../schema';
-
-function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Test Page',
-    hostname: 'example.com',
-    visitCount: 5,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-    ...overrides,
-  } as IndexedItem;
-}
 
 const NOW = 1_700_000_000_000; // fixed timestamp for determinism
 

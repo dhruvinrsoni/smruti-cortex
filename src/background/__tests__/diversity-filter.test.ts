@@ -2,6 +2,7 @@
 // SmrutiCortex v4.0
 
 import { describe, it, expect } from 'vitest';
+import { makeItem } from '../../__test-utils__';
 import { IndexedItem } from '../../background/schema';
 
 // ============================================================================
@@ -51,17 +52,17 @@ function applyDiversityFilter<T extends ScoredItem>(
 
 // Helper to create a mock IndexedItem
 function createMockItem(url: string, title: string, score: number): ScoredItem {
-    const item: IndexedItem = {
-        url,
-        title,
-        hostname: new URL(url).hostname,
-        metaDescription: '',
-        metaKeywords: [],
-        visitCount: 1,
-        lastVisit: Date.now(),
-        tokens: []
+    return {
+        item: makeItem({
+            url,
+            title,
+            hostname: new URL(url).hostname,
+            metaDescription: '',
+            metaKeywords: [],
+            tokens: [],
+        }),
+        finalScore: score,
     };
-    return { item, finalScore: score };
 }
 
 describe('normalizeUrl', () => {

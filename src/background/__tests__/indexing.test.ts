@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mockLogger, chromeMock } from '../../__test-utils__';
 
 // Mock the database module
 vi.mock('../database', () => ({
@@ -29,29 +30,17 @@ vi.mock('../../core/helpers', () => ({
 }));
 
 // Mock Logger
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    forComponent: () => ({
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      trace: vi.fn(),
-    }),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
+vi.mock('../../core/logger', () => mockLogger());
 
 // Mock chrome.runtime.getManifest
-vi.stubGlobal('chrome', {
-  runtime: {
-    getManifest: () => ({ version: '3.0.0' }),
-  },
-});
+vi.stubGlobal(
+  'chrome',
+  chromeMock()
+    .withRuntime({
+      getManifest: () => ({ version: '3.0.0' }),
+    })
+    .build(),
+);
 
 // Mock settings
 vi.mock('../../core/settings', () => ({

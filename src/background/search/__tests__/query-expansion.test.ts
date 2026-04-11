@@ -1,21 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { mockLogger } from '../../../__test-utils__';
 
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(),
-      debug: vi.fn(),
-      trace: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../core/logger', () => mockLogger());
 
 import {
   expandTerm,

@@ -1,16 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { IndexedItem } from '../../../schema';
+import { mockLogger, makeItem } from '../../../../__test-utils__';
 
-// === Mocks ===
-
-vi.mock('../../../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../../core/logger', () => mockLogger());
 
 const mockGetSetting = vi.fn();
 vi.mock('../../../../core/settings', () => ({
@@ -31,20 +22,6 @@ vi.mock('../../../embedding-text', () => ({
   buildEmbeddingText: vi.fn(() => 'mocked embedding text'),
 }));
 
-// === Helpers ===
-
-function createMockItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Test Page',
-    hostname: 'example.com',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-    ...overrides,
-  };
-}
-
 describe('embeddingScorer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,7 +40,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(false);
 
-      const item = createMockItem({ embedding: [1, 0, 0] });
+      const item = makeItem({ embedding: [1, 0, 0] });
       const result = scorer.score(item, 'test', [], { queryEmbedding: [1, 0, 0] });
       expect(result).toBe(0);
     });
@@ -72,7 +49,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(undefined);
 
-      const item = createMockItem({ embedding: [1, 0, 0] });
+      const item = makeItem({ embedding: [1, 0, 0] });
       const result = scorer.score(item, 'test', [], { queryEmbedding: [1, 0, 0] });
       expect(result).toBe(0);
     });
@@ -81,7 +58,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(true);
 
-      const item = createMockItem({ embedding: [1, 0, 0] });
+      const item = makeItem({ embedding: [1, 0, 0] });
       const result = scorer.score(item, 'test', [], {});
       expect(result).toBe(0);
     });
@@ -90,7 +67,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(true);
 
-      const item = createMockItem({ embedding: [1, 0, 0] });
+      const item = makeItem({ embedding: [1, 0, 0] });
       const result = scorer.score(item, 'test', [], { queryEmbedding: [] });
       expect(result).toBe(0);
     });
@@ -99,7 +76,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(true);
 
-      const item = createMockItem(); // no embedding
+      const item = makeItem(); // no embedding
       const result = scorer.score(item, 'test', [], { queryEmbedding: [1, 0, 0] });
       expect(result).toBe(0);
     });
@@ -108,7 +85,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(true);
 
-      const item = createMockItem({ embedding: [] });
+      const item = makeItem({ embedding: [] });
       const result = scorer.score(item, 'test', [], { queryEmbedding: [1, 0, 0] });
       expect(result).toBe(0);
     });
@@ -117,7 +94,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(true);
 
-      const item = createMockItem({ embedding: [1, 0, 0] });
+      const item = makeItem({ embedding: [1, 0, 0] });
       const result = scorer.score(item, 'test', [], { queryEmbedding: [1, 0, 0] });
       expect(result).toBeCloseTo(1.0);
     });
@@ -126,7 +103,7 @@ describe('embeddingScorer', () => {
       const { default: scorer } = await getModule();
       mockGetSetting.mockReturnValue(true);
 
-      const item = createMockItem({ embedding: [1, 0, 0] });
+      const item = makeItem({ embedding: [1, 0, 0] });
       const result = scorer.score(item, 'test', [], { queryEmbedding: [0, 1, 0] });
       expect(result).toBeCloseTo(0);
     });

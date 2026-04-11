@@ -1,30 +1,11 @@
 // Tests for diversity-filter.ts — normalizeUrl and applyDiversityFilter
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, makeItem } from '../../../__test-utils__';
 
-vi.mock('../../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../../core/logger', () => mockLogger());
 
 import { normalizeUrl, applyDiversityFilter, ScoredItem } from '../diversity-filter';
-import type { IndexedItem } from '../../schema';
-
-function makeItem(overrides?: Partial<IndexedItem>): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Test',
-    hostname: 'example.com',
-    visitCount: 1,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-    ...overrides,
-  } as IndexedItem;
-}
 
 function makeScoredItem(url: string, score: number): ScoredItem {
   return {

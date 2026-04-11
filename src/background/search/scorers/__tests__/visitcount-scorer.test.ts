@@ -1,16 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeItem as makeItemBase } from '../../../../__test-utils__';
 import visitCountScorer from '../visitcount-scorer';
-import type { IndexedItem } from '../../../schema';
 
-function makeItem(visitCount: number): IndexedItem {
-  return {
-    url: 'https://example.com',
-    title: 'Test Page',
-    hostname: 'example.com',
-    visitCount,
-    lastVisit: Date.now(),
-    tokens: ['test'],
-  } as IndexedItem;
+function makeItem(visitCount: number) {
+  return makeItemBase({ visitCount });
 }
 
 describe('visitCountScorer', () => {

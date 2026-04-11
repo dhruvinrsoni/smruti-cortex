@@ -1,15 +1,9 @@
 // Tests for ranking-report.ts — ranking bug report generation
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger, chromeMock, makeSnapshot as buildSnapshot } from '../../__test-utils__';
 
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    forComponent: () => ({
-      info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../core/logger', () => mockLogger());
 
 vi.mock('../../core/settings', () => ({
   SettingsManager: {
@@ -30,18 +24,14 @@ vi.mock('../diagnostics', () => {
   };
 });
 
-vi.stubGlobal('chrome', {
-  runtime: {
-    getManifest: () => ({ name: 'SmrutiCortex', version: '8.1.0', manifest_version: 3 }),
-  },
-});
+vi.stubGlobal('chrome', chromeMock().withRuntime().build());
 
 import { generateRankingReport, buildGitHubIssueUrl } from '../ranking-report';
 import { recordSearchSnapshot } from '../diagnostics';
 import type { SearchDebugSnapshot } from '../diagnostics';
 
 function makeSnapshot(overrides?: Partial<SearchDebugSnapshot>): SearchDebugSnapshot {
-  return {
+  return buildSnapshot({
     timestamp: Date.now(),
     query: 'confluence pto',
     tokens: ['confluence', 'pto'],
@@ -114,7 +104,7 @@ function makeSnapshot(overrides?: Partial<SearchDebugSnapshot>): SearchDebugSnap
       },
     ],
     ...overrides,
-  };
+  });
 }
 
 describe('generateRankingReport', () => {

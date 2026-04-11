@@ -1,13 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mockLogger } from '../../__test-utils__';
 
 // Mock Logger (must be before any module import that uses it)
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    forComponent: () => ({
-      info: vi.fn(), debug: vi.fn(), trace: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../core/logger', () => mockLogger());
 
 const mockFetch = vi.fn();
 

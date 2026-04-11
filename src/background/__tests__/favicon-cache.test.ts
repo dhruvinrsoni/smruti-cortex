@@ -2,15 +2,10 @@
 // Uses manual IndexedDB mock (fake-indexeddb not installed) + vi.resetModules for fresh state
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mockLogger } from '../../__test-utils__';
 
 // ── Logger mock (must be before any import of favicon-cache) ─────────────
-vi.mock('../../core/logger', () => ({
-  Logger: {
-    forComponent: () => ({
-      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
-    }),
-  },
-}));
+vi.mock('../../core/logger', () => mockLogger());
 
 // ── IndexedDB mock infrastructure ────────────────────────────────────────
 // A simple in-memory store keyed by hostname, supporting get/put/clear/getAll/openCursor
