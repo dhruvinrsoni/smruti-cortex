@@ -6,7 +6,7 @@
 
   [![Build](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/build.yml)
   [![Quality Report](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/nfr-report.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/nfr-report.yml)
-  [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+  [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
   [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
   [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)
 
@@ -372,7 +372,7 @@ npm run build       # Verify build
 
 ## 📄 License
 
-Apache-2.0 — See [LICENSE](LICENSE)
+[Business Source License 1.1](LICENSE) — Free for non-commercial, personal, educational, and evaluation use. Converts to Apache-2.0 on April 1, 2030.
 
 ---
 

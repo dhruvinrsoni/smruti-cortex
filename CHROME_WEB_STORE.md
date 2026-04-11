@@ -579,4 +579,4 @@ This extension complies with:
 **SmrutiCortex** — A gift to society. Ultra-fast, privacy-first browser history search.  
 No analytics. No tracking. No data collection. Just pure, local search that respects your privacy.
 
-© 2026 SmrutiCortex | Apache-2.0
+© 2026 SmrutiCortex | BSL-1.1 (converts to Apache-2.0 on April 1, 2030)
