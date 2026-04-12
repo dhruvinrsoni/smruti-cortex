@@ -156,3 +156,61 @@ test.describe('Popup > Perf Modal', () => {
     await expect(perfModal).toHaveClass(/hidden/);
   });
 });
+
+test.describe('Popup > Hash Routing', () => {
+  test('#settings auto-opens settings modal', async ({ extPage: page, extensionId }) => {
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html#settings`);
+    await page.waitForLoadState('load');
+
+    // Settings modal should be visible without clicking the settings button
+    const modal = page.locator('#settings-modal');
+    await expect(modal).not.toHaveClass(/hidden/, { timeout: 3000 });
+    await expect(modal.locator('.settings-header h2')).toHaveText('Settings');
+  });
+});
+
+test.describe('Popup > Data Actions', () => {
+  test('Index Now shows feedback', async ({ extPage: page, extensionId }) => {
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#settings-button').click();
+    await page.locator('.settings-tab[data-tab="data"]').click();
+
+    const indexBtn = page.locator('#manual-index-btn');
+    await expect(indexBtn).toBeVisible();
+
+    await indexBtn.click();
+
+    // Button text changes while indexing
+    await expect(indexBtn).toContainText(/Indexing|Index Now/, { timeout: 10_000 });
+
+    // Feedback element should show a result
+    const feedback = page.locator('#manual-index-feedback');
+    await expect(feedback).not.toBeEmpty({ timeout: 10_000 });
+  });
+
+  test('Rebuild Index triggers with confirm', async ({ extPage: page, extensionId }) => {
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#settings-button').click();
+    await page.locator('.settings-tab[data-tab="data"]').click();
+
+    const rebuildBtn = page.locator('#modal-rebuild');
+    await expect(rebuildBtn).toBeVisible();
+
+    // Auto-accept the confirm dialog
+    page.on('dialog', async (dialog) => {
+      await dialog.accept();
+    });
+
+    await rebuildBtn.click();
+
+    // Button text changes during rebuild
+    await expect(rebuildBtn).toContainText(/Rebuilding|Rebuild Index/, { timeout: 15_000 });
+
+    // After rebuild completes, button should revert to original text
+    await expect(rebuildBtn).toContainText('Rebuild Index', { timeout: 15_000 });
+  });
+});

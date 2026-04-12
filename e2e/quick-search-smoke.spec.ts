@@ -81,6 +81,46 @@ test.describe('Quick-search > Overlay', () => {
   });
 });
 
+test.describe('Quick-search > Functional', () => {
+  test('overlay host has visible class when open', async ({ extPage: page, extensionContext }) => {
+    await page.goto('https://example.com', { waitUntil: 'load' });
+    await waitForContentScript(extensionContext);
+
+    // The overlay host element gets a 'visible' class when open
+    const overlayHost = page.locator('#smruti-cortex-overlay');
+    await expect(overlayHost).toBeAttached({ timeout: 5000 });
+    await expect(overlayHost).toHaveClass(/visible/);
+  });
+
+  test('Esc hides the overlay', async ({ extPage: page, extensionContext }) => {
+    await page.goto('https://example.com', { waitUntil: 'load' });
+    await waitForContentScript(extensionContext);
+
+    const overlayHost = page.locator('#smruti-cortex-overlay');
+    await expect(overlayHost).toBeAttached({ timeout: 5000 });
+
+    // Press Escape — overlay should be hidden (host detached from DOM)
+    await page.keyboard.press('Escape');
+    await expect(overlayHost).not.toBeAttached({ timeout: 3000 });
+  });
+
+  test('re-open after Esc works', async ({ extPage: page, extensionContext }) => {
+    await page.goto('https://example.com', { waitUntil: 'load' });
+    await waitForContentScript(extensionContext);
+
+    const overlayHost = page.locator('#smruti-cortex-overlay');
+    await expect(overlayHost).toBeAttached({ timeout: 5000 });
+
+    // Close with Escape
+    await page.keyboard.press('Escape');
+    await expect(overlayHost).not.toBeAttached({ timeout: 3000 });
+
+    // Re-open via SW message
+    await triggerOverlay(extensionContext);
+    await expect(overlayHost).toBeAttached({ timeout: 5000 });
+  });
+});
+
 test.describe('Service Worker', () => {
   test('PING returns ok', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
