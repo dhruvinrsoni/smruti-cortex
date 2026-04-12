@@ -9,7 +9,7 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
 1. **Understand** — Read the bug report. Reproduce if possible.
 2. **Locate** — Use CLAUDE.md Critical File Map to find the relevant file.
 3. **Fix** — Make the minimal change. Don't refactor surrounding code.
-4. **Test** — `npm test` (all tests must pass — 1,252+ tests across 47 files).
+4. **Test** — `npm test` (all tests must pass — 1,233+ tests across 46 files).
 5. **Build** — `npm run build:prod` (must compile with zero errors).
 6. **Manual test** — Tell the user:
    - Open `chrome://extensions` → reload unpacked → test the specific fix
@@ -142,7 +142,7 @@ After loading unpacked from `dist/`:
 Run after ANY code change:
 
 ```bash
-npm test                    # all tests pass (1,252+ unit tests across 47 files)
+npm test                    # all tests pass (1,233+ unit tests across 46 files)
 npm run build:prod          # Compiles with zero errors
 npm run lint                # No new warnings above threshold
 npx playwright test         # 45 E2E tests across 7 spec files (requires build first)

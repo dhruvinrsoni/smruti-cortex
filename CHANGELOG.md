@@ -12,15 +12,18 @@ All notable changes to SmrutiCortex are documented here.
 - **Palette in popup** — Optional setting to enable prefix modes in the popup (useful on restricted `chrome://` pages)
 - **Jira & Confluence integration** — Configurable site URLs for `?? j` and `?? c` quick search
 - **Palette diagnostic toasts** — Formatted toast messages for palette command execution feedback
+- **Popup & quick-search resizing** — User-resizable popup and quick-search overlay with drag handles, persisted size, and double-click reset
+- **Unified scroll toggle** — New `unifiedScroll` setting to switch between split and unified scrolling in the popup
+- **Settings UI modernization** — Toggle switches, segmented controls, pill chips, searchable model dropdown
 
 ### Bug Fixes
-- **CSP compliance** — Replace all `fav.onerror` / `closeBtn.onclick` IDL handlers with `addEventListener` to comply with Chrome MV3 `script-src 'self'`
+- **CSP compliance** — Replace all `fav.onerror` / `closeBtn.onclick` IDL handlers with `addEventListener` to comply with Chrome MV3 `script-src 'self'`; move global error handler from inline script to external `error-guard.js`
 - **XSS prevention** — Escape user-derived strings in popup `innerHTML` assignments
 - **Search rate limiting** — Rate-limit search requests on the port handler; add bookmark walk depth guard
 - **Input validation** — Validate and sanitize all service-worker message handler inputs
 - **Scorer isolation** — Per-scorer `try/catch` in search loop prevents one scorer failure from breaking all results
-- **Error boundaries** — Wrap `renderResults` and `renderAIStatus` in popup and quick-search with error boundaries
-- **Unhandled rejections** — Add global error handler for unhandled promise rejections in service worker
+- **Error boundaries** — Wrap `renderResults` and `renderAIStatus` in popup and quick-search with error boundaries; add global `window.onerror` / `window.onunhandledrejection` guardrails
+- **Unhandled rejections** — Add global error handler for unhandled promise rejections in service worker; fix `checkHealth()` and `startHealthMonitoring()` promise chains in resilience module
 - **IndexedDB resilience** — Graceful degradation when IndexedDB or embedding hydration fails
 - **Ollama hardening** — Cap keyword expander timeout at 120s, wire circuit breaker, add response body size cap on fetch calls
 - **Memory pressure** — Strip embeddings from in-memory item cache; null `item.embedding` after `saveIndexedItem`; add session embedding counter fallback for memory pressure guard
@@ -31,25 +34,42 @@ All notable changes to SmrutiCortex are documented here.
 - **Context recovery** — Skip futile context recovery on extension reload; show reconnect UI immediately
 - **Settings tab bar** — Convert vertical scroll to horizontal on settings tab bar overflow
 - **Text selection** — Allow text selection on toast notifications and Recently Visited section
-- **Recent history** — Always show recent history results; toggle only controls Recently Visited section
+- **Recent history** — Always show recent history results; toggle only controls Recently Visited section; restore display cap from 3 to 5
 - **Quick-search parity** — Command palette arrow keys and Tab navigation match quick-search overlay behaviour
 - **Footer typography** — Larger command palette footer hint text in popup
 - **Deprecation** — Deprecate `getIndexedItemsBatches` (returns all batches at once, replaced by streaming)
+- **Message port closed** — Add `lastError` callbacks to fire-and-forget `sendMessage` calls in popup and quick-search to suppress Chrome warnings
+- **Bookmarks lastError** — Check `chrome.runtime.lastError` in bookmarks `getTree` callback to properly reject on error
+- **Listener leak** — Fix `visibilitychange` listener leak in quick-search by hoisting handler to module scope with cleanup
+- **Tour keydown leak** — Move `removeEventListener('keydown')` to cleanup function so listener is always removed
+- **Silent catch logging** — Replace all 60+ silent `.catch(() => {})` in popup, quick-search, and tour with meaningful `logger.debug` / `logger.warn` calls for debuggability
+
+### Code Quality
+- **Dead code removal** — Remove unused exports (`createContextLogger`, `incrementSessionEmbeddingCount`, `INJECTED_FLAG`), unused imports, unused variables, and duplicate test file (`background/__tests__/diversity-filter.test.ts`)
+- **Dependency cleanup** — Uninstall unused `webextension-polyfill` and `ts-node` packages
+- **Lint warning reduction** — Fix 13 `no-unused-vars` warnings (dead imports, unused params prefixed with `_`, removed dead functions)
+- **Build guardrail** — Add two-layer defense against Chrome MV3 underscore-dir restriction: `tsconfig.json` exclude + post-build sweep in `scripts/copy-static.mjs`
+- **Dual release path resolution** — Disable CI `release` job (set `if: false`) since `scripts/release.mjs` is the single source of truth for GitHub Releases
 
 ### Testing
-- **1,098 tests across 43 files** — Up from 1,073 tests / 34 files in v8.1.0
+- **1,233 unit tests across 46 files** — Up from 1,098 tests / 43 files in v8.1.0
+- **45 E2E tests across 7 Playwright specs** — New infrastructure for end-to-end browser automation testing
+- **E2E CI workflow** — GitHub Actions workflow with xvfb for headless Chromium testing
 - Added `command-registry-core.test.ts` (21 tests) and `command-registry-advanced-browser.test.ts` (6 tests)
 - Added `web-search.test.ts` (15 tests), `palette-messages.test.ts` (4 tests), `hide-img-on-error.test.ts` (2 tests)
 - Added `toolbar-toggles.test.ts` (7 tests), `tour.test.ts` (13 tests), `recent-interactions.test.ts` (11 tests), `recent-searches.test.ts` (10 tests)
 - Expanded service-worker tests (50 → 95) with full coverage of advanced browser commands and omnibox palette
-- Removed redundant and trivial test cases across scorer and core test files
+- Pre-commit hook now runs `eslint --fix` auto-correction before build
+
+### License
+- **BSL 1.1** — Changed license from Apache-2.0 to Business Source License 1.1. Additional Use Grant: non-commercial, personal, educational, or evaluation use. Change Date: April 1, 2030 (converts back to Apache-2.0). Licensor: Dhruvin Rupesh Soni.
 
 ### Other
 - New shared modules: `command-registry.ts`, `web-search.ts`, `palette-messages.ts`, `hide-img-on-error.ts`
-- New settings: `commandPaletteEnabled`, `commandPaletteModes`, `commandPaletteInPopup`, `webSearchEngine`, `jiraSiteUrl`, `confluenceSiteUrl`, `advancedBrowserCommands`
+- New settings: `commandPaletteEnabled`, `commandPaletteModes`, `commandPaletteInPopup`, `webSearchEngine`, `jiraSiteUrl`, `confluenceSiteUrl`, `advancedBrowserCommands`, `unifiedScroll`
 - New manifest permissions: `sessions`, `windows` (required); `tabGroups`, `browsingData`, `topSites` (optional)
 - Settings tab for Command Palette configuration with per-mode toggles
-- Advanced Browser Commands permission prompt screenshot in docs
+- Documentation synced across CLAUDE.md, maintenance SKILL.md, and CHANGELOG
 
 ---
 
