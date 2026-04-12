@@ -1,6 +1,23 @@
-# E2E Testing — Playwright for Chrome Extensions
+# E2E Testing — Playwright for Chrome MV3 Extensions
 
-SmrutiCortex uses **Playwright** for end-to-end testing of the Chrome MV3 extension. This document covers the architecture, patterns, and operational commands for running, debugging, and extending E2E tests.
+SmrutiCortex uses **Playwright** for end-to-end testing of the Chrome MV3 extension. This document is a complete reference for the architecture, fixture design, troubleshooting, and patterns used — written to be reusable by anyone building E2E tests for Chrome extensions.
+
+---
+
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [Fixture Design](#fixture-design--the-extensionts-core)
+- [The withSlowMo Pattern](#the-withslowmo-pattern)
+- [Service Worker Lifecycle and Timer Cleanup](#service-worker-lifecycle-and-timer-cleanup)
+- [Test Inventory](#test-inventory)
+- [Test Data Strategy](#test-data-strategy)
+- [Content Scripts and the Isolated World](#content-scripts-and-the-isolated-world)
+- [Commands Reference](#commands-reference)
+- [Writing New Tests](#writing-new-tests)
+- [Troubleshooting](#troubleshooting)
+- [Network Dependency](#network-dependency)
+- [CI Considerations](#ci-considerations)
 
 ---
 
@@ -9,11 +26,14 @@ SmrutiCortex uses **Playwright** for end-to-end testing of the Chrome MV3 extens
 ```
 e2e/
 ├── fixtures/
-│   └── extension.ts           # Custom Playwright fixtures (browser launch, tour skip, page lifecycle)
-├── 01-tour.spec.ts            # Feature tour validation (runs FIRST, alphabetical ordering)
-├── popup-smoke.spec.ts        # Popup UI: load, search, settings, performance modal
-├── quick-search-smoke.spec.ts # Quick-search overlay, service worker health
-└── search-with-history.spec.ts # History indexing + search with real developer sites
+│   └── extension.ts               # Custom Playwright fixtures (browser, tour skip, page lifecycle, withSlowMo)
+├── 01-tour.spec.ts                # Feature tour validation (runs FIRST, alphabetical ordering)
+├── popup-smoke.spec.ts            # Popup UI: layout, search, settings modal, perf modal, hash routing, data actions
+├── popup-appearance.spec.ts       # Theme switching, display mode (list/cards), match highlighting
+├── keyboard.spec.ts               # Keyboard navigation: Esc, arrows, Enter, Tab
+├── quick-search-smoke.spec.ts     # Quick-search overlay: content script, Shadow DOM, functional search
+├── search-with-history.spec.ts    # History indexing + search with real developer sites
+└── empty-state.spec.ts            # Empty state: recent searches, recently visited sections
 ```
 
 ### Why Playwright for Chrome Extensions?
@@ -30,9 +50,26 @@ Chrome extensions can't run in headless mode (Chromium limitation for MV3). Play
 
 ## Fixture Design — The `extension.ts` Core
 
-The fixture is the heart of E2E testing. It solves three Chrome extension challenges:
+The fixture (`e2e/fixtures/extension.ts`) is the heart of E2E testing. It provides three fixtures with two different scopes:
 
-### 1. Worker-Scoped Browser Context
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Worker Scope (one per test file)                           │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ extensionContext  — BrowserContext with extension loaded│ │
+│  │ extensionId       — the extension's unique chrome ID   │ │
+│  └────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ Test Scope (one per test)                              │ │
+│  │ ┌──────────────────────────────────────────────────┐   │ │
+│  │ │ extPage — fresh tab, auto-closed after test      │   │ │
+│  │ │          wrapped with withSlowMo if SLOW_MO > 0  │   │ │
+│  │ └──────────────────────────────────────────────────┘   │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Why Worker-Scoped Browser Context?
 
 Each test file launches **one** Chrome instance (not one per test). Tests share the browser and open/close tabs.
 
@@ -43,103 +80,202 @@ Worker lifecycle (per test file):
   │  ├─ Test 2: open tab → assert → close tab ─┤
   │  ├─ Test N: open tab → assert → close tab ─┤
   │  └─ ...                                     │
-  └─ Close Chrome ──────────────────────────────┘
+  └─ Teardown: clear SW timers → close Chrome ──┘
 ```
 
 **Why not per-test browser?** Launching Chrome for each test causes:
 - Resource exhaustion (multiple Chrome instances competing for GPU/memory)
-- Hanging `context.close()` calls when the extension has active intervals (e.g., performance monitor polling)
 - 2-5x slower execution
+- Extension re-installation overhead on every test
 
-### 2. Tour Auto-Dismissal (`@BeforeAll` Pattern)
+### Tour Auto-Dismissal (the `@BeforeAll` Pattern)
 
-The popup auto-launches a feature tour on first visit (checks `chrome.storage.local` for `tourCompleted`). In a fresh Playwright browser, storage is empty, so the tour **always** fires.
-
-The tour creates overlay elements at **z-index 99999** that intercept all UI clicks — breaking every popup test.
+The popup auto-launches a 6-step feature tour on first visit (checks `chrome.storage.local` for `tourCompleted`). In a fresh Playwright browser, storage is empty, so the tour **always** fires. The tour creates overlay elements at **z-index 99999** that intercept all clicks — breaking every popup test.
 
 **Solution:** The fixture marks `tourCompleted: true` via the service worker immediately after browser launch:
 
 ```typescript
-// Inside extensionContext fixture (worker-scoped)
 await bg.evaluate(async () => {
   await chrome.storage.local.set({ tourCompleted: true });
 });
 ```
 
-This acts as JUnit's `@BeforeAll` — runs once per browser context, before any test.
+This acts as JUnit's `@BeforeAll` — runs once per browser context, before any test. The tour itself is validated in `01-tour.spec.ts`, which explicitly resets the flag.
 
-### 3. Test-Scoped Pages (`@BeforeEach` Pattern)
+### Test-Scoped Pages (the `@BeforeEach` / `@AfterEach` Pattern)
 
 Each test gets a fresh tab via the `extPage` fixture. The tab is automatically closed after the test:
 
 ```typescript
 extPage: async ({ extensionContext }, use) => {
-  const page = await extensionContext.newPage();  // @BeforeEach
+  const raw = await extensionContext.newPage();
+  const page = SLOW_MO > 0 ? withSlowMo(raw, SLOW_MO) : raw;
   await use(page);
-  await page.close();                              // @AfterEach
+  await raw.close();  // @AfterEach — always closes, even on failure
 },
 ```
 
 ---
 
-## Test Files — What Each One Covers
+## The `withSlowMo` Pattern
 
-### `01-tour.spec.ts` — Feature Tour (3 tests)
+This is a custom solution to a Playwright architectural limitation that is not documented anywhere.
 
-Runs **first** (alphabetical `01-` prefix). Validates the tour lifecycle before other tests skip it.
+### The Problem
 
-| Test | What It Verifies |
-|------|-----------------|
-| Full walkthrough | Tour auto-launches, all 6 steps are clickable (Next → Done), tour elements removed after Done |
-| Skip button | Skip button dismisses tour immediately, marks `tourCompleted: true` |
-| Already completed | When `tourCompleted` is already set, tour never appears (verified after 1000ms wait) |
+Playwright's built-in `slowMo` option (passed to `launchPersistentContext()`) adds a **synchronous delay** to every Chrome DevTools Protocol (CDP) command dispatched through its internal `_doSlowMo()` function in `node_modules/playwright-core/lib/server/dispatchers/dispatcher.js`.
 
-**Key pattern:** The tour test *resets* the `tourCompleted` flag before navigating:
+When `ctx.close()` is called, Playwright sends dozens of internal CDP commands (detach targets, stop workers, close pages). With `slowMo=400` and 20+ accumulated test targets, the close operation **blocks Node's event loop entirely** — meaning `setTimeout`, `Promise.race`, and even `process.exit()` cannot fire.
+
+### Why 1 Test Works But 26 Tests Hang
+
+With 1 test, Chrome has few internal CDP targets to close — the blocking is brief. With 26 tests, Chrome accumulates more targets (page handles, service worker evaluations, history entries), and the close takes long enough to trigger an indefinite block.
+
+### The Solution
+
+`slowMo` is **never** passed to `launchPersistentContext()`. Instead, the `withSlowMo()` wrapper adds `page.waitForTimeout(ms)` before each user-visible action on the `extPage` fixture:
 
 ```typescript
-await bg.evaluate(async () => {
-  await chrome.storage.local.remove('tourCompleted');
+function withSlowMo(page: Page, ms: number): Page {
+  const methods = [
+    'click', 'dblclick', 'fill', 'type', 'press', 'check', 'uncheck',
+    'selectOption', 'hover', 'goto', 'goBack', 'goForward', 'reload',
+  ] as const;
+  for (const name of methods) {
+    const orig = (page as any)[name].bind(page);
+    (page as any)[name] = async (...args: any[]) => {
+      await page.waitForTimeout(ms);
+      return orig(...args);
+    };
+  }
+  return page;
+}
+```
+
+This gives the same visual debugging experience (watch the browser step through actions) but leaves `ctx.close()` completely unaffected — it runs at full speed with no event loop blocking.
+
+### How to Use It
+
+```bash
+# Set SLOW_MO environment variable (milliseconds between each action)
+SLOW_MO=400 npx playwright test          # Linux/Mac
+$env:SLOW_MO=400; npx playwright test    # PowerShell
+set SLOW_MO=400 && npx playwright test   # cmd.exe
+```
+
+### Key Takeaway
+
+**Never pass `slowMo` directly to `launchPersistentContext()` for Chrome extension testing.** Use the page-level wrapper approach instead. This applies to any extension with active service worker timers (which is most production extensions).
+
+---
+
+## Service Worker Lifecycle and Timer Cleanup
+
+### The Problem
+
+Chrome's MV3 service workers have a lifecycle: they stay alive while there are active handles (timers, fetch events, message listeners). SmrutiCortex's service worker uses `setInterval()` for performance monitoring and index status polling. These timers prevent Chrome from shutting down when Playwright calls `ctx.close()`.
+
+### The Fix
+
+The fixture teardown clears **all** service worker timers before closing the browser. The technique exploits the fact that `setInterval()` returns sequentially increasing integer IDs:
+
+```typescript
+// Allocate one timer to discover the highest ID, then clear everything
+await sws[0].evaluate(() => {
+  const id = setInterval(() => {}, 1e9) as unknown as number;
+  for (let i = 1; i <= id; i++) {
+    clearInterval(i);
+    clearTimeout(i);
+  }
 });
 ```
 
-### `popup-smoke.spec.ts` — Popup UI (15 tests)
+### Full Teardown Sequence
 
-| Group | Tests | What It Verifies |
-|-------|-------|-----------------|
-| Page load | 4 | Brand text, logo, subtitle, footer hints, sort dropdown, tour button |
-| Search input | 3 | Text entry, clear button visibility, clear resets, autofocus attribute |
-| Settings modal | 7 | Open/close, 8 tab buttons, default tab, tab switching, Advanced diagnostics, Data management |
-| Performance modal | 1 | Opens from Advanced tab, shows metrics, closes cleanly |
+```typescript
+// 1. Clear all service worker timers
+const sws = ctx.serviceWorkers();
+if (sws.length > 0) {
+  await sws[0].evaluate(() => { /* clear all timers */ }).catch(() => {});
+}
 
-### `search-with-history.spec.ts` — Real-World Search (5 tests)
+// 2. Close all open pages
+for (const p of ctx.pages()) {
+  await p.close().catch(() => {});
+}
 
-Exercises the **full indexing → search pipeline** with globally-accessible developer sites. This is the closest to a real user's browsing → search flow.
+// 3. Close the browser context (now fast — no timers blocking)
+await ctx.close().catch(() => {});
 
-| Test | What It Verifies |
-|------|-----------------|
-| Browse + rebuild + verify | Visits 6 developer sites (GitHub, StackOverflow, MDN, Hacker News, Wikipedia, Google), triggers `REBUILD_INDEX`, confirms search returns results |
-| Live search results | Types a query in the popup input, verifies `<li>` result items render |
-| Sort switching | Toggles Best Match → Most Recent → Alphabetical → Best Match, results persist |
-| Multi-term search | Searches for 3 different terms (stackoverflow, mozilla, wikipedia), each yields results |
-| Clear button | Fill + clear resets input value and button visibility |
+// 4. Clean up the temp profile directory
+fs.rmSync(userDataDir, { recursive: true, force: true });
+```
 
-**Test data philosophy:** The URLs were chosen to match a developer's daily browsing pattern. Each has a **distinct title** (tokenized differently by the extension) and a **globally stable URL** that resolves anywhere. The extension indexes `title + url` via `tokenize()`, so these sites produce rich, searchable tokens.
+Each step is wrapped in `.catch(() => {})` or `try/catch` because the service worker or pages may already be gone if Chrome shut down early.
 
-**Timing strategy:** Each site visit uses `waitUntil: 'load'` + 800ms dwell time to ensure Chrome's history DB flushes the entry before the indexer reads `chrome.history.search()`. The `REBUILD_INDEX` message is synchronous (callback fires when indexing completes), so no additional wait is needed after rebuild.
+---
 
-### `quick-search-smoke.spec.ts` — Quick-Search & Service Worker (3 tests)
+## Test Inventory
 
-| Group | Tests | What It Verifies |
-|-------|-------|-----------------|
-| Content script | 1 | Service worker can reach content script via `chrome.tabs.sendMessage` |
-| Overlay lifecycle | 1 | `OPEN_INLINE_SEARCH` message causes `#smruti-cortex-overlay` to attach to DOM |
-| Service worker health | 1 | `PING` message from popup returns `{ status: 'ok' }` |
+| Spec File | Tests | Area | What It Validates |
+|-----------|-------|------|-------------------|
+| `01-tour.spec.ts` | 3 | Tour | Full 6-step walkthrough, skip button, no-relaunch guard |
+| `popup-smoke.spec.ts` | 18 | Popup | Layout, search, settings modal (8 tabs), perf modal, hash routing, data actions |
+| `popup-appearance.spec.ts` | 3 | Popup | Theme switching, display mode (list/cards), match highlighting |
+| `keyboard.spec.ts` | 4 | Popup | Esc clear, arrow navigation, Enter opens tab, ArrowUp returns to input |
+| `quick-search-smoke.spec.ts` | 6 | Overlay | Content script message, Shadow DOM overlay, search in overlay, Esc close, settings link |
+| `search-with-history.spec.ts` | 5 | Search | Browse 6 real sites, rebuild index, live search, sort, multi-term, clear |
+| `empty-state.spec.ts` | 2 | Popup | Recent history section, recent searches section |
+
+**Total: ~41 tests** across 7 spec files.
+
+---
+
+## Test Data Strategy
+
+### Real URLs for History Tests
+
+The `search-with-history.spec.ts` file uses 6 globally-accessible developer sites:
+
+| URL | Expected Search Term | Why This Site |
+|-----|---------------------|---------------|
+| `github.com` | `github` | Every developer's daily driver |
+| `stackoverflow.com` | `stackoverflow` | Distinct multi-word title, heavy page |
+| `developer.mozilla.org` | `mozilla` | MDN — canonical web reference |
+| `news.ycombinator.com` | `hacker` | Title says "Hacker News" — tests title tokenization |
+| `en.wikipedia.org` | `wikipedia` | Stable, fast, unique tokens |
+| `google.com` | `google` | Universal, always resolves |
+
+**Why real URLs instead of `example.com`?** The extension indexes `title + URL` via its tokenizer. Real sites produce diverse, realistic tokens that exercise the actual search pipeline. `example.com` has a single-word title and no real content — it wouldn't catch tokenization or scoring regressions.
+
+### `domcontentloaded` vs `load`
+
+History tests use `waitUntil: 'domcontentloaded'` instead of `'load'`:
+
+- `domcontentloaded` fires when the HTML is parsed and the `<title>` is set — this is all Chrome needs to record the history entry
+- `load` waits for every sub-resource (images, scripts, fonts), which can time out on heavy sites like StackOverflow (15s+ load times)
+
+### Dwell Time
+
+Each visit includes an 800ms `waitForTimeout` after navigation. This gives Chrome time to flush the history entry to its internal SQLite database before the indexer reads `chrome.history.search()`.
+
+### CI Guard with `test.skip()`
+
+On some CI environments (or very fresh profiles), Chrome's history API may not capture visits from a temporary profile. The tests guard against this:
+
+```typescript
+if (!searchResult?.results?.length) {
+  await popupPage.close();
+  test.skip();  // Skip gracefully — don't fail CI
+  return;
+}
+```
 
 ---
 
 ## Content Scripts and the Isolated World
 
-Chrome MV3 content scripts run in an **isolated world** — a separate JavaScript context from the page's main world. This has critical testing implications:
+Chrome MV3 content scripts run in an **isolated world** — a separate JavaScript context from the page's main world:
 
 ```
 Main World (page.evaluate sees this)     Isolated World (content script runs here)
@@ -162,6 +298,21 @@ Main World (page.evaluate sees this)     Isolated World (content script runs her
 **What doesn't work:**
 - `page.evaluate(() => window.__SMRUTI_QUICK_SEARCH_LOADED__)` — Returns `undefined` because the flag lives in the isolated world
 
+### Shadow DOM Testing
+
+The quick-search overlay uses Shadow DOM for style isolation. To interact with elements inside it:
+
+```typescript
+// Option 1: Evaluate inside the shadow root
+const hasInput = await page.evaluate(() => {
+  const host = document.querySelector('#smruti-cortex-overlay');
+  return host?.shadowRoot?.querySelector('.search-input') !== null;
+});
+
+// Option 2: Use Playwright's built-in shadow piercing (for visibility checks)
+await expect(page.locator('#smruti-cortex-overlay')).toBeAttached();
+```
+
 ---
 
 ## Commands Reference
@@ -175,7 +326,6 @@ npx playwright test
 ### Run with Visual Slow-Motion (Watch Mode)
 
 ```bash
-# Set SLOW_MO environment variable (milliseconds between each action)
 SLOW_MO=400 npx playwright test          # Linux/Mac
 $env:SLOW_MO=400; npx playwright test    # PowerShell
 set SLOW_MO=400 && npx playwright test   # cmd.exe
@@ -191,8 +341,8 @@ npx playwright test e2e/01-tour.spec.ts
 ### Run a Single Test by Name
 
 ```bash
-npx playwright test -g "renders brand"
-npx playwright test -g "tour auto-launches"
+npx playwright test -g "Esc clears"
+npx playwright test -g "completes all 6 steps"
 ```
 
 ### Debug a Failing Test (Step-by-Step)
@@ -201,7 +351,7 @@ npx playwright test -g "tour auto-launches"
 npx playwright test --debug
 ```
 
-This opens Playwright Inspector: a GUI debugger where you can step through each action, inspect locators, and see the browser state.
+Opens Playwright Inspector: a GUI debugger where you can step through each action, inspect locators, and see the browser state.
 
 ### View the HTML Report
 
@@ -209,11 +359,9 @@ This opens Playwright Inspector: a GUI debugger where you can step through each 
 npx playwright show-report
 ```
 
-Opens a detailed HTML report with screenshots, traces, and timing for every test. Reports are generated in `playwright-report/`.
+Opens a detailed HTML report with screenshots, traces, and timing for every test.
 
 ### View Failure Traces
-
-When a test fails, Playwright captures a trace file. View it with:
 
 ```bash
 npx playwright show-trace test-results/<test-name>/trace.zip
@@ -222,9 +370,9 @@ npx playwright show-trace test-results/<test-name>/trace.zip
 ### Run Specific Test Group
 
 ```bash
-npx playwright test -g "settings modal"
+npx playwright test -g "Keyboard"
+npx playwright test -g "Settings"
 npx playwright test -g "Quick-search"
-npx playwright test -g "Service worker"
 ```
 
 ---
@@ -278,7 +426,6 @@ test.describe('My feature tests', () => {
 test('service worker does X', async ({ extensionContext }) => {
   const bg = extensionContext.serviceWorkers()[0];
   const result = await bg.evaluate(async () => {
-    // This runs inside the service worker context
     return await chrome.storage.local.get('someKey');
   });
   expect(result).toHaveProperty('someKey', 'expectedValue');
@@ -288,18 +435,22 @@ test('service worker does X', async ({ extensionContext }) => {
 ### 4. Test Content Script Effects
 
 ```typescript
-test('content script creates DOM element', async ({ extPage: page, extensionContext }) => {
+test('content script creates overlay', async ({ extPage: page, extensionContext }) => {
   await page.goto('https://example.com', { waitUntil: 'load' });
-  await page.waitForTimeout(1500); // Wait for content script injection
 
-  // Trigger via service worker
+  // Wait for content script to be ready (poll via SW message)
   const bg = extensionContext.serviceWorkers()[0];
-  await bg.evaluate(async () => {
-    const tabs = await chrome.tabs.query({ url: 'https://example.com/*' });
-    await chrome.tabs.sendMessage(tabs[0].id!, { type: 'OPEN_INLINE_SEARCH' });
-  });
+  await bg.evaluate(async (url: string) => {
+    const tabs = await chrome.tabs.query({ url });
+    for (let i = 0; i < 15; i++) {
+      const r = await new Promise(resolve => {
+        chrome.tabs.sendMessage(tabs[0].id!, { type: 'OPEN_INLINE_SEARCH' }, resolve);
+      });
+      if (r?.success) return;
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }, 'https://example.com/*');
 
-  // Verify DOM effect (shared between main world and isolated world)
   await expect(page.locator('#smruti-cortex-overlay')).toBeAttached({ timeout: 5000 });
 });
 ```
@@ -310,42 +461,15 @@ test('content script creates DOM element', async ({ extPage: page, extensionCont
 
 ### Tests Hang After All Pass (Process Never Exits)
 
-This is the most critical operational issue with Playwright + Chrome extensions. The symptom is: all tests print `ok`, but no summary line appears and the Node process never exits.
+This is the most critical operational issue with Playwright + Chrome extensions. The symptom: all tests print `ok`, but no summary line appears and the Node process never exits.
 
 **Root cause chain (three layers):**
 
-1. **Service worker timers keep Chrome alive.** The extension's service worker runs `setInterval()` for performance monitoring and index status polling. Chrome's service worker lifecycle won't terminate the SW while active timers exist, which prevents Chrome from shutting down when Playwright calls `ctx.close()`.
+1. **Service worker timers keep Chrome alive.** See [Service Worker Lifecycle and Timer Cleanup](#service-worker-lifecycle-and-timer-cleanup).
+2. **Playwright's built-in `slowMo` blocks the event loop.** See [The withSlowMo Pattern](#the-withslowmo-pattern).
+3. **Orphaned Chrome processes compound the problem.** Each interrupted/hung test run leaves behind Playwright Chromium processes.
 
-2. **Playwright's built-in `slowMo` blocks the event loop.** When `slowMo` is passed to `launchPersistentContext()`, Playwright adds a synchronous delay to every CDP (Chrome DevTools Protocol) command dispatched through its internal `_doSlowMo()` in the dispatcher layer (`node_modules/playwright-core/lib/server/dispatchers/dispatcher.js`). During `ctx.close()`, Playwright sends dozens of internal CDP commands (detach targets, stop workers, close pages). With `slowMo=400` and 20+ accumulated test targets, the close operation **blocks Node's event loop entirely** — meaning `setTimeout`, `Promise.race`, and even `process.exit()` cannot fire.
-
-3. **Orphaned Chrome processes compound the problem.** Each interrupted/hung test run leaves behind Playwright Chromium processes. These accumulate over debugging sessions and consume system resources, making subsequent runs more likely to hang.
-
-**Why 1 test works but 26 tests hang:** With 1 test, Chrome has few internal CDP targets to close — the blocking is brief. With 26 tests, Chrome accumulates more targets (page handles, service worker evaluations, history entries), and the close takes long enough to trigger an indefinite block.
-
-**The fix (implemented in `e2e/fixtures/extension.ts`):**
-
-SlowMo is **not** passed to Playwright's `launchPersistentContext()`. Instead, the `withSlowMo()` wrapper adds `page.waitForTimeout(ms)` before each user-visible action (click, fill, goto, etc.) on the `extPage` fixture. This gives the same visual debugging experience but leaves `ctx.close()` completely unaffected — it runs at full speed.
-
-Additionally, the fixture teardown clears all service worker timers before closing:
-
-```typescript
-await sws[0].evaluate(() => {
-  const id = setInterval(() => {}, 1e9) as unknown as number;
-  for (let i = 1; i <= id; i++) { clearInterval(i); clearTimeout(i); }
-});
-```
-
-**If you still get a hang after an interrupted run:**
-
-```bash
-# Kill orphaned Playwright Chromium processes (NOT your personal Chrome)
-Get-Process chrome | Where-Object { $_.Path -like '*ms-playwright*' } | Stop-Process -Force
-
-# Clean temp profiles
-Remove-Item "$env:TEMP\smruti-cortex-e2e-*" -Recurse -Force
-```
-
-**Key takeaway:** Never pass `slowMo` directly to `launchPersistentContext()` for Chrome extension testing. Use the page-level wrapper approach instead.
+**The fix is already implemented** in `e2e/fixtures/extension.ts`. If you still get a hang after an interrupted run, clean up orphaned processes (see below).
 
 ### Tour Overlay Blocks Clicks
 
@@ -376,7 +500,7 @@ Remove-Item "$env:TEMP\smruti-cortex-e2e-*" -Recurse -Force
 pkill -f "ms-playwright" ; rm -rf /tmp/smruti-cortex-e2e-*
 ```
 
-If you only want to kill the Playwright test runner (which auto-closes its Chromium):
+If you only want to kill the Playwright test runner:
 
 ```bash
 # PowerShell — kill by PID (shown in terminal output)
@@ -407,5 +531,6 @@ All sites are globally accessible and stable. `example.com` is IANA's reserved d
 
 - Chrome extensions **require headed mode** (`headless: false`). CI runners need a display server (Xvfb on Linux).
 - `workers: 1` is mandatory — extensions share a single browser state.
-- Build time (~30s) + test time (~20s) = ~50s total for `npm run test:e2e`.
+- Build time (~30s) + test time (~20-30s) = ~50-60s total for `npm run test:e2e`.
 - HTML report is generated in `playwright-report/` — archive as a CI artifact.
+- History tests may skip on CI if Chrome's temp profile doesn't flush history entries. This is expected behavior, not a failure.
