@@ -59,11 +59,7 @@
     "husky": "^9.1.7",
     "jsdom": "^24.1.0",
     "rimraf": "^5.0.0",
-    "ts-node": "^10.9.1",
     "typescript": "^5.6.0",
     "vitest": "^4.0.16"
-  },
-  "dependencies": {
-    "webextension-polyfill": "^0.10.0"
   }
 }

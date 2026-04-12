@@ -601,8 +601,6 @@ const MEMORY_LIMIT_MB = 512;  // Hard cap: stop AI features if extension exceeds
 const MAX_SESSION_EMBEDDINGS = 5000; // Fallback cap when performance.memory is unavailable
 let sessionEmbeddingCount = 0;
 
-export function incrementSessionEmbeddingCount(): void { sessionEmbeddingCount++; }
-
 export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: number } {
   try {
     // performance.memory is available in Chrome/Edge (non-standard but works in extensions)
