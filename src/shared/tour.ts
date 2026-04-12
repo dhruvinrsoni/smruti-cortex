@@ -199,7 +199,7 @@ export function runTour(
       tooltip.remove();
       highlight.remove();
       document.removeEventListener('keydown', onKeydown, true);
-      markTourCompleted().catch(() => {});
+      markTourCompleted().catch(e => console.debug('[SmrutiCortex:tour] Failed to mark tour completed', e));
       resolve();
     }
 

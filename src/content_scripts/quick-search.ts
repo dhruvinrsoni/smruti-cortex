@@ -2740,9 +2740,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         break;
       case 'fullscreen':
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(e => log.debug('command', 'exitFullscreen failed', e));
         } else {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(e => log.debug('command', 'requestFullscreen failed', e));
         }
         break;
       case 'tour':
@@ -3489,7 +3489,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             btn!.style.color = '#10b981';
             btn!.style.borderColor = '#10b981';
           } else {
-            navigator.clipboard.writeText(resp.reportBody || '').catch(() => {});
+            navigator.clipboard.writeText(resp.reportBody || '').catch(e => log.debug('bugReport', 'Clipboard write failed', e));
             btn!.textContent = 'Copied!';
             btn!.style.color = '#10b981';
             btn!.style.borderColor = '#10b981';
@@ -3529,7 +3529,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     clearBtn.title = 'Clear recent searches';
     clearBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      clearRecentSearches().then(() => container.remove()).catch(() => {});
+      clearRecentSearches().then(() => container.remove()).catch(e => log.debug('recentSearches', 'Failed to clear', e));
     });
     header.appendChild(clearBtn);
     container.appendChild(header);
@@ -3583,7 +3583,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     clearBtn.title = 'Clear recently visited';
     clearBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      clearRecentInteractions().then(() => container.remove()).catch(() => {});
+      clearRecentInteractions().then(() => container.remove()).catch(e => log.debug('recentHistory', 'Failed to clear', e));
     });
     header.appendChild(clearBtn);
     container.appendChild(header);
@@ -3742,7 +3742,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             const section = buildRecentInteractionsSection(entries.slice(0, 5));
             resultsEl.insertBefore(section, resultsEl.firstChild);
           }
-        }).catch(() => {});
+        }).catch(e => log.debug('loadRecent', 'Failed to load recent interactions', e));
       }
 
       // Show recent searches above results when enabled
@@ -3752,7 +3752,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             const section = buildRecentSearchesSection(entries.slice(0, 5));
             resultsEl.insertBefore(section, resultsEl.firstChild);
           }
-        }).catch(() => {});
+        }).catch(e => log.debug('loadRecent', 'Failed to load recent searches', e));
       }
       
       perfLog('loadRecentHistory completed', t0);
@@ -4148,7 +4148,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }).catch(() => {
       showToast('❌ Copy failed', 'error');
     });
-    addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
+    addRecentInteraction(result.url, result.title || '', 'copy').catch(e => log.debug('copyMarkdown', 'Failed to record interaction', e));
   }
 
   function copyHtmlLink(index: number): void {
@@ -4160,7 +4160,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }).catch(() => {
       showToast('📋 Copied (text only)', 'info');
     });
-    addRecentInteraction(result.url, result.title || '', 'copy').catch(() => {});
+    addRecentInteraction(result.url, result.title || '', 'copy').catch(e => log.debug('copyHtml', 'Failed to record interaction', e));
   }
 
   // ===== TAB NAVIGATION =====
@@ -4455,11 +4455,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     const query = inputEl?.value?.trim();
     if (query) {
-      addRecentSearch(query, result.url).catch(() => {});
+      addRecentSearch(query, result.url).catch(e => log.debug('openResult', 'Failed to record recent search', e));
     }
 
     const action = background ? 'background-tab' : 'click';
-    addRecentInteraction(result.url, result.title || '', action).catch(() => {});
+    addRecentInteraction(result.url, result.title || '', action).catch(e => log.debug('openResult', 'Failed to record interaction', e));
 
     hideOverlay();
 
