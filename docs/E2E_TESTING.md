@@ -308,11 +308,44 @@ test('content script creates DOM element', async ({ extPage: page, extensionCont
 
 ## Troubleshooting
 
-### Tests Hang After N Tests
+### Tests Hang After All Pass (Process Never Exits)
 
-**Cause:** `slowMo` + extension lifecycle interactions can deadlock Chrome.
+This is the most critical operational issue with Playwright + Chrome extensions. The symptom is: all tests print `ok`, but no summary line appears and the Node process never exits.
 
-**Fix:** Remove or reduce `SLOW_MO`. The default (0) is recommended for CI. Use `SLOW_MO=200` for watching.
+**Root cause chain (three layers):**
+
+1. **Service worker timers keep Chrome alive.** The extension's service worker runs `setInterval()` for performance monitoring and index status polling. Chrome's service worker lifecycle won't terminate the SW while active timers exist, which prevents Chrome from shutting down when Playwright calls `ctx.close()`.
+
+2. **Playwright's built-in `slowMo` blocks the event loop.** When `slowMo` is passed to `launchPersistentContext()`, Playwright adds a synchronous delay to every CDP (Chrome DevTools Protocol) command dispatched through its internal `_doSlowMo()` in the dispatcher layer (`node_modules/playwright-core/lib/server/dispatchers/dispatcher.js`). During `ctx.close()`, Playwright sends dozens of internal CDP commands (detach targets, stop workers, close pages). With `slowMo=400` and 20+ accumulated test targets, the close operation **blocks Node's event loop entirely** — meaning `setTimeout`, `Promise.race`, and even `process.exit()` cannot fire.
+
+3. **Orphaned Chrome processes compound the problem.** Each interrupted/hung test run leaves behind Playwright Chromium processes. These accumulate over debugging sessions and consume system resources, making subsequent runs more likely to hang.
+
+**Why 1 test works but 26 tests hang:** With 1 test, Chrome has few internal CDP targets to close — the blocking is brief. With 26 tests, Chrome accumulates more targets (page handles, service worker evaluations, history entries), and the close takes long enough to trigger an indefinite block.
+
+**The fix (implemented in `e2e/fixtures/extension.ts`):**
+
+SlowMo is **not** passed to Playwright's `launchPersistentContext()`. Instead, the `withSlowMo()` wrapper adds `page.waitForTimeout(ms)` before each user-visible action (click, fill, goto, etc.) on the `extPage` fixture. This gives the same visual debugging experience but leaves `ctx.close()` completely unaffected — it runs at full speed.
+
+Additionally, the fixture teardown clears all service worker timers before closing:
+
+```typescript
+await sws[0].evaluate(() => {
+  const id = setInterval(() => {}, 1e9) as unknown as number;
+  for (let i = 1; i <= id; i++) { clearInterval(i); clearTimeout(i); }
+});
+```
+
+**If you still get a hang after an interrupted run:**
+
+```bash
+# Kill orphaned Playwright Chromium processes (NOT your personal Chrome)
+Get-Process chrome | Where-Object { $_.Path -like '*ms-playwright*' } | Stop-Process -Force
+
+# Clean temp profiles
+Remove-Item "$env:TEMP\smruti-cortex-e2e-*" -Recurse -Force
+```
+
+**Key takeaway:** Never pass `slowMo` directly to `launchPersistentContext()` for Chrome extension testing. Use the page-level wrapper approach instead.
 
 ### Tour Overlay Blocks Clicks
 
@@ -330,29 +363,27 @@ test('content script creates DOM element', async ({ extPage: page, extensionCont
 
 > **WARNING:** Never use `Get-Process -Name "chrome*" | Stop-Process -Force`. This kills ALL Chrome processes including your personal browser and PWA windows.
 
-Playwright uses its own Chromium binary (separate from your Chrome). The fixture creates an isolated temp profile (`smruti-cortex-e2e-*` in your temp directory) so it never touches your personal Chrome data.
+Playwright uses its own Chromium binary at `%LOCALAPPDATA%\ms-playwright\chromium-*\` (separate from `C:\Program Files\Google\Chrome\`). The fixture creates an isolated temp profile (`smruti-cortex-e2e-*`) so it never touches your personal Chrome data.
 
-If Playwright hangs, kill the **node process** running Playwright — this will automatically close its Chromium:
+**Full cleanup (safe — only kills Playwright's Chromium, not your Chrome):**
 
 ```bash
-# PowerShell — kill only the Playwright runner (not your Chrome)
-Get-Process -Name "node" | Where-Object { $_.CommandLine -match "playwright" } | Stop-Process -Force
+# PowerShell — kill orphaned Playwright Chromium + clean temp profiles
+Get-Process chrome | Where-Object { $_.Path -like '*ms-playwright*' } | Stop-Process -Force
+Remove-Item "$env:TEMP\smruti-cortex-e2e-*" -Recurse -Force
 
-# Or kill by specific PID (shown in the terminal output)
+# Linux/Mac
+pkill -f "ms-playwright" ; rm -rf /tmp/smruti-cortex-e2e-*
+```
+
+If you only want to kill the Playwright test runner (which auto-closes its Chromium):
+
+```bash
+# PowerShell — kill by PID (shown in terminal output)
 Stop-Process -Id <PID> -Force
 
 # Linux/Mac
 pkill -f "playwright test"
-```
-
-Orphaned temp profiles can be cleaned with:
-
-```bash
-# PowerShell
-Remove-Item "$env:TEMP\smruti-cortex-e2e-*" -Recurse -Force
-
-# Linux/Mac
-rm -rf /tmp/smruti-cortex-e2e-*
 ```
 
 ---
