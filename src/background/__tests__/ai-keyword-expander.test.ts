@@ -48,12 +48,6 @@ describe('ai-keyword-expander', () => {
     vi.stubGlobal('fetch', vi.fn());
   });
 
-  async function importModule() {
-    // We don't resetModules here because the top-level mocks are sufficient
-    // and the module's internal state (lastExpansionSource) is useful to test
-    return import('../ai-keyword-expander');
-  }
-
   // Reset module state for tests that need clean lastExpansionSource
   async function importFreshModule() {
     vi.resetModules();

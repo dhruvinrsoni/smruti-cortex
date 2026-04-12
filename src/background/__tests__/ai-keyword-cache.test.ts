@@ -360,7 +360,7 @@ describe('ai-keyword-cache module', () => {
       // Make storage.local.set throw an error inside the callback by rejecting the promise
       // The implementation wraps set() in a Promise — to trigger the catch we throw inside the callback
       vi.mocked(browserAPI.storage.local.set).mockImplementationOnce(
-        (_items: unknown, cb?: () => void) => {
+        (_items: unknown, _cb?: () => void) => {
           // Throw synchronously — this will propagate into the async try block via the Promise executor
           throw new Error('QuotaExceededError');
         }

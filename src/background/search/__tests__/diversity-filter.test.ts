@@ -1,6 +1,6 @@
 // Tests for diversity-filter.ts — normalizeUrl and applyDiversityFilter
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mockLogger, makeItem } from '../../../__test-utils__';
 
 vi.mock('../../../core/logger', () => mockLogger());

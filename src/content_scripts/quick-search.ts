@@ -42,7 +42,7 @@ import { type AppSettings, DisplayMode } from '../core/settings';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
-import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import { getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
 import {
   type PaletteCommand,
   ALL_COMMANDS,
@@ -51,7 +51,6 @@ import {
   getCommandsByTier,
   getAvailableCommands,
   getCycleValueFromCommand,
-  getCurrentValueLabel,
   saveRecentCommand,
   getWebSearchPrefixHintLines,
   getWebSearchEngineDisplayName,
@@ -208,15 +207,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  let contextRecoveryAttempts = 0;
-
   // No-reload reconnect: re-establish port and retry search without reloading
   // the page. After an extension update, the service worker re-injects this
   // content script automatically (via chrome.scripting). This function handles
   // the content-script side: reset recovery state, reopen the port, and
   // retry the current query so the user never loses their underlying page.
   function attemptNoReloadReconnect(): void {
-    contextRecoveryAttempts = 0;
     if (isExtensionContextValid()) {
       openSearchPort();
       const query = inputEl?.value?.trim() || '';
@@ -1407,7 +1403,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   const QS_SIZE_KEY = 'quickSearchSize';
   const QS_MIN_W = 400;
   const QS_MIN_H = 300;
-  const QS_DEFAULT_W = 680;
 
   function clampWidth(w: number): number {
     return clampWidthPure(w, QS_MIN_W, window.innerWidth);
@@ -1423,7 +1418,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     } catch { /* ignore */ }
   }
 
-  function setupResizeHandles(container: HTMLElement, resultsEl: HTMLElement): void {
+  function setupResizeHandles(container: HTMLElement, _resultsEl: HTMLElement): void {
     const handleBottom = document.createElement('div');
     handleBottom.className = 'resize-handle-bottom';
     const handleCorner = document.createElement('div');
@@ -2383,7 +2378,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     executeCommand(cmd);
   }
 
-  function showConfirmation(cmd: PaletteCommand, commands: PaletteCommand[]): void {
+  function showConfirmation(cmd: PaletteCommand, _commands: PaletteCommand[]): void {
     if (!resultsEl) {return;}
     confirmingCommand = cmd;
 

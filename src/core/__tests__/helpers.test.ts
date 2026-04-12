@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // Note: browserAPI is a module-level IIFE evaluated at import time.
 // Test detectBrowser(), isFirefox(), isChromium(), and getBrowserCompatibility() directly.

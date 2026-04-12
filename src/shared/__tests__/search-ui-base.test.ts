@@ -25,7 +25,6 @@ import {
   copyHtmlLinkToClipboard,
   type SearchResult,
   type FocusableGroup,
-  type AIStatus,
 } from '../search-ui-base';
 
 // ---------------------------------------------------------------------------

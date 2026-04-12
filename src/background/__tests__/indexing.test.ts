@@ -74,7 +74,7 @@ vi.mock('../../core/constants', () => ({
 }));
 
 // Import after mocks are set up
-import { mergeMetadata, generateItemEmbedding, generateBatchEmbeddings, ingestHistory, performFullRebuild, clearBookmarkFlags, performBookmarksIndex, performIncrementalHistoryIndexManual } from '../indexing';
+import { mergeMetadata, generateItemEmbedding, generateBatchEmbeddings, ingestHistory, performFullRebuild, clearBookmarkFlags, performBookmarksIndex } from '../indexing';
 import { getIndexedItem, saveIndexedItem, getSetting, setSetting, clearIndexedDB } from '../database';
 import { tokenize } from '../search/tokenizer';
 

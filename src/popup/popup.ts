@@ -636,7 +636,6 @@ function initializePopup() {
   // Popup command palette state
   let popupPaletteMode: PopupPaletteMode = 'history';
   let popupSelectedIndex = 0;
-  let popupConfirmingCommand: PaletteCommand | null = null;
   let popupWindowPickerActive = false;
 
   function getPopupPaletteSelectableRows(): HTMLElement[] {
@@ -1421,8 +1420,6 @@ function initializePopup() {
 
   function debounceSearchLocal(q: string) {
     syncClearButton();
-    popupConfirmingCommand = null;
-
     const { mode, query } = detectPopupMode(q.trim());
     popupPaletteMode = mode;
 
