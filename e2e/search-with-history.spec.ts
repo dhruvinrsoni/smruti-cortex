@@ -150,6 +150,48 @@ test.describe('History > Index & Search', () => {
     }
   });
 
+  test('result count updates after search', async ({ extPage: page, extensionId }) => {
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await page.waitForLoadState('load');
+
+    const check = await sendToServiceWorker(page, { type: 'SEARCH_QUERY', query: 'com' });
+    if (!check?.results?.length) { test.skip(); return; }
+
+    await page.locator('#search-input').fill('com');
+    const resultItems = page.locator('#results li');
+    await expect(resultItems.first()).toBeVisible({ timeout: 5000 });
+
+    // Result count should show "<N> result(s)" after search completes
+    await expect(page.locator('#result-count')).toContainText(/\d+\s+result/, { timeout: 3000 });
+  });
+
+  test('highlight matches renders mark tags', async ({ extPage: page, extensionId, extensionContext }) => {
+    // SettingsManager stores all settings under 'smrutiCortexSettings' as one object.
+    // In a fresh profile this key may be empty — seed highlightMatches explicitly.
+    const bg = extensionContext.serviceWorkers()[0];
+    await bg.evaluate(async () => {
+      const result: any = await new Promise(resolve =>
+        (globalThis as any).chrome.storage.local.get(['smrutiCortexSettings'], resolve),
+      );
+      const current = result.smrutiCortexSettings || {};
+      current.highlightMatches = true;
+      await (globalThis as any).chrome.storage.local.set({ smrutiCortexSettings: current });
+    });
+
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await page.waitForLoadState('load');
+
+    const check = await sendToServiceWorker(page, { type: 'SEARCH_QUERY', query: 'github' });
+    if (!check?.results?.length) { test.skip(); return; }
+
+    await page.locator('#search-input').fill('github');
+    const resultItems = page.locator('#results li');
+    await expect(resultItems.first()).toBeVisible({ timeout: 5000 });
+
+    // Wait for Playwright's auto-retry to find at least one <mark> highlight
+    await expect(page.locator('#results mark').first()).toBeAttached({ timeout: 3000 });
+  });
+
   test('clear resets input and hides button', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.waitForLoadState('load');

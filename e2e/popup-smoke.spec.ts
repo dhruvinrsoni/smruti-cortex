@@ -137,6 +137,17 @@ test.describe('Popup > Settings', () => {
     await expect(page.locator('#export-index-btn')).toBeVisible();
     await expect(page.locator('#import-index-btn')).toBeVisible();
   });
+
+  test('Data tab shows storage and health status', async ({ extPage: page, extensionId }) => {
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await page.waitForLoadState('load');
+    await page.locator('#settings-button').click();
+    await page.locator('.settings-tab[data-tab="data"]').click();
+
+    await expect(page.locator('#storage-used')).toBeVisible();
+    await expect(page.locator('#health-indicator')).toBeVisible();
+    await expect(page.locator('#health-text')).toBeVisible();
+  });
 });
 
 test.describe('Popup > Perf Modal', () => {

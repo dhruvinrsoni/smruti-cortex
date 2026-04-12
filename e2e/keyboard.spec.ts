@@ -108,4 +108,31 @@ test.describe('Keyboard > Results Navigation', () => {
     const focused = await page.evaluate(() => document.activeElement?.id);
     expect(focused).toBe('search-input');
   });
+
+  test('Esc from results clears input and returns focus', async ({
+    extPage: page, extensionId, extensionContext,
+  }) => {
+    if (indexReady === null) indexReady = await ensureIndexHasData(extensionContext, extensionId);
+    if (!indexReady) { test.skip(); return; }
+
+    await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await page.waitForLoadState('load');
+
+    const input = page.locator('#search-input');
+    await input.fill('google');
+
+    const results = page.locator('#results li');
+    await expect(results.first()).toBeVisible({ timeout: 5000 });
+
+    // Navigate to a result
+    await page.keyboard.press('ArrowDown');
+    await expect(results.first()).toHaveClass(/active/, { timeout: 2000 });
+
+    // Escape should clear the query and return focus to input
+    await page.keyboard.press('Escape');
+    await expect(input).toHaveValue('');
+
+    const focused = await page.evaluate(() => document.activeElement?.id);
+    expect(focused).toBe('search-input');
+  });
 });
