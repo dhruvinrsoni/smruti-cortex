@@ -137,7 +137,7 @@ console.log('✅ CHANGELOG.md updated\n');
 // ===== Step 5: Run tests =====
 console.log('🧪 Running tests...\n');
 try {
-  run('node node_modules/.bin/vitest run');
+  run('npx vitest run');
   console.log('\n✅ All tests passed\n');
 } catch {
   console.error('\n❌ Tests failed. Fix before releasing.');
@@ -149,7 +149,7 @@ try {
 // ===== Step 6: Build =====
 console.log('🏗️  Running production build...\n');
 try {
-  run('node scripts/sync-version.mjs && node node_modules/.bin/rimraf dist && node node_modules/.bin/tsc --project tsconfig.json && node scripts/copy-static.mjs && node scripts/esbuild-prod.mjs');
+  run('node scripts/sync-version.mjs && npx rimraf dist && npx tsc --project tsconfig.json && node scripts/copy-static.mjs && node scripts/esbuild-prod.mjs');
   console.log('\n✅ Production build passed\n');
 } catch {
   console.error('\n❌ Build failed. Fix before releasing.');
