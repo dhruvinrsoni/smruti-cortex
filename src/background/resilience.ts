@@ -198,20 +198,22 @@ export function startHealthMonitoring(): void {
     // Run initial check
     checkHealth().then(status => {
         if (!status.isHealthy) {
-            // Auto-heal on startup if issues found
             selfHeal('Startup health check failed');
         }
+    }).catch(err => {
+        logger.warn('startHealthMonitoring', 'Initial health check failed', err);
     });
     
     // Set up periodic checks
-    healthCheckTimer = setInterval(async () => {
-        const status = await checkHealth();
-        
-        // Auto-heal if index is empty (critical issue)
-        if (status.indexedItems === 0 && status.databaseOpen) {
-            logger.warn('startHealthMonitoring', '⚠️ Empty index detected, triggering self-heal');
-            await selfHeal('Empty index detected during periodic check');
-        }
+    healthCheckTimer = setInterval(() => {
+        checkHealth().then(status => {
+            if (status.indexedItems === 0 && status.databaseOpen) {
+                logger.warn('startHealthMonitoring', '⚠️ Empty index detected, triggering self-heal');
+                return selfHeal('Empty index detected during periodic check');
+            }
+        }).catch(err => {
+            logger.warn('startHealthMonitoring', 'Periodic health check failed', err);
+        });
     }, HEALTH_CHECK_INTERVAL_MS);
 }
 
