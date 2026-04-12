@@ -29,11 +29,15 @@ Navigate here first — don't broad-search when the location is known:
 | Web search module | `src/shared/web-search.ts` (`??` prefix engines, URL builders) |
 | Palette toast formatting | `src/shared/palette-messages.ts` |
 | CSP-safe img error handler | `src/shared/hide-img-on-error.ts` |
-| All test files | `src/**/__tests__/*.test.ts` |
+| All unit test files | `src/**/__tests__/*.test.ts` |
+| E2E test specs | `e2e/*.spec.ts` (7 Playwright specs, 45 tests) |
+| E2E fixture | `e2e/fixtures/extension.ts` (browser context, SW setup, `withSlowMo` wrapper) |
+| E2E testing guide | `docs/E2E_TESTING.md` |
 | Shared test utilities | `src/__test-utils__/` (chrome mock builder, logger mock, settings mock, factories, lifecycle) |
 | Popup pure logic | `src/popup/popup-utils.ts` (extracted from popup.ts for testability) |
 | Quick-search pure logic | `src/content_scripts/quick-search-utils.ts` (extracted from quick-search.ts for testability) |
 | Vitest config | `vitest.config.ts` |
+| Playwright config | `playwright.config.ts` |
 | Build scripts | `scripts/esbuild-*.mjs` |
 | Store submission docs | `docs/store-submissions/vX.Y.Z-chrome-web-store.md` |
 
@@ -43,8 +47,10 @@ Navigate here first — don't broad-search when the location is known:
 
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm test` | Run full test suite (1,252+ tests, 47 files) | ~65s |
-| `npx vitest run --coverage --pool=forks` | Tests + v8 coverage report | ~30s |
+| `npm test` | Run full unit test suite (1,252+ tests, 47 files) | ~60s |
+| `npx playwright test` | Run E2E tests (45 tests, 7 specs, requires `npm run build:prod` first) | ~60s |
+| `$env:SLOW_MO=400; npx playwright test` | E2E tests in slow-mo (visible automation) | ~5min |
+| `npx vitest run --coverage --pool=forks` | Unit tests + v8 coverage report | ~30s |
 | `npm run lint` | ESLint check | ~5s |
 | `npm run build:prod` | Production build (minified) | ~30s |
 | `npm run build:dev` | Dev build (source maps) | ~10s |
@@ -100,8 +106,9 @@ Prefer in this order:
 - **Tests run fast:** `npm test` finishes in ~28s. Always run after code changes before committing.
 - **Build is slow:** `npm run build:prod` takes ~30s + pre-commit hook adds another run on commit. Verify logic via `npm test` first.
 - **Chrome APIs require mocking:** jsdom has no `chrome.*`. Every test that touches Chrome APIs must mock them. See `.github/skills/testing/SKILL.md` patterns.
-- **90%+ line coverage:** 1,252+ tests across 47 test files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
+- **90%+ line coverage:** 1,252+ unit tests across 47 test files + 45 Playwright E2E tests across 7 spec files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
 - **Shared test utilities:** `src/__test-utils__/` provides composable Chrome API mocks, Logger/Settings mocks, data factories, and lifecycle helpers — use these instead of inline mocks.
+- **E2E tests need a build:** Playwright loads the built extension from `dist/`. Run `npm run build:prod` before `npx playwright test`. See `docs/E2E_TESTING.md` for fixture architecture and troubleshooting.
 
 ### Parallelization
 
@@ -133,7 +140,7 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 2. Use the **Critical File Map** above to locate the relevant source file
 3. Load the appropriate **domain skill** if the bug is in a complex area (search, AI, settings)
 4. Make the **minimal fix** in `src/` — no refactoring, no unrelated changes
-5. Run `npm test` — all tests must pass (1,252+)
+5. Run `npm test` — all 1,252+ unit tests must pass
 6. Run `npm run build:prod` — must succeed with zero errors
 7. Commit: `git commit -m "fix: <concise description>"`
 8. If shipping immediately: `node scripts/release.mjs patch`
