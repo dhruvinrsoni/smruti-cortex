@@ -9,6 +9,11 @@ dist/
 coverage/
 *.lcov
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
 # Release artifacts
 release/
 *.zip

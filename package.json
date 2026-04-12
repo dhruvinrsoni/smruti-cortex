@@ -38,6 +38,7 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "npm run build:prod && npx playwright test",
     "start:watch": "node ./scripts/esbuild-dev.mjs --watch",
     "docker:build": "sh ./scripts/docker-build-and-extract.sh",
     "docker:dev": "node ./scripts/docker-compose.mjs run --rm dev",
@@ -47,6 +48,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/chrome": "^0.0.188",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
