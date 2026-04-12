@@ -173,8 +173,8 @@ if (DRY_RUN) {
 // ===== Step 7: Commit, tag, push =====
 console.log('📦 Committing release...\n');
 run('git add package.json manifest.json CHANGELOG.md');
-run(`git commit -m "chore: release v${newVersion}" --no-verify`);
-run(`git tag -a v${newVersion} -m "SmrutiCortex v${newVersion}"`);
+run(`git commit -m "chore: release v${newVersion}" --no-verify --no-gpg-sign`);
+run(`git tag -a v${newVersion} -m "SmrutiCortex v${newVersion}" --no-sign`);
 
 console.log('🚀 Pushing to origin...\n');
 run('git push origin main');
