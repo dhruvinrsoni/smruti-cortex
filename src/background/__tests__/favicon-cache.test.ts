@@ -309,7 +309,7 @@ describe('favicon-cache', () => {
 
     it('should return null and not throw when IDB get request fails', async () => {
       // Override the get mock to fire onerror
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       mockObjectStore.get.mockImplementation((() => {
         const req: Record<string, unknown> = { result: undefined, error: new Error('read error') };
         queueMicrotask(() => {
@@ -409,7 +409,7 @@ describe('favicon-cache', () => {
       const fakeBlob = new Blob(['img'], { type: 'image/png' });
       mockFetch.mockResolvedValue({ ok: true, blob: async () => fakeBlob });
       // Override put to fire onerror
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       mockObjectStore.put.mockImplementation((() => {
         const req: Record<string, unknown> = { result: undefined, error: new Error('put failed') };
         queueMicrotask(() => {
@@ -632,7 +632,7 @@ describe('favicon-cache', () => {
     });
 
     it('should return zeroes when IDB clear request fails', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       mockObjectStore.clear.mockImplementation((() => {
         const req: Record<string, unknown> = { result: undefined, error: new Error('clear failed') };
         queueMicrotask(() => { (req.onerror as () => void)?.(); });
@@ -741,7 +741,7 @@ describe('favicon-cache', () => {
     });
 
     it('should return 0 when cursor request fails', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       mockObjectStore.openCursor.mockImplementation((() => {
         const req: Record<string, unknown> = { onsuccess: null, onerror: null, result: undefined, error: new Error('cursor fail') };
         queueMicrotask(() => { (req.onerror as () => void)?.(); });
@@ -803,7 +803,7 @@ describe('favicon-cache', () => {
     });
 
     it('should return fallback stats when getAll request fails', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       mockObjectStore.getAll.mockImplementation((() => {
         const req: Record<string, unknown> = { result: undefined, error: new Error('getAll fail') };
         queueMicrotask(() => { (req.onerror as () => void)?.(); });
@@ -840,7 +840,7 @@ describe('favicon-cache', () => {
     it('should handle storeNegativeEntry failure gracefully in cacheFavicon', async () => {
       // Fetch fails, and then the put for the negative entry also fails
       mockFetch.mockRejectedValue(new Error('network'));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       mockObjectStore.put.mockImplementation((() => {
         const req: Record<string, unknown> = { result: undefined, error: new Error('put broken') };
         queueMicrotask(() => { (req.onerror as () => void)?.(); });

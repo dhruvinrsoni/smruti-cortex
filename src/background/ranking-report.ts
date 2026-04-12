@@ -67,8 +67,8 @@ function formatReportBody(
     // Search context
     lines.push('### Search Context');
     lines.push('');
-    lines.push(`| Field | Value |`);
-    lines.push(`|-------|-------|`);
+    lines.push('| Field | Value |');
+    lines.push('|-------|-------|');
     lines.push(`| Version | ${version} |`);
     lines.push(`| Query | \`${snapshot.query}\` |`);
     lines.push(`| Tokens | ${snapshot.tokens.map(t => `\`${t}\``).join(', ')} |`);
@@ -93,8 +93,8 @@ function formatReportBody(
     lines.push('<details>');
     lines.push('<summary><strong>Settings Snapshot</strong></summary>');
     lines.push('');
-    lines.push(`| Setting | Value |`);
-    lines.push(`|---------|-------|`);
+    lines.push('| Setting | Value |');
+    lines.push('|---------|-------|');
     lines.push(`| sortBy | ${snapshot.sortBy} |`);
     lines.push(`| showNonMatchingResults | ${snapshot.showNonMatchingResults} |`);
     lines.push(`| showDuplicateUrls | ${snapshot.showDuplicateUrls} |`);
