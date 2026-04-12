@@ -9,6 +9,8 @@
   [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
   [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
   [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)
+  [![Tests](https://img.shields.io/badge/Tests-1%2C252%20unit%20%7C%2021%20E2E-brightgreen.svg)](#-test-infrastructure)
+  [![Coverage](https://img.shields.io/badge/Coverage-83%25%20lines-yellow.svg)](#-test-infrastructure)
 
   <br>
 </div>
@@ -345,6 +347,27 @@ npm run build       # Verify build
 
 ---
 
+## 🧪 Test Infrastructure
+
+**1,252 unit tests** (Vitest) + **21 E2E tests** (Playwright) across 50 files. 83%+ line coverage.
+
+| Layer | Framework | Tests | What It Covers |
+|-------|-----------|-------|---------------|
+| **Unit** | Vitest + jsdom | 1,252 | All 9 scorers, search engine, tokenizer, settings, logger, database, indexing, Ollama, commands, web search, data masking, diagnostics, service worker messages |
+| **E2E** | Playwright | 21 | Popup UI (load, search, settings, performance), feature tour (full walkthrough + skip), quick-search overlay (content script + service worker messaging), service worker health |
+| **Shared Framework** | `src/__test-utils__/` | — | Composable Chrome API mocks, Logger mock, Settings mock, factory functions, lifecycle helpers — zero test duplication |
+
+```bash
+npm test                                    # Unit tests (~60s)
+npm run test:e2e                            # E2E tests (build + Playwright, ~50s)
+npx vitest run --coverage --pool=forks      # Unit tests with coverage report
+SLOW_MO=400 npx playwright test             # E2E in slow-motion (watch mode)
+```
+
+> Full E2E guide: [docs/E2E_TESTING.md](docs/E2E_TESTING.md) — architecture, patterns, fixtures, content script isolated world, troubleshooting.
+
+---
+
 ## 📚 Documentation
 
 | Doc | Purpose |
@@ -353,6 +376,7 @@ npm run build       # Verify build
 | [CHANGELOG.md](CHANGELOG.md) | Full version history |
 | [docs/VIVEK_SEARCH_ALGORITHM.md](docs/VIVEK_SEARCH_ALGORITHM.md) | How Vivek Search works — algorithm, scoring, AI |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Contributor workflow — lifecycle, smoke tests, semver |
+| [docs/E2E_TESTING.md](docs/E2E_TESTING.md) | Playwright E2E — architecture, fixtures, commands, troubleshooting |
 
 ---
 
