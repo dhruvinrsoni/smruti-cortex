@@ -141,22 +141,17 @@ jobs:
           echo "- Uploads artifact for download (30 days)" >> $GITHUB_STEP_SUMMARY
           echo "- **Does NOT commit or push changes**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "### 🚀 Release Notes" >> $GITHUB_STEP_SUMMARY
-            echo "**Tag detected:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "A GitHub Release will be created automatically." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
-            echo "Download \`${{ env.ARTIFACT_NAME }}\` from artifacts and load unpacked." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**To create a release:** Push a version tag like \`v7.0.0\`" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
+          echo "Download \`${{ env.ARTIFACT_NAME }}\` from artifacts and load unpacked." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To create a release:** Run \`node scripts/release.mjs <patch|minor|major>\` locally." >> $GITHUB_STEP_SUMMARY
 
   release:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Disabled: scripts/release.mjs is the single release path to avoid duplicate GitHub Releases
+    if: false
     timeout-minutes: 30
 
     permissions:
