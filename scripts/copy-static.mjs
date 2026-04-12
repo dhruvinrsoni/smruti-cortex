@@ -38,4 +38,13 @@ try {
 
 console.log("Static files copied to", outputDir);
 
-console.log("Static files copied to dist/");
+// Chrome MV3 rejects files/dirs starting with "_" — purge any that leaked from tsc
+import { rmSync } from "fs";
+const distEntries = readdirSync(outputDir, { withFileTypes: true });
+for (const entry of distEntries) {
+  if (entry.name.startsWith("_")) {
+    const fullPath = resolve(outputDir, entry.name);
+    rmSync(fullPath, { recursive: true, force: true });
+    console.warn(`⚠️  Removed "${entry.name}" from dist/ (Chrome rejects names starting with "_")`);
+  }
+}
