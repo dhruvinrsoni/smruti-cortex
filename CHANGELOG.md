@@ -2,7 +2,7 @@
 
 All notable changes to SmrutiCortex are documented here.
 
-## [Unreleased]
+## [9.0.0] — 2026-04-13
 
 ### Features
 - **Command palette** — Prefix-based modes transform the search overlay into a universal browser control surface (`/` commands, `>` power, `@` tabs, `#` bookmarks, `??` web search, `?` help)
