@@ -5013,6 +5013,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     try {
       document.removeEventListener('keydown', handleGlobalKeydown, true);
       document.removeEventListener('keydown', prewarmServiceWorker, true);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (chrome?.runtime?.onMessage) {
         chrome.runtime.onMessage.removeListener(handleMessage);
       }
@@ -5044,13 +5045,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     document.addEventListener('keydown', prewarmServiceWorker, { once: true, passive: true, capture: true });
     
     // Pre-warm on visibility change (tab becomes active)
-    document.addEventListener('visibilitychange', () => {
+    function handleVisibilityChange(): void {
       if (document.visibilityState === 'visible') {
         prewarmServiceWorker();
-        // Re-fetch log level in case it changed
         fetchLogLevel();
       }
-    }, { passive: true });
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange, { passive: true });
 
     // Message listener from service worker
     if (chrome?.runtime?.onMessage) {
