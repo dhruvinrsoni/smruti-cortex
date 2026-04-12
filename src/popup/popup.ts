@@ -551,7 +551,7 @@ function initializePopup() {
     if (mainEl && SettingsManager.getSetting('unifiedScroll')) {
       mainEl.classList.add('unified-scroll');
     }
-  });
+  }).catch(() => {});
 
   // Load recent history on popup open (show default results)
   loadRecentHistory();
@@ -1229,7 +1229,7 @@ function initializePopup() {
             if (input) {
               debounceSearch(input.value);
             }
-          });
+          }).catch(() => showToast('Failed to save setting', 'error'));
         }
         return;
       }
@@ -4153,7 +4153,7 @@ function initializePopup() {
         if (response?.enabled !== undefined) {
           searchDebugCheckbox.checked = response.enabled;
         }
-      });
+      }).catch(() => {});
 
       // Toggle debug mode
       searchDebugCheckbox.addEventListener('change', async () => {
@@ -4319,7 +4319,7 @@ function initializePopup() {
         resultCountNode.textContent = 'Initializing...';
         resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
       }
-    });
+    }).catch(() => {});
 
     // Lazy load hints after initial render (non-critical)
     requestIdleCallback(() => {
@@ -4337,7 +4337,7 @@ function initializePopup() {
       if (!completed) {
         setTimeout(() => runTour(POPUP_TOUR_STEPS, document), 500);
       }
-    });
+    }).catch(() => {});
   });
 
   // Ultra-fast keyboard shortcut handling
