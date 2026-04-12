@@ -4,8 +4,30 @@ import fs from 'fs';
 import os from 'os';
 
 const EXTENSION_PATH = path.resolve(__dirname, '../../dist');
-// Set SLOW_MO=400 (or any ms value) to watch tests step-by-step
+// Set SLOW_MO=400 (or any ms value) to watch tests step-by-step.
+// Implemented as page-level delays (not Playwright's built-in slowMo)
+// because built-in slowMo blocks ctx.close() indefinitely with 20+ tests.
 const SLOW_MO = Number(process.env.SLOW_MO) || 0;
+
+/**
+ * Wrap a Page so that user-visible actions (click, fill, goto, …) pause
+ * for SLOW_MO milliseconds before executing. This gives the same visual
+ * effect as Playwright's built-in slowMo but doesn't affect ctx.close().
+ */
+function withSlowMo(page: Page, ms: number): Page {
+  const methods = [
+    'click', 'dblclick', 'fill', 'type', 'press', 'check', 'uncheck',
+    'selectOption', 'hover', 'goto', 'goBack', 'goForward', 'reload',
+  ] as const;
+  for (const name of methods) {
+    const orig = (page as any)[name].bind(page);
+    (page as any)[name] = async (...args: any[]) => {
+      await page.waitForTimeout(ms);
+      return orig(...args);
+    };
+  }
+  return page;
+}
 
 /**
  * Worker-scoped fixtures: ONE browser launches per worker (not per test).
@@ -30,7 +52,9 @@ export const test = base.extend<
 
     const ctx = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
-      ...(SLOW_MO > 0 && { slowMo: SLOW_MO }),
+      // slowMo is NOT passed here — see withSlowMo() wrapper above.
+      // Playwright's built-in slowMo blocks ctx.close() indefinitely
+      // when the extension's service worker has active timers.
       args: [
         '--no-first-run',
         '--no-default-browser-check',
@@ -50,34 +74,28 @@ export const test = base.extend<
 
     await use(ctx);
 
-    // ── Teardown: prevent ctx.close() from hanging indefinitely ──
-    // Root cause: the extension's service worker keeps active setInterval()
-    // handles (performance monitor polling, index status checks). Chrome's
-    // service worker lifecycle won't shut down while intervals are alive,
-    // which blocks ctx.close() forever. Fix: clear them before closing.
+    // ── Teardown ──
+    // Clear service worker timers (perf monitor, index status polling)
+    // so Chrome's service worker lifecycle allows shutdown.
     try {
       const sws = ctx.serviceWorkers();
       if (sws.length > 0) {
         await sws[0].evaluate(() => {
           const id = setInterval(() => {}, 1e9) as unknown as number;
-          for (let i = 1; i <= id; i++) clearInterval(i);
-        });
+          for (let i = 1; i <= id; i++) {
+            clearInterval(i);
+            clearTimeout(i);
+          }
+        }).catch(() => {});
       }
-    } catch { /* browser may already be gone */ }
+    } catch { /* SW may be gone */ }
 
-    // Close all pages explicitly before closing the browser context
-    for (const page of ctx.pages()) {
-      await page.close().catch(() => {});
+    for (const p of ctx.pages()) {
+      await p.close().catch(() => {});
     }
 
-    // Hard timeout: if ctx.close() still hangs (e.g. Chrome DevTools
-    // protocol stalls), bail out after 5s so the process can exit
-    await Promise.race([
-      ctx.close(),
-      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
-    ]);
+    await ctx.close().catch(() => {});
 
-    // Best-effort cleanup — Windows may hold file locks briefly after Chrome exits
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch { /* non-critical */ }
   }, { scope: 'worker' }],
 
@@ -90,11 +108,13 @@ export const test = base.extend<
     await use(extensionId);
   }, { scope: 'worker' }],
 
-  // Test-scoped: each test gets a fresh tab, closed automatically after
+  // Test-scoped: each test gets a fresh tab, closed automatically after.
+  // When SLOW_MO is set, the page is wrapped so actions pause visually.
   extPage: async ({ extensionContext }, use) => {
-    const page = await extensionContext.newPage();
+    const raw = await extensionContext.newPage();
+    const page = SLOW_MO > 0 ? withSlowMo(raw, SLOW_MO) : raw;
     await use(page);
-    await page.close();
+    await raw.close();
   },
 });
 

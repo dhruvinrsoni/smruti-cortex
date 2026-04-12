@@ -37,8 +37,9 @@ test.describe('History > Index & Search', () => {
     // register the visit (url + title + visitCount + lastVisitTime).
     for (const site of BROWSING_SESSION) {
       const page = await extensionContext.newPage();
-      // waitUntil: 'load' ensures the page title is set in Chrome's history
-      await page.goto(site.url, { waitUntil: 'load', timeout: 15000 });
+      // domcontentloaded is enough for Chrome to record title + URL in history;
+      // 'load' waits for every sub-resource which can time out on heavy sites.
+      await page.goto(site.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       // Dwell: give Chrome time to flush the history entry to its SQLite DB
       await page.waitForTimeout(800);
       await page.close();
