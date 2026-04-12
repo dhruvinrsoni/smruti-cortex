@@ -2362,10 +2362,11 @@ function initializePopup() {
       indexBookmarksInput.checked = SettingsManager.getSetting('indexBookmarks') ?? true;
     }
 
-    // Advanced Browser Commands setting
-    const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
-    if (advBrowserInput) {
-      advBrowserInput.checked = SettingsManager.getSetting('advancedBrowserCommands') ?? false;
+    // Advanced Browser Commands setting — disabled, optional permissions removed for CWS compliance
+    const advBrowserInputLoad = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
+    if (advBrowserInputLoad) {
+      advBrowserInputLoad.checked = false;
+      advBrowserInputLoad.disabled = true;
     }
 
     // Search result diversity setting
@@ -3510,62 +3511,16 @@ function initializePopup() {
       });
     }
 
-    // Advanced Browser Commands: optional permissions must be granted before the setting turns on
-    const ADV_BROWSER_OPTIONAL_PERMS = ['tabGroups', 'browsingData', 'topSites'] as const;
+    // Advanced Browser Commands: disabled — optional permissions removed for Chrome Web Store compliance
     const advBrowserInput = modal.querySelector('#modal-advancedBrowserCommands') as HTMLInputElement;
     if (advBrowserInput) {
-      advBrowserInput.addEventListener('change', async (e) => {
-        const target = e.target as HTMLInputElement;
-        if (!target.checked) {
-          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e => logger.debug('settings', 'Failed to save advancedBrowserCommands', e));
-          await sendMessage({
-            type: 'REMOVE_OPTIONAL_PERMISSIONS',
-            permissions: [...ADV_BROWSER_OPTIONAL_PERMS],
-          }).catch(e => logger.debug('settings', 'Failed to revoke optional permissions', e));
-          syncToggleBar();
-          showToast('Advanced Browser Commands disabled — optional permissions revoked.', 'info');
-          return;
-        }
-        target.disabled = true;
-        try {
-          const resp = await sendMessage({
-            type: 'REQUEST_OPTIONAL_PERMISSIONS',
-            permissions: [...ADV_BROWSER_OPTIONAL_PERMS],
-          }) as { status?: string; granted?: boolean; error?: string };
-          if (resp?.error) {
-            target.checked = false;
-            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
-            showToast(
-              'Advanced Browser Commands stay off (permission request failed). Try again from chrome://extensions → SmrutiCortex → Details → Permissions.',
-              'warning',
-            );
-            return;
-          }
-          if (resp?.granted) {
-            await SettingsManager.setSetting('advancedBrowserCommands', true).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
-            showToast(
-              'Advanced Browser Commands enabled. Tab groups, browsing data cleanup, and Top Sites are allowed.',
-              'info',
-            );
-          } else {
-            target.checked = false;
-            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
-            showToast(
-              'Advanced Browser Commands stay off because optional permissions were not granted. Chrome was asked for: tab groups, browsing data cleanup, and Top Sites. To try again: chrome://extensions → SmrutiCortex → Details → Permissions.',
-              'warning',
-            );
-          }
-        } catch {
-          target.checked = false;
-          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
-          showToast(
-            'Advanced Browser Commands stay off (could not complete permission request). Try again from chrome://extensions → SmrutiCortex → Details.',
-            'warning',
-          );
-        } finally {
-          target.disabled = false;
-          syncToggleBar();
-        }
+      advBrowserInput.disabled = true;
+      advBrowserInput.checked = false;
+      advBrowserInput.title = 'Advanced Browser Commands are not available in this version.';
+      advBrowserInput.addEventListener('change', async () => {
+        advBrowserInput.checked = false;
+        await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e => logger.debug('settings', 'Failed to save advancedBrowserCommands', e));
+        showToast('Advanced Browser Commands are not available in this version.', 'info');
       });
     }
 
