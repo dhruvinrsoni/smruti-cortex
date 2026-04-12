@@ -67,6 +67,17 @@ import {
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
+import {
+  type PaletteMode,
+  sanitizeQuery as sanitizeQueryPure,
+  detectMode as detectModePure,
+  clampWidth as clampWidthPure,
+  clampHeight as clampHeightPure,
+  formatTimeAgo,
+  isOverlayKey as isOverlayKeyPure,
+  prevWordBoundary,
+  nextWordBoundary,
+} from './quick-search-utils';
 
 // Extend window interface for our extension
 declare global {
@@ -167,7 +178,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   const SPINNER_TIMEOUT_MS = 15_000; // Hide spinner after 15s if no response
 
   // Command palette state
-  type PaletteMode = 'history' | 'commands' | 'power' | 'tabs' | 'bookmarks' | 'websearch' | 'help';
   let currentMode: PaletteMode = 'history';
   let modeBadgeEl: HTMLDivElement | null = null;
   let confirmingCommand: PaletteCommand | null = null;
@@ -220,22 +230,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
-  // Helper: Sanitize query string to prevent issues with special characters or malformed URLs
-  function sanitizeQuery(query: string): string {
-    if (!query) {return '';}
-    // Trim whitespace
-    let sanitized = query.trim();
-    // Remove control characters (non-printable ASCII and DEL)
-    sanitized = sanitized.split('').filter(ch => {
-      const code = ch.charCodeAt(0);
-      return code >= 32 && code !== 127;
-    }).join('');
-    // Limit length to prevent abuse
-    if (sanitized.length > 500) {
-      sanitized = sanitized.substring(0, 500);
-    }
-    return sanitized;
-  }
+  const sanitizeQuery = sanitizeQueryPure;
 
   const QUICK_SEARCH_TOUR_STEPS: TourStep[] = [
     { target: '.search-input', title: 'Search', description: 'Type anything — title, URL, or keywords. Results appear instantly.', position: 'bottom' },
@@ -1415,12 +1410,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   const QS_DEFAULT_W = 680;
 
   function clampWidth(w: number): number {
-    const maxW = window.innerWidth * 0.92;
-    return Math.max(QS_MIN_W, Math.min(w, maxW));
+    return clampWidthPure(w, QS_MIN_W, window.innerWidth);
   }
   function clampHeight(h: number): number {
-    const maxH = window.innerHeight * 0.85;
-    return Math.max(QS_MIN_H, Math.min(h, maxH));
+    return clampHeightPure(h, QS_MIN_H, window.innerHeight);
   }
 
   function persistSize(w: number, h: number): void {
@@ -2044,34 +2037,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== COMMAND PALETTE: MODE DETECTION =====
 
   function detectMode(value: string): { mode: PaletteMode; query: string } {
-    const paletteEnabled = cachedSettings?.commandPaletteEnabled ?? true;
-    const enabledModes = cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'];
-
-    if (!paletteEnabled || !value) {
-      return { mode: 'history', query: value };
-    }
-
-    if (value === '?') {
-      return { mode: 'help', query: '' };
-    }
-
-    if (value.startsWith('??') && enabledModes.includes('??')) {
-      return { mode: 'websearch', query: value.slice(2).trim() };
-    }
-
-    const firstChar = value[0];
-    const prefixMap: Record<string, PaletteMode> = {
-      '/': 'commands',
-      '>': 'power',
-      '@': 'tabs',
-      '#': 'bookmarks',
-    };
-
-    if (prefixMap[firstChar] && enabledModes.includes(firstChar)) {
-      return { mode: prefixMap[firstChar], query: value.slice(1).trim() };
-    }
-
-    return { mode: 'history', query: value };
+    return detectModePure(value, {
+      commandPaletteEnabled: cachedSettings?.commandPaletteEnabled ?? true,
+      commandPaletteModes: cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'],
+    });
   }
 
   function updateModeBadge(mode: PaletteMode): void {
@@ -3078,16 +3047,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       chrome.runtime.sendMessage({ type: 'SWITCH_TO_TAB', tabId, windowId });
     } catch { /* ignore */ }
     hideOverlay();
-  }
-
-  function formatTimeAgo(timestamp: number): string {
-    const seconds = Math.floor(Date.now() / 1000 - timestamp);
-    if (seconds < 60) {return 'just now';}
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) {return `${minutes} min ago`;}
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {return `${hours}h ago`;}
-    return `${Math.floor(hours / 24)}d ago`;
   }
 
   function truncateUrl(url: string): string {
@@ -4512,49 +4471,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== GLOBAL KEYBOARD LISTENER =====
-  /**
-   * Returns true for key combos the overlay explicitly handles.
-   * Everything else (browser shortcuts, other extension shortcuts, F-keys,
-   * Alt combos, unknown Ctrl combos) passes through untouched.
-   */
-  function isOverlayKey(e: KeyboardEvent): boolean {
-    const key = e.key;
-    const mod = e.ctrlKey || e.metaKey;
-
-    if (key === 'Escape' || key === 'Tab') {return true;}
-
-    // F-keys → browser (F5 reload, F12 devtools, etc.)
-    if (/^F\d{1,2}$/.test(key)) {return false;}
-
-    // Alt combos → browser (Alt+Left/Right = back/forward, etc.)
-    if (e.altKey) {return false;}
-
-    if (mod) {
-      const lk = key.toLowerCase();
-      // Ctrl+Shift+S = toggle overlay
-      if (e.shiftKey && lk === 's') {return true;}
-      // Ctrl+Shift+Z = redo
-      if (e.shiftKey && lk === 'z') {return true;}
-      // Our text-editing Ctrl shortcuts
-      if (['a', 'c', 'v', 'x', 'z', 'y', 'm'].includes(lk)) {return true;}
-      // Ctrl+Backspace/Delete (word delete), Ctrl+Arrow (word jump), Ctrl+Home/End
-      if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) {return true;}
-      // Any other Ctrl/Cmd combo (Ctrl+R, Ctrl+K, Ctrl+L, Ctrl+T, Ctrl+W,
-      // Ctrl+N, Ctrl+E, Ctrl+H, Ctrl+J, Ctrl+D, Ctrl+P, Ctrl+F, Ctrl+G,
-      // Ctrl+Shift+K, Ctrl+Shift+T, Ctrl+Tab, etc.) → pass to browser
-      return false;
-    }
-
-    // Non-modifier navigation & editing keys
-    if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-         'Backspace', 'Delete', 'Home', 'End'].includes(key)) {return true;}
-
-    // Printable character (single char, no Ctrl/Alt/Meta)
-    if (key.length === 1) {return true;}
-
-    // Modifier-only presses (Shift, Control, CapsLock, etc.) — ignore
-    return false;
-  }
+  const isOverlayKey = isOverlayKeyPure;
 
   function handleGlobalKeydown(e: KeyboardEvent): void {
     if (!isOverlayVisible()) {
@@ -4642,21 +4559,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     inputEl!.dispatchEvent(ev);
   }
 
-  /** Index of start of the previous word from pos (going left) */
-  function prevWordBoundary(text: string, pos: number): number {
-    let i = pos;
-    while (i > 0 && /\s/.test(text[i - 1])) {i--;}
-    while (i > 0 && /\S/.test(text[i - 1])) {i--;}
-    return i;
-  }
-
-  /** Index of end of the next word from pos (going right) */
-  function nextWordBoundary(text: string, pos: number): number {
-    let i = pos;
-    while (i < text.length && /\S/.test(text[i])) {i++;}
-    while (i < text.length && /\s/.test(text[i])) {i++;}
-    return i;
-  }
+  // prevWordBoundary and nextWordBoundary imported from quick-search-utils
 
   // ===== DIRECT KEY INPUT HANDLING =====
   function handleKeyInput(e: KeyboardEvent): void {

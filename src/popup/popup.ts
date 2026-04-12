@@ -36,6 +36,13 @@ import {
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import type { AppSettings } from '../core/settings';
 import {
+  type PopupPaletteMode,
+  detectPopupMode as detectPopupModePure,
+  formatBytes,
+  formatModelSize,
+  buildHintMap,
+} from './popup-utils';
+import {
   type SearchResult,
   type FocusableGroup,
   type AIStatus,
@@ -627,7 +634,6 @@ function initializePopup() {
   }
 
   // Popup command palette state
-  type PopupPaletteMode = 'history' | 'commands' | 'power' | 'tabs' | 'bookmarks' | 'websearch' | 'help';
   let popupPaletteMode: PopupPaletteMode = 'history';
   let popupSelectedIndex = 0;
   let popupConfirmingCommand: PaletteCommand | null = null;
@@ -672,19 +678,11 @@ function initializePopup() {
   }
 
   function detectPopupMode(value: string): { mode: PopupPaletteMode; query: string } {
-    const cpEnabled = SettingsManager.getSetting('commandPaletteEnabled') ?? true;
-    const cpInPopup = SettingsManager.getSetting('commandPaletteInPopup') ?? false;
-    const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
-
-    if (!cpEnabled || !cpInPopup || !value) {return { mode: 'history', query: value };}
-    if (value === '?') {return { mode: 'help', query: '' };}
-    if (value.startsWith('??') && cpModes.includes('??')) {return { mode: 'websearch', query: value.slice(2).trim() };}
-
-    const prefixMap: Record<string, PopupPaletteMode> = { '/': 'commands', '>': 'power', '@': 'tabs', '#': 'bookmarks' };
-    const first = value[0];
-    if (prefixMap[first] && cpModes.includes(first)) {return { mode: prefixMap[first], query: value.slice(1).trim() };}
-
-    return { mode: 'history', query: value };
+    return detectPopupModePure(value, {
+      commandPaletteEnabled: SettingsManager.getSetting('commandPaletteEnabled') ?? true,
+      commandPaletteInPopup: SettingsManager.getSetting('commandPaletteInPopup') ?? false,
+      commandPaletteModes: SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'],
+    });
   }
 
   function renderPopupHelpScreen(): void {
@@ -2444,28 +2442,7 @@ function initializePopup() {
     switchSettingsTab(activeSettingsTab);
   }
 
-  function formatBytes(bytes: number): string {
-    if (bytes >= 1_048_576) {return `${(bytes / 1_048_576).toFixed(1)} MB`;}
-    if (bytes >= 1_024)     {return `${Math.round(bytes / 1_024)} KB`;}
-    return `${bytes} B`;
-  }
-
   // ===== SEARCHABLE MODEL SELECT =====
-  function formatModelSize(bytes: number): string {
-    if (bytes >= 1e9) {return `${(bytes / 1e9).toFixed(1)} GB`;}
-    if (bytes >= 1e6) {return `${(bytes / 1e6).toFixed(0)} MB`;}
-    return `${(bytes / 1e3).toFixed(0)} KB`;
-  }
-
-  function buildHintMap(defaults: Array<{ value: string; hint?: string }>): Map<string, string> {
-    const map = new Map<string, string>();
-    for (const d of defaults) {
-      if (!d.hint) {continue;}
-      map.set(d.value, d.hint);
-      map.set(d.value.split(':')[0], d.hint);
-    }
-    return map;
-  }
 
   const MODEL_SELECT_DEFAULTS = [
     { value: 'llama3.2:1b',  hint: '1.3 GB · Fast ★' },
