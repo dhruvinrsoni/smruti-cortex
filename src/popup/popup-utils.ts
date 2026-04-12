@@ -58,8 +58,8 @@ export function formatBytes(bytes: number): string {
 
 /** Format a model size (in bytes) for display (KB / MB / GB). */
 export function formatModelSize(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
+  if (bytes >= 1e9) {return `${(bytes / 1e9).toFixed(1)} GB`;}
+  if (bytes >= 1e6) {return `${(bytes / 1e6).toFixed(0)} MB`;}
   return `${(bytes / 1e3).toFixed(0)} KB`;
 }
 
@@ -67,7 +67,7 @@ export function formatModelSize(bytes: number): string {
 export function buildHintMap(defaults: Array<{ value: string; hint?: string }>): Map<string, string> {
   const map = new Map<string, string>();
   for (const d of defaults) {
-    if (!d.hint) continue;
+    if (!d.hint) {continue;}
     map.set(d.value, d.hint);
     map.set(d.value.split(':')[0], d.hint);
   }

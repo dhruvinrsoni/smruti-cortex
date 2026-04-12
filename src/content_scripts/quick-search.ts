@@ -1499,7 +1499,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function restoreSavedSize(container: HTMLElement): void {
     try {
       chrome.storage.local.get(QS_SIZE_KEY, (data) => {
-        if (chrome.runtime.lastError) return;
+        if (chrome.runtime.lastError) {return;}
         const saved = data?.[QS_SIZE_KEY];
         if (saved && typeof saved.width === 'number' && typeof saved.height === 'number') {
           container.style.width = clampWidth(saved.width) + 'px';

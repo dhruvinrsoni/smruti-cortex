@@ -40,7 +40,7 @@ export function createMockPort(name = 'quick-search'): MockPort {
       addListener: vi.fn((fn: (msg: unknown) => void) => messageListeners.push(fn)),
       removeListener: vi.fn((fn: (msg: unknown) => void) => {
         const idx = messageListeners.indexOf(fn);
-        if (idx >= 0) messageListeners.splice(idx, 1);
+        if (idx >= 0) {messageListeners.splice(idx, 1);}
       }),
       _listeners: messageListeners,
       fire: (msg: unknown) => messageListeners.forEach(fn => fn(msg)),
@@ -49,7 +49,7 @@ export function createMockPort(name = 'quick-search'): MockPort {
       addListener: vi.fn((fn: () => void) => disconnectListeners.push(fn)),
       removeListener: vi.fn((fn: () => void) => {
         const idx = disconnectListeners.indexOf(fn);
-        if (idx >= 0) disconnectListeners.splice(idx, 1);
+        if (idx >= 0) {disconnectListeners.splice(idx, 1);}
       }),
       _listeners: disconnectListeners,
       fire: () => disconnectListeners.forEach(fn => fn()),

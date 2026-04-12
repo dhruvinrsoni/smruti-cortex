@@ -8,7 +8,7 @@ vi.mock('../../core/logger', () => mockLogger());
 vi.mock('../../core/settings', () => ({
   SettingsManager: {
     getSetting: vi.fn((key: string) => {
-      if (key === 'developerGithubPat') return '';
+      if (key === 'developerGithubPat') {return '';}
       return '';
     }),
     getSettings: vi.fn().mockReturnValue({}),

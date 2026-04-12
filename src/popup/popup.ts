@@ -2452,15 +2452,15 @@ function initializePopup() {
 
   // ===== SEARCHABLE MODEL SELECT =====
   function formatModelSize(bytes: number): string {
-    if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-    if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
+    if (bytes >= 1e9) {return `${(bytes / 1e9).toFixed(1)} GB`;}
+    if (bytes >= 1e6) {return `${(bytes / 1e6).toFixed(0)} MB`;}
     return `${(bytes / 1e3).toFixed(0)} KB`;
   }
 
   function buildHintMap(defaults: Array<{ value: string; hint?: string }>): Map<string, string> {
     const map = new Map<string, string>();
     for (const d of defaults) {
-      if (!d.hint) continue;
+      if (!d.hint) {continue;}
       map.set(d.value, d.hint);
       map.set(d.value.split(':')[0], d.hint);
     }
@@ -3272,7 +3272,7 @@ function initializePopup() {
             const hintMap = buildHintMap(MODEL_SELECT_DEFAULTS);
             modelSelectOptions = models.map((m: { name: string; size?: number }) => {
               const hint = hintMap.get(m.name) || hintMap.get(m.name.split(':')[0]);
-              if (hint) return { value: m.name, hint };
+              if (hint) {return { value: m.name, hint };}
               const sizeStr = m.size ? formatModelSize(m.size) : '';
               return { value: m.name, hint: sizeStr || undefined };
             });
@@ -3365,7 +3365,7 @@ function initializePopup() {
             const embedHintMap = buildHintMap(EMBED_SELECT_DEFAULTS);
             embedSelectOptions = embedModels.map((m: { name: string; size?: number }) => {
               const hint = embedHintMap.get(m.name) || embedHintMap.get(m.name.split(':')[0]);
-              if (hint) return { value: m.name, hint };
+              if (hint) {return { value: m.name, hint };}
               const sizeStr = m.size ? formatModelSize(m.size) : '';
               return { value: m.name, hint: sizeStr || undefined };
             });
