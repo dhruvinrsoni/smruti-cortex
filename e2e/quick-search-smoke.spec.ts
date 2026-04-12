@@ -48,8 +48,8 @@ async function triggerOverlay(extensionContext: any, tabUrl = 'https://example.c
   }, tabUrl);
 }
 
-test.describe('Quick-search — content script', () => {
-  test('content script is reachable via service worker messaging', async ({ extPage: page, extensionContext }) => {
+test.describe('Quick-search > Content Script', () => {
+  test('responds to SW message', async ({ extPage: page, extensionContext }) => {
     await page.goto('https://example.com', { waitUntil: 'load' });
     await waitForContentScript(extensionContext);
 
@@ -71,8 +71,8 @@ test.describe('Quick-search — content script', () => {
   });
 });
 
-test.describe('Quick-search — overlay lifecycle', () => {
-  test('overlay opens when triggered via service worker', async ({ extPage: page, extensionContext }) => {
+test.describe('Quick-search > Overlay', () => {
+  test('attaches to DOM on trigger', async ({ extPage: page, extensionContext }) => {
     await page.goto('https://example.com', { waitUntil: 'load' });
     await waitForContentScript(extensionContext);
 
@@ -81,8 +81,8 @@ test.describe('Quick-search — overlay lifecycle', () => {
   });
 });
 
-test.describe('Service worker — health check', () => {
-  test('service worker responds to PING via popup page', async ({ extPage: page, extensionId }) => {
+test.describe('Service Worker', () => {
+  test('PING returns ok', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     const result = await page.evaluate(async () => {

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/extension';
 
-test.describe('Popup — page load', () => {
-  test('renders brand, search input, and logo', async ({ extPage: page, extensionId }) => {
+test.describe('Popup > Layout', () => {
+  test('shows brand, input, logo, subtitle', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     await expect(page.locator('.title')).toHaveText('SmrutiCortex');
@@ -10,7 +10,7 @@ test.describe('Popup — page load', () => {
     await expect(page.locator('.subtitle')).toBeVisible();
   });
 
-  test('footer hints are visible', async ({ extPage: page, extensionId }) => {
+  test('shows footer hints', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     await expect(page.locator('#hints-container')).toBeVisible();
@@ -18,7 +18,7 @@ test.describe('Popup — page load', () => {
     await expect(page.locator('.footer-palette-modes')).toContainText('> Power');
   });
 
-  test('sort dropdown has all four options', async ({ extPage: page, extensionId }) => {
+  test('shows 4 sort options', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     const options = page.locator('#sort-by option');
@@ -29,7 +29,7 @@ test.describe('Popup — page load', () => {
     await expect(options.nth(3)).toHaveText('Alphabetical');
   });
 
-  test('tour help button is present', async ({ extPage: page, extensionId }) => {
+  test('shows tour button', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     await expect(page.locator('#tour-button')).toBeVisible();
@@ -37,8 +37,8 @@ test.describe('Popup — page load', () => {
   });
 });
 
-test.describe('Popup — search input', () => {
-  test('accepts text and shows clear button', async ({ extPage: page, extensionId }) => {
+test.describe('Popup > Search', () => {
+  test('typing shows clear button', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     const input = page.locator('#search-input');
@@ -47,7 +47,7 @@ test.describe('Popup — search input', () => {
     await expect(page.locator('#clear-input')).toHaveClass(/visible/);
   });
 
-  test('clear button resets the input', async ({ extPage: page, extensionId }) => {
+  test('clear resets input', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     const input = page.locator('#search-input');
@@ -56,15 +56,15 @@ test.describe('Popup — search input', () => {
     await expect(input).toHaveValue('');
   });
 
-  test('search input has autofocus', async ({ extPage: page, extensionId }) => {
+  test('has autofocus', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     await expect(page.locator('#search-input')).toHaveAttribute('autofocus', '');
   });
 });
 
-test.describe('Popup — settings modal', () => {
-  test('opens on settings button click', async ({ extPage: page, extensionId }) => {
+test.describe('Popup > Settings', () => {
+  test('opens on click', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     const modal = page.locator('#settings-modal');
@@ -75,7 +75,7 @@ test.describe('Popup — settings modal', () => {
     await expect(modal.locator('.settings-header h2')).toHaveText('Settings');
   });
 
-  test('closes via close button', async ({ extPage: page, extensionId }) => {
+  test('closes on X', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     await page.locator('#settings-button').click();
@@ -86,7 +86,7 @@ test.describe('Popup — settings modal', () => {
     await expect(modal).toHaveClass(/hidden/);
   });
 
-  test('has all 8 tab buttons', async ({ extPage: page, extensionId }) => {
+  test('renders 8 tabs', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.locator('#settings-button').click();
 
@@ -99,7 +99,7 @@ test.describe('Popup — settings modal', () => {
     }
   });
 
-  test('General tab is active by default', async ({ extPage: page, extensionId }) => {
+  test('defaults to General tab', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.locator('#settings-button').click();
 
@@ -107,7 +107,7 @@ test.describe('Popup — settings modal', () => {
     await expect(generalTab).toHaveClass(/active/);
   });
 
-  test('switching tabs updates active state', async ({ extPage: page, extensionId }) => {
+  test('switches active tab', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.locator('#settings-button').click();
 
@@ -119,7 +119,7 @@ test.describe('Popup — settings modal', () => {
     await expect(generalTab).not.toHaveClass(/active/);
   });
 
-  test('Advanced tab shows diagnostics buttons', async ({ extPage: page, extensionId }) => {
+  test('Advanced tab has diagnostics', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.locator('#settings-button').click();
     await page.locator('.settings-tab[data-tab="advanced"]').click();
@@ -128,7 +128,7 @@ test.describe('Popup — settings modal', () => {
     await expect(page.locator('#export-diagnostics')).toBeVisible();
   });
 
-  test('Data tab shows storage and management buttons', async ({ extPage: page, extensionId }) => {
+  test('Data tab has rebuild/export/import', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.locator('#settings-button').click();
     await page.locator('.settings-tab[data-tab="data"]').click();
@@ -139,8 +139,8 @@ test.describe('Popup — settings modal', () => {
   });
 });
 
-test.describe('Popup — performance modal', () => {
-  test('opens from Advanced tab and shows metrics', async ({ extPage: page, extensionId }) => {
+test.describe('Popup > Perf Modal', () => {
+  test('opens, shows metrics, closes', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
 
     await page.locator('#settings-button').click();

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/extension';
 
-test.describe('Feature tour — full walkthrough', () => {
-  test('tour auto-launches on first visit and can be completed step by step', async ({
+test.describe('Tour', () => {
+  test('completes all 6 steps via Next → Done', async ({
     extPage: page,
     extensionId,
     extensionContext,
@@ -49,7 +49,7 @@ test.describe('Feature tour — full walkthrough', () => {
     expect(completed).toBe(true);
   });
 
-  test('tour can be skipped via Skip button', async ({
+  test('skips via Skip button', async ({
     extPage: page,
     extensionId,
     extensionContext,
@@ -79,7 +79,7 @@ test.describe('Feature tour — full walkthrough', () => {
     expect(completed).toBe(true);
   });
 
-  test('tour does not launch when already completed', async ({
+  test('does not relaunch when completed', async ({
     extPage: page,
     extensionId,
     extensionContext,

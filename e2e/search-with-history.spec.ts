@@ -29,9 +29,9 @@ async function sendToServiceWorker(page: any, message: Record<string, unknown>):
   }, message);
 }
 
-test.describe('Search with browsing history', () => {
+test.describe('History > Index & Search', () => {
 
-  test('browse sites like a developer, index them, and verify extension finds them', async ({ extensionContext, extensionId }) => {
+  test('visits 6 sites, rebuilds index, finds results', async ({ extensionContext, extensionId }) => {
     // ── Phase 1: Simulate a developer's browsing session ──
     // Visit each site with enough dwell time for Chrome's history DB to
     // register the visit (url + title + visitCount + lastVisitTime).
@@ -79,7 +79,7 @@ test.describe('Search with browsing history', () => {
     await popupPage.close();
   });
 
-  test('popup search input shows live results as you type', async ({ extPage: page, extensionId }) => {
+  test('live search renders results', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.waitForLoadState('load');
 
@@ -103,7 +103,7 @@ test.describe('Search with browsing history', () => {
     await expect(resultCount).not.toBeEmpty();
   });
 
-  test('switching sort order re-renders results', async ({ extPage: page, extensionId }) => {
+  test('sort order re-renders results', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.waitForLoadState('load');
 
@@ -127,7 +127,7 @@ test.describe('Search with browsing history', () => {
     await expect(resultItems.first()).toBeVisible({ timeout: 3000 });
   });
 
-  test('search for different sites returns relevant results', async ({ extPage: page, extensionId }) => {
+  test('multi-term search finds distinct sites', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.waitForLoadState('load');
 
@@ -149,7 +149,7 @@ test.describe('Search with browsing history', () => {
     }
   });
 
-  test('clear button resets search state', async ({ extPage: page, extensionId }) => {
+  test('clear resets input and hides button', async ({ extPage: page, extensionId }) => {
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
     await page.waitForLoadState('load');
 
