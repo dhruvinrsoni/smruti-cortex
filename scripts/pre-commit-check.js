@@ -135,8 +135,9 @@ async function main() {
 
   // === Smart skip: only run builds if product files are staged ===
   const stagedFiles = getStagedFiles();
+  let productFiles = [];
   if (stagedFiles !== null && stagedFiles.length > 0 && !process.env.FORCE_PRE_COMMIT) {
-    const productFiles = stagedFiles.filter(f => !SKIP_PATTERNS.some(p => p.test(f)));
+    productFiles = stagedFiles.filter(f => !SKIP_PATTERNS.some(p => p.test(f)));
     if (productFiles.length === 0) {
       console.log('📂 Only non-product files staged:');
       stagedFiles.forEach(f => console.log(`   ✅ ${f}`));
@@ -149,6 +150,23 @@ async function main() {
     productFiles.forEach(f => console.log(`   🔧 ${f}`));
   } else if (process.env.FORCE_PRE_COMMIT) {
     console.log('🔒 FORCE_PRE_COMMIT set — running all checks regardless of file types');
+  }
+
+  // Auto-fix lint errors on staged .ts files before build.
+  // Shift-left gate: code is corrected at commit time regardless of origin.
+  const tsFiles = productFiles.filter(f => f.endsWith('.ts') || f.endsWith('.tsx'));
+  if (tsFiles.length > 0) {
+    console.log(`\n🧹 PHASE 0: Lint auto-fix (${tsFiles.length} TypeScript file(s))`);
+    try {
+      const lintCmd = `"${bin('eslint')}" --fix ${tsFiles.map(f => `"${f}"`).join(' ')}`;
+      execSync(lintCmd, { stdio: 'inherit', shell: true, timeout: 30000 });
+      execSync(`git add ${tsFiles.map(f => `"${f}"`).join(' ')}`, {
+        stdio: 'inherit', shell: true, timeout: 10000
+      });
+      console.log('✅ Lint auto-fix complete — changes re-staged');
+    } catch {
+      console.log('⚠️  Lint auto-fix had issues (non-blocking, build will catch errors)');
+    }
   }
 
   let allPassed = true;
