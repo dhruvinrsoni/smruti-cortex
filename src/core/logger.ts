@@ -341,10 +341,3 @@ export class ComponentLogger {
 
 // ===== LEGACY COMPATIBILITY METHODS =====
 // These maintain backward compatibility but are deprecated
-
-/**
- * @deprecated Use Logger.forComponent("ComponentName").info() instead
- */
-export function createContextLogger(context: string) {
-    return Logger.forComponent(context);
-}

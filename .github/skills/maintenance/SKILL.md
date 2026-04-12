@@ -9,8 +9,8 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
 1. **Understand** — Read the bug report. Reproduce if possible.
 2. **Locate** — Use CLAUDE.md Critical File Map to find the relevant file.
 3. **Fix** — Make the minimal change. Don't refactor surrounding code.
-4. **Test** — `npm test` (all tests must pass — 980+ tests across 34 files).
-5. **Build** — `npm run build` (must compile with zero errors).
+4. **Test** — `npm test` (all tests must pass — 1,252+ tests across 47 files).
+5. **Build** — `npm run build:prod` (must compile with zero errors).
 6. **Manual test** — Tell the user:
    - Open `chrome://extensions` → reload unpacked → test the specific fix
    - For popup: click extension icon → search → verify behavior
@@ -27,7 +27,7 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
 2. **Load domain skill** — From `.github/skills/`: search-engine, ai-ollama, ui-components, settings, etc.
 3. **Implement** — Follow existing patterns (Logger, SettingsManager, scorers are isolated, etc.)
 4. **Test** — Write tests if touching core logic. `npm test` must pass.
-5. **Build** — `npm run build` must succeed.
+5. **Build** — `npm run build:prod` must succeed.
 6. **Manual test** — Same as bug fix above, focused on the new feature.
 7. **Commit** — `feat: <concise description of the new capability>`
 8. **Release** — If user wants to ship: `node scripts/release.mjs minor`
@@ -142,9 +142,10 @@ After loading unpacked from `dist/`:
 Run after ANY code change:
 
 ```bash
-npm test                    # all tests pass (980+)
-npm run build               # Compiles with zero errors
+npm test                    # all tests pass (1,252+ unit tests across 47 files)
+npm run build:prod          # Compiles with zero errors
 npm run lint                # No new warnings above threshold
+npx playwright test         # 45 E2E tests across 7 spec files (requires build first)
 ```
 
 Critical paths to manually verify:

@@ -198,17 +198,16 @@ export function runTour(
       backdrop.remove();
       tooltip.remove();
       highlight.remove();
+      document.removeEventListener('keydown', onKeydown, true);
       markTourCompleted().catch(() => {});
       resolve();
     }
 
-    // Handle Escape to skip
     function onKeydown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         cleanup();
-        document.removeEventListener('keydown', onKeydown, true);
       }
     }
     document.addEventListener('keydown', onKeydown, true);

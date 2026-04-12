@@ -636,8 +636,14 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
 
     try {
         // Get all bookmarks
-        const tree = await new Promise<chrome.bookmarks.BookmarkTreeNode[]>((resolve) => {
-            browserAPI.bookmarks.getTree((nodes: chrome.bookmarks.BookmarkTreeNode[]) => resolve(nodes));
+        const tree = await new Promise<chrome.bookmarks.BookmarkTreeNode[]>((resolve, reject) => {
+            browserAPI.bookmarks.getTree((nodes: chrome.bookmarks.BookmarkTreeNode[]) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                    return;
+                }
+                resolve(nodes);
+            });
         });
 
         // Collect all bookmarks with their folder paths

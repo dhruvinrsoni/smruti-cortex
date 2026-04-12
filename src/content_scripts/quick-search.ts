@@ -163,6 +163,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let toggleBarEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
+  let visibilityChangeHandler: (() => void) | null = null;
   const SPINNER_TIMEOUT_MS = 15_000; // Hide spinner after 15s if no response
 
   // Command palette state
@@ -5013,6 +5014,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     try {
       document.removeEventListener('keydown', handleGlobalKeydown, true);
       document.removeEventListener('keydown', prewarmServiceWorker, true);
+      if (visibilityChangeHandler) {
+        document.removeEventListener('visibilitychange', visibilityChangeHandler);
+        visibilityChangeHandler = null;
+      }
       if (chrome?.runtime?.onMessage) {
         chrome.runtime.onMessage.removeListener(handleMessage);
       }
@@ -5044,13 +5049,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     document.addEventListener('keydown', prewarmServiceWorker, { once: true, passive: true, capture: true });
     
     // Pre-warm on visibility change (tab becomes active)
-    document.addEventListener('visibilitychange', () => {
+    visibilityChangeHandler = () => {
       if (document.visibilityState === 'visible') {
         prewarmServiceWorker();
-        // Re-fetch log level in case it changed
         fetchLogLevel();
       }
-    }, { passive: true });
+    };
+    document.addEventListener('visibilitychange', visibilityChangeHandler, { passive: true });
 
     // Message listener from service worker
     if (chrome?.runtime?.onMessage) {
