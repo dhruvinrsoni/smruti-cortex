@@ -5,6 +5,7 @@ import os from 'os';
 
 const EXTENSION_PATH = path.resolve(__dirname, '../../dist');
 // Set SLOW_MO=400 (or any ms value) to watch tests step-by-step.
+// Prefer: npm run test:e2e:slowmo (sets SLOW_MO reliably on Windows).
 // Implemented as page-level delays (not Playwright's built-in slowMo)
 // because built-in slowMo blocks ctx.close() indefinitely with 20+ tests.
 const SLOW_MO = Number(process.env.SLOW_MO) || 0;

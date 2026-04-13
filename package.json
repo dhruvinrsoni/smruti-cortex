@@ -39,6 +39,8 @@
     "coverage": "vitest run --coverage",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "npm run build:prod && npx playwright test",
+    "test:e2e:slowmo": "npm run build:prod && node ./scripts/e2e-slowmo.mjs",
+    "test:e2e:slowmo:only": "node ./scripts/e2e-slowmo.mjs",
     "start:watch": "node ./scripts/esbuild-dev.mjs --watch",
     "docker:build": "sh ./scripts/docker-build-and-extract.sh",
     "docker:dev": "node ./scripts/docker-compose.mjs run --rm dev",

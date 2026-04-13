@@ -156,12 +156,30 @@ This gives the same visual debugging experience (watch the browser step through 
 
 ### How to Use It
 
+**Recommended (works everywhere, including Windows):** use the npm script so `SLOW_MO` is set inside Node — no shell quirks.
+
+```bash
+npm run test:e2e:slowmo          # build + E2E with 400ms pause before each action
+npm run test:e2e:slowmo:only     # same, but skip build (use after a recent build:prod)
+```
+
+Override the delay (milliseconds):
+
+```bash
+node scripts/e2e-slowmo.mjs 600                    # 600ms pause, assumes build already done
+node scripts/e2e-slowmo.mjs 400 e2e/01-tour.spec.ts   # slow-mo + single spec
+```
+
+Manual env (if you prefer):
+
 ```bash
 # Set SLOW_MO environment variable (milliseconds between each action)
-SLOW_MO=400 npx playwright test          # Linux/Mac
-$env:SLOW_MO=400; npx playwright test    # PowerShell
+SLOW_MO=400 npx playwright test          # Linux/Mac / Git Bash
+$env:SLOW_MO=400; npx playwright test    # PowerShell — both lines in same session
 set SLOW_MO=400 && npx playwright test   # cmd.exe
 ```
+
+**If slow-mo still looks instant on Windows:** you probably ran `npx playwright test` without `SLOW_MO`, or set the variable in a different terminal session than `npx`. Use `npm run test:e2e:slowmo` instead. This project does **not** use Playwright’s built-in `launchOptions.slowMo` (see above); only `SLOW_MO` + `withSlowMo()` applies.
 
 ### Key Takeaway
 
@@ -326,9 +344,12 @@ npx playwright test
 ### Run with Visual Slow-Motion (Watch Mode)
 
 ```bash
-SLOW_MO=400 npx playwright test          # Linux/Mac
-$env:SLOW_MO=400; npx playwright test    # PowerShell
-set SLOW_MO=400 && npx playwright test   # cmd.exe
+npm run test:e2e:slowmo                    # build + E2E with 400ms (recommended)
+npm run test:e2e:slowmo:only               # skip build; use after build:prod
+node scripts/e2e-slowmo.mjs 600            # custom ms, no build
+
+# Manual env (Linux/Mac / Git Bash / PowerShell / cmd — see "How to Use It" above)
+SLOW_MO=400 npx playwright test
 ```
 
 ### Run a Specific Test File

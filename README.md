@@ -361,7 +361,7 @@ npm run build       # Verify build
 npm test                                    # Unit tests (~60s)
 npm run test:e2e                            # E2E tests (build + Playwright, ~50s)
 npx vitest run --coverage --pool=forks      # Unit tests with coverage report
-SLOW_MO=400 npx playwright test             # E2E in slow-motion (watch mode)
+npm run test:e2e:slowmo                     # E2E in slow-motion (recommended; see docs/E2E_TESTING.md)
 ```
 
 > Full E2E guide: [docs/E2E_TESTING.md](docs/E2E_TESTING.md) — architecture, patterns, fixtures, content script isolated world, troubleshooting.

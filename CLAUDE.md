@@ -49,7 +49,7 @@ Navigate here first — don't broad-search when the location is known:
 |---------|---------|-------|
 | `npm test` | Run full unit test suite (1,233+ tests, 46 files) | ~60s |
 | `npx playwright test` | Run E2E tests (45 tests, 7 specs, requires `npm run build:prod` first) | ~60s |
-| `$env:SLOW_MO=400; npx playwright test` | E2E tests in slow-mo (visible automation) | ~5min |
+| `npm run test:e2e:slowmo` | E2E tests in slow-mo (sets `SLOW_MO` reliably on Windows) | ~5min |
 | `npx vitest run --coverage --pool=forks` | Unit tests + v8 coverage report | ~30s |
 | `npm run lint` | ESLint check | ~5s |
 | `npm run build:prod` | Production build (minified) | ~30s |
