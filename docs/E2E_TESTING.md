@@ -133,24 +133,11 @@ With 1 test, Chrome has few internal CDP targets to close — the blocking is br
 
 ### The Solution
 
-`slowMo` is **never** passed to `launchPersistentContext()`. Instead, the `withSlowMo()` wrapper adds `page.waitForTimeout(ms)` before each user-visible action on the `extPage` fixture:
+`slowMo` is **never** passed to `launchPersistentContext()`. Instead:
 
-```typescript
-function withSlowMo(page: Page, ms: number): Page {
-  const methods = [
-    'click', 'dblclick', 'fill', 'type', 'press', 'check', 'uncheck',
-    'selectOption', 'hover', 'goto', 'goBack', 'goForward', 'reload',
-  ] as const;
-  for (const name of methods) {
-    const orig = (page as any)[name].bind(page);
-    (page as any)[name] = async (...args: any[]) => {
-      await page.waitForTimeout(ms);
-      return orig(...args);
-    };
-  }
-  return page;
-}
-```
+1. **`withSlowMo()`** adds `page.waitForTimeout(ms)` before each **Page**-level action (`goto`, `reload`, `page.click`, …).
+
+2. **Locator actions** — Almost all SmrutiCortex tests use `page.locator('#x').click()` / `.fill()`, not `page.click(selector)`. Those call methods on **Locator**, so patching `Page` alone produces **no visible slowdown**. When `SLOW_MO > 0`, the fixture patches **`Locator.prototype`** once (click, fill, hover, etc.): each action waits `ms` before running. This keeps `expect(locator)` working (Playwright rejects Proxied locators).
 
 This gives the same visual debugging experience (watch the browser step through actions) but leaves `ctx.close()` completely unaffected — it runs at full speed with no event loop blocking.
 
@@ -179,7 +166,9 @@ $env:SLOW_MO=400; npx playwright test    # PowerShell — both lines in same ses
 set SLOW_MO=400 && npx playwright test   # cmd.exe
 ```
 
-**If slow-mo still looks instant on Windows:** you probably ran `npx playwright test` without `SLOW_MO`, or set the variable in a different terminal session than `npx`. Use `npm run test:e2e:slowmo` instead. This project does **not** use Playwright’s built-in `launchOptions.slowMo` (see above); only `SLOW_MO` + `withSlowMo()` applies.
+**If slow-mo still looks instant:** (1) `SLOW_MO` was not set for the `npx playwright test` process — use `npm run test:e2e:slowmo`, or (2) you were on an older revision that only patched `Page` (locator chains stayed fast). This project does **not** use Playwright’s built-in `launchOptions.slowMo` on the browser (see above); use `SLOW_MO` + `withSlowMo()` + Locator prototype patch.
+
+**Stronger visibility:** try `node scripts/e2e-slowmo.mjs 800` (800ms between actions) or `1000` if 400ms still feels quick.
 
 ### Key Takeaway
 

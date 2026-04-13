@@ -1,4 +1,4 @@
-import { test as base, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { test as base, chromium, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -11,11 +11,44 @@ const EXTENSION_PATH = path.resolve(__dirname, '../../dist');
 const SLOW_MO = Number(process.env.SLOW_MO) || 0;
 
 /**
+ * Locator actions to slow down. Tests use page.locator().click() / .fill() —
+ * those call Locator methods, not page.click(), so patching Page alone does nothing.
+ *
+ * We patch Locator.prototype once (first extPage with SLOW_MO > 0). A Proxy around
+ * Locator breaks expect(locator) (Playwright checks for a real Locator instance).
+ */
+const LOCATOR_SLOW_ACTIONS = [
+  'click', 'dblclick', 'tap', 'fill', 'focus', 'hover', 'press', 'type',
+  'check', 'uncheck', 'selectOption', 'setInputFiles', 'setChecked', 'selectText',
+  'scrollIntoViewIfNeeded', 'highlight', 'blur',
+] as const;
+
+let locatorPrototypeSlowMoInstalled = false;
+
+function ensureLocatorSlowMoPatched(samplePage: Page, ms: number): void {
+  if (locatorPrototypeSlowMoInstalled || ms <= 0) {return;}
+  locatorPrototypeSlowMoInstalled = true;
+  const proto = Object.getPrototypeOf(samplePage.locator('html')) as Record<string, (...args: unknown[]) => Promise<unknown>>;
+  for (const name of LOCATOR_SLOW_ACTIONS) {
+    const orig = proto[name];
+    if (typeof orig !== 'function') {continue;}
+    proto[name] = async function (this: Locator, ...args: unknown[]) {
+      await this.page().waitForTimeout(ms);
+      return orig.apply(this, args);
+    };
+  }
+}
+
+/**
  * Wrap a Page so that user-visible actions (click, fill, goto, …) pause
  * for SLOW_MO milliseconds before executing. This gives the same visual
  * effect as Playwright's built-in slowMo but doesn't affect ctx.close().
+ *
+ * When SLOW_MO > 0, also patches Locator.prototype so locator.click() / fill() slow down.
  */
 function withSlowMo(page: Page, ms: number): Page {
+  const raw = page;
+  ensureLocatorSlowMoPatched(raw, ms);
   const methods = [
     'click', 'dblclick', 'fill', 'type', 'press', 'check', 'uncheck',
     'selectOption', 'hover', 'goto', 'goBack', 'goForward', 'reload',
@@ -23,7 +56,7 @@ function withSlowMo(page: Page, ms: number): Page {
   for (const name of methods) {
     const orig = (page as any)[name].bind(page);
     (page as any)[name] = async (...args: any[]) => {
-      await page.waitForTimeout(ms);
+      await raw.waitForTimeout(ms);
       return orig(...args);
     };
   }
