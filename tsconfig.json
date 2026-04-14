@@ -11,6 +11,7 @@
     "strict": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
     "types": ["chrome"]
   },
   "include": ["src/**/*", "scripts/**/*"],
