@@ -13,6 +13,7 @@ import {
 } from './tokenizer';
 import { browserAPI } from '../../core/helpers';
 import { Logger } from '../../core/logger';
+import { traced } from '../../core/traced';
 import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
 import { expandQueryKeywords, getLastExpansionSource } from '../ai-keyword-expander';
@@ -43,16 +44,18 @@ export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; 
 // Allows cancelling a previous search when a new one starts
 let activeSearchAbort: AbortController | null = null;
 
-export async function runSearch(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
-    // Signal to embedding processor: search is active → yield Ollama slot
-    embeddingProcessor.setSearchActive(true);
+export const runSearch = traced('SearchEngine', 'runSearch',
+    async function runSearch(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
+        // Signal to embedding processor: search is active → yield Ollama slot
+        embeddingProcessor.setSearchActive(true);
 
-    try {
-        return await runSearchInner(query, options);
-    } finally {
-        embeddingProcessor.setSearchActive(false);
+        try {
+            return await runSearchInner(query, options);
+        } finally {
+            embeddingProcessor.setSearchActive(false);
+        }
     }
-}
+);
 
 async function runSearchInner(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
     // Cancel any in-flight search (prevents concurrent embedding generation storms)

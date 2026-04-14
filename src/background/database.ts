@@ -4,6 +4,7 @@ import { browserAPI } from '../core/helpers';
 import { IndexedItem } from './schema';
 import { DB_NAME } from '../core/constants';
 import { Logger } from '../core/logger';
+import { traced } from '../core/traced';
 
 const DB_VERSION = 1;
 const STORE_NAME = 'pages';
@@ -21,7 +22,7 @@ export function invalidateItemCache(): void {
 // ------------------------------
 // IndexedDB Init
 // ------------------------------
-export function openDatabase(): Promise<IDBDatabase> {
+function openDatabaseImpl(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
         Logger.debug('Opening database...');
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -50,47 +51,52 @@ export function openDatabase(): Promise<IDBDatabase> {
         };
     });
 }
+export const openDatabase = traced('Database', 'openDatabase', openDatabaseImpl);
 
 // ------------------------------
 // Add or Update Page Entry
 // ------------------------------
-export async function saveIndexedItem(item: IndexedItem): Promise<void> {
-    cachedItems = null; // Invalidate cache on write
-    const db = dbInstance || await openDatabase();
-    return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, 'readwrite');
-        const store = txn.objectStore(STORE_NAME);
-        const req = store.put(item);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-    });
-}
+export const saveIndexedItem = traced('Database', 'saveIndexedItem',
+    async function saveIndexedItem(item: IndexedItem): Promise<void> {
+        cachedItems = null; // Invalidate cache on write
+        const db = dbInstance || await openDatabaseImpl();
+        return new Promise((resolve, reject) => {
+            const txn = db.transaction(STORE_NAME, 'readwrite');
+            const store = txn.objectStore(STORE_NAME);
+            const req = store.put(item);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    }
+);
 
 // ------------------------------
 // Query Pages
 // ------------------------------
-export async function getAllIndexedItems(): Promise<IndexedItem[]> {
-    if (cachedItems) { return cachedItems; }
-    const db = dbInstance || await openDatabase();
-    return new Promise((resolve, reject) => {
-        const txn = db.transaction(STORE_NAME, 'readonly');
-        const store = txn.objectStore(STORE_NAME);
-        const req = store.getAll();
+export const getAllIndexedItems = traced('Database', 'getAllIndexedItems',
+    async function getAllIndexedItems(): Promise<IndexedItem[]> {
+        if (cachedItems) { return cachedItems; }
+        const db = dbInstance || await openDatabaseImpl();
+        return new Promise((resolve, reject) => {
+            const txn = db.transaction(STORE_NAME, 'readonly');
+            const store = txn.objectStore(STORE_NAME);
+            const req = store.getAll();
 
-        req.onsuccess = () => {
-            const items = req.result as IndexedItem[];
-            // Strip embedding arrays from the in-memory cache to prevent
-            // sustained multi-MB retention. Embeddings are persisted in IndexedDB
-            // and loaded on-demand by the embedding scorer / search engine.
-            for (const item of items) {
-                item.embedding = undefined;
-            }
-            cachedItems = items;
-            resolve(cachedItems);
-        };
-        req.onerror = () => reject(req.error);
-    });
-}
+            req.onsuccess = () => {
+                const items = req.result as IndexedItem[];
+                // Strip embedding arrays from the in-memory cache to prevent
+                // sustained multi-MB retention. Embeddings are persisted in IndexedDB
+                // and loaded on-demand by the embedding scorer / search engine.
+                for (const item of items) {
+                    item.embedding = undefined;
+                }
+                cachedItems = items;
+                resolve(cachedItems);
+            };
+            req.onerror = () => reject(req.error);
+        });
+    }
+);
 
 /**
  * Load stored embeddings from IndexedDB into an items array (by URL key).
@@ -98,7 +104,7 @@ export async function getAllIndexedItems(): Promise<IndexedItem[]> {
  * are available without keeping them permanently in the cachedItems cache.
  */
 export async function loadEmbeddingsInto(items: IndexedItem[]): Promise<number> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     const urlToItem = new Map<string, IndexedItem>();
     for (const item of items) { urlToItem.set(item.url, item); }
 
@@ -137,7 +143,7 @@ export async function loadEmbeddingsInto(items: IndexedItem[]): Promise<number> 
  * (getItemsWithoutEmbeddingsBatch) or getAllIndexedItems + loadEmbeddingsInto.
  */
 export async function getIndexedItemsBatches(batchSize = 1000): Promise<IndexedItem[][]> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     const txn = db.transaction(STORE_NAME, 'readonly');
     const store = txn.objectStore(STORE_NAME);
     const request = store.openCursor();
@@ -174,7 +180,7 @@ export async function getIndexedItemsBatches(batchSize = 1000): Promise<IndexedI
 
 // Get paginated results (offset-based)
 export async function getIndexedItemsPage(offset = 0, limit = 100): Promise<{ items: IndexedItem[]; total: number }> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     
     // Get total count
     const total = await new Promise<number>((resolve, reject) => {
@@ -229,7 +235,7 @@ export async function getIndexedItemsPage(offset = 0, limit = 100): Promise<{ it
 
 // Get recent items sorted by lastVisit (descending)
 export async function getRecentIndexedItems(limit = 50): Promise<IndexedItem[]> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
@@ -261,7 +267,7 @@ export async function getRecentIndexedItems(limit = 50): Promise<IndexedItem[]> 
 
 // Get single item by URL (key)
 export async function getIndexedItem(url: string): Promise<IndexedItem | null> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
@@ -274,7 +280,7 @@ export async function getIndexedItem(url: string): Promise<IndexedItem | null> {
 // Delete item by URL
 export async function deleteIndexedItem(url: string): Promise<void> {
     cachedItems = null; // Invalidate cache on write
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readwrite');
         const store = txn.objectStore(STORE_NAME);
@@ -287,7 +293,7 @@ export async function deleteIndexedItem(url: string): Promise<void> {
 // Clear all data from IndexedDB
 export async function clearIndexedDB(): Promise<void> {
     cachedItems = null; // Invalidate cache on write
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readwrite');
         const store = txn.objectStore(STORE_NAME);
@@ -306,7 +312,7 @@ export async function clearIndexedDB(): Promise<void> {
  * Avoids loading full embedding arrays into memory.
  */
 export async function countItemsWithoutEmbeddings(): Promise<{ total: number; withoutEmbeddings: number }> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
@@ -338,7 +344,7 @@ export async function countItemsWithoutEmbeddings(): Promise<{ total: number; wi
  * Returns full IndexedItem (needed to save back with the generated embedding).
  */
 export async function getItemsWithoutEmbeddingsBatch(batchSize: number): Promise<IndexedItem[]> {
-    const db = dbInstance || await openDatabase();
+    const db = dbInstance || await openDatabaseImpl();
     return new Promise((resolve, reject) => {
         const txn = db.transaction(STORE_NAME, 'readonly');
         const store = txn.objectStore(STORE_NAME);
@@ -406,7 +412,7 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
     try {
         // Use store.count() instead of getAllIndexedItems() to avoid
         // materializing every row just for a length check.
-        const db = dbInstance || await openDatabase();
+        const db = dbInstance || await openDatabaseImpl();
         const itemCount = await new Promise<number>((resolve, reject) => {
             const txn = db.transaction(STORE_NAME, 'readonly');
             const req = txn.objectStore(STORE_NAME).count();

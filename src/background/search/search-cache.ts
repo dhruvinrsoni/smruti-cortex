@@ -2,6 +2,7 @@
 
 import { IndexedItem } from '../schema';
 import { Logger } from '../../core/logger';
+import { Traced } from '../../core/traced';
 
 const logger = Logger.forComponent('SearchCache');
 
@@ -28,6 +29,7 @@ export class SearchCache {
   /**
    * Get cached results for a query
    */
+  @Traced()
   get(query: string): IndexedItem[] | null {
     const key = this.normalizeQuery(query);
     const entry = this.cache.get(key);
@@ -52,6 +54,7 @@ export class SearchCache {
   /**
    * Store results for a query
    */
+  @Traced()
   set(query: string, results: IndexedItem[]): void {
     const key = this.normalizeQuery(query);
 
@@ -72,6 +75,7 @@ export class SearchCache {
   /**
    * Clear the cache
    */
+  @Traced()
   clear(): void {
     const prevSize = this.cache.size;
     this.cache.clear();

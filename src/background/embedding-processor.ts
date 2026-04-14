@@ -1,6 +1,7 @@
 // embedding-processor.ts — Background embedding generation with pause/resume and search priority
 
 import { Logger } from '../core/logger';
+import { Traced } from '../core/traced';
 import { SettingsManager } from '../core/settings';
 import { countItemsWithoutEmbeddings, getItemsWithoutEmbeddingsBatch, saveIndexedItem } from './database';
 import { generateItemEmbedding } from './indexing';
@@ -41,6 +42,7 @@ class EmbeddingProcessorImpl {
      * Start background embedding generation.
      * If already running, this is a no-op.
      */
+    @Traced()
     async start(): Promise<void> {
         if (this.state === 'running' && this.loopRunning) {
             logger.debug('start', 'Already running, ignoring start request');
@@ -98,6 +100,7 @@ class EmbeddingProcessorImpl {
     /**
      * Pause embedding generation. Can be resumed later.
      */
+    @Traced()
     pause(): void {
         if (this.state !== 'running') {
             logger.debug('pause', `Cannot pause in state: ${this.state}`);
@@ -110,6 +113,7 @@ class EmbeddingProcessorImpl {
     /**
      * Resume embedding generation after pause.
      */
+    @Traced()
     resume(): void {
         if (this.state !== 'paused') {
             logger.debug('resume', `Cannot resume in state: ${this.state}`);
@@ -127,6 +131,7 @@ class EmbeddingProcessorImpl {
     /**
      * Stop embedding generation completely. Resets progress.
      */
+    @Traced()
     stop(): void {
         logger.info('stop', `Stopping embedding processor (state was: ${this.state})`);
         this.state = 'idle';
@@ -211,6 +216,7 @@ class EmbeddingProcessorImpl {
      * Main processing loop. Runs asynchronously until paused, stopped, or all items are embedded.
      * Fetches items in batches to avoid retrying the same failed item endlessly.
      */
+    @Traced()
     private async runLoop(): Promise<void> {
         if (this.loopRunning) {
             logger.debug('runLoop', 'Loop already running, skipping');
