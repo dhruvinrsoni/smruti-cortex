@@ -2797,7 +2797,7 @@ function initializePopup() {
     
     try {
       const response = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        chrome.runtime.sendMessage({ type: 'GET_FAVICON_CACHE_STATS' }, resolve);
+        chrome.runtime.sendMessage({ type: 'GET_FAVICON_CACHE_STATS' }, (r) => { void chrome.runtime.lastError; resolve(r); });
       });
       
       if (response?.status === 'OK') {
@@ -2821,7 +2821,7 @@ function initializePopup() {
 
     try {
       const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_STATS' }, resolve);
+        chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_STATS' }, (r) => { void chrome.runtime.lastError; resolve(r); });
       });
       if (resp?.status === 'OK') {
         countEl.textContent = `${resp.withEmbeddings}/${resp.total} pages`;
@@ -2871,7 +2871,7 @@ function initializePopup() {
 
     try {
       const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_PROGRESS' }, resolve);
+        chrome.runtime.sendMessage({ type: 'GET_EMBEDDING_PROGRESS' }, (r) => { void chrome.runtime.lastError; resolve(r); });
       });
 
       if (resp?.status !== 'OK' || !resp.progress) { return; }
@@ -2941,7 +2941,7 @@ function initializePopup() {
 
     try {
       const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        chrome.runtime.sendMessage({ type: 'GET_AI_CACHE_STATS' }, resolve);
+        chrome.runtime.sendMessage({ type: 'GET_AI_CACHE_STATS' }, (r) => { void chrome.runtime.lastError; resolve(r); });
       });
       if (resp?.status === 'OK') {
         countEl.textContent = `${resp.size} entries`;
@@ -3384,7 +3384,7 @@ function initializePopup() {
         clearFaviconCacheBtn.textContent = 'Clearing...';
         try {
           const response = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            chrome.runtime.sendMessage({ type: 'CLEAR_FAVICON_CACHE' }, resolve);
+            chrome.runtime.sendMessage({ type: 'CLEAR_FAVICON_CACHE' }, (r) => { void chrome.runtime.lastError; resolve(r); });
           });
           if (response?.status === 'OK') {
             showToast(`Cleared ${response.cleared} favicons, freed ${formatBytes(response.freedBytes)}`);
@@ -3414,7 +3414,7 @@ function initializePopup() {
         embeddingClearBtn.textContent = '⏳ Clearing...';
         try {
           const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            chrome.runtime.sendMessage({ type: 'CLEAR_ALL_EMBEDDINGS' }, resolve);
+            chrome.runtime.sendMessage({ type: 'CLEAR_ALL_EMBEDDINGS' }, (r) => { void chrome.runtime.lastError; resolve(r); });
           });
           if (resp?.status === 'OK') {
             showToast(`Cleared embeddings from ${resp.cleared} pages`);
@@ -3438,7 +3438,7 @@ function initializePopup() {
         embStartBtn.disabled = true;
         try {
           await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            chrome.runtime.sendMessage({ type: 'START_EMBEDDING_PROCESSOR' }, resolve);
+            chrome.runtime.sendMessage({ type: 'START_EMBEDDING_PROCESSOR' }, (r) => { void chrome.runtime.lastError; resolve(r); });
           });
           updateEmbeddingProcessorUI();
         } catch { /* ignore */ }
@@ -3450,7 +3450,7 @@ function initializePopup() {
         embPauseBtn.disabled = true;
         try {
           await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            chrome.runtime.sendMessage({ type: 'PAUSE_EMBEDDING_PROCESSOR' }, resolve);
+            chrome.runtime.sendMessage({ type: 'PAUSE_EMBEDDING_PROCESSOR' }, (r) => { void chrome.runtime.lastError; resolve(r); });
           });
           updateEmbeddingProcessorUI();
         } catch { /* ignore */ }
@@ -3462,7 +3462,7 @@ function initializePopup() {
         embResumeBtn.disabled = true;
         try {
           await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            chrome.runtime.sendMessage({ type: 'RESUME_EMBEDDING_PROCESSOR' }, resolve);
+            chrome.runtime.sendMessage({ type: 'RESUME_EMBEDDING_PROCESSOR' }, (r) => { void chrome.runtime.lastError; resolve(r); });
           });
           updateEmbeddingProcessorUI();
         } catch { /* ignore */ }
@@ -3481,7 +3481,7 @@ function initializePopup() {
         clearAICacheBtn.disabled = true;
         try {
           const resp = await new Promise<any>((resolve) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            chrome.runtime.sendMessage({ type: 'CLEAR_AI_CACHE' }, resolve);
+            chrome.runtime.sendMessage({ type: 'CLEAR_AI_CACHE' }, (r) => { void chrome.runtime.lastError; resolve(r); });
           });
           if (resp?.status === 'OK') {
             showToast(`Cleared ${resp.cleared} cached expansions`);

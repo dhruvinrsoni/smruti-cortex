@@ -1127,6 +1127,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     return new Promise<void>((resolve) => {
       try {
         chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
+          if (chrome.runtime.lastError) {
+            log.debug('settings', 'GET_SETTINGS lastError:', chrome.runtime.lastError.message);
+            resolve();
+            return;
+          }
           try {
             const settings = resp?.settings || {};
             cachedSettings = settings;
@@ -1211,6 +1216,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           log.warn('port', 'Error response from service worker:', response.error);
           aiSearchPending = false;
           hideSpinner();
+          if (response.error === 'Rate limited') {
+            const query = inputEl?.value?.trim() || '';
+            if (!query) { loadRecentHistory(); }
+          }
           return;
         }
 
@@ -1917,6 +1926,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     currentMode = 'history';
     if (modeBadgeEl) { modeBadgeEl.style.display = 'none'; }
     if (inputEl) { inputEl.style.paddingLeft = '12px'; inputEl.placeholder = 'Search your browsing history...'; }
+
+    // Show empty state immediately so overlay is never visually blank
+    renderResults([]);
+    recentHistoryRetryCount = 0;
 
     // Await fresh settings before loading defaults so toggles are respected
     fetchSettings().then(() => {
@@ -3684,11 +3697,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // Load recent history (smart default results when query is empty)
+  let recentHistoryRetryCount = 0;
   async function loadRecentHistory(): Promise<void> {
     const t0 = performance.now();
     perfLog('loadRecentHistory called');
 
-    // Check extension context validity
     if (!isExtensionContextValid()) {
       perfLog('Extension context invalid - showing error');
       currentResults = [];
@@ -3704,7 +3717,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const showSearches = cachedSettings?.showRecentSearches ?? true;
 
       const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
-      const response = await new Promise<{ results?: SearchResult[] }>((resolve) => {
+      const response = await new Promise<{ results?: SearchResult[]; error?: string }>((resolve) => {
         chrome.runtime.sendMessage(
           { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
           (resp) => {
@@ -3722,10 +3735,20 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         perfLog('loadRecentHistory — aborting, palette mode active: ' + currentMode);
         return;
       }
+
+      // Service worker returned error (e.g., "Service worker not ready") — retry once
+      if (response.error && recentHistoryRetryCount < 2) {
+        recentHistoryRetryCount++;
+        log.debug('loadRecentHistory', `SW returned error "${response.error}", retry ${recentHistoryRetryCount}/2`);
+        setTimeout(() => loadRecentHistory(), 500);
+        return;
+      }
+
       let recentItems: SearchResult[] = response.results || [];
       const sortBy = cachedSettings?.sortBy || 'most-recent';
       recentItems = sortResults(recentItems, sortBy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       currentResults = recentItems;
+      recentHistoryRetryCount = 0;
 
       selectedIndex = -1;
       renderResults(currentResults);
@@ -3740,7 +3763,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }).catch(e => log.debug('loadRecent', 'Failed to load recent interactions', e));
       }
 
-      // Show recent searches above results when enabled
       if (showSearches && resultsEl) {
         getRecentSearches().then(entries => {
           if (entries.length > 0 && resultsEl) {

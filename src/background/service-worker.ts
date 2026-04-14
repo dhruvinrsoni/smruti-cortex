@@ -201,7 +201,7 @@ function setupPortBasedMessaging() {
       
       let portDisconnected = false;
 
-      const PORT_RATE_LIMIT = 10;
+      const PORT_RATE_LIMIT = 30;
       const PORT_RATE_WINDOW_MS = 1000;
       let portSearchCount = 0;
       let portRateWindowStart = Date.now();
