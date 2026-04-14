@@ -47,6 +47,16 @@ class EmbeddingProcessorImpl {
             return;
         }
 
+        // Fast path: if we already completed, verify nothing new arrived
+        if (this.state === 'completed') {
+            const counts = await countItemsWithoutEmbeddings();
+            if (counts.withoutEmbeddings === 0) {
+                logger.debug('start', 'Still completed — no new items to embed');
+                return;
+            }
+            logger.info('start', `${counts.withoutEmbeddings} new items detected, restarting`);
+        }
+
         // Check if embeddings are enabled
         await SettingsManager.init();
         const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
