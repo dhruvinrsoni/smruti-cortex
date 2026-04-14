@@ -3717,13 +3717,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const showSearches = cachedSettings?.showRecentSearches ?? true;
 
       const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
-      const response = await new Promise<{ results?: SearchResult[]; error?: string }>((resolve) => {
+      const response = await new Promise<{ results?: SearchResult[]; error?: string; _lastError?: boolean }>((resolve) => {
         chrome.runtime.sendMessage(
           { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
           (resp) => {
             if (chrome.runtime.lastError) {
               perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
-              resolve({ results: [] });
+              resolve({ results: [], _lastError: true });
             } else {
               resolve(resp || { results: [] });
             }
@@ -3736,10 +3736,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         return;
       }
 
-      // Service worker returned error (e.g., "Service worker not ready") — retry once
-      if (response.error && recentHistoryRetryCount < 2) {
+      // Service worker not ready or connection failed (e.g., SW still cold-starting
+      // after hibernation wake) — retry with backoff before giving up
+      const shouldRetry = (response.error || response._lastError) && recentHistoryRetryCount < 2;
+      if (shouldRetry) {
         recentHistoryRetryCount++;
-        log.debug('loadRecentHistory', `SW returned error "${response.error}", retry ${recentHistoryRetryCount}/2`);
+        const reason = response.error || 'lastError (connection failed)';
+        log.debug('loadRecentHistory', `SW unavailable: "${reason}", retry ${recentHistoryRetryCount}/2`);
         setTimeout(() => loadRecentHistory(), 500);
         return;
       }

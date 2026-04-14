@@ -262,22 +262,18 @@ function setupPortBasedMessaging() {
 // Register port listener immediately
 setupPortBasedMessaging();
 
-(async function initLogger() {
-  // Initialize logger first, then start logging
-  await Logger.init();
-  await SettingsManager.init();
-  logger.info('initLogger', '[SmrutiCortex] Logger and settings initialized, starting main init');
-  logger.debug('initLogger', 'Service worker script starting');
-
-  // Set up messaging immediately
-  logger.debug('initLogger', '[SmrutiCortex] Setting up message listeners');
-  browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    logger.trace('onMessage', 'Message listener triggered with message:', msg);
-    logger.trace('onMessage', 'Sender:', sender);
-    (async () => {
-      logger.trace('onMessage', 'Processing message asynchronously');
-      try {
-        logger.trace('onMessage', 'Message type:', msg.type);
+// Register onMessage listener SYNCHRONOUSLY at module level (Chrome MV3 requirement).
+// All event listeners must be registered in the first execution tick so Chrome can
+// dispatch events immediately after waking a terminated service worker (e.g. after
+// laptop hibernation). The handler itself gates init-dependent messages behind
+// `await initializationPromise` so they wait for DB/indexing to finish.
+browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  logger.trace('onMessage', 'Message listener triggered with message:', msg);
+  logger.trace('onMessage', 'Sender:', sender);
+  (async () => {
+    logger.trace('onMessage', 'Processing message asynchronously');
+    try {
+      logger.trace('onMessage', 'Message type:', msg.type);
         switch (msg.type) {
           case 'PING':
             logger.trace('onMessage', 'Handling PING');
@@ -1674,9 +1670,17 @@ setupPortBasedMessaging();
     })();
     logger.trace('onMessage', 'Returning true for async response');
     return true; // async response
-  });
+});
 
-  // Now start the main initialization
+// Async bootstrap: initialize logger, settings, then full service worker init.
+// Listeners above are already registered synchronously so Chrome can dispatch
+// events immediately; this IIFE handles the slower storage-backed initialization.
+(async function initLogger() {
+  await Logger.init();
+  await SettingsManager.init();
+  logger.info('initLogger', '[SmrutiCortex] Logger and settings initialized, starting main init');
+  logger.debug('initLogger', 'Service worker script starting');
+
   try {
     await init();
   } catch (err) {
