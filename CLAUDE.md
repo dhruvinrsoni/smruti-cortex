@@ -55,12 +55,68 @@ Navigate here first — don't broad-search when the location is known:
 | `npm run build:prod` | Production build (minified) | ~30s |
 | `npm run build:dev` | Dev build (source maps) | ~10s |
 | `npm run package` | Build + zip for Chrome Web Store | ~35s |
-| `npm run verify` | Full codebase verification: lint + build + build:prod + coverage + E2E | ~8min |
-| `npm run preflight` | Pre-release check: verify + manifest/version/dist checks + package zip + store-prep | ~10min |
+| `npm run verify` | Full codebase verification (runs ALL steps, reports at end) | ~8min |
+| `npm run verify -- --no-e2e` | Same as verify but skips E2E tests | ~2min |
+| `npm run preflight` | Pre-release check: verify + prod release validations | ~10min |
 | `node scripts/release.mjs <patch\|minor\|major>` | Full release: bump, changelog, tag, push, GitHub Release, zip | ~60s |
 | `npm run store-prep` | Print Chrome Web Store submission text | instant |
 
 **Note:** Pre-commit hook (`scripts/pre-commit-check.js`) runs build+test+coverage for product files. Skips for docs-only changes. Override with `FORCE_PRE_COMMIT=1`.
+
+---
+
+## Scripts Quick Reference
+
+Quick-reference for the build/release scripts. Useful if you come back after 6 months.
+
+### `npm run verify` (`scripts/verify.mjs`)
+**What:** Runs lint → build:dev → build:prod → unit tests with coverage → E2E tests.
+**Key behavior:** Runs ALL steps even if one fails, then shows a summary table at the end so you can fix everything in one go. Pass `--no-e2e` to skip the 5-minute E2E suite.
+**When to use:** After big changes, before merging, or whenever you want full confidence.
+
+### `npm run preflight` (`scripts/preflight.mjs`)
+**What:** Runs `npm run verify` first, then adds production release checks:
+- **Version sync** — confirms `package.json` and `manifest.json` have the same version (they can drift if you manually edit one)
+- **Manifest MV3 validation** — confirms `manifest_version: 3`, name/description present, required permissions (`history`, `storage`, `activeTab`, `tabs`) are declared
+- **dist/ integrity** — no underscore directories (Chrome MV3 rejects `_` dirs), all 6 critical output files exist
+- **Package zip** — creates the `release/smruti-cortex-vX.Y.Z.zip` ready to upload
+- **Git status** — warns if working tree is dirty or you're not on `main`
+- **Store prep preview** — prints the "What's New" text, permission justifications, and privacy summary
+**When to use:** Right before running `release.mjs`. This is your "are we cleared for takeoff?" check.
+
+### `node scripts/release.mjs <patch|minor|major>` 
+**What:** Fully automated release pipeline:
+1. Validates: must be on `main`, clean tree, `gh` CLI installed
+2. Bumps version in `package.json` (e.g. 9.0.0 → 9.1.0)
+3. Syncs version to `manifest.json` via `sync-version.mjs`
+4. Generates changelog from git commit history (grouped by `feat:`, `fix:`, etc.)
+5. Runs tests and prod build (aborts and reverts if either fails)
+6. Commits `package.json` + `manifest.json` + `CHANGELOG.md`
+7. Creates git tag `vX.Y.Z`
+8. Pushes commit and tag to origin
+9. Creates GitHub Release with changelog notes
+10. Packages zip for Chrome Web Store upload
+**Supports `--dry-run`** to preview everything without pushing.
+
+### `npm run store-prep` (`scripts/store-prep.mjs`)
+**What:** Generates copy-paste text for Chrome Web Store submission:
+- "What's New" text (≤500 chars, extracted from `CHANGELOG.md`)
+- Permission justifications (one-liner for each permission explaining why it's needed)
+- Privacy summary (all data local, no telemetry, etc.)
+- Upload path for the zip file
+**When to use:** After `release.mjs`, when you're filling out the Chrome Web Store submission form.
+
+### `scripts/sync-version.mjs`
+**What:** Copies the version string from `package.json` → `manifest.json`. This is the "version sync check" — `package.json` is the single source of truth for version numbers, and this script ensures `manifest.json` always matches. Runs automatically as part of every build.
+
+### Pre-commit hook (`scripts/pre-commit-check.js`)
+**What:** Runs automatically on every `git commit`:
+1. Detects staged files — skips if only docs/config changed
+2. ESLint auto-fix on staged `.ts` files
+3. Build (dev) — blocking
+4. Build (prod) — blocking
+5. Unit tests with coverage — non-blocking (warns but doesn't block)
+**Override:** `FORCE_PRE_COMMIT=1 git commit ...` to force checks even for docs-only changes.
 
 ---
 
