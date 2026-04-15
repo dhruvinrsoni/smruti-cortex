@@ -185,6 +185,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let cachedBookmarks: chrome.bookmarks.BookmarkTreeNode[] | null = null;
   let firstUseHintEl: HTMLDivElement | null = null;
   let firstUseHintTimer: number | null = null;
+  // Pre-cache extension asset URLs (safe: context valid at IIFE init time)
+  const ASSET_LOGO = chrome.runtime.getURL('../assets/icon-48.svg');
+  const ASSET_SETTINGS_ICON = chrome.runtime.getURL('../assets/icon-settings.svg');
+  const ASSET_FAVICON_FALLBACK = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+
   // Helper: returns the currently focused element inside our shadow root if any
   function getFocusedElement(): Element | null {
     try {
@@ -206,6 +211,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return false;
     }
   }
+
+  /** Consume chrome.runtime.lastError on fire-and-forget sendMessage calls. */
+  const ack = () => { void chrome.runtime.lastError; };
 
   // No-reload reconnect: re-establish port and retry search without reloading
   // the page. After an extension update, the service worker re-injects this
@@ -1546,7 +1554,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     
     const logo = document.createElement('img');
     logo.className = 'logo';
-    logo.src = chrome.runtime.getURL('../assets/icon-48.svg');
+    logo.src = ASSET_LOGO;
     logo.alt = 'SmrutiCortex';
     
     inputEl = document.createElement('input');
@@ -1618,7 +1626,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const newSort = sortOptions[currentSortIndex].value;
       // Persist sort preference via settings (synced with popup)
       try {
-        chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { sortBy: newSort } });
+        chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { sortBy: newSort } }, ack);
         if (cachedSettings) { cachedSettings.sortBy = newSort as any; } // eslint-disable-line @typescript-eslint/no-explicit-any
       } catch {
         // Extension context may be invalid
@@ -1660,7 +1668,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     settingsBtn.tabIndex = 0; // Make focusable
     
     const settingsIcon = document.createElement('img');
-    settingsIcon.src = chrome.runtime.getURL('../assets/icon-settings.svg');
+    settingsIcon.src = ASSET_SETTINGS_ICON;
     settingsIcon.alt = 'Settings';
     settingsIcon.style.width = '16px';
     settingsIcon.style.height = '16px';
@@ -1674,7 +1682,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         return;
       }
       // Open the extension popup page in a new tab
-      chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
+      chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' }, ack);
       hideOverlay();
     });
     
@@ -2555,7 +2563,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             chrome.runtime.sendMessage({
               type: 'SETTINGS_CHANGED',
               settings: { [cmd.settingKey]: newVal },
-            });
+            }, ack);
           } catch { /* context invalidated */ }
           applySettingSideEffects(cmd.settingKey);
           showToast(`${cmd.label}: ${newVal ? 'ON' : 'OFF'}`);
@@ -2574,7 +2582,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               chrome.runtime.sendMessage({
                 type: 'SETTINGS_CHANGED',
                 settings: { [cmd.settingKey]: value },
-              });
+              }, ack);
             } catch { /* context invalidated */ }
             applySettingSideEffects(cmd.settingKey);
             showToast(`${cmd.label}`);
@@ -2592,7 +2600,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             if (patch && cachedSettings) {
               cachedSettings = { ...cachedSettings, ...patch };
               try {
-                chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: patch });
+                chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: patch }, ack);
               } catch { /* context invalidated */ }
               applySettingsPatchSideEffects(patch);
               showToast(`${cmd.label} — saved`);
@@ -2700,7 +2708,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               type: 'WINDOW_CREATE',
               windowType: 'tab',
               url: cmd.url,
-            });
+            }, ack);
           } catch {
             window.open(cmd.url, '_blank');
           }
@@ -2835,6 +2843,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               return;
             }
             chrome.runtime.sendMessage({ type: 'IMPORT_INDEX', items }, (resp) => {
+              if (chrome.runtime.lastError) { showToast('Import failed: service worker unavailable', 'error'); return; }
               if (resp?.status === 'OK') {
                 showToast('Index imported successfully');
               } else {
@@ -2937,7 +2946,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const rawFaviconUrl = tab.favIconUrl || '';
         const faviconUrl = (location.protocol === 'https:' && rawFaviconUrl.startsWith('http://'))
           ? '' : rawFaviconUrl;
-        const tabFavSrc = faviconUrl || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+        const tabFavSrc = faviconUrl || ASSET_FAVICON_FALLBACK;
         li.innerHTML = `
           <img class="tab-favicon" src="${tabFavSrc}" alt="">
           <div class="tab-details">
@@ -2958,7 +2967,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           const sk = (ev as MouseEvent).shiftKey;
           if (sk && tabUrl) {
             try {
-              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl });
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl }, ack);
             } catch { window.open(tabUrl); }
             hideOverlay();
           } else {
@@ -3018,7 +3027,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const rawClosedFavicon = tab.favIconUrl || '';
       const closedFavicon = (location.protocol === 'https:' && rawClosedFavicon.startsWith('http://'))
         ? '' : rawClosedFavicon;
-      const closedFavSrc = closedFavicon || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
+      const closedFavSrc = closedFavicon || ASSET_FAVICON_FALLBACK;
       li.innerHTML = `
         <img class="tab-favicon" src="${closedFavSrc}" alt="">
         <div class="tab-details">
@@ -3037,12 +3046,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const sk = (ev as MouseEvent).shiftKey;
         if (sessionId && !sk) {
           try {
-            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId });
+            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId }, ack);
           } catch { /* ignore */ }
         } else if (closedUrl) {
           if (sk) {
             try {
-              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl });
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl }, ack);
             } catch { window.open(closedUrl); }
           } else {
             window.open(closedUrl, '_blank');
@@ -3056,7 +3065,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function switchToTab(tabId: number, windowId: number): void {
     try {
-      chrome.runtime.sendMessage({ type: 'SWITCH_TO_TAB', tabId, windowId });
+      chrome.runtime.sendMessage({ type: 'SWITCH_TO_TAB', tabId, windowId }, ack);
     } catch { /* ignore */ }
     hideOverlay();
   }
@@ -3151,8 +3160,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
 
       const folderPath = (bm as unknown as { folderPath?: string }).folderPath || '';
+      let qsBmFavUrl = '';
+      try { qsBmFavUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url || '').hostname)}&sz=16`; } catch { /* malformed URL */ }
       li.innerHTML = `
-        <img class="tab-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="">
+        <img class="tab-favicon" src="${qsBmFavUrl || ASSET_FAVICON_FALLBACK}" alt="">
         <div class="tab-details">
           <span class="tab-title">${escapeHtml(bm.title || 'Untitled')}</span>
           ${folderPath ? `<span class="bookmark-folder">📁 ${escapeHtml(folderPath)}</span>` : ''}
@@ -3162,11 +3173,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       wireHideImgOnError(li.querySelector('img'));
 
       li.addEventListener('click', (e) => {
-        const url = bm.url!;
+        const url = bm.url || '';
+        if (!url) { return; }
         if ((e as MouseEvent).shiftKey) {
-          try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url }); } catch { window.open(url); }
+          try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url }, ack); } catch { window.open(url); }
         } else {
-          try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'tab', url }); } catch { window.open(url, '_blank'); }
+          try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'tab', url }, ack); } catch { window.open(url, '_blank'); }
         }
         hideOverlay();
       });
@@ -3206,7 +3218,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         chrome.runtime.sendMessage({
           type: 'SETTINGS_CHANGED',
           settings: { commandPaletteOnboarded: true },
-        });
+        }, ack);
       } catch { /* ignore */ }
     }
   }
@@ -3243,12 +3255,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const closedUrl = selected.dataset.closedUrl || '';
         if (sessionId && !shiftKey) {
           try {
-            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId });
+            chrome.runtime.sendMessage({ type: 'REOPEN_TAB', sessionId }, ack);
           } catch { /* ignore */ }
         } else if (closedUrl) {
           if (shiftKey) {
             try {
-              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl });
+              chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: closedUrl }, ack);
             } catch { window.open(closedUrl); }
           } else {
             window.open(closedUrl, '_blank');
@@ -3263,7 +3275,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (Number.isFinite(tabId) && Number.isFinite(windowId)) {
         if (shiftKey && tabUrl) {
           try {
-            chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl });
+            chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: tabUrl }, ack);
           } catch { window.open(tabUrl); }
           hideOverlay();
         } else {
@@ -3495,6 +3507,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         maskingLevel: 'partial',
         method,
       }, (resp) => {
+        if (chrome.runtime.lastError) { btn!.textContent = 'Error'; btn!.style.color = '#ef4444'; return; }
         if (resp?.status === 'OK') {
           if (resp.method === 'api') {
             btn!.textContent = 'Filed!';
@@ -3650,14 +3663,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           const next = !cur;
           if (s) { s[def.key] = next; }
           try {
-            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
+            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } }, ack);
           } catch { /* context invalidated */ }
         } else if (def.type === 'cycle') {
           const cur = s?.[def.key];
           const next = getNextCycleValue(def, cur);
           if (s) { s[def.key] = next; }
           try {
-            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } });
+            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } }, ack);
           } catch { /* context invalidated */ }
         }
         applySettingSideEffects(def.key);
@@ -3990,9 +4003,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
         const fav = document.createElement('img');
         fav.className = 'card-favicon';
-        const qsFavFallback = chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
-        fav.src = qsFavFallback;
-        fav.addEventListener('error', () => { fav.src = qsFavFallback; }, { once: true });
+        fav.src = ASSET_FAVICON_FALLBACK;
+        fav.addEventListener('error', () => { fav.src = ASSET_FAVICON_FALLBACK; }, { once: true });
         if (loadFavicons) {
           try {
             const hostname = new URL(item.url).hostname;

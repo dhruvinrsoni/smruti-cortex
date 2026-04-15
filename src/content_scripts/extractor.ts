@@ -71,7 +71,10 @@ if (window.top !== window) {
         try {
           // Request settings to check user blacklist
           const response = await new Promise<{ settings?: { sensitiveUrlBlacklist?: string[] } } | undefined>((resolve) => {
-            runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
+            runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
+              void runtime.lastError;
+              resolve(resp);
+            });
           });
           
           if (response && response.settings && response.settings.sensitiveUrlBlacklist) {
@@ -128,7 +131,7 @@ if (window.top !== window) {
       // send to background (runtime already declared above)
       if (runtime && runtime.sendMessage) {
         runtime.sendMessage({ type: 'METADATA_CAPTURE', payload }, () => {
-          // optional callback; ignore errors
+          void runtime.lastError;
         });
       }
     } catch {

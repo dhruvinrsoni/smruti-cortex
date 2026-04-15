@@ -1944,7 +1944,7 @@ browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) => {
             if (cmd?.url) {
                 await browserAPI.tabs.create({ url: cmd.url });
             } else if (cmd?.messageType) {
-                browserAPI.runtime.sendMessage({ type: cmd.messageType });
+                browserAPI.runtime.sendMessage({ type: cmd.messageType }, () => { void browserAPI.runtime.lastError; });
             }
             return;
         }

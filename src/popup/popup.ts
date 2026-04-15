@@ -857,8 +857,9 @@ function initializePopup() {
             li.dataset.tabUrl = tab.url;
           }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const popupTabFav = tab.favIconUrl || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
           li.innerHTML = `
-            <img src="${tab.favIconUrl || ''}" alt="" style="width:16px;height:16px;border-radius:3px;">
+            <img src="${popupTabFav}" alt="" style="width:16px;height:16px;border-radius:3px;">
             <div style="flex:1;overflow:hidden;">
               <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.title || 'Untitled')}</div>
               <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tab.url || '')}</div>
@@ -872,7 +873,7 @@ function initializePopup() {
             if (sk && url) {
               chrome.tabs.create({ url, active: false });
             } else if (typeof tab.id === 'number' && typeof tab.windowId === 'number') {
-              void sendMessage({ type: 'SWITCH_TO_TAB', tabId: tab.id, windowId: tab.windowId });
+              sendMessage({ type: 'SWITCH_TO_TAB', tabId: tab.id, windowId: tab.windowId }).catch(() => { /* SW unavailable */ });
             }
           });
           li.addEventListener('mouseenter', () => {
@@ -916,17 +917,21 @@ function initializePopup() {
             li.dataset.bookmarkUrl = bm.url;
           }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          let bmFavUrl = '';
+          try { bmFavUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url || '').hostname)}&sz=16`; } catch { /* malformed URL */ }
           li.innerHTML = `
-            <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bm.url!).hostname)}&sz=16" alt="" style="width:16px;height:16px;border-radius:3px;">
+            <img src="${bmFavUrl || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg')}" alt="" style="width:16px;height:16px;border-radius:3px;">
             <div style="flex:1;overflow:hidden;">
               <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.title || 'Untitled')}</div>
               <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(bm.url || '')}</div>
             </div>
           `;
           wireHideImgOnError(li.querySelector('img'));
+          const bmClickUrl = bm.url || '';
           li.addEventListener('click', (ev) => {
+            if (!bmClickUrl) { return; }
             const sk = (ev as MouseEvent).shiftKey;
-            chrome.tabs.create({ url: bm.url!, active: !sk });
+            chrome.tabs.create({ url: bmClickUrl, active: !sk });
           });
           li.addEventListener('mouseenter', () => {
             popupSelectedIndex = idx;
@@ -1381,7 +1386,7 @@ function initializePopup() {
         if (shiftKey && url) {
           chrome.tabs.create({ url, active: false });
         } else {
-          void sendMessage({ type: 'SWITCH_TO_TAB', tabId: Number(tabId), windowId: Number(windowId) });
+          sendMessage({ type: 'SWITCH_TO_TAB', tabId: Number(tabId), windowId: Number(windowId) }).catch(() => { /* SW unavailable */ });
         }
       }
       return;
