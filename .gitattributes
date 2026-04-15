@@ -1,0 +1,27 @@
+# Auto-detect text files and normalize line endings to LF in the repo.
+# On checkout, Git uses the platform's native line ending (CRLF on Windows).
+* text=auto
+
+# Force LF for all source files — prevents phantom diffs from build scripts
+# that write LF regardless of platform.
+*.ts    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.svg   text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sh    text eol=lf
+
+# Binary files — never touch
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
