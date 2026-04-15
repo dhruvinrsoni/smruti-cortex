@@ -1344,7 +1344,7 @@ describe('omnibox listeners', () => {
   it('onInputEntered sends message for / command with messageType', async () => {
     const onInputEntered = o.omniboxOnInputEntered[0];
     await onInputEntered('/settings', 'newForegroundTab');
-    expect(o.runtimeSendMessage).toHaveBeenCalledWith({ type: 'OPEN_SETTINGS' });
+    expect(o.runtimeSendMessage).toHaveBeenCalledWith({ type: 'OPEN_SETTINGS' }, expect.any(Function));
   });
 
   it('onInputEntered creates tab for command with url', async () => {
