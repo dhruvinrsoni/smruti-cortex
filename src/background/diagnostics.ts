@@ -316,12 +316,34 @@ const performanceCollector: IDiagnosticCollector = {
     }
 };
 
+/**
+ * Built-in: Recent logs collector (ring buffer from Logger)
+ */
+const logsCollector: IDiagnosticCollector = {
+    name: 'logs',
+    async collect(): Promise<unknown> {
+        const entries = Logger.getRecentLogs(50);
+        return {
+            count: entries.length,
+            entries: entries.map(e => ({
+                timestamp: e.timestamp,
+                level: e.level,
+                component: e.context.className,
+                method: e.context.methodName,
+                message: e.message,
+                ...(e.data ? { data: e.data } : {}),
+            })),
+        };
+    }
+};
+
 // Register built-in collectors
 registerCollector(systemInfoCollector);
 registerCollector(storageCollector);
 registerCollector(settingsCollector);
 registerCollector(healthCollector);
 registerCollector(performanceCollector);
+registerCollector(logsCollector);
 
 /**
  * Full diagnostic report

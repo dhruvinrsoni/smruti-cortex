@@ -2,7 +2,7 @@
 // Ensures the extension can recover from any state and remains functional
 
 import { Logger } from '../core/logger';
-import { openDatabase, getAllIndexedItems, clearIndexedDB, getForceRebuildFlag, setForceRebuildFlag } from './database';
+import { openDatabase, getAllIndexedItems, clearIndexedDB, getForceRebuildFlag, setForceRebuildFlag, resetDbInstance } from './database';
 import { performFullRebuild } from './indexing';
 import { performanceTracker } from './performance-monitor';
 
@@ -13,6 +13,9 @@ const MIN_EXPECTED_ITEMS = 10; // Minimum items expected for a "healthy" index
 const HEALTH_CHECK_INTERVAL_MS = 60 * 1000; // Check every 60 seconds
 const MAX_RETRY_ATTEMPTS = 3; // Maximum retry attempts for operations
 const RETRY_DELAY_MS = 1000; // Delay between retries
+const MAX_CONSECUTIVE_FAILURES = 3; // Escalate to recoverFromCorruption after N consecutive failures
+
+let consecutiveUnhealthy = 0;
 
 /**
  * Health status of the extension
@@ -206,10 +209,38 @@ export function startHealthMonitoring(): void {
     
     // Set up periodic checks
     healthCheckTimer = setInterval(() => {
-        checkHealth().then(status => {
-            if (status.indexedItems === 0 && status.databaseOpen) {
+        checkHealth().then(async (status) => {
+            if (status.isHealthy) {
+                consecutiveUnhealthy = 0;
+                // Check if embedding processor is stuck in error and auto-recover
+                try {
+                    const { embeddingProcessor } = await import('./embedding-processor');
+                    const { SettingsManager } = await import('../core/settings');
+                    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled');
+                    if (embeddingsEnabled && embeddingProcessor.getProgress().state === 'error') {
+                        logger.info('startHealthMonitoring', '🔄 Restarting embedding processor stuck in error state');
+                        await embeddingProcessor.start();
+                    }
+                } catch { /* embedding processor not available */ }
+                return;
+            }
+            consecutiveUnhealthy++;
+
+            if (!status.databaseOpen) {
+                logger.warn('startHealthMonitoring', '❌ Database inaccessible, attempting corruption recovery');
+                resetDbInstance();
+                await recoverFromCorruption();
+                return;
+            }
+
+            if (status.indexedItems === 0) {
                 logger.warn('startHealthMonitoring', '⚠️ Empty index detected, triggering self-heal');
-                return selfHeal('Empty index detected during periodic check');
+                const healed = await selfHeal('Empty index detected during periodic check');
+                if (!healed && consecutiveUnhealthy >= MAX_CONSECUTIVE_FAILURES) {
+                    logger.warn('startHealthMonitoring', `⚠️ ${consecutiveUnhealthy} consecutive failures, escalating to corruption recovery`);
+                    await recoverFromCorruption();
+                    consecutiveUnhealthy = 0;
+                }
             }
         }).catch(err => {
             logger.warn('startHealthMonitoring', 'Periodic health check failed', err);
@@ -321,14 +352,17 @@ export async function recoverFromCorruption(): Promise<boolean> {
     logger.info('recoverFromCorruption', '🔧 Attempting database corruption recovery...');
     
     try {
-        // Step 1: Clear IndexedDB completely
+        // Step 1: Reset cached DB handle so we get a fresh connection
+        resetDbInstance();
+
+        // Step 2: Clear IndexedDB completely
         logger.info('recoverFromCorruption', '🗑️ Clearing corrupted database...');
         await clearIndexedDB();
         
-        // Step 2: Wait a moment for cleanup
+        // Step 3: Wait a moment for cleanup
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Step 3: Reopen database (fresh schema)
+        // Step 4: Reopen database (fresh schema)
         logger.info('recoverFromCorruption', '📂 Reopening fresh database...');
         await openDatabase();
         

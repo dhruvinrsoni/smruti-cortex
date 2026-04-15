@@ -11,6 +11,7 @@ vi.mock('../database', () => ({
   clearIndexedDB: vi.fn(),
   getForceRebuildFlag: vi.fn(),
   setForceRebuildFlag: vi.fn(),
+  resetDbInstance: vi.fn(),
 }));
 
 vi.mock('../indexing', () => ({

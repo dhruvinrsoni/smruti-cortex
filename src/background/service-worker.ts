@@ -17,7 +17,7 @@ import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
 import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring } from './resilience';
+import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring, recoverFromCorruption, ensureReady, handleQuotaExceeded } from './resilience';
 
 // Promisified Chrome API helpers for callback-only APIs
 function hasOptionalPermission(perm: string): Promise<boolean> {
@@ -491,13 +491,20 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               if (initializationPromise) {
                 logger.debug('onMessage', 'Service worker initializing, waiting for init before handling:', msg.type);
                 try { await initializationPromise; } catch {
+                  logger.info('onMessage', 'Init promise failed, attempting ensureReady self-heal');
+                  const healed = await ensureReady();
+                  if (!healed) {
+                    sendResponse({ error: 'Service worker not ready' });
+                    break;
+                  }
+                }
+              } else {
+                logger.debug('onMessage', 'Service worker not initialized, attempting ensureReady self-heal');
+                const healed = await ensureReady();
+                if (!healed) {
                   sendResponse({ error: 'Service worker not ready' });
                   break;
                 }
-              } else {
-                logger.debug('onMessage', 'Service worker not initialized yet, rejecting message:', msg.type);
-                sendResponse({ error: 'Service worker not ready' });
-                break;
               }
             }
             switch (msg.type) {
@@ -533,9 +540,14 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 logger.info('onMessage', '🔄 REBUILD_INDEX requested by user');
                 try {
                   await performFullRebuild();
+                  const { clearSearchCache } = await import('./search/search-cache');
+                  clearSearchCache();
                   logger.info('onMessage', '✅ REBUILD_INDEX completed successfully');
                   sendResponse({ status: 'OK', message: 'Index rebuilt successfully' });
                 } catch (error) {
+                  if ((error as Error).name === 'QuotaExceededError') {
+                    await handleQuotaExceeded();
+                  }
                   logger.error('onMessage', '❌ REBUILD_INDEX failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
@@ -725,7 +737,11 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               case 'SELF_HEAL': {
                 logger.info('onMessage', '🔧 SELF_HEAL requested by user');
                 try {
-                  const success = await selfHeal('User requested self-heal');
+                  let success = await selfHeal('User requested self-heal');
+                  if (!success) {
+                    logger.info('onMessage', '🔧 selfHeal failed, escalating to recoverFromCorruption');
+                    success = await recoverFromCorruption();
+                  }
                   const health = await checkHealth();
                   sendResponse({ 
                     status: success ? 'OK' : 'PARTIAL', 
@@ -734,6 +750,122 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   });
                 } catch (error) {
                   logger.error('onMessage', 'SELF_HEAL failed:', error);
+                  sendResponse({ status: 'ERROR', message: (error as Error).message });
+                }
+                break;
+              }
+
+              case 'RUN_TROUBLESHOOTER': {
+                logger.info('onMessage', '🩺 RUN_TROUBLESHOOTER requested');
+                try {
+                  const overallStart = performance.now();
+                  const steps: Array<{ id: string; label: string; status: string; detail: string; durationMs: number }> = [];
+
+                  const runStep = async (
+                    id: string,
+                    label: string,
+                    fn: () => Promise<{ status: string; detail: string }>,
+                  ) => {
+                    const t0 = performance.now();
+                    try {
+                      const r = await fn();
+                      steps.push({ id, label, ...r, durationMs: Math.round(performance.now() - t0) });
+                    } catch (err) {
+                      steps.push({ id, label, status: 'fail', detail: (err as Error).message, durationMs: Math.round(performance.now() - t0) });
+                    }
+                  };
+
+                  // 1. Service Worker
+                  await runStep('sw-alive', 'Service Worker', async () => ({ status: 'pass', detail: 'Running' }));
+
+                  // 2. Database
+                  await runStep('db-open', 'Database', async () => {
+                    try {
+                      await openDatabase();
+                      return { status: 'pass', detail: 'Open, healthy' };
+                    } catch {
+                      const recovered = await recoverFromCorruption();
+                      return recovered
+                        ? { status: 'healed', detail: 'Recovered from corruption' }
+                        : { status: 'fail', detail: 'Database inaccessible' };
+                    }
+                  });
+
+                  // 3. Search Index
+                  await runStep('index-health', 'Search Index', async () => {
+                    const items = await getAllIndexedItems();
+                    if (items.length > 0) {
+                      return { status: 'pass', detail: `${items.length.toLocaleString()} items indexed` };
+                    }
+                    const healed = await selfHeal('Troubleshooter');
+                    const after = await getAllIndexedItems();
+                    return after.length > 0
+                      ? { status: 'healed', detail: `Rebuilt — ${after.length.toLocaleString()} items indexed` }
+                      : { status: 'fail', detail: 'Index empty after rebuild' };
+                  });
+
+                  // 4. Search Cache
+                  await runStep('search-cache', 'Search Cache', async () => {
+                    const { clearSearchCache: clearCache } = await import('./search/search-cache');
+                    clearCache();
+                    return { status: 'pass', detail: 'Cleared' };
+                  });
+
+                  // 5. Favicon Cache
+                  await runStep('favicon-cache', 'Favicon Cache', async () => {
+                    const { getFaviconCacheStats, clearExpiredFavicons } = await import('./favicon-cache');
+                    const stats = await getFaviconCacheStats();
+                    const cleared = await clearExpiredFavicons();
+                    const detail = cleared > 0
+                      ? `${stats.count} entries, cleared ${cleared} expired`
+                      : `${stats.count} entries`;
+                    return { status: cleared > 0 ? 'healed' : 'pass', detail };
+                  });
+
+                  // 6. AI / Embeddings
+                  await runStep('embeddings', 'AI / Embeddings', async () => {
+                    const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled');
+                    if (!embeddingsEnabled) {
+                      return { status: 'skipped', detail: 'Disabled' };
+                    }
+                    const { embeddingProcessor } = await import('./embedding-processor');
+                    const progress = embeddingProcessor.getProgress();
+                    if (progress.state === 'error') {
+                      await embeddingProcessor.start();
+                      return { status: 'healed', detail: 'Restarted from error state' };
+                    }
+                    const pct = progress.total > 0
+                      ? Math.round((progress.withEmbeddings / progress.total) * 100)
+                      : 0;
+                    return { status: 'pass', detail: `${progress.state} (${pct}%)` };
+                  });
+
+                  // 7. Ollama Connectivity
+                  await runStep('ollama', 'Ollama Connectivity', async () => {
+                    const ollamaEnabled = SettingsManager.getSetting('ollamaEnabled');
+                    if (!ollamaEnabled) {
+                      return { status: 'skipped', detail: 'Disabled' };
+                    }
+                    const { isCircuitBreakerOpen } = await import('./ollama-service');
+                    return isCircuitBreakerOpen()
+                      ? { status: 'fail', detail: 'Circuit breaker open (cooling down)' }
+                      : { status: 'pass', detail: 'Connected' };
+                  });
+
+                  const hasHealed = steps.some(s => s.status === 'healed');
+                  const hasFail = steps.some(s => s.status === 'fail');
+                  const overallStatus = hasFail ? 'issues-remain' : hasHealed ? 'healed' : 'healthy';
+
+                  sendResponse({
+                    status: 'OK',
+                    data: {
+                      steps,
+                      overallStatus,
+                      totalDurationMs: Math.round(performance.now() - overallStart),
+                    },
+                  });
+                } catch (error) {
+                  logger.error('onMessage', 'RUN_TROUBLESHOOTER failed:', error);
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -1728,11 +1860,15 @@ async function init() {
                 logger.info('init', '🔄 Force rebuild flag detected - performing full rebuild');
                 await performFullRebuild();
                 await setForceRebuildFlag(false);
+                const { clearSearchCache: clearCacheAfterRebuild } = await import('./search/search-cache');
+                clearCacheAfterRebuild();
                 logger.info('init', '✅ Force rebuild completed');
             } else {
                 // Normal indexing (smart indexing will decide what to do)
                 logger.info('init', '🔄 Starting history indexing...');
                 await ingestHistory();
+                const { clearSearchCache: clearCacheAfterIngest } = await import('./search/search-cache');
+                clearCacheAfterIngest();
                 logger.info('init', '✅ History indexing complete');
             }
 

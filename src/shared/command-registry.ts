@@ -1380,6 +1380,17 @@ const POWER_COMMANDS: PaletteCommand[] = [
         messageType: 'SELF_HEAL',
     },
     {
+        id: 'troubleshoot',
+        label: 'Run Troubleshooter',
+        icon: '🩺',
+        tier: 'power',
+        category: 'diagnostics',
+        keywords: ['troubleshoot', 'fix', 'heal', 'repair', 'doctor', 'health', 'check'],
+        action: 'message',
+        messageType: 'RUN_TROUBLESHOOTER',
+        hint: 'Run all health checks and auto-repair',
+    },
+    {
         id: 'search-debug',
         label: 'Toggle Search Debug Mode',
         icon: '🔍',

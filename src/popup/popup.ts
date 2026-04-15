@@ -612,16 +612,23 @@ function initializePopup() {
     });
   }
 
-  // Fast service worker check
+  // Service worker check with retry + exponential backoff
   async function checkServiceWorkerStatus(): Promise<boolean> {
-    if (serviceWorkerReady) {return true;}
-    try {
-      const resp = await sendMessage({ type: 'PING' });
-      serviceWorkerReady = resp && resp.status === 'ok';
-      return serviceWorkerReady;
-    } catch {
-      return false;
+    if (serviceWorkerReady) { return true; }
+    const delays = [0, 500, 1000, 2000];
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, delays[attempt]));
+      }
+      try {
+        const resp = await sendMessage({ type: 'PING' });
+        if (resp && resp.status === 'ok') {
+          serviceWorkerReady = true;
+          return true;
+        }
+      } catch { /* retry */ }
     }
+    return false;
   }
 
   // Smart debounce - wait for user to stop typing before searching
@@ -4092,6 +4099,72 @@ function initializePopup() {
       }
     });
 
+    // Troubleshooter
+    const troubleshootBtn = modal.querySelector('#run-troubleshooter') as HTMLButtonElement;
+    if (troubleshootBtn) {
+      troubleshootBtn.addEventListener('click', async () => {
+        troubleshootBtn.disabled = true;
+        troubleshootBtn.textContent = '🩺 Running...';
+        const resultsDiv = document.getElementById('troubleshooter-results');
+        if (resultsDiv) {
+          resultsDiv.classList.remove('hidden');
+          resultsDiv.innerHTML = '<div style="padding:8px;color:var(--muted);">Running checks...</div>';
+        }
+        try {
+          const response = await sendMessage({ type: 'RUN_TROUBLESHOOTER' });
+          if (response?.status === 'OK' && response.data && resultsDiv) {
+            const report = response.data as {
+              steps: Array<{ id: string; label: string; status: string; detail: string; durationMs: number }>;
+              overallStatus: string;
+              totalDurationMs: number;
+            };
+            const icons: Record<string, string> = { pass: '✅', healed: '🔧', fail: '❌', skipped: '—' };
+            const stepsHtml = report.steps.map(s =>
+              `<div class="troubleshooter-step step-${s.status}">` +
+              `<span class="step-icon">${icons[s.status] || '?'}</span>` +
+              `<span class="step-label">${s.label}</span>` +
+              `<span class="step-detail">${s.detail}</span>` +
+              `<span class="step-time">${s.durationMs}ms</span>` +
+              '</div>'
+            ).join('');
+
+            const passCount = report.steps.filter(s => s.status === 'pass' || s.status === 'skipped').length;
+            const healedCount = report.steps.filter(s => s.status === 'healed').length;
+            const failCount = report.steps.filter(s => s.status === 'fail').length;
+            const summaryLabel = report.overallStatus === 'healthy'
+              ? 'All systems healthy'
+              : report.overallStatus === 'healed'
+                ? `${healedCount} issue(s) auto-repaired`
+                : `${failCount} issue(s) need attention`;
+            const summaryHtml = `<div class="troubleshooter-summary ${report.overallStatus}">${summaryLabel} (${report.totalDurationMs}ms)</div>`;
+
+            resultsDiv.innerHTML = stepsHtml + summaryHtml;
+            if (report.overallStatus === 'issues-remain') {
+              resultsDiv.innerHTML += '<div style="margin-top:8px;"><button class="action-btn warning" id="troubleshooter-force-reset">⚠️ Force Reset</button></div>';
+              document.getElementById('troubleshooter-force-reset')?.addEventListener('click', async () => {
+                if (confirm('This will clear all data and rebuild from browser history. Continue?')) {
+                  await sendMessage({ type: 'CLEAR_ALL_DATA' });
+                  showToast('✅ Force reset completed');
+                  troubleshootBtn.click();
+                }
+              });
+            }
+            showToast(report.overallStatus === 'healthy' ? '✅ All checks passed' : `🩺 Troubleshooter: ${summaryLabel}`);
+
+            // Also refresh health + storage display on the Data tab
+            void fetchStorageQuotaInfo?.();
+          } else {
+            showToast('❌ Troubleshooter failed', 'error');
+          }
+        } catch (err) {
+          logger.error('troubleshooter', 'Error', err);
+          showToast('❌ Error running troubleshooter', 'error');
+        }
+        troubleshootBtn.disabled = false;
+        troubleshootBtn.textContent = '🩺 Run Troubleshooter';
+      });
+    }
+
     // Diagnostics Export
     const diagBtn = modal.querySelector('#export-diagnostics') as HTMLButtonElement;
     if (diagBtn) {
@@ -4295,8 +4368,10 @@ function initializePopup() {
     checkServiceWorkerStatus().then(ready => {
       serviceWorkerReady = ready;
       if (!ready) {
-        resultCountNode.textContent = 'Initializing...';
-        resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension starting up...</div>';
+        resultCountNode.textContent = 'Recovering...';
+        resultsNode.innerHTML = '<div style="padding:8px;color:#f59e0b;">Extension is recovering, please try again in a moment.</div>';
+      } else {
+        loadRecentHistory();
       }
     }).catch(e => logger.warn('onLoad', 'Service worker status check failed', e));
 

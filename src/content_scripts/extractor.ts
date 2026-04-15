@@ -69,7 +69,6 @@ if (window.top !== window) {
       // Check user-defined blacklist from settings
       if (runtime && runtime.sendMessage) {
         try {
-          // Request settings to check user blacklist
           const response = await new Promise<{ settings?: { sensitiveUrlBlacklist?: string[] } } | undefined>((resolve) => {
             runtime.sendMessage({ type: 'GET_SETTINGS' }, (resp) => {
               void runtime.lastError;

@@ -117,8 +117,11 @@ vi.mock('../search/search-engine', () => ({
 vi.mock('../resilience', () => ({
   clearAndRebuild: vi.fn(async () => ({ success: true, message: 'done', itemCount: 0 })),
   checkHealth: vi.fn(async () => ({ healthy: true })),
-  selfHeal: vi.fn(async () => {}),
+  selfHeal: vi.fn(async () => true),
   startHealthMonitoring: vi.fn(),
+  recoverFromCorruption: vi.fn(async () => true),
+  ensureReady: vi.fn(async () => true),
+  handleQuotaExceeded: vi.fn(async () => true),
 }));
 
 vi.mock('../favicon-cache', () => ({

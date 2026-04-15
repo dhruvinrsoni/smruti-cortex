@@ -19,6 +19,13 @@ export function invalidateItemCache(): void {
     cachedItems = null;
 }
 
+/** Reset the cached DB instance so the next operation re-opens the connection.
+ *  Called by resilience recovery paths after detecting a broken connection. */
+export function resetDbInstance(): void {
+    dbInstance = null;
+    cachedItems = null;
+}
+
 // ------------------------------
 // IndexedDB Init
 // ------------------------------
@@ -32,7 +39,25 @@ function openDatabaseImpl(): Promise<IDBDatabase> {
             reject(request.error);
         };
         request.onsuccess = () => {
-            dbInstance = request.result;
+            const db = request.result;
+
+            // Auto-clear the cached instance when the browser closes the
+            // connection unexpectedly (hibernation, Chrome GC, etc.)
+            db.onclose = () => {
+                Logger.warn('Database connection closed unexpectedly');
+                dbInstance = null;
+                cachedItems = null;
+            };
+
+            // Handle concurrent version-change events (another tab upgrading)
+            db.onversionchange = () => {
+                Logger.warn('Database version change detected, closing connection');
+                db.close();
+                dbInstance = null;
+                cachedItems = null;
+            };
+
+            dbInstance = db;
             Logger.debug('Database opened successfully');
             resolve(dbInstance);
         };

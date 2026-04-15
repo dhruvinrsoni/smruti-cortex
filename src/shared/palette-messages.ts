@@ -10,6 +10,7 @@ export const PALETTE_DIAGNOSTIC_MESSAGE_TYPES: readonly string[] = [
     'GET_EMBEDDING_PROGRESS',
     'GET_PERFORMANCE_METRICS',
     'GET_SEARCH_ANALYTICS',
+    'RUN_TROUBLESHOOTER',
 ];
 
 export const PALETTE_DIAGNOSTIC_TOAST_MS = 12_000;
@@ -118,6 +119,24 @@ export function formatPaletteDiagnosticToast(
             const ar = Number(resp.averageResults);
             const ad = Number(resp.averageDuration);
             return `Search analytics: ${ts} traces · avg ${ar.toFixed(1)} results · avg ${ad.toFixed(0)} ms`;
+        }
+        case 'RUN_TROUBLESHOOTER': {
+            const d = resp.data as {
+                steps?: Array<{ status: string }>;
+                overallStatus?: string;
+                totalDurationMs?: number;
+            } | undefined;
+            if (!d || !d.steps) { return null; }
+            const total = d.steps.length;
+            const passed = d.steps.filter(s => s.status === 'pass' || s.status === 'skipped').length;
+            const healed = d.steps.filter(s => s.status === 'healed').length;
+            const dur = typeof d.totalDurationMs === 'number' ? ` (${d.totalDurationMs}ms)` : '';
+            if (d.overallStatus === 'healthy') {
+                return `Troubleshooter: ${total}/${total} passed · All systems healthy${dur}`;
+            }
+            const healedStr = healed > 0 ? `, ${healed} healed` : '';
+            const label = d.overallStatus === 'healed' ? 'Auto-repaired' : 'Issues remain';
+            return `Troubleshooter: ${passed}/${total} passed${healedStr} · ${label}${dur}`;
         }
         default:
             return null;
