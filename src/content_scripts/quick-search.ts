@@ -2935,9 +2935,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         ].filter(Boolean).join(' ');
 
         const rawFaviconUrl = tab.favIconUrl || '';
-        const faviconUrl = (location.protocol === 'https:' && rawFaviconUrl.startsWith('http://')) ? '' : rawFaviconUrl;
+        const faviconUrl = (location.protocol === 'https:' && rawFaviconUrl.startsWith('http://'))
+          ? '' : rawFaviconUrl;
+        const tabFavSrc = faviconUrl || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
         li.innerHTML = `
-          <img class="tab-favicon" src="${faviconUrl}" alt="">
+          <img class="tab-favicon" src="${tabFavSrc}" alt="">
           <div class="tab-details">
             <span class="tab-title">${escapeHtml(tab.title || 'Untitled')}</span>
             <span class="tab-url">${escapeHtml(truncateUrl(tab.url || ''))}</span>
@@ -3014,9 +3016,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       const ago = formatTimeAgo((tab as unknown as { lastModified: number }).lastModified);
       const rawClosedFavicon = tab.favIconUrl || '';
-      const closedFavicon = (location.protocol === 'https:' && rawClosedFavicon.startsWith('http://')) ? '' : rawClosedFavicon;
+      const closedFavicon = (location.protocol === 'https:' && rawClosedFavicon.startsWith('http://'))
+        ? '' : rawClosedFavicon;
+      const closedFavSrc = closedFavicon || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
       li.innerHTML = `
-        <img class="tab-favicon" src="${closedFavicon}" alt="">
+        <img class="tab-favicon" src="${closedFavSrc}" alt="">
         <div class="tab-details">
           <span class="tab-title">${escapeHtml(tab.title || 'Untitled')}</span>
           <span class="tab-url">${escapeHtml(truncateUrl(tab.url || ''))}</span>
