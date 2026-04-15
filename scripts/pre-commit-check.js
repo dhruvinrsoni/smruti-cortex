@@ -59,7 +59,7 @@ const buildProdCmd = [
   'node ./scripts/esbuild-prod.mjs',
 ].join(' && ');
 
-const testCmd = `"${bin('vitest')}" run`;
+const testCmd = `"${bin('vitest')}" run --coverage`;
 
 function runCommand(command, description) {
   console.log(`\n🔨 RUNNING: ${description.toUpperCase()}`);

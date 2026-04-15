@@ -55,10 +55,12 @@ Navigate here first — don't broad-search when the location is known:
 | `npm run build:prod` | Production build (minified) | ~30s |
 | `npm run build:dev` | Dev build (source maps) | ~10s |
 | `npm run package` | Build + zip for Chrome Web Store | ~35s |
+| `npm run verify` | Full codebase verification: lint + build + build:prod + coverage + E2E | ~8min |
+| `npm run preflight` | Pre-release check: verify + manifest/version/dist checks + package zip + store-prep | ~10min |
 | `node scripts/release.mjs <patch\|minor\|major>` | Full release: bump, changelog, tag, push, GitHub Release, zip | ~60s |
 | `npm run store-prep` | Print Chrome Web Store submission text | instant |
 
-**Note:** Pre-commit hook (`scripts/pre-commit-check.js`) runs build+test for product files. Skips for docs-only changes. Override with `FORCE_PRE_COMMIT=1`.
+**Note:** Pre-commit hook (`scripts/pre-commit-check.js`) runs build+test+coverage for product files. Skips for docs-only changes. Override with `FORCE_PRE_COMMIT=1`.
 
 ---
 
