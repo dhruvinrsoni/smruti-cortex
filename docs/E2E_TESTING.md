@@ -13,6 +13,7 @@ SmrutiCortex uses **Playwright** for end-to-end testing of the Chrome MV3 extens
 - [Test Inventory](#test-inventory)
 - [Test Data Strategy](#test-data-strategy)
 - [Content Scripts and the Isolated World](#content-scripts-and-the-isolated-world)
+- [Fast vs Slow-Mo](#fast-vs-slow-mo)
 - [Commands Reference](#commands-reference)
 - [Writing New Tests](#writing-new-tests)
 - [Troubleshooting](#troubleshooting)
@@ -143,32 +144,25 @@ This gives the same visual debugging experience (watch the browser step through 
 
 ### How to Use It
 
-**Recommended (works everywhere, including Windows):** use the npm script so `SLOW_MO` is set inside Node — no shell quirks.
+**Recommended (works everywhere, including Windows):** use the helper script so `SLOW_MO` is set inside Node — no shell variable quirks.
 
 ```bash
-npm run test:e2e:slowmo          # build + E2E with 400ms pause before each action
-npm run test:e2e:slowmo:only     # same, but skip build (use after a recent build:prod)
-```
-
-Override the delay (milliseconds):
-
-```bash
-node scripts/e2e-slowmo.mjs 600                    # 600ms pause, assumes build already done
+node scripts/e2e-slowmo.mjs               # default 400ms pause before each action
+node scripts/e2e-slowmo.mjs 800           # 800ms for stronger visibility
 node scripts/e2e-slowmo.mjs 400 e2e/01-tour.spec.ts   # slow-mo + single spec
 ```
+
+Build first if `dist/` is stale: `npm run build:prod && node scripts/e2e-slowmo.mjs`
 
 Manual env (if you prefer):
 
 ```bash
-# Set SLOW_MO environment variable (milliseconds between each action)
 SLOW_MO=400 npx playwright test          # Linux/Mac / Git Bash
-$env:SLOW_MO=400; npx playwright test    # PowerShell — both lines in same session
+$env:SLOW_MO=400; npx playwright test    # PowerShell
 set SLOW_MO=400 && npx playwright test   # cmd.exe
 ```
 
-**If slow-mo still looks instant:** (1) `SLOW_MO` was not set for the `npx playwright test` process — use `npm run test:e2e:slowmo`, or (2) you were on an older revision that only patched `Page` (locator chains stayed fast). This project does **not** use Playwright’s built-in `launchOptions.slowMo` on the browser (see above); use `SLOW_MO` + `withSlowMo()` + Locator prototype patch.
-
-**Stronger visibility:** try `node scripts/e2e-slowmo.mjs 800` (800ms between actions) or `1000` if 400ms still feels quick.
+See [Fast vs Slow-Mo](#fast-vs-slow-mo) for a quick comparison table and troubleshooting if slow-mo doesn't feel visible.
 
 ### Key Takeaway
 
@@ -322,6 +316,39 @@ await expect(page.locator('#smruti-cortex-overlay')).toBeAttached();
 
 ---
 
+## Fast vs Slow-Mo
+
+By default, E2E tests run at full Playwright speed — no artificial delays. Slow-mo is **opt-in** for visual debugging.
+
+| Scenario | Command | Speed |
+|----------|---------|-------|
+| Full-speed E2E | `npx playwright test` | ~30s |
+| Full-speed E2E (with build) | `npm run test:e2e` | ~60s |
+| Slow-mo (400ms default) | `node scripts/e2e-slowmo.mjs` | ~5min |
+| Slow-mo (custom ms) | `node scripts/e2e-slowmo.mjs 800` | ~8min |
+| Slow-mo + single spec | `node scripts/e2e-slowmo.mjs 400 e2e/popup-smoke.spec.ts` | varies |
+
+### How `npm run verify` runs E2E
+
+`verify.mjs` runs E2E at full speed by default. Two flags control E2E behavior:
+
+- `npm run verify -- --no-e2e` — skip E2E entirely (fast, ~2min)
+- `npm run verify -- --e2e-slowmo` — run E2E with slow-mo (visual debugging, ~8min)
+
+Without either flag, verify uses plain `npx playwright test` (~4min total).
+
+### Slow-mo not visible?
+
+If slow-mo appears to have no effect:
+
+1. **Using `npm run test:e2e` instead of slow-mo script** — `test:e2e` runs at full speed. Use `node scripts/e2e-slowmo.mjs` for slow-mo.
+2. **On an older revision** — before commit `853df39`, only `Page`-level methods were patched. Since tests use `page.locator().click()` (Locator methods), the delays had no effect. The current fixture patches `Locator.prototype` directly.
+3. **Delay too low** — 400ms can feel quick with many tests. Try `node scripts/e2e-slowmo.mjs 800` or `1000`.
+
+See [The withSlowMo Pattern](#the-withslowmo-pattern) for the full technical explanation.
+
+---
+
 ## Commands Reference
 
 ### Run All E2E Tests
@@ -330,16 +357,16 @@ await expect(page.locator('#smruti-cortex-overlay')).toBeAttached();
 npx playwright test
 ```
 
-### Run with Visual Slow-Motion (Watch Mode)
+### Run with Visual Slow-Motion
 
 ```bash
-npm run test:e2e:slowmo                    # build + E2E with 400ms (recommended)
-npm run test:e2e:slowmo:only               # skip build; use after build:prod
-node scripts/e2e-slowmo.mjs 600            # custom ms, no build
-
-# Manual env (Linux/Mac / Git Bash / PowerShell / cmd — see "How to Use It" above)
-SLOW_MO=400 npx playwright test
+node scripts/e2e-slowmo.mjs               # default 400ms, assumes dist/ exists
+node scripts/e2e-slowmo.mjs 800           # stronger visibility — 800ms between actions
+node scripts/e2e-slowmo.mjs 400 e2e/popup-smoke.spec.ts   # slow-mo on a single spec
+node scripts/e2e-slowmo.mjs -h            # show usage help
 ```
+
+If you need to build first, run `npm run build:prod` before the slow-mo command.
 
 ### Run a Specific Test File
 
