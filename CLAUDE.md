@@ -58,7 +58,11 @@ Navigate here first — don't broad-search when the location is known:
 | `npm run verify` | Full codebase verification (runs ALL steps, reports at end) | ~8min |
 | `npm run verify -- --no-e2e` | Same as verify but skips E2E tests | ~2min |
 | `npm run preflight` | Pre-release check: verify + prod release validations | ~10min |
-| `node scripts/release.mjs <patch\|minor\|major>` | Full release: bump, changelog, tag, push, GitHub Release, zip | ~60s |
+| `npm run release:patch` | Full release pipeline (patch bump) | ~60s |
+| `npm run release:minor` | Full release pipeline (minor bump) | ~60s |
+| `npm run release:major` | Full release pipeline (major bump) | ~60s |
+| `npm run release:patch:dry` | Dry-run: preview a patch release without pushing | ~30s |
+| `npm version patch\|minor\|major` | Quick version bump only (syncs manifest.json, commits, tags) | instant |
 | `npm run store-prep` | Print Chrome Web Store submission text | instant |
 
 **Note:** Pre-commit hook (`scripts/pre-commit-check.js`) runs build+test+coverage for product files. Skips for docs-only changes. Override with `FORCE_PRE_COMMIT=1`.
@@ -84,7 +88,7 @@ Quick-reference for the build/release scripts. Useful if you come back after 6 m
 - **Store prep preview** — prints the "What's New" text, permission justifications, and privacy summary
 **When to use:** Right before running `release.mjs`. This is your "are we cleared for takeoff?" check.
 
-### `node scripts/release.mjs <patch|minor|major>` 
+### `npm run release:patch/minor/major` (`scripts/release.mjs`)
 **What:** Fully automated release pipeline:
 1. Validates: must be on `main`, clean tree, `gh` CLI installed
 2. Bumps version in `package.json` (e.g. 9.0.0 → 9.1.0)
@@ -96,7 +100,12 @@ Quick-reference for the build/release scripts. Useful if you come back after 6 m
 8. Pushes commit and tag to origin
 9. Creates GitHub Release with changelog notes
 10. Packages zip for Chrome Web Store upload
-**Supports `--dry-run`** to preview everything without pushing.
+
+**Convenience scripts:**
+- `npm run release:patch` / `release:minor` / `release:major` — real release
+- `npm run release:patch:dry` / `release:minor:dry` / `release:major:dry` — preview without pushing
+
+You can also call `node scripts/release.mjs <type> [--dry-run]` directly.
 
 ### `npm run store-prep` (`scripts/store-prep.mjs`)
 **What:** Generates copy-paste text for Chrome Web Store submission:
@@ -106,8 +115,14 @@ Quick-reference for the build/release scripts. Useful if you come back after 6 m
 - Upload path for the zip file
 **When to use:** After `release.mjs`, when you're filling out the Chrome Web Store submission form.
 
-### `scripts/sync-version.mjs`
-**What:** Copies the version string from `package.json` → `manifest.json`. This is the "version sync check" — `package.json` is the single source of truth for version numbers, and this script ensures `manifest.json` always matches. Runs automatically as part of every build.
+### `scripts/sync-version.mjs` + npm version lifecycle hooks
+**What:** Copies the version string from `package.json` → `manifest.json`. `package.json` is the single source of truth for version numbers.
+
+**Two paths keep versions in sync (Tier 3 with Tier 2 fallback):**
+- **Tier 3 (npm lifecycle):** Running `npm version patch/minor/major` triggers the `version` hook in `package.json`, which calls `sync-version.mjs` and stages `manifest.json` — both files are committed together automatically by npm.
+- **Tier 2 (build-time fallback):** `sync-version.mjs` also runs at the start of every `npm run build` and `npm run build:prod`, so even if `npm version` is bypassed, the next build catches any drift.
+
+**Quick bump (no full release):** `npm version patch` — bumps both files, commits, and tags. Does NOT push, build, or create a GitHub Release. Use `npm run release:*` for the full pipeline.
 
 ### Pre-commit hook (`scripts/pre-commit-check.js`)
 **What:** Runs automatically on every `git commit`:
@@ -202,7 +217,7 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 5. Run `npm test` — all 1,233+ unit tests must pass
 6. Run `npm run build:prod` — must succeed with zero errors
 7. Commit: `git commit -m "fix: <concise description>"`
-8. If shipping immediately: `node scripts/release.mjs patch`
+8. If shipping immediately: `npm run release:patch`
 
 ### New Feature
 1. Understand the request — check if existing code can be extended
@@ -212,12 +227,12 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 5. Write tests if touching core logic — target 90%+ coverage for new code
 6. Run `npm test` and `npm run build:prod`
 7. Commit: `git commit -m "feat: <concise description>"`
-8. If shipping: `node scripts/release.mjs minor`
+8. If shipping: `npm run release:minor`
 
 ### Release + Chrome Web Store
 ```bash
-node scripts/release.mjs <patch|minor|major>   # automated: bump, changelog, tag, push, GitHub Release, zip
-npm run store-prep                              # prints: What's New, permissions, privacy summary
+npm run release:patch   # or release:minor / release:major
+npm run store-prep      # prints: What's New, permissions, privacy summary
 ```
 Then:
 1. Create/update `docs/store-submissions/vX.Y.Z-chrome-web-store.md` with full submission fields
@@ -233,7 +248,7 @@ Then:
 2. Update the dependency in `package.json`
 3. Run `npm install` → `npm test` → `npm run build:prod`
 4. Commit: `git commit -m "fix: update <pkg> to address <CVE/issue>"`
-5. If shipping: `node scripts/release.mjs patch`
+5. If shipping: `npm run release:patch`
 
 ### Quick Patch (no deep context)
 1. Grep for the error message or keyword in `src/`

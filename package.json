@@ -29,6 +29,12 @@
     "build:prod": "npm run sync-version && npm run clean && npm run tsc && node ./scripts/copy-static.mjs && node ./scripts/esbuild-prod.mjs",
     "package": "npm run build:prod && node ./scripts/package.mjs",
     "release": "node ./scripts/release.mjs",
+    "release:patch": "node ./scripts/release.mjs patch",
+    "release:patch:dry": "node ./scripts/release.mjs patch --dry-run",
+    "release:minor": "node ./scripts/release.mjs minor",
+    "release:minor:dry": "node ./scripts/release.mjs minor --dry-run",
+    "release:major": "node ./scripts/release.mjs major",
+    "release:major:dry": "node ./scripts/release.mjs major --dry-run",
     "store-prep": "node ./scripts/store-prep.mjs",
     "benchmark": "node ./scripts/benchmark-performance.mjs",
     "generate-screenshots-index": "node ./scripts/generate-screenshots-index.mjs",
@@ -49,6 +55,9 @@
     "docker:test": "node ./scripts/docker-compose.mjs run --rm test",
     "docker:validate": "sh ./scripts/validate-docker.sh",
     "docker:clean": "sh ./scripts/docker-clean.sh",
+    "preversion": "node -e \"const{execSync:e}=require('child_process');if(e('git status --porcelain',{encoding:'utf-8'}).trim()){console.error('Working tree not clean. Commit or stash first.');process.exit(1)}\"",
+    "version": "node scripts/sync-version.mjs && git add manifest.json",
+    "postversion": "node -e \"console.log('Version bumped and synced. Run npm run release:* for full release pipeline.')\"",
     "prepare": "husky"
   },
   "devDependencies": {
