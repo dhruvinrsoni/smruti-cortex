@@ -797,7 +797,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     if (items.length > 0) {
                       return { status: 'pass', detail: `${items.length.toLocaleString()} items indexed` };
                     }
-                    const healed = await selfHeal('Troubleshooter');
+                    await selfHeal('Troubleshooter');
                     const after = await getAllIndexedItems();
                     return after.length > 0
                       ? { status: 'healed', detail: `Rebuilt — ${after.length.toLocaleString()} items indexed` }

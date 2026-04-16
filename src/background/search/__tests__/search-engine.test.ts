@@ -276,7 +276,7 @@ describe('search-engine', () => {
       settingsMap.ollamaEnabled = true;
       indexedItems.push(makeItem());
       const { runSearch } = await importModule();
-      const results = await runSearch('example', { skipAI: false });
+      await runSearch('example', { skipAI: false });
       // Should NOT return cached items — should do fresh search
       // (cache is skipped when AI is explicitly requested)
       expect(mockCache.get).not.toHaveBeenCalled();

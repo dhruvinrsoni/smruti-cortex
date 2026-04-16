@@ -4128,7 +4128,6 @@ function initializePopup() {
               '</div>'
             ).join('');
 
-            const passCount = report.steps.filter(s => s.status === 'pass' || s.status === 'skipped').length;
             const healedCount = report.steps.filter(s => s.status === 'healed').length;
             const failCount = report.steps.filter(s => s.status === 'fail').length;
             const summaryLabel = report.overallStatus === 'healthy'
