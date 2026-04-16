@@ -5,7 +5,7 @@ import os from 'os';
 
 const EXTENSION_PATH = path.resolve(__dirname, '../../dist');
 // Set SLOW_MO=400 (or any ms value) to watch tests step-by-step.
-// Prefer: npm run test:e2e:slowmo (sets SLOW_MO reliably on Windows).
+// Prefer: node scripts/e2e-slowmo.mjs (sets SLOW_MO reliably on Windows).
 // Implemented as page-level delays (not Playwright's built-in slowMo)
 // because built-in slowMo blocks ctx.close() indefinitely with 20+ tests.
 const SLOW_MO = Number(process.env.SLOW_MO) || 0;
@@ -99,7 +99,7 @@ export const test = base.extend<
 
     // Wait for the service worker to be available
     let [bg] = ctx.serviceWorkers();
-    if (!bg) bg = await ctx.waitForEvent('serviceworker');
+    if (!bg) {bg = await ctx.waitForEvent('serviceworker');}
 
     // @BeforeAll — dismiss tour so it never blocks popup UI tests
     await bg.evaluate(async () => {

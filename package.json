@@ -36,8 +36,6 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "test:e2e": "npm run build:prod && npx playwright test",
-    "test:e2e:slowmo": "npm run build:prod && node ./scripts/e2e-slowmo.mjs",
-    "test:e2e:slowmo:only": "node ./scripts/e2e-slowmo.mjs",
     "verify": "node ./scripts/verify.mjs",
     "preflight": "node ./scripts/preflight.mjs",
     "start:watch": "node ./scripts/esbuild-dev.mjs --watch",

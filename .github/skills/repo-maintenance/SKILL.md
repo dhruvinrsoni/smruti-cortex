@@ -54,12 +54,12 @@ Ask these in order for every file you consider removing:
 
 ## Examples from SmrutiCortex v8 Cleanup
 
-### ACTIVATED: `scripts/benchmark-performance.mjs`
+### INTEGRATED: `scripts/benchmark-performance.mjs`
 
-**Situation:** Not in `package.json`, so appeared "dead."
+**Situation:** Originally not in `package.json`, then added as a standalone `npm run benchmark` script.
 **Analysis:** Reads dist/ bundle sizes, checks against KB thresholds, CI-aware output.
-**Decision:** ACTIVATE — added `"benchmark": "node ./scripts/benchmark-performance.mjs"` to package.json.
-**Lesson:** A script without a package.json entry is a sleeping tool. Check what it does before deleting.
+**Decision:** INTEGRATE into `preflight.mjs` (Phase 2) as a release gate instead of a standalone npm script. The standalone entry was removed to reduce `npm run` surface noise, but the script itself is preserved and called automatically during preflight.
+**Lesson:** Useful scripts don't always need their own npm entry — they can be wired into existing pipelines where they add the most value.
 
 ### ARCHIVED: `src/assets/v1-*/v2-*/v3-*/v4-*/v5-*/v11-*` (17 icon files)
 
@@ -97,7 +97,7 @@ git ls-files | sort
 grep -r "title-scorers" src/ --include="*.ts"
 
 # 3. Check if a script is in package.json
-grep "benchmark" package.json
+grep "benchmark" scripts/preflight.mjs
 
 # 4. Check if an asset is referenced in manifest
 grep "v1-icon" manifest.json
