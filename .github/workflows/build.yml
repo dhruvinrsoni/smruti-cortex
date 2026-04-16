@@ -93,7 +93,7 @@ jobs:
         run: npm run build${{ inputs.build_type == 'development' && ':dev' || ':prod' }}
 
       - name: Type check
-        run: npm run tsc
+        run: npx tsc --project tsconfig.json
 
       - name: Package extension
         run: |
