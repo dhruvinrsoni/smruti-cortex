@@ -9,8 +9,9 @@
  * Steps: lint → build:dev → build:prod → unit tests + coverage → E2E tests
  *
  * Usage:
- *   npm run verify          # run everything
- *   npm run verify -- --no-e2e   # skip E2E (faster, ~2min instead of ~8min)
+ *   npm run verify                    # run everything (E2E at full speed)
+ *   npm run verify -- --no-e2e        # skip E2E (faster, ~2min)
+ *   npm run verify -- --e2e-slowmo    # run E2E with SLOW_MO (visual debugging)
  */
 
 import { execSync } from 'child_process';
@@ -20,6 +21,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const skipE2E = process.argv.includes('--no-e2e');
+const e2eSlowMo = process.argv.includes('--e2e-slowmo');
 
 const BOLD = '\x1b[1m';
 const GREEN = '\x1b[32m';
@@ -58,8 +60,10 @@ step('Unit Tests + Coverage', 'npx vitest run --coverage');
 if (skipE2E) {
   results.push({ name: 'E2E Tests', passed: true, ms: 0, skipped: true });
   console.log(`\n${DIM}  ⏭️  E2E tests skipped (--no-e2e)${RESET}`);
-} else {
+} else if (e2eSlowMo) {
   step('E2E Tests (slow-mo)', 'node ./scripts/e2e-slowmo.mjs');
+} else {
+  step('E2E Tests', 'npx playwright test');
 }
 
 // Summary

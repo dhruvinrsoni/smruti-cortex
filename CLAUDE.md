@@ -49,16 +49,17 @@ Navigate here first — don't broad-search when the location is known:
 |---------|---------|-------|
 | `npm test` | Run full unit test suite (1,233+ tests, 46 files) | ~60s |
 | `npx playwright test` | Run E2E tests (45 tests, 7 specs, requires `npm run build:prod` first) | ~60s |
-| `npm run test:e2e:slowmo` | E2E tests in slow-mo (sets `SLOW_MO` reliably on Windows) | ~5min |
+| `node scripts/e2e-slowmo.mjs [ms]` | E2E tests in slow-mo (visual debugging, default 400ms) | ~5min |
 | `npx vitest run --coverage --pool=forks` | Unit tests + v8 coverage report | ~30s |
 | `npm run lint` | ESLint check (errors block, warnings inform) | ~5s |
 | `npm run lint:strict` | ESLint zero-warning check (manual cleanup use) | ~5s |
 | `npm run build:prod` | Production build (minified) | ~30s |
 | `npm run build:dev` | Dev build (source maps) | ~10s |
 | `npm run package` | Build + zip for Chrome Web Store | ~35s |
-| `npm run verify` | Full codebase verification (runs ALL steps, reports at end) | ~8min |
+| `npm run verify` | Full codebase verification (runs ALL steps, reports at end) | ~4min |
 | `npm run verify -- --no-e2e` | Same as verify but skips E2E tests | ~2min |
-| `npm run preflight` | Pre-release check: verify + prod release validations | ~10min |
+| `npm run verify -- --e2e-slowmo` | Verify with E2E in slow-mo (visual debugging) | ~8min |
+| `npm run preflight` | Pre-release check: verify + prod release validations | ~6min |
 | `npm run release:patch` | Full release pipeline (patch bump) | ~60s |
 | `npm run release:minor` | Full release pipeline (minor bump) | ~60s |
 | `npm run release:major` | Full release pipeline (major bump) | ~60s |
@@ -75,8 +76,8 @@ Navigate here first — don't broad-search when the location is known:
 Quick-reference for the build/release scripts. Useful if you come back after 6 months.
 
 ### `npm run verify` (`scripts/verify.mjs`)
-**What:** Runs lint → build:dev → build:prod → unit tests with coverage → E2E tests.
-**Key behavior:** Runs ALL steps even if one fails, then shows a summary table at the end so you can fix everything in one go. Pass `--no-e2e` to skip the 5-minute E2E suite.
+**What:** Runs lint → build:dev → build:prod → unit tests with coverage → E2E tests (full speed).
+**Key behavior:** Runs ALL steps even if one fails, then shows a summary table at the end so you can fix everything in one go. Pass `--no-e2e` to skip E2E, or `--e2e-slowmo` to run E2E with visual slow-motion for debugging.
 **When to use:** After big changes, before merging, or whenever you want full confidence.
 
 ### `npm run preflight` (`scripts/preflight.mjs`)
