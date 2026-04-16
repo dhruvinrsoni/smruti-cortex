@@ -62,7 +62,7 @@ Navigate here first — don't broad-search when the location is known:
 | `npm run release:patch` | Full release pipeline (patch bump) | ~60s |
 | `npm run release:minor` | Full release pipeline (minor bump) | ~60s |
 | `npm run release:major` | Full release pipeline (major bump) | ~60s |
-| `npm run release:patch:dry` | Dry-run: preview a patch release without pushing | ~30s |
+| `npm run release:patch -- --dry-run` | Dry-run: preview a patch release without pushing | ~30s |
 | `npm version patch\|minor\|major` | Quick version bump only (syncs manifest.json, commits, tags) | instant |
 | `npm run store-prep` | Print Chrome Web Store submission text | instant |
 
@@ -104,9 +104,7 @@ Quick-reference for the build/release scripts. Useful if you come back after 6 m
 
 **Convenience scripts:**
 - `npm run release:patch` / `release:minor` / `release:major` — real release
-- `npm run release:patch:dry` / `release:minor:dry` / `release:major:dry` — preview without pushing
-
-You can also call `node scripts/release.mjs <type> [--dry-run]` directly.
+- Append `-- --dry-run` to any of the above to preview without pushing
 
 ### `npm run store-prep` (`scripts/store-prep.mjs`)
 **What:** Generates copy-paste text for Chrome Web Store submission:
