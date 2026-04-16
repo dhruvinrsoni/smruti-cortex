@@ -8,7 +8,7 @@ import aiScorer from '../ai-scorer-placeholder';
 
 describe('ai-scorer-placeholder', () => {
   it('should always return score 0', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect(aiScorer.score('test', {} as any, {} as any)).toBe(0);
   });
 });

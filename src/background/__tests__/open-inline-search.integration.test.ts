@@ -34,9 +34,9 @@ const mocks = vi.hoisted(() => {
 
   // Deep no-op proxy — silently handles any chrome API not explicitly mocked,
   // preventing TypeError on missing .addListener / nested property chains.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   function noOp(): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return new Proxy(function() {} as any, {
       get: () => noOp(),
       apply: () => undefined,
@@ -44,18 +44,18 @@ const mocks = vi.hoisted(() => {
   }
 
   // Wrap an object so any property not explicitly defined returns noOp().
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   function proxied(obj: Record<string, any>): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return new Proxy(obj as any, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       get(t: any, prop: string) { return prop in t ? t[prop] : noOp(); },
     });
   }
 
   // Explicit mock for APIs the test cares about; everything else falls through
   // to noOp() via proxied() so no TypeError on unknown nested .addListener calls.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (globalThis as any).chrome = proxied({
     commands: proxied({
       onCommand: {
@@ -104,7 +104,7 @@ describe('OPEN_INLINE_SEARCH integration', () => {
     expect(mocks.commandCallback).toBeTruthy();
 
     // Trigger the command listener as Chrome would
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+     
     mocks.commandCallback!('open-popup');
 
     // Allow async flow to run

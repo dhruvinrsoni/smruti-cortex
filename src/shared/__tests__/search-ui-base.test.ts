@@ -476,18 +476,18 @@ describe('openUrl', () => {
   let originalChrome: unknown;
 
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     originalChrome = (globalThis as any).chrome;
   });
 
   afterEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (globalThis as any).chrome = originalChrome;
   });
 
   it('should call chrome.tabs.update for same-tab open', () => {
     const update = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (globalThis as any).chrome = { tabs: { update, create: vi.fn() } };
     openUrl('https://example.com');
     expect(update).toHaveBeenCalledWith({ url: 'https://example.com' });
@@ -495,7 +495,7 @@ describe('openUrl', () => {
 
   it('should call chrome.tabs.create for new tab', () => {
     const create = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (globalThis as any).chrome = { tabs: { update: vi.fn(), create } };
     openUrl('https://example.com', true);
     expect(create).toHaveBeenCalledWith({ url: 'https://example.com', active: true });
@@ -503,14 +503,14 @@ describe('openUrl', () => {
 
   it('should call chrome.tabs.create with active=false for background tab', () => {
     const create = vi.fn();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (globalThis as any).chrome = { tabs: { update: vi.fn(), create } };
     openUrl('https://example.com', true, true);
     expect(create).toHaveBeenCalledWith({ url: 'https://example.com', active: false });
   });
 
   it('should fall back to window.open when chrome.tabs unavailable', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (globalThis as any).chrome = undefined;
     const openSpy = vi.fn();
     vi.stubGlobal('open', openSpy);

@@ -170,19 +170,19 @@ vi.mock('../../core/settings', () => ({
 vi.mock('../../core/helpers', () => {
   const m = swBrowserMocks;
   const o = swOmniboxMocks;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   function noOp(): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return new Proxy(function() {} as any, {
       get: () => noOp(),
       apply: () => undefined,
     });
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   function proxied(obj: Record<string, any>): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return new Proxy(obj as any, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       get(t: any, prop: string) { return prop in t ? t[prop] : noOp(); },
     });
   }
@@ -237,11 +237,11 @@ vi.mock('../../core/helpers', () => {
       omnibox: proxied({
         setDefaultSuggestion: () => {},
         onInputChanged: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           addListener: (cb: any) => { o.omniboxOnInputChanged.push(cb); },
         },
         onInputEntered: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           addListener: (cb: any) => { o.omniboxOnInputEntered.push(cb); },
         },
       }),
@@ -249,17 +249,17 @@ vi.mock('../../core/helpers', () => {
         lastError: null,
         getManifest: () => ({ manifest_version: 3, version: '8.0.0' }),
         onMessage: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           addListener: (cb: any) => {
             // Store handler for test access — access via globalThis to avoid hoisting issues
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             (globalThis as any).__swTestMessageHandler = cb;
           },
         },
         onConnect: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           addListener: (cb: any) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             (globalThis as any).__swTestPortHandler = cb;
           },
         },
@@ -323,29 +323,29 @@ vi.mock('../ai-keyword-cache', () => ({
 const mocks = vi.hoisted(() => {
   // Capture variables must be inside vi.hoisted to be available at module load time
   const captured: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     messageHandler: ((msg: any, sender: any, sendResponse: (r: any) => void) => boolean | void) | null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     portHandler: ((port: any) => void) | null;
   } = { messageHandler: null, portHandler: null };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   function noOp(): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return new Proxy(function() {} as any, {
       get: () => noOp(),
       apply: () => undefined,
     });
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   function proxied(obj: Record<string, any>): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return new Proxy(obj as any, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       get(t: any, prop: string) { return prop in t ? t[prop] : noOp(); },
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (globalThis as any).chrome = proxied({
     commands: proxied({
       onCommand: { addListener: () => {} },
@@ -362,13 +362,13 @@ const mocks = vi.hoisted(() => {
       lastError: null,
       getManifest: () => ({ manifest_version: 3, version: '8.0.0' }),
       onMessage: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         addListener: (cb: any) => {
           captured.messageHandler = cb;
         },
       },
       onConnect: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         addListener: (cb: any) => { captured.portHandler = cb; },
       },
       onStartup: { addListener: () => {} },
@@ -408,7 +408,7 @@ async function sendMessage(
   msg: Record<string, unknown>,
   sender: { tab?: { id?: number; url?: string; index?: number } } = {},
 ): Promise<unknown> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const handler = (globalThis as any).__swTestMessageHandler;
   if (!handler) {
     throw new Error('Message handler not captured — initLogger() may have failed');
@@ -521,7 +521,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to REBUILD_INDEX', async () => {
     const response = await sendMessage({ type: 'REBUILD_INDEX' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.message).toBe('Index rebuilt successfully');
@@ -529,7 +529,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to CLEAR_ALL_DATA', async () => {
     const response = await sendMessage({ type: 'CLEAR_ALL_DATA' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('itemCount');
@@ -537,7 +537,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_RECENT_HISTORY', async () => {
     const response = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: 10 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res).toHaveProperty('results');
     expect(Array.isArray(res.results)).toBe(true);
@@ -545,7 +545,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_RECENT_HISTORY with default limit', async () => {
     const response = await sendMessage({ type: 'GET_RECENT_HISTORY' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res).toHaveProperty('results');
     expect(Array.isArray(res.results)).toBe(true);
@@ -553,7 +553,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_STORAGE_QUOTA', async () => {
     const response = await sendMessage({ type: 'GET_STORAGE_QUOTA' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('data');
@@ -563,7 +563,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to CLEAR_FAVICON_CACHE', async () => {
     const response = await sendMessage({ type: 'CLEAR_FAVICON_CACHE' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('cleared');
@@ -572,7 +572,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_FAVICON_CACHE_STATS', async () => {
     const response = await sendMessage({ type: 'GET_FAVICON_CACHE_STATS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('count');
@@ -581,14 +581,14 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_FAVICON', async () => {
     const response = await sendMessage({ type: 'GET_FAVICON', hostname: 'example.com' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res).toHaveProperty('dataUrl');
   });
 
   it('should respond to GET_EMBEDDING_PROGRESS', async () => {
     const response = await sendMessage({ type: 'GET_EMBEDDING_PROGRESS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('progress');
@@ -597,7 +597,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to SEARCH_QUERY with results', async () => {
     const response = await sendMessage({ type: 'SEARCH_QUERY', query: 'test search' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res).toHaveProperty('results');
     expect(res).toHaveProperty('query', 'test search');
@@ -606,7 +606,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to SEARCH_QUERY with skipAI flag', async () => {
     const response = await sendMessage({ type: 'SEARCH_QUERY', query: 'hello', skipAI: true });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res).toHaveProperty('results');
     expect(res).toHaveProperty('skipAI', true);
@@ -614,7 +614,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_HEALTH_STATUS', async () => {
     const response = await sendMessage({ type: 'GET_HEALTH_STATUS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('data');
@@ -623,7 +623,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to SELF_HEAL', async () => {
     const response = await sendMessage({ type: 'SELF_HEAL' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     // selfHeal mock returns undefined (not explicitly true), so status may be PARTIAL
     expect(['OK', 'PARTIAL']).toContain(res.status);
@@ -633,7 +633,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_EMBEDDING_STATS', async () => {
     const response = await sendMessage({ type: 'GET_EMBEDDING_STATS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('total');
@@ -643,7 +643,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to INDEX_BOOKMARKS', async () => {
     const response = await sendMessage({ type: 'INDEX_BOOKMARKS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('indexed');
@@ -652,7 +652,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to MANUAL_INDEX', async () => {
     const response = await sendMessage({ type: 'MANUAL_INDEX' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('added');
@@ -661,7 +661,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to EXPORT_INDEX', async () => {
     const response = await sendMessage({ type: 'EXPORT_INDEX' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.data).toHaveProperty('items');
@@ -674,7 +674,7 @@ describe('service-worker post-init message handlers', () => {
     const response = await sendMessage({ type: 'IMPORT_INDEX', items: [
       { url: 'https://example.com', title: 'Example', lastVisit: Date.now(), hostname: 'example.com', visitCount: 1, tokens: [] },
     ] });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.imported).toBe(1);
@@ -683,7 +683,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to START_EMBEDDING_PROCESSOR', async () => {
     const response = await sendMessage({ type: 'START_EMBEDDING_PROCESSOR' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('progress');
@@ -691,7 +691,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to PAUSE_EMBEDDING_PROCESSOR', async () => {
     const response = await sendMessage({ type: 'PAUSE_EMBEDDING_PROCESSOR' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('progress');
@@ -699,7 +699,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to RESUME_EMBEDDING_PROCESSOR', async () => {
     const response = await sendMessage({ type: 'RESUME_EMBEDDING_PROCESSOR' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('progress');
@@ -707,7 +707,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to GET_AI_CACHE_STATS', async () => {
     const response = await sendMessage({ type: 'GET_AI_CACHE_STATS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('size');
@@ -717,7 +717,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to CLEAR_AI_CACHE', async () => {
     const response = await sendMessage({ type: 'CLEAR_AI_CACHE' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('cleared');
@@ -733,7 +733,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should respond to CLEAR_ALL_EMBEDDINGS', async () => {
     const response = await sendMessage({ type: 'CLEAR_ALL_EMBEDDINGS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res).toHaveProperty('cleared');
@@ -741,7 +741,7 @@ describe('service-worker post-init message handlers', () => {
 
   it('should return error for unknown message type', async () => {
     const response = await sendMessage({ type: 'TOTALLY_UNKNOWN_MESSAGE_TYPE_XYZ' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res).toHaveProperty('error', 'Unknown message type');
   });
@@ -757,7 +757,7 @@ describe('service-worker error paths', () => {
     const { performFullRebuild } = await import('../indexing');
     (performFullRebuild as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Rebuild failed'));
     const response = await sendMessage({ type: 'REBUILD_INDEX' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('ERROR');
     expect(res.message).toBe('Rebuild failed');
@@ -767,7 +767,7 @@ describe('service-worker error paths', () => {
     const { getStorageQuotaInfo } = await import('../database');
     (getStorageQuotaInfo as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Quota check failed'));
     const response = await sendMessage({ type: 'GET_STORAGE_QUOTA' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('ERROR');
     expect(res.message).toBe('Quota check failed');
@@ -777,7 +777,7 @@ describe('service-worker error paths', () => {
     const { clearFaviconCache } = await import('../favicon-cache');
     (clearFaviconCache as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Cache clear failed'));
     const response = await sendMessage({ type: 'CLEAR_FAVICON_CACHE' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('ERROR');
     expect(res.message).toBe('Cache clear failed');
@@ -787,7 +787,7 @@ describe('service-worker error paths', () => {
     const { getRecentIndexedItems } = await import('../database');
     (getRecentIndexedItems as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('DB read failed'));
     const response = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: 10 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     // The handler catches the error and returns empty results
     expect(res).toHaveProperty('results');
@@ -798,7 +798,7 @@ describe('service-worker error paths', () => {
     const { checkHealth } = await import('../resilience');
     (checkHealth as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Health check failed'));
     const response = await sendMessage({ type: 'GET_HEALTH_STATUS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('ERROR');
     expect(res.message).toBe('Health check failed');
@@ -812,17 +812,17 @@ describe('service-worker port-based messaging', () => {
   });
 
   it('should accept quick-search port connection', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const portHandler = (globalThis as any).__swTestPortHandler;
     expect(portHandler).toBeDefined();
     expect(typeof portHandler).toBe('function');
   });
 
   it('should handle SEARCH_QUERY through quick-search port', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const portHandler = (globalThis as any).__swTestPortHandler;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const messageListeners: ((msg: any) => void)[] = [];
     const disconnectListeners: (() => void)[] = [];
     const postMessage = vi.fn();
@@ -830,7 +830,7 @@ describe('service-worker port-based messaging', () => {
     const mockPort = {
       name: 'quick-search',
       postMessage,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       onMessage: { addListener: (cb: (msg: any) => void) => { messageListeners.push(cb); } },
       onDisconnect: { addListener: (cb: () => void) => { disconnectListeners.push(cb); } },
     };
@@ -852,7 +852,7 @@ describe('service-worker port-based messaging', () => {
   });
 
   it('should ignore non-quick-search port connections', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const portHandler = (globalThis as any).__swTestPortHandler;
 
     const messageListeners: (() => void)[] = [];
@@ -870,10 +870,10 @@ describe('service-worker port-based messaging', () => {
   });
 
   it('should handle port disconnect gracefully', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const portHandler = (globalThis as any).__swTestPortHandler;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const messageListeners: ((msg: any) => void)[] = [];
     const disconnectListeners: (() => void)[] = [];
     const postMessage = vi.fn();
@@ -881,7 +881,7 @@ describe('service-worker port-based messaging', () => {
     const mockPort = {
       name: 'quick-search',
       postMessage,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       onMessage: { addListener: (cb: (msg: any) => void) => { messageListeners.push(cb); } },
       onDisconnect: { addListener: (cb: () => void) => { disconnectListeners.push(cb); } },
     };
@@ -906,17 +906,17 @@ describe('service-worker port-based messaging', () => {
   });
 
   it('should send skipAI flag through port response', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const portHandler = (globalThis as any).__swTestPortHandler;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const messageListeners: ((msg: any) => void)[] = [];
     const postMessage = vi.fn();
 
     const mockPort = {
       name: 'quick-search',
       postMessage,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       onMessage: { addListener: (cb: (msg: any) => void) => { messageListeners.push(cb); } },
       onDisconnect: { addListener: vi.fn() },
     };
@@ -951,7 +951,7 @@ describe('advanced browser command message handlers', () => {
       { id: 3, pinned: true },
     ]);
     const response = await sendMessage({ type: 'CLOSE_OTHER_TABS', tabId: 1 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.closed).toBe(1);
@@ -960,7 +960,7 @@ describe('advanced browser command message handlers', () => {
 
   it('CLOSE_OTHER_TABS returns error without tab id', async () => {
     const response = await sendMessage({ type: 'CLOSE_OTHER_TABS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).error).toBe('No active tab');
   });
 
@@ -973,7 +973,7 @@ describe('advanced browser command message handlers', () => {
         { id: 7, index: 3, pinned: false },
       ]);
     const response = await sendMessage({ type: 'CLOSE_TABS_RIGHT' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.closed).toBe(2);
@@ -989,7 +989,7 @@ describe('advanced browser command message handlers', () => {
         { id: 3, index: 2, pinned: false },
       ]);
     const response = await sendMessage({ type: 'CLOSE_TABS_LEFT' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.closed).toBe(2);
@@ -999,7 +999,7 @@ describe('advanced browser command message handlers', () => {
   it('CLOSE_ALL_TABS creates new tab then removes all', async () => {
     m.tabsQuery.mockImplementation(async () => [{ id: 1 }, { id: 2 }]);
     const response = await sendMessage({ type: 'CLOSE_ALL_TABS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.closed).toBe(2);
@@ -1009,7 +1009,7 @@ describe('advanced browser command message handlers', () => {
 
   it('DISCARD_TAB discards given tab', async () => {
     const response = await sendMessage({ type: 'DISCARD_TAB', tabId: 9 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.tabsDiscard).toHaveBeenCalledWith(9);
   });
@@ -1021,7 +1021,7 @@ describe('advanced browser command message handlers', () => {
       { id: 3, active: false, discarded: true },
     ]);
     const response = await sendMessage({ type: 'DISCARD_OTHER_TABS', tabId: 1 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.discarded).toBe(1);
@@ -1030,7 +1030,7 @@ describe('advanced browser command message handlers', () => {
 
   it('MOVE_TAB_NEW_WINDOW creates window with tab', async () => {
     const response = await sendMessage({ type: 'MOVE_TAB_NEW_WINDOW', tabId: 4 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.windowsCreate).toHaveBeenCalledWith({ tabId: 4 });
   });
@@ -1042,7 +1042,7 @@ describe('advanced browser command message handlers', () => {
       { id: 2, tabs: [{ id: 20 }, { id: 21 }] },
     ]);
     const response = await sendMessage({ type: 'MERGE_WINDOWS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.moved).toBe(2);
@@ -1057,7 +1057,7 @@ describe('advanced browser command message handlers', () => {
       { id: 3, url: 'https://y.com' },
     ]);
     const response = await sendMessage({ type: 'CLOSE_DUPLICATES' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.closed).toBe(1);
@@ -1071,7 +1071,7 @@ describe('advanced browser command message handlers', () => {
       { id: 3, pinned: false, url: 'https://a.com' },
     ]);
     const response = await sendMessage({ type: 'SORT_TABS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.sorted).toBe(2);
@@ -1081,7 +1081,7 @@ describe('advanced browser command message handlers', () => {
 
   it('SCROLL_TO_TOP runs executeScript', async () => {
     const response = await sendMessage({ type: 'SCROLL_TO_TOP', tabId: 8 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.scriptingExecuteScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 8 } }));
   });
@@ -1096,14 +1096,14 @@ describe('advanced browser command message handlers', () => {
   it('GROUP_TAB requires tabGroups permission', async () => {
     m.permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => { cb(false); });
     const response = await sendMessage({ type: 'GROUP_TAB', tabId: 1 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect(String((response as any).error)).toContain('tabGroups');
     expect(m.tabsGroup).not.toHaveBeenCalled();
   });
 
   it('GROUP_TAB calls tabs.group when permitted', async () => {
     const response = await sendMessage({ type: 'GROUP_TAB', tabId: 1 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.tabsGroup).toHaveBeenCalledWith({ tabIds: 1 });
   });
@@ -1111,7 +1111,7 @@ describe('advanced browser command message handlers', () => {
   it('COLLAPSE_GROUPS updates each group', async () => {
     m.tabGroupsQuery.mockResolvedValue([{ id: 100 }, { id: 101 }]);
     const response = await sendMessage({ type: 'COLLAPSE_GROUPS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.collapsed).toBe(2);
@@ -1122,7 +1122,7 @@ describe('advanced browser command message handlers', () => {
   it('NAME_GROUP sets title when tab is grouped', async () => {
     m.tabsGet.mockResolvedValue({ id: 1, groupId: 42 });
     const response = await sendMessage({ type: 'NAME_GROUP', tabId: 1, name: 'Work' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.tabGroupsUpdate).toHaveBeenCalledWith(42, { title: 'Work' });
   });
@@ -1130,7 +1130,7 @@ describe('advanced browser command message handlers', () => {
   it('COLOR_GROUP passes color to tabGroups.update', async () => {
     m.tabsGet.mockResolvedValue({ id: 1, groupId: 7 });
     const response = await sendMessage({ type: 'COLOR_GROUP', tabId: 1, color: 'red' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.tabGroupsUpdate).toHaveBeenCalledWith(7, { color: 'red' });
   });
@@ -1139,7 +1139,7 @@ describe('advanced browser command message handlers', () => {
     m.tabsGet.mockResolvedValue({ id: 1, groupId: 99 });
     m.tabsQuery.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     const response = await sendMessage({ type: 'CLOSE_GROUP', tabId: 1 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.closed).toBe(2);
@@ -1152,7 +1152,7 @@ describe('advanced browser command message handlers', () => {
       { id: 2, groupId: 5 },
     ]);
     const response = await sendMessage({ type: 'UNGROUP_ALL' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.ungrouped).toBe(1);
@@ -1161,14 +1161,14 @@ describe('advanced browser command message handlers', () => {
 
   it('CLEAR_BROWSER_CACHE calls removeCache when browsingData allowed', async () => {
     const response = await sendMessage({ type: 'CLEAR_BROWSER_CACHE' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.browsingDataRemoveCache).toHaveBeenCalledWith({});
   });
 
   it('CLEAR_LAST_HOUR calls browsingData.remove with time range', async () => {
     const response = await sendMessage({ type: 'CLEAR_LAST_HOUR' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.browsingDataRemove).toHaveBeenCalled();
     const arg0 = m.browsingDataRemove.mock.calls[0][0];
@@ -1184,7 +1184,7 @@ describe('advanced browser command message handlers', () => {
       cb([{ url: 'https://a.test/', title: 'A' }]);
     });
     const response = await sendMessage({ type: 'GET_TOP_SITES' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.sites).toHaveLength(1);
@@ -1197,7 +1197,7 @@ describe('advanced browser command message handlers', () => {
       type: 'REQUEST_OPTIONAL_PERMISSIONS',
       permissions: ['topSites'],
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.granted).toBe(false);
@@ -1213,13 +1213,13 @@ describe('advanced browser command message handlers', () => {
       type: 'CHECK_PERMISSIONS',
       permissions: ['a', 'b'],
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).granted).toBe(false);
   });
 
   it('UNGROUP_TAB calls tabs.ungroup', async () => {
     const response = await sendMessage({ type: 'UNGROUP_TAB', tabId: 11 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.tabsUngroup).toHaveBeenCalledWith(11);
   });
@@ -1227,7 +1227,7 @@ describe('advanced browser command message handlers', () => {
   it('EXPAND_GROUPS expands each group', async () => {
     m.tabGroupsQuery.mockResolvedValue([{ id: 200 }]);
     const response = await sendMessage({ type: 'EXPAND_GROUPS' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = response as any;
     expect(res.status).toBe('OK');
     expect(res.expanded).toBe(1);
@@ -1237,7 +1237,7 @@ describe('advanced browser command message handlers', () => {
   it('CLEAR_COOKIES returns error when browsingData permission denied', async () => {
     m.permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => { cb(false); });
     const response = await sendMessage({ type: 'CLEAR_COOKIES' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).error).toContain('browsingData');
     expect(m.browsingDataRemoveCookies).not.toHaveBeenCalled();
   });
@@ -1245,13 +1245,13 @@ describe('advanced browser command message handlers', () => {
   it('NAME_GROUP returns error when tab is not grouped', async () => {
     m.tabsGet.mockResolvedValue({ id: 1, groupId: -1 });
     const response = await sendMessage({ type: 'NAME_GROUP', tabId: 1, name: 'X' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).error).toContain('not in a group');
   });
 
   it('SCROLL_TO_BOTTOM runs executeScript with scroll target', async () => {
     const response = await sendMessage({ type: 'SCROLL_TO_BOTTOM', tabId: 12 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     expect((response as any).status).toBe('OK');
     expect(m.scriptingExecuteScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 12 } }));
   });

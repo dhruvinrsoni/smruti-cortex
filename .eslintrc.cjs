@@ -36,4 +36,13 @@ module.exports = {
     'comma-dangle': ['error', 'only-multiline'],
     'indent': 'off', // Let TypeScript/Prettier handle this
   },
+  overrides: [
+    {
+      files: ['**/__tests__/**/*.ts', '**/*.test.ts'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/no-non-null-assertion': 'off',
+      },
+    },
+  ],
 };

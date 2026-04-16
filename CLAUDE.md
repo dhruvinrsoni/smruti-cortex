@@ -51,7 +51,8 @@ Navigate here first — don't broad-search when the location is known:
 | `npx playwright test` | Run E2E tests (45 tests, 7 specs, requires `npm run build:prod` first) | ~60s |
 | `npm run test:e2e:slowmo` | E2E tests in slow-mo (sets `SLOW_MO` reliably on Windows) | ~5min |
 | `npx vitest run --coverage --pool=forks` | Unit tests + v8 coverage report | ~30s |
-| `npm run lint` | ESLint check | ~5s |
+| `npm run lint` | ESLint check (errors block, warnings inform) | ~5s |
+| `npm run lint:strict` | ESLint zero-warning check (manual cleanup use) | ~5s |
 | `npm run build:prod` | Production build (minified) | ~30s |
 | `npm run build:dev` | Dev build (source maps) | ~10s |
 | `npm run package` | Build + zip for Chrome Web Store | ~35s |
@@ -183,6 +184,7 @@ Prefer in this order:
 - **Shared test utilities:** `src/__test-utils__/` provides composable Chrome API mocks, Logger/Settings mocks, data factories, and lifecycle helpers — use these instead of inline mocks.
 - **E2E tests need a build:** Playwright loads the built extension from `dist/`. Run `npm run build:prod` before `npx playwright test`. See `docs/E2E_TESTING.md` for fixture architecture and troubleshooting.
 - **Underscore-dir guardrail:** Chrome MV3 forbids directories starting with `_` in extensions. `tsconfig.json` excludes `src/**/__test-utils__/**` and `scripts/copy-static.mjs` post-build sweep removes any that leak through.
+- **Lint policy:** `npm run lint` — errors block, warnings are advisory (exit 0). Test files have `no-explicit-any` and `no-non-null-assertion` turned off via `.eslintrc.cjs` overrides. `npm run lint:strict` (`--max-warnings 0`) exists for manual cleanup sprints but is **not** wired into verify/preflight/release — no obligation to maintain zero warnings.
 
 ### Parallelization
 
