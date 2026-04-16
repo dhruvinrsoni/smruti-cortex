@@ -33,7 +33,6 @@
     "release:major": "node ./scripts/release.mjs major",
     "store-prep": "node ./scripts/store-prep.mjs",
     "benchmark": "node ./scripts/benchmark-performance.mjs",
-    "generate-screenshots-index": "node ./scripts/generate-screenshots-index.mjs",
     "tsc": "tsc --project tsconfig.json",
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives",
     "lint:strict": "eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
