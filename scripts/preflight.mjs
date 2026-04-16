@@ -5,6 +5,7 @@
  *
  * Runs `npm run verify` (lint + build + build:prod + coverage + E2E)
  * then performs additional prod-release checks:
+ *   - Bundle size benchmark (thresholds + dist integrity)
  *   - manifest.json / package.json version sync
  *   - manifest_version === 3
  *   - No forbidden underscore dirs in dist/
@@ -73,9 +74,20 @@ try {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 2: Version & Manifest Checks
+// Phase 2: Bundle Size Benchmark
 // ─────────────────────────────────────────────────
-header('PHASE 2 — Version & Manifest');
+header('PHASE 2 — Bundle Size Benchmark');
+try {
+  runInherit('node ./scripts/benchmark-performance.mjs');
+  pass('Bundle benchmark passed (sizes within thresholds)');
+} catch {
+  fail('Bundle benchmark failed — check size thresholds above');
+}
+
+// ─────────────────────────────────────────────────
+// Phase 3: Version & Manifest Checks
+// ─────────────────────────────────────────────────
+header('PHASE 3 — Version & Manifest');
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
 const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf-8'));
@@ -107,9 +119,9 @@ if (missingPerms.length === 0) {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 3: dist/ Integrity
+// Phase 4: dist/ Integrity
 // ─────────────────────────────────────────────────
-header('PHASE 3 — dist/ Integrity');
+header('PHASE 4 — dist/ Integrity');
 
 const distDir = join(root, 'dist');
 if (!existsSync(distDir)) {
@@ -156,9 +168,9 @@ if (!existsSync(distDir)) {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 4: Package Zip
+// Phase 5: Package Zip
 // ─────────────────────────────────────────────────
-header('PHASE 4 — Package Zip');
+header('PHASE 5 — Package Zip');
 try {
   runInherit('node ./scripts/package.mjs');
   pass('Package zip created successfully');
@@ -167,9 +179,9 @@ try {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 5: Git Status
+// Phase 6: Git Status
 // ─────────────────────────────────────────────────
-header('PHASE 5 — Git Status');
+header('PHASE 6 — Git Status');
 
 try {
   const status = run('git status --porcelain').trim();
@@ -195,9 +207,9 @@ try {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 6: Store Prep Preview
+// Phase 7: Store Prep Preview
 // ─────────────────────────────────────────────────
-header('PHASE 6 — Store Prep Preview');
+header('PHASE 7 — Store Prep Preview');
 try {
   const storeOutput = run('node ./scripts/store-prep.mjs');
   console.log(storeOutput);
