@@ -21,7 +21,7 @@ vi.mock('../../core/settings', () => ({
 
 const ollamaMocks = {
   isCircuitBreakerOpen: vi.fn(() => false),
-  checkMemoryPressure: vi.fn(() => ({ ok: true })),
+  checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
   acquireOllamaSlot: vi.fn(() => true),
   releaseOllamaSlot: vi.fn(),
   recordCircuitBreakerFailure: vi.fn(),
@@ -53,7 +53,7 @@ describe('ai-keyword-expander', () => {
     vi.resetModules();
     // Restore mock defaults after clearAllMocks
     ollamaMocks.isCircuitBreakerOpen.mockReturnValue(false);
-    ollamaMocks.checkMemoryPressure.mockReturnValue({ ok: true });
+    ollamaMocks.checkMemoryPressure.mockReturnValue({ ok: true, permanent: false });
     ollamaMocks.acquireOllamaSlot.mockReturnValue(true);
     cacheMocks.getCachedExpansion.mockReturnValue(null);
     cacheMocks.getPrefixMatch.mockReturnValue(null);
@@ -134,7 +134,7 @@ describe('ai-keyword-expander', () => {
 
     it('should skip AI when memory pressure detected', async () => {
       const { expandQueryKeywords, getLastExpansionSource } = await importFreshModule();
-      ollamaMocks.checkMemoryPressure.mockReturnValue({ ok: false });
+      ollamaMocks.checkMemoryPressure.mockReturnValue({ ok: false, permanent: false });
       const result = await expandQueryKeywords('war');
       expect(result).toContain('war');
       expect(getLastExpansionSource()).toBe('skipped');

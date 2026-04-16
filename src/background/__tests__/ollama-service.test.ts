@@ -502,8 +502,9 @@ describe('OllamaService', () => {
         });
 
       const result = await service.generateEmbedding('test');
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.embedding).toEqual([]);
+      expect(result.error).toBe('Embedding response contained 0 dimensions');
     });
 
     it('should handle response with no embeddings field', async () => {
@@ -518,8 +519,9 @@ describe('OllamaService', () => {
         });
 
       const result = await service.generateEmbedding('test');
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.embedding).toEqual([]);
+      expect(result.error).toBe('Embedding response contained 0 dimensions');
     });
 
     it('should handle infinite timeout config (timeout <= 0)', async () => {

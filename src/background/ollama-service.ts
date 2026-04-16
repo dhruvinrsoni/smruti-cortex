@@ -386,7 +386,19 @@ export class OllamaService {
         embeddingSample: embedding.slice(0, 5)
       });
 
-      logger.info('generateEmbedding', `✅ Embedding generated in ${duration}ms (${embedding.length} dimensions)`);
+      if (embedding.length === 0) {
+        logger.warn('generateEmbedding',
+          `Embedding response contained 0 dimensions in ${duration}ms — model may not support this input`);
+        return {
+          embedding,
+          model: this.config.model,
+          success: false,
+          duration,
+          error: 'Embedding response contained 0 dimensions'
+        };
+      }
+
+      logger.debug('generateEmbedding', `Embedding generated in ${duration}ms (${embedding.length} dimensions)`);
       logger.debug('generateEmbedding', '📈 Embedding stats', {
         dimensions: embedding.length,
         durationMs: duration,
@@ -398,7 +410,7 @@ export class OllamaService {
       sessionEmbeddingCount++;
 
       return {
-        embedding,  // Use the extracted embedding, not data.embedding
+        embedding,
         model: this.config.model,
         success: true,
         duration
@@ -600,8 +612,9 @@ export function releaseOllamaSlot(): void { requestSemaphore.release(); }
 const MEMORY_LIMIT_MB = 512;  // Hard cap: stop AI features if extension exceeds 512MB
 const MAX_SESSION_EMBEDDINGS = 5000; // Fallback cap when performance.memory is unavailable
 let sessionEmbeddingCount = 0;
+let sessionCapLogged = false;
 
-export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: number } {
+export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: number; permanent: boolean } {
   try {
     // performance.memory is available in Chrome/Edge (non-standard but works in extensions)
     const perfMemory = (performance as any).memory;  // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -609,18 +622,23 @@ export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: n
       const usedMB = Math.round(perfMemory.usedJSHeapSize / (1024 * 1024));
       const ok = usedMB < MEMORY_LIMIT_MB;
       if (!ok) {
-        logger.warn('memoryGuard', `🔴 MEMORY PRESSURE: ${usedMB}MB used (limit: ${MEMORY_LIMIT_MB}MB) — blocking AI operations`);
+        logger.warn('memoryGuard', `MEMORY PRESSURE: ${usedMB}MB used (limit: ${MEMORY_LIMIT_MB}MB)`);
       }
-      return { ok, usedMB, limitMB: MEMORY_LIMIT_MB };
+      return { ok, usedMB, limitMB: MEMORY_LIMIT_MB, permanent: false };
     }
   } catch { /* ignore */ }
 
   // Fallback: use session embedding counter when performance.memory is unavailable.
+  // This is a permanent condition — the counter never decreases within a session.
   if (sessionEmbeddingCount >= MAX_SESSION_EMBEDDINGS) {
-    logger.warn('memoryGuard', `🔴 Session embedding cap reached: ${sessionEmbeddingCount}/${MAX_SESSION_EMBEDDINGS} — blocking AI operations`);
-    return { ok: false, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
+    if (!sessionCapLogged) {
+      logger.warn('memoryGuard',
+        `Session embedding cap reached: ${sessionEmbeddingCount}/${MAX_SESSION_EMBEDDINGS} — stopping AI operations for this session`);
+      sessionCapLogged = true;
+    }
+    return { ok: false, usedMB: 0, limitMB: MEMORY_LIMIT_MB, permanent: true };
   }
-  return { ok: true, usedMB: 0, limitMB: MEMORY_LIMIT_MB };
+  return { ok: true, usedMB: 0, limitMB: MEMORY_LIMIT_MB, permanent: false };
 }
 
 // Singleton instance

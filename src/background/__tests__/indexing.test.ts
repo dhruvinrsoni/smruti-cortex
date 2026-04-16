@@ -368,7 +368,7 @@ describe('generateItemEmbedding', () => {
       getOllamaService: vi.fn(),
       getOllamaConfigFromSettings: vi.fn(),
       isCircuitBreakerOpen: vi.fn(() => true),
-      checkMemoryPressure: vi.fn(() => ({ ok: true })),
+      checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
     }));
 
     const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });

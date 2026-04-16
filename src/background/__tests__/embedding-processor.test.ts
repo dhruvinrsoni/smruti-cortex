@@ -56,7 +56,7 @@ describe('embedding-processor', () => {
     // Mock ollama-service for the dynamic import inside runLoop
     vi.doMock('../ollama-service', () => ({
       isCircuitBreakerOpen: vi.fn(() => false),
-      checkMemoryPressure: vi.fn(() => ({ ok: true })),
+      checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
     }));
     return import('../embedding-processor');
   }
@@ -252,7 +252,7 @@ describe('embedding-processor', () => {
       vi.doMock('../indexing', () => indexingMocks);
       vi.doMock('../ollama-service', () => ({
         isCircuitBreakerOpen: vi.fn(() => false),
-        checkMemoryPressure: vi.fn(() => ({ ok: true })),
+        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
       }));
 
       // Make total large enough that withEmbeddings/total division works
@@ -308,7 +308,7 @@ describe('embedding-processor', () => {
       vi.doMock('../indexing', () => indexingMocks);
       vi.doMock('../ollama-service', () => ({
         isCircuitBreakerOpen: vi.fn(() => false),
-        checkMemoryPressure: vi.fn(() => ({ ok: true })),
+        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
       }));
       return import('../embedding-processor');
     }
@@ -394,7 +394,7 @@ describe('embedding-processor', () => {
       vi.doMock('../indexing', () => indexingMocks);
       vi.doMock('../ollama-service', () => ({
         isCircuitBreakerOpen: vi.fn(() => false),
-        checkMemoryPressure: vi.fn(() => ({ ok: true })),
+        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
       }));
 
       const { embeddingProcessor } = await import('../embedding-processor');

@@ -234,15 +234,22 @@ class EmbeddingProcessorImpl {
             while (this.state === 'running') {
                 // --- Guard: Circuit breaker tripped → wait ---
                 if (isCircuitBreakerOpen()) {
-                    logger.info('runLoop', 'Circuit breaker open, waiting 60s...');
+                    logger.debug('runLoop', 'Circuit breaker open, waiting 60s...');
                     await this.sleep(60_000);
                     continue;
                 }
 
-                // --- Guard: Memory pressure → wait ---
+                // --- Guard: Memory pressure → wait or stop ---
                 const mem = checkMemoryPressure();
                 if (!mem.ok) {
-                    logger.info('runLoop', `Memory pressure (${mem.usedMB}MB), waiting 30s...`);
+                    if (mem.permanent) {
+                        logger.info('runLoop',
+                            `Session embedding cap reached — processed ${this.processed} items this session. ` +
+                            'Remaining items will be processed next session.');
+                        this.state = 'completed';
+                        break;
+                    }
+                    logger.debug('runLoop', `Memory pressure (${mem.usedMB}MB), waiting 30s...`);
                     await this.sleep(30_000);
                     continue;
                 }

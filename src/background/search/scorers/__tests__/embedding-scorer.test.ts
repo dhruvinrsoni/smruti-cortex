@@ -10,7 +10,7 @@ vi.mock('../../../../core/settings', () => ({
 
 const mockGenerateEmbedding = vi.fn();
 const mockIsCircuitBreakerOpen = vi.fn(() => false);
-const mockCheckMemoryPressure = vi.fn(() => ({ ok: true, usedMB: 100, limitMB: 512 }));
+const mockCheckMemoryPressure = vi.fn(() => ({ ok: true, usedMB: 100, limitMB: 512, permanent: false }));
 vi.mock('../../../ollama-service', () => ({
   getOllamaService: () => ({ generateEmbedding: mockGenerateEmbedding }),
   getOllamaConfigFromSettings: async () => ({}),
@@ -27,7 +27,7 @@ describe('embeddingScorer', () => {
     vi.clearAllMocks();
     // Re-establish defaults (vi.restoreAllMocks resets mock implementations)
     mockIsCircuitBreakerOpen.mockReturnValue(false);
-    mockCheckMemoryPressure.mockReturnValue({ ok: true, usedMB: 100, limitMB: 512 });
+    mockCheckMemoryPressure.mockReturnValue({ ok: true, usedMB: 100, limitMB: 512, permanent: false });
   });
 
   // Lazy import to ensure mocks are registered
@@ -120,7 +120,7 @@ describe('embeddingScorer', () => {
 
     it('should return empty array when memory pressure is too high', async () => {
       const { generateItemEmbedding } = await getModule();
-      mockCheckMemoryPressure.mockReturnValue({ ok: false, usedMB: 600, limitMB: 512 });
+      mockCheckMemoryPressure.mockReturnValue({ ok: false, usedMB: 600, limitMB: 512, permanent: false });
 
       const result = await generateItemEmbedding({ title: 'Test', url: 'https://example.com' });
       expect(result).toEqual([]);

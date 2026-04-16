@@ -306,7 +306,7 @@ vi.mock('../performance-monitor', () => ({
 
 vi.mock('../ollama-service', () => ({
   isCircuitBreakerOpen: vi.fn(() => false),
-  checkMemoryPressure: vi.fn(() => ({ ok: true })),
+  checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
   getOllamaConfigFromSettings: vi.fn(async () => ({})),
   getOllamaService: vi.fn(() => ({ checkStatus: vi.fn(async () => ({ available: false })), warmup: vi.fn(async () => true) })),
 }));
