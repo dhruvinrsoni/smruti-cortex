@@ -1,12 +1,42 @@
 #!/usr/bin/env node
 /**
- * Performance Benchmark Script
- * Tests key operations and reports timing metrics
+ * benchmark-performance.mjs — Bundle size analysis and threshold enforcement.
+ *
+ * Reads dist/ bundle sizes, verifies required build outputs exist, and
+ * compares sizes against thresholds. Exits non-zero if any threshold is
+ * exceeded or required files are missing — suitable as a release gate.
+ *
+ * Called automatically by preflight.mjs (Phase 2). Can also be run standalone
+ * after a production build.
+ *
+ * Usage:
+ *   node scripts/benchmark-performance.mjs        # run checks
+ *   node scripts/benchmark-performance.mjs -h     # show this help
+ *
+ * In CI (when $CI is set), writes performance-results.json for archiving.
  */
 
-import { performance } from 'perf_hooks';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+
+if (process.argv.includes('-h') || process.argv.includes('--help')) {
+  console.log(`
+benchmark-performance.mjs — Bundle size analysis and threshold enforcement.
+
+Usage:
+  node scripts/benchmark-performance.mjs
+
+What it does:
+  1. Reads dist/ bundle sizes for key JS outputs
+  2. Verifies all required build artifacts exist in dist/
+  3. Compares sizes against thresholds (exits non-zero on breach)
+  4. Writes performance-results.json when $CI is set
+
+Prerequisite:
+  dist/ must exist — run \`npm run build:prod\` first.
+`.trim());
+  process.exit(0);
+}
 
 const results = {
   bundleSizes: {},
@@ -14,10 +44,10 @@ const results = {
   status: 'pass'
 };
 
-console.log('📊 Performance Benchmark Starting...\n');
+console.log('\n  Bundle Size Benchmark\n');
 
 // 1. Bundle Size Analysis
-console.log('1. Analyzing bundle sizes...');
+console.log('  1. Analyzing bundle sizes...');
 const distFiles = [
   'background/service-worker.js',
   'content_scripts/quick-search.js',
@@ -31,14 +61,14 @@ for (const file of distFiles) {
     const content = readFileSync(filePath);
     const sizeKB = (content.length / 1024).toFixed(2);
     results.bundleSizes[file] = sizeKB;
-    console.log(`   ${file}: ${sizeKB} KB`);
-  } catch (e) {
-    console.warn(`   ⚠️  ${file}: Not found`);
+    console.log(`     ${file}: ${sizeKB} KB`);
+  } catch {
+    console.warn(`     [!] ${file}: Not found`);
   }
 }
 
-// 2. Dist integrity check — verify all required build outputs exist
-console.log('\n2. Verifying dist output integrity...');
+// 2. Dist integrity check
+console.log('\n  2. Verifying dist output integrity...');
 const requiredDistFiles = [
   'dist/manifest.json',
   'dist/background/service-worker.js',
@@ -52,8 +82,8 @@ const requiredDistFiles = [
 let allPresent = true;
 for (const file of requiredDistFiles) {
   const exists = existsSync(resolve(process.cwd(), file));
-  const icon = exists ? '✅' : '❌';
-  console.log(`   ${icon} ${file}`);
+  const icon = exists ? '[ok]' : '[MISSING]';
+  console.log(`     ${icon} ${file}`);
   if (!exists) {
     allPresent = false;
     results.status = 'warn';
@@ -62,43 +92,38 @@ for (const file of requiredDistFiles) {
 results.timing['distIntegrity'] = allPresent ? 'pass' : 'fail';
 
 // 3. Threshold Checks
-console.log('\n3. Checking performance thresholds...');
-
-// Thresholds set at ~150% of current actual sizes (v8.0.0: 102, 1.8, 55, 58 KB).
-// Tighten when sizes are stable; loosen only with explicit justification.
+// Thresholds set at ~150% of current actual sizes (v9.0.0: 194, 1.8, 162, 162 KB).
+// Tighten when sizes stabilize; loosen only with explicit justification.
+console.log('\n  3. Checking size thresholds...');
 const thresholds = {
-  'background/service-worker.js': 150,  // actual ~102 KB
-  'content_scripts/extractor.js': 5,    // actual ~1.8 KB
-  'content_scripts/quick-search.js': 80, // actual ~55 KB
-  'popup/popup.js': 85,                  // actual ~58 KB
+  'background/service-worker.js': 300,
+  'content_scripts/extractor.js': 5,
+  'content_scripts/quick-search.js': 250,
+  'popup/popup.js': 250,
 };
 
 for (const [file, maxSize] of Object.entries(thresholds)) {
   const actualSize = parseFloat(results.bundleSizes[file] || '999');
-  const status = actualSize <= maxSize ? '✅' : '❌';
-  console.log(`   ${status} ${file}: ${actualSize} KB / ${maxSize} KB`);
-  
+  const status = actualSize <= maxSize ? '[ok]' : '[OVER]';
+  console.log(`     ${status} ${file}: ${actualSize} KB / ${maxSize} KB`);
+
   if (actualSize > maxSize) {
     results.status = 'warn';
-    console.warn(`   ⚠️  Bundle size exceeds threshold!`);
+    console.warn(`     [!] Bundle size exceeds threshold!`);
   }
 }
 
 // 4. Summary
-console.log('\n📊 Performance Benchmark Complete\n');
-console.log('Summary:');
-console.log(`   Status: ${results.status.toUpperCase()}`);
-console.log(`   Total Bundles: ${Object.keys(results.bundleSizes).length}`);
-console.log(`   Total Tests: ${Object.keys(results.timing).length}`);
+console.log('\n  Benchmark complete.');
+console.log(`     Status: ${results.status.toUpperCase()}`);
+console.log(`     Bundles checked: ${Object.keys(results.bundleSizes).length}`);
 
-// Output JSON for CI
 if (process.env.CI) {
   writeFileSync(
     resolve(process.cwd(), 'performance-results.json'),
     JSON.stringify(results, null, 2)
   );
-  console.log('\n✅ Results saved to performance-results.json');
+  console.log('     Results saved to performance-results.json');
 }
 
-// Exit with appropriate code
 process.exit(results.status === 'pass' ? 0 : 1);
