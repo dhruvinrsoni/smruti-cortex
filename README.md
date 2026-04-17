@@ -161,6 +161,20 @@ npm run lint         # Check code
 npm run test         # Run tests
 npm run coverage     # Run tests with coverage report
 
+# Publish local coverage (for contributors)
+# - Copies the local `coverage/` HTML into `docs/quality-report/coverage` so it can be published.
+# - CI already publishes coverage for runs on `main`; this helper is for local snapshots.
+```bash
+# 1. Run tests with coverage
+npm run coverage
+# 2. Copy coverage HTML into the docs tree (helper)
+npm run publish:coverage
+# 3. To publish the snapshot publicly, force-add and commit the generated docs (these files are ignored by default)
+git add -f docs/quality-report/coverage
+git commit -m "docs: publish coverage HTML to docs/quality-report/coverage [skip ci]"
+git push origin HEAD
+```
+
 # Quality report workflow (non-blocking quality indicator)
 # See GitHub Actions -> "Quality Report" for shareable summary and artifacts
 
