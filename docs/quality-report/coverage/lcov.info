@@ -1,5 +1,5 @@
 TN:
-SF:src\background\ai-keyword-cache.ts
+SF:src/background/ai-keyword-cache.ts
 FN:40,loadCache
 FN:44,(anonymous_1)
 FN:64,scheduleSave
@@ -158,7 +158,7 @@ BRF:43
 BRH:40
 end_of_record
 TN:
-SF:src\background\ai-keyword-expander.ts
+SF:src/background/ai-keyword-expander.ts
 FN:30,readResponseText
 FN:66,getLastExpansionSource
 FN:84,expandQueryKeywords
@@ -533,7 +533,7 @@ BRF:116
 BRH:84
 end_of_record
 TN:
-SF:src\background\database.ts
+SF:src/background/database.ts
 FN:18,invalidateItemCache
 FN:24,resetDbInstance
 FN:32,openDatabaseImpl
@@ -1013,7 +1013,7 @@ BRF:94
 BRH:81
 end_of_record
 TN:
-SF:src\background\diagnostics.ts
+SF:src/background/diagnostics.ts
 FN:71,initSearchDebugState
 FN:85,isSearchDebugEnabled
 FN:92,setSearchDebugEnabled
@@ -1194,7 +1194,7 @@ BRF:23
 BRH:17
 end_of_record
 TN:
-SF:src\background\embedding-processor.ts
+SF:src/background/embedding-processor.ts
 FN:28,(anonymous_0)
 FN:46,(anonymous_1)
 FN:104,(anonymous_2)
@@ -1458,7 +1458,7 @@ BRF:71
 BRH:52
 end_of_record
 TN:
-SF:src\background\embedding-text.ts
+SF:src/background/embedding-text.ts
 FN:28,buildEmbeddingText
 FN:49,cleanUrlForEmbedding
 FN:54,(anonymous_2)
@@ -1501,7 +1501,7 @@ BRF:8
 BRH:8
 end_of_record
 TN:
-SF:src\background\favicon-cache.ts
+SF:src/background/favicon-cache.ts
 FN:38,shouldSkipFavicon
 FN:56,openFaviconDatabase
 FN:61,(anonymous_2)
@@ -1833,7 +1833,7 @@ BRF:55
 BRH:55
 end_of_record
 TN:
-SF:src\background\indexing.ts
+SF:src/background/indexing.ts
 FN:18,generateItemEmbedding
 FN:61,generateBatchEmbeddings
 FN:69,(anonymous_2)
@@ -2352,7 +2352,7 @@ BRF:156
 BRH:104
 end_of_record
 TN:
-SF:src\background\ollama-service.ts
+SF:src/background/ollama-service.ts
 FN:23,readResponseWithLimit
 FN:50,readJsonWithLimit
 FN:86,(anonymous_2)
@@ -2816,7 +2816,7 @@ BRF:143
 BRH:124
 end_of_record
 TN:
-SF:src\background\performance-monitor.ts
+SF:src/background/performance-monitor.ts
 FN:59,isValidPersistedMetrics
 FN:71,defaultPersistedMetrics
 FN:86,(anonymous_2)
@@ -3024,7 +3024,7 @@ BRF:47
 BRH:43
 end_of_record
 TN:
-SF:src\background\ranking-report.ts
+SF:src/background/ranking-report.ts
 FN:30,getGitHubPAT
 FN:38,generateRankingReport
 FN:55,formatReportBody
@@ -3227,7 +3227,7 @@ BRF:28
 BRH:25
 end_of_record
 TN:
-SF:src\background\resilience.ts
+SF:src/background/resilience.ts
 FN:37,checkHealth
 FN:97,selfHeal
 FN:147,clearAndRebuild
@@ -3496,7 +3496,7 @@ BRF:48
 BRH:43
 end_of_record
 TN:
-SF:src\background\search-debug.ts
+SF:src/background/search-debug.ts
 FN:68,(anonymous_0)
 FN:76,(anonymous_1)
 FN:84,(anonymous_2)
@@ -3627,7 +3627,7 @@ BRF:15
 BRH:13
 end_of_record
 TN:
-SF:src\background\service-worker.ts
+SF:src/background/service-worker.ts
 FN:23,hasOptionalPermission
 FN:24,(anonymous_1)
 FN:29,requestOptionalPermissions
@@ -5566,7 +5566,7 @@ BRF:592
 BRH:276
 end_of_record
 TN:
-SF:src\background\search\diversity-filter.ts
+SF:src/background/search/diversity-filter.ts
 FN:21,normalizeUrl
 FN:79,applyDiversityFilter
 FNF:2
@@ -5614,7 +5614,7 @@ BRF:10
 BRH:10
 end_of_record
 TN:
-SF:src\background\search\query-expansion.ts
+SF:src/background/search/query-expansion.ts
 FN:69,expandTerm
 FN:86,expandQuery
 FN:87,(anonymous_2)
@@ -5677,7 +5677,7 @@ BRF:8
 BRH:8
 end_of_record
 TN:
-SF:src\background\search\scorer-manager.ts
+SF:src/background/search/scorer-manager.ts
 FN:28,(anonymous_0)
 FN:66,(anonymous_1)
 FN:90,(anonymous_2)
@@ -5833,7 +5833,7 @@ BRF:53
 BRH:42
 end_of_record
 TN:
-SF:src\background\search\search-cache.ts
+SF:src/background/search/search-cache.ts
 FN:24,(anonymous_0)
 FN:33,(anonymous_1)
 FN:58,(anonymous_2)
@@ -5951,7 +5951,7 @@ BRF:26
 BRH:21
 end_of_record
 TN:
-SF:src\background\search\search-engine.ts
+SF:src/background/search/search-engine.ts
 FN:41,getLastAIStatus
 FN:48,runSearch2
 FN:60,runSearchInner
@@ -6624,7 +6624,7 @@ BRF:305
 BRH:200
 end_of_record
 TN:
-SF:src\background\search\tokenizer.ts
+SF:src/background/search/tokenizer.ts
 FN:4,tokenize
 FN:22,(anonymous_1)
 FN:51,getTokenRegexes
@@ -6737,7 +6737,7 @@ BRF:26
 BRH:23
 end_of_record
 TN:
-SF:src\background\search\scorers\ai-scorer-placeholder.ts
+SF:src/background/search/scorers/ai-scorer-placeholder.ts
 FN:6,(anonymous_0)
 FNF:1
 FNH:1
@@ -6750,7 +6750,7 @@ BRF:0
 BRH:0
 end_of_record
 TN:
-SF:src\background\search\scorers\embedding-scorer.ts
+SF:src/background/search/scorers/embedding-scorer.ts
 FN:33,cosineSimilarity
 FN:62,(anonymous_1)
 FN:97,generateItemEmbedding
@@ -6831,7 +6831,7 @@ BRF:30
 BRH:28
 end_of_record
 TN:
-SF:src\background\search\scorers\meta-scorer.ts
+SF:src/background/search/scorers/meta-scorer.ts
 FN:13,(anonymous_0)
 FNF:1
 FNH:1
@@ -6868,7 +6868,7 @@ BRF:14
 BRH:13
 end_of_record
 TN:
-SF:src\background\search\scorers\recency-scorer.ts
+SF:src/background/search/scorers/recency-scorer.ts
 FN:6,(anonymous_0)
 FNF:1
 FNH:1
@@ -6884,7 +6884,7 @@ BRF:0
 BRH:0
 end_of_record
 TN:
-SF:src\background\search\scorers\title-scorer.ts
+SF:src/background/search/scorers/title-scorer.ts
 FN:26,(anonymous_0)
 FN:42,(anonymous_1)
 FN:46,(anonymous_2)
@@ -6974,7 +6974,7 @@ BRF:32
 BRH:23
 end_of_record
 TN:
-SF:src\background\search\scorers\url-scorer.ts
+SF:src/background/search/scorers/url-scorer.ts
 FN:19,(anonymous_0)
 FNF:1
 FNH:1
@@ -7012,7 +7012,7 @@ BRF:10
 BRH:10
 end_of_record
 TN:
-SF:src\background\search\scorers\visitcount-scorer.ts
+SF:src/background/search/scorers/visitcount-scorer.ts
 FN:6,(anonymous_0)
 FNF:1
 FNH:1
@@ -7028,7 +7028,7 @@ BRF:2
 BRH:2
 end_of_record
 TN:
-SF:src\content_scripts\extractor.ts
+SF:src/content_scripts/extractor.ts
 FN:13,isSensitiveUrl
 FN:58,runExtractor
 FN:103,(anonymous_2)
@@ -7158,7 +7158,7 @@ BRF:54
 BRH:48
 end_of_record
 TN:
-SF:src\content_scripts\quick-search-utils.ts
+SF:src/content_scripts/quick-search-utils.ts
 FN:23,sanitizeQuery
 FN:26,(anonymous_1)
 FN:39,detectMode
@@ -7302,7 +7302,7 @@ BRF:62
 BRH:62
 end_of_record
 TN:
-SF:src\core\constants.ts
+SF:src/core/constants.ts
 FN:9,(anonymous_0)
 FNF:1
 FNH:1
@@ -7324,7 +7324,7 @@ BRF:2
 BRH:2
 end_of_record
 TN:
-SF:src\core\helpers.ts
+SF:src/core/helpers.ts
 FN:13,detectBrowser
 FN:30,isFirefox
 FN:37,isChromium
@@ -7430,7 +7430,7 @@ BRF:38
 BRH:33
 end_of_record
 TN:
-SF:src\core\logger.ts
+SF:src/core/logger.ts
 FN:5,(anonymous_0)
 FN:41,(anonymous_1)
 FN:70,(anonymous_2)
@@ -7640,7 +7640,7 @@ BRF:60
 BRH:50
 end_of_record
 TN:
-SF:src\core\settings.ts
+SF:src/core/settings.ts
 FN:6,(anonymous_0)
 FN:83,(anonymous_1)
 FN:87,(anonymous_2)
@@ -8108,7 +8108,7 @@ BRF:112
 BRH:69
 end_of_record
 TN:
-SF:src\core\traced.ts
+SF:src/core/traced.ts
 FN:37,isTraceEnabled
 FN:47,summariseArgs
 FN:49,(anonymous_2)
@@ -8279,7 +8279,7 @@ BRF:58
 BRH:37
 end_of_record
 TN:
-SF:src\popup\popup-utils.ts
+SF:src/popup/popup-utils.ts
 FN:25,detectPopupMode
 FN:53,formatBytes
 FN:60,formatModelSize
@@ -8345,7 +8345,7 @@ BRF:25
 BRH:25
 end_of_record
 TN:
-SF:src\shared\command-registry.ts
+SF:src/shared/command-registry.ts
 FN:14,(anonymous_0)
 FN:341,(anonymous_1)
 FN:559,(anonymous_2)
@@ -8729,7 +8729,7 @@ BRF:75
 BRH:59
 end_of_record
 TN:
-SF:src\shared\data-masker.ts
+SF:src/shared/data-masker.ts
 FN:9,simpleHash
 FN:27,redactWord
 FN:49,maskTitle
@@ -8899,7 +8899,7 @@ BRF:54
 BRH:49
 end_of_record
 TN:
-SF:src\shared\hide-img-on-error.ts
+SF:src/shared/hide-img-on-error.ts
 FN:5,wireHideImgOnError
 FN:9,(anonymous_1)
 FNF:2
@@ -8917,7 +8917,7 @@ BRF:2
 BRH:2
 end_of_record
 TN:
-SF:src\shared\palette-messages.ts
+SF:src/shared/palette-messages.ts
 FN:18,isPaletteDiagnosticMessageType
 FN:22,formatBytesShort
 FN:30,isOkStatus
@@ -9083,7 +9083,7 @@ BRF:87
 BRH:51
 end_of_record
 TN:
-SF:src\shared\recent-interactions.ts
+SF:src/shared/recent-interactions.ts
 FN:16,getRecentInteractions
 FN:27,addRecentInteraction
 FN:37,(anonymous_2)
@@ -9123,7 +9123,7 @@ BRF:6
 BRH:6
 end_of_record
 TN:
-SF:src\shared\recent-searches.ts
+SF:src/shared/recent-searches.ts
 FN:15,getRecentSearches
 FN:26,addRecentSearch
 FN:34,(anonymous_2)
@@ -9166,7 +9166,7 @@ BRF:8
 BRH:8
 end_of_record
 TN:
-SF:src\shared\search-ui-base.ts
+SF:src/shared/search-ui-base.ts
 FN:45,(anonymous_0)
 FN:100,handleCyclicTabNavigation
 FN:108,(anonymous_2)
@@ -9652,7 +9652,7 @@ BRF:159
 BRH:149
 end_of_record
 TN:
-SF:src\shared\toolbar-toggles.ts
+SF:src/shared/toolbar-toggles.ts
 FN:138,getToggleDef
 FN:139,(anonymous_1)
 FN:143,getCycleState
@@ -9692,7 +9692,7 @@ BRF:10
 BRH:10
 end_of_record
 TN:
-SF:src\shared\tour.ts
+SF:src/shared/tour.ts
 FN:55,isTourCompleted
 FN:64,markTourCompleted
 FN:74,runTour
@@ -9825,7 +9825,7 @@ BRF:28
 BRH:19
 end_of_record
 TN:
-SF:src\shared\web-search.ts
+SF:src/shared/web-search.ts
 FN:47,getWebSearchEngineDisplayName
 FN:54,isAtlassianOrStaticEngine
 FN:59,getWebSearchPrefixHintLines
