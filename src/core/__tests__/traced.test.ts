@@ -103,4 +103,76 @@ describe('traced utilities', () => {
     expect(f.baz()).toBe('ok');
     expect(traceMock).not.toHaveBeenCalled();
   });
+
+  it('sync function THROW logs THROW and rethrows', async () => {
+    const traceMock = vi.fn();
+    vi.doMock('../../core/logger', () => ({
+      Logger: { trace: traceMock, getLevel: vi.fn(() => 4) },
+      LogLevel: { TRACE: 4 },
+    }));
+
+    const { traced } = await import('../traced');
+    const fn = () => { throw new Error('boom'); };
+    const wrapped = traced('Comp', 'boom', fn);
+    expect(() => wrapped()).toThrow('boom');
+
+    const throwCall = traceMock.mock.calls.find(c => typeof c[2] === 'string' && (c[2] as string).startsWith('THROW'));
+    expect(throwCall).toBeDefined();
+  });
+
+  it('async reject logs THROW and rejects', async () => {
+    const traceMock = vi.fn();
+    vi.doMock('../../core/logger', () => ({
+      Logger: { trace: traceMock, getLevel: vi.fn(() => 4) },
+      LogLevel: { TRACE: 4 },
+    }));
+
+    const { traced } = await import('../traced');
+    const fn = async () => { throw new Error('async boom'); };
+    const wrapped = traced('Comp', 'arej', fn);
+    await expect(wrapped()).rejects.toThrow('async boom');
+
+    const throwCall = traceMock.mock.calls.find(c => typeof c[2] === 'string' && (c[2] as string).startsWith('THROW'));
+    expect(throwCall).toBeDefined();
+  });
+
+  it('summariseArgs includes count indicator when many args', async () => {
+    const traceMock = vi.fn();
+    vi.doMock('../../core/logger', () => ({
+      Logger: { trace: traceMock, getLevel: vi.fn(() => 4) },
+      LogLevel: { TRACE: 4 },
+    }));
+
+    const { traced } = await import('../traced');
+    const fn = (a: any, b: any, c: any, d: any, e: any) => 'ok';
+    const wrapped = traced('Comp', 'many', fn);
+    wrapped(1,2,3,4,5);
+
+    const enterCall = traceMock.mock.calls.find(c => c[2] === 'ENTER');
+    expect(enterCall).toBeDefined();
+    const data = enterCall![3];
+    expect(data).toBeDefined();
+    expect(String(data.args)).toContain('(+');
+  });
+
+  it('truncates large results when logResult true', async () => {
+    const traceMock = vi.fn();
+    vi.doMock('../../core/logger', () => ({
+      Logger: { trace: traceMock, getLevel: vi.fn(() => 4) },
+      LogLevel: { TRACE: 4 },
+    }));
+
+    const { traced } = await import('../traced');
+    const big = 'a'.repeat(500);
+    const fn = () => big;
+    const wrapped = traced('Comp', 'big', fn, { logResult: true });
+    const out = wrapped();
+    expect(out).toBe(big);
+
+    const exitCall = traceMock.mock.calls.find(c => typeof c[2] === 'string' && (c[2] as string).startsWith('EXIT'));
+    expect(exitCall).toBeDefined();
+    const data = exitCall![3];
+    expect(String(data.result).length).toBeLessThan(250);
+    expect(String(data.result)).toContain('…');
+  });
 });
