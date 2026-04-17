@@ -426,6 +426,7 @@ jobs:
             `      <p class="meta">Generated: ${esc(data.generatedAt)} | Run #${esc(data.runNumber)} | Ref: ${esc(data.ref)} | Coverage source: ${esc(data.coverageSource)}</p>`,
             `      <p class="meta"><a href="https://github.com/${esc(data.repository)}/actions/runs/${esc(data.runId)}" target="_blank" rel="noopener">Open workflow run details</a></p>`,
             `      <div class="chips">${chip('Lint', data.lintStatus)}${chip('Tests', data.testStatus)}${chip('Coverage', data.coverageStatus)}${chip('Security', data.securityStatus)}${chip('Performance', data.perfStatus)}</div>`,
+            '      <p class="meta"><a href="./coverage/index.html">Coverage details (HTML)</a></p>',
             '      <div class="kpis">',
             `        <div class="kpi"><div class="label">Coverage</div><div class="value">${esc(toCoverageLabel(data.coverageLinesPct))}</div></div>`,
             `        <div class="kpi"><div class="label">Lint Errors</div><div class="value">${esc(data.lintErrors)}</div></div>`,
@@ -480,6 +481,13 @@ jobs:
           ].join('\n');
           fs.writeFileSync('docs/reports/nfr/latest/index.html', redirect);
           NODE
+
+      - name: Copy coverage HTML to public docs
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          rm -rf docs/quality-report/coverage || true
+          mkdir -p docs/quality-report/coverage
+          cp -r coverage/* docs/quality-report/coverage/ || true
 
       - name: Publish public report to docs
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
