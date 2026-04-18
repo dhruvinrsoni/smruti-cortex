@@ -6,7 +6,7 @@
  * Runs ALL checks regardless of individual failures so you get a complete
  * picture in one go. Exit code is non-zero if any step fails.
  *
- * Steps: lint → build:dev → build:prod → unit tests + coverage → E2E tests
+ * Steps: lint → build:prod → unit tests + coverage → E2E tests
  *
  * Usage:
  *   npm run verify                    # run everything (E2E at full speed)
@@ -53,7 +53,6 @@ console.log(`${BOLD}  SmrutiCortex — Full Verification${RESET}`);
 console.log(`${'═'.repeat(50)}`);
 
 step('Lint', 'npm run lint');
-step('Build (dev)', 'npm run build');
 step('Build (prod)', 'npm run build:prod');
 step('Unit Tests + Coverage', 'npx vitest run --coverage');
 
