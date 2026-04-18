@@ -3,31 +3,48 @@
 /**
  * SmrutiCortex Release Script
  *
- * Usage: node scripts/release.mjs <patch|minor|major> [--dry-run]
+ * Usage: node scripts/release.mjs <patch|minor|major> [--skip-e2e] [--dry-run]
  *
- * Automates: version bump → sync manifest → changelog → commit → tag → push → GitHub Release → package zip
+ * Flow (verify-first — zero disk writes until everything is green):
+ *   1. Validate prerequisites (main branch, clean tree, gh CLI)
+ *   2. Full verify gate: lint + build:prod + unit tests + E2E
+ *   3. Compute new version from explicit bump arg
+ *   4. Write: bump package.json, sync manifest, generate CHANGELOG, scaffold submission doc
+ *   5. Re-build with new version baked in + package zip
+ *   6. Post-bump integrity checks
+ *   7. Single commit with all release files
+ *   8. Tag, push, create GitHub Release
+ *   9. Print next steps
  */
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const DRY_RUN = process.argv.includes('--dry-run');
+const SKIP_E2E = process.argv.includes('--skip-e2e');
 const BUMP_TYPE = process.argv.find(a => ['patch', 'minor', 'major'].includes(a));
 
+const RED = '\x1b[31m';
+const GREEN = '\x1b[32m';
+const YELLOW = '\x1b[33m';
+const BOLD = '\x1b[1m';
+const RESET = '\x1b[0m';
+
 if (!BUMP_TYPE) {
-  console.error('Usage: node scripts/release.mjs <patch|minor|major> [--dry-run]');
+  console.error('Usage: node scripts/release.mjs <patch|minor|major> [--skip-e2e] [--dry-run]');
   console.error('  patch  — bug fixes (8.0.0 → 8.0.1)');
   console.error('  minor  — new features (8.0.0 → 8.1.0)');
   console.error('  major  — breaking changes (8.0.0 → 9.0.0)');
-  console.error('  --dry-run  — preview without pushing or tagging');
+  console.error('  --skip-e2e  — skip E2E tests (emergency only)');
+  console.error('  --dry-run   — preview without pushing or tagging');
   process.exit(1);
 }
 
 function run(cmd, opts = {}) {
   const stdio = opts.silent ? 'pipe' : 'inherit';
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio, timeout: 300000 });
+  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio, timeout: 600000 });
 }
 
 function runSilent(cmd) {
@@ -35,34 +52,69 @@ function runSilent(cmd) {
 }
 
 // ===== Step 1: Validate prerequisites =====
-console.log('🔍 Validating prerequisites...\n');
+console.log(`\n${BOLD}═══ STEP 1: Validate Prerequisites ═══${RESET}\n`);
 
-// Check branch
 const branch = runSilent('git rev-parse --abbrev-ref HEAD');
 if (branch !== 'main') {
-  console.error(`❌ Must be on 'main' branch (currently on '${branch}')`);
+  console.error(`${RED}❌ Must be on 'main' branch (currently on '${branch}')${RESET}`);
   process.exit(1);
 }
 
-// Check clean working tree
 const status = runSilent('git status --porcelain');
 if (status) {
-  console.error('❌ Working tree is not clean. Commit or stash changes first.');
+  console.error(`${RED}❌ Working tree is not clean. Commit or stash changes first.${RESET}`);
   console.error(status);
   process.exit(1);
 }
 
-// Check gh CLI available
 try {
   runSilent('gh --version');
 } catch {
-  console.error('❌ GitHub CLI (gh) not found. Install: https://cli.github.com/');
+  console.error(`${RED}❌ GitHub CLI (gh) not found. Install: https://cli.github.com/${RESET}`);
   process.exit(1);
 }
 
-console.log('✅ On main, clean tree, gh available\n');
+console.log(`${GREEN}✅ On main, clean tree, gh available${RESET}\n`);
 
-// ===== Step 2: Bump version =====
+// ===== Step 2: Full verify gate (BEFORE any disk changes) =====
+console.log(`${BOLD}═══ STEP 2: Verify Gate (zero disk changes) ═══${RESET}\n`);
+
+if (SKIP_E2E) {
+  console.log(`${YELLOW}${BOLD}┌─────────────────────────────────────────────────┐${RESET}`);
+  console.log(`${YELLOW}${BOLD}│  ⚠️  WARNING: --skip-e2e is set                 │${RESET}`);
+  console.log(`${YELLOW}${BOLD}│  E2E tests will be SKIPPED.                     │${RESET}`);
+  console.log(`${YELLOW}${BOLD}│  [ship-override: skip-e2e] will be recorded.    │${RESET}`);
+  console.log(`${YELLOW}${BOLD}│  Use this for emergencies only.                 │${RESET}`);
+  console.log(`${YELLOW}${BOLD}└─────────────────────────────────────────────────┘${RESET}\n`);
+}
+
+const verifySteps = [
+  { name: 'Lint', cmd: 'npm run lint' },
+  { name: 'Build (prod)', cmd: 'npm run build:prod' },
+  { name: 'Unit Tests + Coverage', cmd: 'npx vitest run --coverage' },
+];
+
+if (!SKIP_E2E) {
+  verifySteps.push({ name: 'E2E Tests', cmd: 'npx playwright test' });
+}
+
+for (const { name, cmd } of verifySteps) {
+  console.log(`\n${BOLD}▶ ${name}${RESET}`);
+  try {
+    run(cmd);
+    console.log(`${GREEN}  ✅ ${name} passed${RESET}`);
+  } catch {
+    console.error(`\n${RED}❌ ${name} FAILED. Fix the errors above and retry.${RESET}`);
+    console.error(`${RED}   No disk changes were made — your tree is still clean.${RESET}`);
+    process.exit(1);
+  }
+}
+
+console.log(`\n${GREEN}✅ All verify checks passed${RESET}\n`);
+
+// ===== Step 3: Compute new version =====
+console.log(`${BOLD}═══ STEP 3: Compute Version ═══${RESET}\n`);
+
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
 const [major, minor, patch] = pkg.version.split('.').map(Number);
 let newVersion;
@@ -74,134 +126,197 @@ switch (BUMP_TYPE) {
 
 console.log(`📦 Version bump: ${pkg.version} → ${newVersion} (${BUMP_TYPE})\n`);
 
-// Update package.json
-pkg.version = newVersion;
-writeFileSync(resolve(ROOT, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
-
-// Sync to manifest.json
-run('node scripts/sync-version.mjs');
-
-// ===== Step 3: Generate changelog from git log =====
-const lastTag = runSilent('git describe --tags --abbrev=0 2>/dev/null || echo ""');
-const logRange = lastTag ? `${lastTag}..HEAD` : 'HEAD';
-const rawLog = runSilent(`git log ${logRange} --oneline --no-merges`);
-
-const commits = rawLog.split('\n').filter(Boolean);
-const categorized = { feat: [], fix: [], refactor: [], docs: [], chore: [], style: [], other: [] };
-
-for (const line of commits) {
-  const match = line.match(/^[a-f0-9]+ (\w+)(?:\(.*?\))?[!]?:\s*(.+)$/);
-  if (match) {
-    const [, type, msg] = match;
-    const cat = categorized[type] || categorized.other;
-    cat.push(msg);
-  } else {
-    // Non-conventional commit
-    const msg = line.replace(/^[a-f0-9]+ /, '');
-    categorized.other.push(msg);
-  }
-}
-
-const today = new Date().toISOString().split('T')[0];
-let changelogSection = `## [${newVersion}] — ${today}\n\n`;
-
-if (categorized.feat.length) {
-  changelogSection += '### Features\n' + categorized.feat.map(m => `- ${m}`).join('\n') + '\n\n';
-}
-if (categorized.fix.length) {
-  changelogSection += '### Bug Fixes\n' + categorized.fix.map(m => `- ${m}`).join('\n') + '\n\n';
-}
-if (categorized.refactor.length) {
-  changelogSection += '### Refactoring\n' + categorized.refactor.map(m => `- ${m}`).join('\n') + '\n\n';
-}
-const misc = [...categorized.docs, ...categorized.chore, ...categorized.style, ...categorized.other];
-if (misc.length) {
-  changelogSection += '### Other\n' + misc.map(m => `- ${m}`).join('\n') + '\n\n';
-}
-
-console.log('📝 Generated changelog:\n');
-console.log(changelogSection);
-
-// ===== Step 4: Update CHANGELOG.md =====
-const changelogPath = resolve(ROOT, 'CHANGELOG.md');
-const existingChangelog = readFileSync(changelogPath, 'utf-8');
-
-// Insert new section after the header line
-const headerEnd = existingChangelog.indexOf('\n\n') + 2;
-const header = existingChangelog.slice(0, headerEnd);
-const rest = existingChangelog.slice(headerEnd);
-
-writeFileSync(changelogPath, header + changelogSection + '---\n\n' + rest);
-console.log('✅ CHANGELOG.md updated\n');
-
-// ===== Step 5: Run tests =====
-console.log('🧪 Running tests...\n');
-try {
-  run('npx vitest run');
-  console.log('\n✅ All tests passed\n');
-} catch {
-  console.error('\n❌ Tests failed. Fix before releasing.');
-  // Revert changes
-  run('git checkout -- package.json manifest.json CHANGELOG.md');
-  process.exit(1);
-}
-
-// ===== Step 6: Build =====
-console.log('🏗️  Running production build...\n');
-try {
-  run('node scripts/sync-version.mjs && npx rimraf dist && npx tsc --project tsconfig.json && node scripts/copy-static.mjs && node scripts/esbuild-prod.mjs');
-  console.log('\n✅ Production build passed\n');
-} catch {
-  console.error('\n❌ Build failed. Fix before releasing.');
-  run('git checkout -- package.json manifest.json CHANGELOG.md');
-  process.exit(1);
-}
-
 if (DRY_RUN) {
-  console.log('🏁 DRY RUN COMPLETE — would have done:\n');
-  console.log(`  git add package.json manifest.json CHANGELOG.md`);
-  console.log(`  git commit -m "chore: release v${newVersion}"`);
-  console.log(`  git tag -a v${newVersion} -m "SmrutiCortex v${newVersion}"`);
-  console.log(`  git push origin main && git push origin v${newVersion}`);
-  console.log(`  gh release create v${newVersion} ...`);
-  console.log(`  npm run package`);
-  console.log('\n💡 Reverting local changes...');
-  run('git checkout -- package.json manifest.json CHANGELOG.md');
+  console.log(`${BOLD}🏁 DRY RUN COMPLETE${RESET} — verified successfully, would bump to ${newVersion}\n`);
+  console.log('  No disk changes made.');
   process.exit(0);
 }
 
-// ===== Step 7: Commit, tag, push =====
-console.log('📦 Committing release...\n');
-run('git add package.json manifest.json CHANGELOG.md');
-run(`git commit -m "chore: release v${newVersion}" --no-verify --no-gpg-sign`);
+// ===== Step 4: Write disk changes =====
+console.log(`${BOLD}═══ STEP 4: Write Disk Changes ═══${RESET}\n`);
+
+const submissionDocPath = resolve(ROOT, `docs/store-submissions/v${newVersion}-chrome-web-store.md`);
+
+function revertOnFailure(msg) {
+  console.error(`\n${RED}❌ ${msg}${RESET}`);
+  console.error(`${YELLOW}⏪ Reverting disk changes...${RESET}`);
+  try { run('git checkout -- .', { silent: true }); } catch { /* best effort */ }
+  try {
+    if (existsSync(submissionDocPath)) unlinkSync(submissionDocPath);
+  } catch { /* best effort */ }
+  console.error(`${GREEN}✅ Reverted. Tree is clean again.${RESET}`);
+  process.exit(1);
+}
+
+try {
+  // 4a. Bump package.json
+  pkg.version = newVersion;
+  writeFileSync(resolve(ROOT, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+
+  // 4b. Sync to manifest.json
+  run('node scripts/sync-version.mjs');
+
+  // 4c. Generate changelog from git log
+  let lastTag = '';
+  try { lastTag = runSilent('git describe --tags --abbrev=0'); } catch { /* no tags */ }
+  const logRange = lastTag ? `${lastTag}..HEAD` : 'HEAD';
+  const rawLog = runSilent(`git log ${logRange} --oneline --no-merges`);
+
+  const commits = rawLog.split('\n').filter(Boolean);
+  const categorized = { feat: [], fix: [], refactor: [], docs: [], chore: [], style: [], test: [], other: [] };
+
+  for (const line of commits) {
+    const match = line.match(/^[a-f0-9]+ (\w+)(?:\(.*?\))?[!]?:\s*(.+)$/);
+    if (match) {
+      const [, type, msg] = match;
+      const cat = categorized[type] || categorized.other;
+      cat.push(msg);
+    } else {
+      const msg = line.replace(/^[a-f0-9]+ /, '');
+      categorized.other.push(msg);
+    }
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  let changelogSection = `## [${newVersion}] — ${today}\n\n`;
+
+  if (categorized.feat.length) {
+    changelogSection += '### Features\n' + categorized.feat.map(m => `- ${m}`).join('\n') + '\n\n';
+  }
+  if (categorized.fix.length) {
+    changelogSection += '### Bug Fixes\n' + categorized.fix.map(m => `- ${m}`).join('\n') + '\n\n';
+  }
+  if (categorized.refactor.length) {
+    changelogSection += '### Refactoring\n' + categorized.refactor.map(m => `- ${m}`).join('\n') + '\n\n';
+  }
+  if (categorized.test.length) {
+    changelogSection += '### Tests\n' + categorized.test.map(m => `- ${m}`).join('\n') + '\n\n';
+  }
+  const misc = [...categorized.docs, ...categorized.chore, ...categorized.style, ...categorized.other];
+  if (misc.length) {
+    changelogSection += '### Other\n' + misc.map(m => `- ${m}`).join('\n') + '\n\n';
+  }
+
+  console.log('📝 Generated changelog:\n');
+  console.log(changelogSection);
+
+  // 4d. Prepend to CHANGELOG.md
+  const changelogPath = resolve(ROOT, 'CHANGELOG.md');
+  const existingChangelog = readFileSync(changelogPath, 'utf-8');
+  const headerEnd = existingChangelog.indexOf('\n\n') + 2;
+  const header = existingChangelog.slice(0, headerEnd);
+  const rest = existingChangelog.slice(headerEnd);
+  writeFileSync(changelogPath, header + changelogSection + '---\n\n' + rest);
+  console.log(`${GREEN}✅ CHANGELOG.md updated${RESET}`);
+
+  // 4e. Scaffold submission doc
+  try {
+    run(`node scripts/store-check.mjs ${newVersion} --init`);
+    console.log(`${GREEN}✅ Submission doc scaffolded${RESET}`);
+  } catch {
+    console.log(`${YELLOW}⚠️  Submission doc scaffold had issues (non-blocking)${RESET}`);
+  }
+
+} catch (e) {
+  revertOnFailure(`Disk write phase failed: ${e.message}`);
+}
+
+// ===== Step 5: Re-build with new version + package zip =====
+console.log(`\n${BOLD}═══ STEP 5: Re-build + Package ═══${RESET}\n`);
+
+try {
+  run('npm run build:prod');
+  console.log(`${GREEN}✅ Production build with v${newVersion}${RESET}`);
+  run('node scripts/package.mjs');
+  console.log(`${GREEN}✅ Package zip created${RESET}`);
+} catch (e) {
+  revertOnFailure(`Build/package failed: ${e.message}`);
+}
+
+// ===== Step 6: Post-bump integrity checks =====
+console.log(`\n${BOLD}═══ STEP 6: Post-bump Integrity ═══${RESET}\n`);
+
+try {
+  const builtManifest = JSON.parse(readFileSync(resolve(ROOT, 'dist/manifest.json'), 'utf-8'));
+  const srcManifest = JSON.parse(readFileSync(resolve(ROOT, 'manifest.json'), 'utf-8'));
+  const srcPkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
+
+  if (srcPkg.version !== newVersion) throw new Error(`package.json version is ${srcPkg.version}, expected ${newVersion}`);
+  if (srcManifest.version !== newVersion) throw new Error(`manifest.json version is ${srcManifest.version}, expected ${newVersion}`);
+  if (builtManifest.version !== newVersion) throw new Error(`dist/manifest.json version is ${builtManifest.version}, expected ${newVersion}`);
+  if (builtManifest.manifest_version !== 3) throw new Error(`manifest_version is ${builtManifest.manifest_version}, expected 3`);
+
+  const criticalFiles = ['manifest.json', 'background/service-worker.js', 'popup/popup.html', 'popup/popup.js', 'content_scripts/quick-search.js'];
+  const missing = criticalFiles.filter(f => !existsSync(resolve(ROOT, 'dist', f)));
+  if (missing.length) throw new Error(`Missing from dist/: ${missing.join(', ')}`);
+
+  const zipPath = resolve(ROOT, `release/smruti-cortex-v${newVersion}.zip`);
+  if (!existsSync(zipPath)) throw new Error(`Release zip not found at ${zipPath}`);
+
+  console.log(`${GREEN}✅ Versions synced: ${newVersion}${RESET}`);
+  console.log(`${GREEN}✅ manifest_version is 3 (MV3)${RESET}`);
+  console.log(`${GREEN}✅ All critical files present in dist/${RESET}`);
+  console.log(`${GREEN}✅ Release zip exists${RESET}`);
+} catch (e) {
+  revertOnFailure(`Integrity check failed: ${e.message}`);
+}
+
+// ===== Step 7: Commit =====
+console.log(`\n${BOLD}═══ STEP 7: Commit Release ═══${RESET}\n`);
+
+const commitFiles = ['package.json', 'manifest.json', 'CHANGELOG.md'];
+if (existsSync(submissionDocPath)) {
+  commitFiles.push(`docs/store-submissions/v${newVersion}-chrome-web-store.md`);
+}
+run(`git add ${commitFiles.join(' ')}`);
+
+let commitMsg = `chore: release v${newVersion}`;
+if (SKIP_E2E) {
+  commitMsg += '\n\n[ship-override: skip-e2e]';
+}
+run(`git commit -m "${commitMsg}" --no-verify`);
+console.log(`${GREEN}✅ Release commit created${RESET}`);
+
+// ===== Step 8: Tag, push, GitHub Release =====
+console.log(`\n${BOLD}═══ STEP 8: Tag + Push + GitHub Release ═══${RESET}\n`);
+
 run(`git tag -a v${newVersion} -m "SmrutiCortex v${newVersion}" --no-sign`);
 
-console.log('🚀 Pushing to origin...\n');
+console.log('🚀 Pushing to origin...');
 run('git push origin main');
 run(`git push origin v${newVersion}`);
 
-// ===== Step 8: GitHub Release =====
-console.log('📋 Creating GitHub Release...\n');
 const notesFile = resolve(ROOT, '.release-notes-tmp.md');
-writeFileSync(notesFile, changelogSection);
+const changelogSection2 = readFileSync(resolve(ROOT, 'CHANGELOG.md'), 'utf-8');
+const sectionMatch = changelogSection2.match(new RegExp(`## \\[${newVersion.replace(/\./g, '\\.')}\\].*?\n\n([\\s\\S]*?)(?=\n---|\n## \\[)`));
+const notes = sectionMatch ? sectionMatch[0] : `Release v${newVersion}`;
+writeFileSync(notesFile, notes);
+
 try {
-  const releaseUrl = runSilent(`gh release create v${newVersion} -t "v${newVersion}" -F "${notesFile}"`);
-  console.log(`✅ GitHub Release created: ${releaseUrl}\n`);
-} catch (e) {
-  console.warn(`⚠️  GitHub Release creation failed (you may need to create it manually)`);
-  console.warn(`  gh release create v${newVersion} -t "v${newVersion}" -F .release-notes-tmp.md`);
+  const zipPath = `release/smruti-cortex-v${newVersion}.zip`;
+  const releaseUrl = runSilent(`gh release create v${newVersion} -t "v${newVersion}" -F "${notesFile}" "${zipPath}"`);
+  console.log(`${GREEN}✅ GitHub Release created: ${releaseUrl}${RESET}`);
+} catch {
+  console.log(`${YELLOW}⚠️  GitHub Release creation failed (create manually)${RESET}`);
+  console.log(`  gh release create v${newVersion} -t "v${newVersion}" -F .release-notes-tmp.md`);
 }
 
-// ===== Step 9: Package zip =====
-console.log('📦 Creating Chrome Web Store package...\n');
-run('node scripts/package.mjs');
+try { unlinkSync(notesFile); } catch { /* best effort */ }
 
-// ===== Summary =====
-console.log('\n' + '='.repeat(50));
-console.log(`🎉 SmrutiCortex v${newVersion} released!`);
-console.log('='.repeat(50));
+// ===== Step 9: Summary + Next Steps =====
+console.log(`\n${'═'.repeat(50)}`);
+console.log(`${BOLD}${GREEN}🎉 SmrutiCortex v${newVersion} released!${RESET}`);
+console.log(`${'═'.repeat(50)}`);
+
+if (SKIP_E2E) {
+  console.log(`\n${YELLOW}⚠️  This release was shipped with --skip-e2e.${RESET}`);
+  console.log(`${YELLOW}   [ship-override: skip-e2e] is recorded in the commit body.${RESET}`);
+}
+
 console.log(`\n📋 Next steps:`);
-console.log(`  1. Run: node scripts/store-prep.mjs`);
-console.log(`  2. Upload release/smruti-cortex-v${newVersion}.zip to Chrome Web Store`);
-console.log(`  3. Paste the generated "What's new" text`);
-console.log(`  4. Submit for review`);
+console.log(`  1. Upload release/smruti-cortex-v${newVersion}.zip to Chrome Web Store`);
+console.log(`     https://chrome.google.com/webstore/devconsole`);
+console.log(`  2. Edit docs/store-submissions/v${newVersion}-chrome-web-store.md`);
+console.log(`     — Fill in Section 7 (Changes) and Section 9 (Checklist)`);
+console.log(`     — Delete the TODO preamble`);
+console.log(`  3. After CWS upload: npm run store:check`);
