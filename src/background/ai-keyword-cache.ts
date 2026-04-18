@@ -12,7 +12,7 @@
  */
 
 import { browserAPI } from '../core/helpers';
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 
 const logger = Logger.forComponent('AIKeywordCache');
 
@@ -53,7 +53,7 @@ export async function loadCache(): Promise<void> {
     }
     loaded = true;
   } catch (error) {
-    logger.warn('loadCache', 'Failed to load cache, starting fresh', { error });
+    logger.warn('loadCache', 'Failed to load cache, starting fresh', errorMeta(error));
     loaded = true;
   }
 }
@@ -77,7 +77,7 @@ function scheduleSave(): void {
       });
       logger.trace('scheduleSave', `Persisted ${cache.size} cache entries`);
     } catch (error) {
-      logger.warn('scheduleSave', 'Failed to persist cache', { error });
+      logger.warn('scheduleSave', 'Failed to persist cache', errorMeta(error));
     }
   }, SAVE_DEBOUNCE_MS);
 }

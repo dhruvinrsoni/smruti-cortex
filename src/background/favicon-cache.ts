@@ -1,6 +1,6 @@
 // favicon-cache.ts — Local favicon caching to reduce Google API calls
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 
 const logger = Logger.forComponent('FaviconCache');
 
@@ -63,7 +63,7 @@ export async function openFaviconDatabase(): Promise<IDBDatabase> {
         const request = indexedDB.open(FAVICON_DB_NAME, FAVICON_DB_VERSION);
 
         request.onerror = () => {
-            logger.error('openFaviconDatabase', 'Failed to open favicon database:', request.error);
+            logger.error('openFaviconDatabase', 'Failed to open favicon database:', errorMeta(request.error));
             reject(request.error);
         };
 
@@ -128,12 +128,12 @@ async function getCachedEntry(hostname: string): Promise<{ dataUrl: string | nul
             };
 
             request.onerror = () => {
-                logger.warn('getCachedEntry', `Failed to get cached favicon for ${hostname}:`, request.error);
+                logger.warn('getCachedEntry', `Failed to get cached favicon for ${hostname}:`, errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.warn('getCachedEntry', 'Error getting cached favicon:', error);
+        logger.warn('getCachedEntry', 'Error getting cached favicon:', errorMeta(error));
         return { dataUrl: null, isNegative: false };
     }
 }
@@ -170,12 +170,12 @@ async function storeNegativeEntry(hostname: string): Promise<void> {
                 resolve();
             };
             request.onerror = () => {
-                logger.warn('storeNegativeEntry', `Failed to store negative entry for ${hostname}:`, request.error);
+                logger.warn('storeNegativeEntry', `Failed to store negative entry for ${hostname}:`, errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.warn('storeNegativeEntry', 'Error storing negative entry:', error);
+        logger.warn('storeNegativeEntry', 'Error storing negative entry:', errorMeta(error));
     }
 }
 
@@ -237,12 +237,12 @@ export async function cacheFavicon(hostname: string): Promise<string | null> {
             };
 
             request.onerror = () => {
-                logger.warn('cacheFavicon', `Failed to cache favicon for ${hostname}:`, request.error);
+                logger.warn('cacheFavicon', `Failed to cache favicon for ${hostname}:`, errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.warn('cacheFavicon', `Error caching favicon for ${hostname}:`, error);
+        logger.warn('cacheFavicon', `Error caching favicon for ${hostname}:`, errorMeta(error));
         // Store negative entry so we don't retry on network/timeout errors
         await storeNegativeEntry(hostname);
         return null;
@@ -307,12 +307,12 @@ export async function clearFaviconCache(): Promise<{ cleared: number; freedBytes
             };
 
             request.onerror = () => {
-                logger.error('clearFaviconCache', 'Failed to clear favicon cache:', request.error);
+                logger.error('clearFaviconCache', 'Failed to clear favicon cache:', errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.error('clearFaviconCache', 'Error clearing favicon cache:', error);
+        logger.error('clearFaviconCache', 'Error clearing favicon cache:', errorMeta(error));
         return { cleared: 0, freedBytes: 0 };
     }
 }
@@ -357,7 +357,7 @@ export async function clearExpiredFavicons(): Promise<number> {
             };
         });
     } catch (error) {
-        logger.error('clearExpiredFavicons', 'Error clearing expired favicons:', error);
+        logger.error('clearExpiredFavicons', 'Error clearing expired favicons:', errorMeta(error));
         return 0;
     }
 }
@@ -388,12 +388,12 @@ export async function getFaviconCacheStats(): Promise<{ count: number; totalSize
             };
 
             request.onerror = () => {
-                logger.error('getFaviconCacheStats', 'Failed to get favicon cache stats:', request.error);
+                logger.error('getFaviconCacheStats', 'Failed to get favicon cache stats:', errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.error('getFaviconCacheStats', 'Error getting favicon cache stats:', error);
+        logger.error('getFaviconCacheStats', 'Error getting favicon cache stats:', errorMeta(error));
         return { count: 0, totalSize: 0, oldestCacheDate: null };
     }
 }

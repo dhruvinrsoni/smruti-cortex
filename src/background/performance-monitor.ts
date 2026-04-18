@@ -1,6 +1,6 @@
 // performance-monitor.ts — Real-time performance metrics tracking with persistence
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { browserAPI } from '../core/helpers';
 
 const logger = Logger.forComponent('PerformanceMonitor');
@@ -236,7 +236,7 @@ class PerformanceTracker {
                 logger.warn('restore', 'Stored metrics failed validation, starting fresh');
             }
         } catch (err) {
-            logger.warn('restore', 'Failed to restore metrics, starting fresh', { error: err });
+            logger.warn('restore', 'Failed to restore metrics, starting fresh', errorMeta(err));
         }
     }
 
@@ -268,7 +268,7 @@ class PerformanceTracker {
                 }
             });
         } catch (err) {
-            logger.warn('persist', 'Failed to persist metrics', { error: err });
+            logger.warn('persist', 'Failed to persist metrics', errorMeta(err));
         }
     }
 }

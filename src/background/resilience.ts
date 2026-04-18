@@ -1,7 +1,7 @@
 // resilience.ts — Self-healing and recovery module for SmrutiCortex
 // Ensures the extension can recover from any state and remains functional
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { openDatabase, getAllIndexedItems, clearIndexedDB, getForceRebuildFlag, setForceRebuildFlag, resetDbInstance } from './database';
 import { performFullRebuild } from './indexing';
 import { performanceTracker } from './performance-monitor';
@@ -48,7 +48,7 @@ export async function checkHealth(): Promise<HealthStatus> {
         logger.trace('checkHealth', '✅ Database is accessible');
     } catch (error) {
         issues.push('Database not accessible');
-        logger.warn('checkHealth', '❌ Database check failed', error);
+        logger.warn('checkHealth', '❌ Database check failed', errorMeta(error));
     }
 
     try {
@@ -67,7 +67,7 @@ export async function checkHealth(): Promise<HealthStatus> {
         }
     } catch (error) {
         issues.push('Failed to read index');
-        logger.warn('checkHealth', '❌ Index read failed', error);
+        logger.warn('checkHealth', '❌ Index read failed', errorMeta(error));
     }
 
     const status: HealthStatus = {
@@ -135,7 +135,7 @@ export async function selfHeal(reason: string): Promise<boolean> {
             return false;
         }
     } catch (error) {
-        logger.error('selfHeal', '❌ Self-healing failed', error);
+        logger.error('selfHeal', '❌ Self-healing failed', errorMeta(error));
         return false;
     }
 }
@@ -178,7 +178,7 @@ export async function clearAndRebuild(): Promise<{ success: boolean; message: st
         }
     } catch (error) {
         const errorMessage = (error as Error).message;
-        logger.error('clearAndRebuild', '❌ Clear and rebuild failed', error);
+        logger.error('clearAndRebuild', '❌ Clear and rebuild failed', errorMeta(error));
         return {
             success: false,
             message: `Operation failed: ${errorMessage}`,
@@ -204,7 +204,7 @@ export function startHealthMonitoring(): void {
             selfHeal('Startup health check failed');
         }
     }).catch(err => {
-        logger.warn('startHealthMonitoring', 'Initial health check failed', err);
+        logger.warn('startHealthMonitoring', 'Initial health check failed', errorMeta(err));
     });
     
     // Set up periodic checks
@@ -243,7 +243,7 @@ export function startHealthMonitoring(): void {
                 }
             }
         }).catch(err => {
-            logger.warn('startHealthMonitoring', 'Periodic health check failed', err);
+            logger.warn('startHealthMonitoring', 'Periodic health check failed', errorMeta(err));
         });
     }, HEALTH_CHECK_INTERVAL_MS);
 }
@@ -383,7 +383,7 @@ export async function recoverFromCorruption(): Promise<boolean> {
         
         return success;
     } catch (error) {
-        logger.error('recoverFromCorruption', '❌ Corruption recovery failed', error);
+        logger.error('recoverFromCorruption', '❌ Corruption recovery failed', errorMeta(error));
         return false;
     }
 }
@@ -402,7 +402,7 @@ export async function handleQuotaExceeded(): Promise<boolean> {
         logger.info('handleQuotaExceeded', '✅ Cleaned up expired data');
         return true;
     } catch (error) {
-        logger.error('handleQuotaExceeded', '❌ Quota cleanup failed', error);
+        logger.error('handleQuotaExceeded', '❌ Quota cleanup failed', errorMeta(error));
         return false;
     }
 }

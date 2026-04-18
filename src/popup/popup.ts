@@ -4,7 +4,7 @@
 // ARCHITECTURE: Uses shared search-ui-base.ts for DRY compliance
 
 import { BRAND_NAME } from '../core/constants'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { Logger, LogLevel, ComponentLogger } from '../core/logger'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { Logger, LogLevel, ComponentLogger, errorMeta } from '../core/logger'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
@@ -502,11 +502,11 @@ function initializePopup() {
       chip.addEventListener('click', () => {
         if (def.type === 'boolean') {
           const cur = SettingsManager.getSetting(def.key) as boolean;
-          SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, e));
+          SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, errorMeta(e)));
         } else if (def.type === 'cycle') {
           const cur = SettingsManager.getSetting(def.key);
           const next = getNextCycleValue(def, cur);
-          SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, e));
+          SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, errorMeta(e)));
         }
         applyPopupSettingSideEffects(def.key);
         if (def.key !== 'displayMode' && def.key !== 'highlightMatches' && def.key !== 'loadFavicons') {
@@ -558,7 +558,7 @@ function initializePopup() {
     if (mainEl && SettingsManager.getSetting('unifiedScroll')) {
       mainEl.classList.add('unified-scroll');
     }
-  }).catch(e => logger.warn('initializePopup', 'Settings init failed', e));
+  }).catch(e => logger.warn('initializePopup', 'Settings init failed', errorMeta(e)));
 
   // Load recent history on popup open (show default results)
   loadRecentHistory();
@@ -573,7 +573,7 @@ function initializePopup() {
     // Handle sort change
     sortBySelect.addEventListener('change', () => {
       const newSort = sortBySelect.value;
-      SettingsManager.setSetting('sortBy', newSort).catch(e => logger.debug('sortByChange', 'Failed to save sortBy', e));
+      SettingsManager.setSetting('sortBy', newSort).catch(e => logger.debug('sortByChange', 'Failed to save sortBy', errorMeta(e)));
       
       if (resultsLocal.length > 0) {
         sortResults(resultsLocal, newSort);
@@ -1862,7 +1862,7 @@ function initializePopup() {
 
     // Record recent search (fire-and-forget)
     if (currentQuery?.trim()) {
-      addRecentSearch(currentQuery, item.url).catch(e => logger.debug('openResult', 'Failed to record recent search', e));
+      addRecentSearch(currentQuery, item.url).catch(e => logger.debug('openResult', 'Failed to record recent search', errorMeta(e)));
     }
 
     const isCtrl = (event && (event as MouseEvent).ctrlKey) || (event instanceof KeyboardEvent && event.ctrlKey);
@@ -1870,7 +1870,7 @@ function initializePopup() {
 
     const openInBackground = isShift && !isCtrl;
     const action = openInBackground ? 'background-tab' : 'click';
-    addRecentInteraction(item.url, item.title || '', action).catch(e => logger.debug('openResult', 'Failed to record interaction', e));
+    addRecentInteraction(item.url, item.title || '', action).catch(e => logger.debug('openResult', 'Failed to record interaction', errorMeta(e)));
 
     openUrl(item.url, true, openInBackground);
   }
@@ -2197,7 +2197,7 @@ function initializePopup() {
         }).catch(() => {
           showToast('❌ Copy failed', 'error');
         });
-        addRecentInteraction(item.url, item.title || '', 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', e2));
+        addRecentInteraction(item.url, item.title || '', 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
       }
       return;
     }
@@ -2212,7 +2212,7 @@ function initializePopup() {
         }).catch(() => {
           showToast('📋 Copied (text only)', 'info');
         });
-        addRecentInteraction(item.url, item.title || '', 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', e2));
+        addRecentInteraction(item.url, item.title || '', 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
       }
       return;
     }
@@ -3023,7 +3023,7 @@ function initializePopup() {
       storageUsedEl.textContent = 'Error';
       storageItemsEl.textContent = '-- items';
       if (healthTextEl) {healthTextEl.textContent = 'Check failed';}
-      logger.debug('openSettingsPage', 'Failed to fetch storage quota', error);
+      logger.debug('openSettingsPage', 'Failed to fetch storage quota', errorMeta(error));
     }
   }
   
@@ -3100,7 +3100,7 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           const value = target.value as 'light' | 'dark' | 'auto';
-          SettingsManager.setSetting('theme', value).catch(e => logger.debug('settings', 'Failed to save theme', e));
+          SettingsManager.setSetting('theme', value).catch(e => logger.debug('settings', 'Failed to save theme', errorMeta(e)));
           applyTheme(value);
           syncToggleBar();
           showToast(`Theme set to ${value}`, 'info');
@@ -3114,7 +3114,7 @@ function initializePopup() {
       input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
-          SettingsManager.setSetting('displayMode', target.value as DisplayMode).catch(e => logger.debug('settings', 'Failed to save displayMode', e));
+          SettingsManager.setSetting('displayMode', target.value as DisplayMode).catch(e => logger.debug('settings', 'Failed to save displayMode', errorMeta(e)));
           syncToggleBar();
           renderResults();
           showToast('Display mode updated', 'info');
@@ -3129,8 +3129,8 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
           const level = parseInt(target.value);
-          SettingsManager.setSetting('logLevel', level).catch(e => logger.debug('settings', 'Failed to save logLevel', e));
-          Logger.setLevel(level).catch(e => logger.debug('settings', 'Failed to apply logLevel', e));
+          SettingsManager.setSetting('logLevel', level).catch(e => logger.debug('settings', 'Failed to save logLevel', errorMeta(e)));
+          Logger.setLevel(level).catch(e => logger.debug('settings', 'Failed to apply logLevel', errorMeta(e)));
           showToast('Log level updated', 'info');
         }
       });
@@ -3141,7 +3141,7 @@ function initializePopup() {
     if (highlightInput) {
       highlightInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('highlightMatches', target.checked).catch(e => logger.debug('settings', 'Failed to save highlightMatches', e));
+        SettingsManager.setSetting('highlightMatches', target.checked).catch(e => logger.debug('settings', 'Failed to save highlightMatches', errorMeta(e)));
         syncToggleBar();
         renderResults();
         showToast('Match highlighting ' + (target.checked ? 'enabled' : 'disabled'), 'info');
@@ -3155,7 +3155,7 @@ function initializePopup() {
         let val = parseInt(focusDelayInput.value);
         if (isNaN(val) || val < 0) {val = 0;}
         if (val > 2000) {val = 2000;}
-        SettingsManager.setSetting('focusDelayMs', val).catch(e => logger.debug('settings', 'Failed to save focusDelayMs', e));
+        SettingsManager.setSetting('focusDelayMs', val).catch(e => logger.debug('settings', 'Failed to save focusDelayMs', errorMeta(e)));
         focusDelayInput.value = String(val);
         showToast(val === 0 ? 'Auto-focus disabled' : `Focus delay set to ${val} ms`, 'info');
       });
@@ -3166,7 +3166,7 @@ function initializePopup() {
     if (selectAllOnFocusInput) {
       selectAllOnFocusInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('selectAllOnFocus', target.checked).catch(e => logger.debug('settings', 'Failed to save selectAllOnFocus', e));
+        SettingsManager.setSetting('selectAllOnFocus', target.checked).catch(e => logger.debug('settings', 'Failed to save selectAllOnFocus', errorMeta(e)));
         syncToggleBar();
         showToast(target.checked ? 'Tab will select all text' : 'Tab will place cursor at end', 'info');
       });
@@ -3177,7 +3177,7 @@ function initializePopup() {
     if (showRecentHistoryInput2) {
       showRecentHistoryInput2.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('showRecentHistory', target.checked).catch(e => logger.debug('settings', 'Failed to save showRecentHistory', e));
+        SettingsManager.setSetting('showRecentHistory', target.checked).catch(e => logger.debug('settings', 'Failed to save showRecentHistory', errorMeta(e)));
         syncToggleBar();
         showToast(target.checked ? 'Recent browsing history enabled' : 'Recent browsing history disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
@@ -3189,7 +3189,7 @@ function initializePopup() {
     if (showRecentSearchesInput2) {
       showRecentSearchesInput2.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('showRecentSearches', target.checked).catch(e => logger.debug('settings', 'Failed to save showRecentSearches', e));
+        SettingsManager.setSetting('showRecentSearches', target.checked).catch(e => logger.debug('settings', 'Failed to save showRecentSearches', errorMeta(e)));
         syncToggleBar();
         showToast(target.checked ? 'Recent searches enabled' : 'Recent searches disabled', 'info');
         if (!currentQuery?.trim()) { loadRecentHistory(); }
@@ -3201,7 +3201,7 @@ function initializePopup() {
     if (ollamaEnabledInput) {
       ollamaEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('ollamaEnabled', target.checked).catch(e => logger.debug('settings', 'Failed to save ollamaEnabled', e));
+        SettingsManager.setSetting('ollamaEnabled', target.checked).catch(e => logger.debug('settings', 'Failed to save ollamaEnabled', errorMeta(e)));
         syncToggleBar();
         console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
@@ -3214,7 +3214,7 @@ function initializePopup() {
       ollamaEndpointInput.addEventListener('change', () => {
         const val = ollamaEndpointInput.value.trim();
         if (val) {
-          SettingsManager.setSetting('ollamaEndpoint', val).catch(e => logger.debug('settings', 'Failed to save ollamaEndpoint', e));
+          SettingsManager.setSetting('ollamaEndpoint', val).catch(e => logger.debug('settings', 'Failed to save ollamaEndpoint', errorMeta(e)));
           showToast('Ollama endpoint updated', 'info');
         }
       });
@@ -3226,7 +3226,7 @@ function initializePopup() {
       ollamaModelInput.addEventListener('change', () => {
         const val = ollamaModelInput.value.trim();
         if (val) {
-          SettingsManager.setSetting('ollamaModel', val).catch(e => logger.debug('settings', 'Failed to save ollamaModel', e));
+          SettingsManager.setSetting('ollamaModel', val).catch(e => logger.debug('settings', 'Failed to save ollamaModel', errorMeta(e)));
           showToast(`Model set to: ${val}`, 'info');
         }
       });
@@ -3288,7 +3288,7 @@ function initializePopup() {
         let val = parseInt(ollamaTimeoutInput.value);
         
         if (val === -1) {
-          SettingsManager.setSetting('ollamaTimeout', -1).catch(e => logger.debug('settings', 'Failed to save ollamaTimeout', e));
+          SettingsManager.setSetting('ollamaTimeout', -1).catch(e => logger.debug('settings', 'Failed to save ollamaTimeout', errorMeta(e)));
           ollamaTimeoutInput.value = '-1';
           showToast('Timeout disabled (infinite wait)', 'info');
           return;
@@ -3296,7 +3296,7 @@ function initializePopup() {
         
         if (isNaN(val) || val < 5000) {val = 5000;}
         if (val > 120000) {val = 120000;}
-        SettingsManager.setSetting('ollamaTimeout', val).catch(e => logger.debug('settings', 'Failed to save ollamaTimeout', e));
+        SettingsManager.setSetting('ollamaTimeout', val).catch(e => logger.debug('settings', 'Failed to save ollamaTimeout', errorMeta(e)));
         ollamaTimeoutInput.value = String(val);
         showToast(`Ollama timeout set to ${val} ms (${(val/1000).toFixed(1)}s)`, 'info');
       });
@@ -3307,7 +3307,7 @@ function initializePopup() {
     if (embeddingsEnabledInput) {
       embeddingsEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('embeddingsEnabled', target.checked).catch(e => logger.debug('settings', 'Failed to save embeddingsEnabled', e));
+        SettingsManager.setSetting('embeddingsEnabled', target.checked).catch(e => logger.debug('settings', 'Failed to save embeddingsEnabled', errorMeta(e)));
         console.info(`[Settings] Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
         if (target.checked) {
@@ -3321,7 +3321,7 @@ function initializePopup() {
       embeddingModelHidden.addEventListener('change', () => {
         const val = embeddingModelHidden.value.trim();
         if (val) {
-          SettingsManager.setSetting('embeddingModel', val).catch(e => logger.debug('settings', 'Failed to save embeddingModel', e));
+          SettingsManager.setSetting('embeddingModel', val).catch(e => logger.debug('settings', 'Failed to save embeddingModel', errorMeta(e)));
           showToast(`Embedding model set to: ${val}`, 'info');
         }
       });
@@ -3380,7 +3380,7 @@ function initializePopup() {
     if (loadFaviconsInput) {
       loadFaviconsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('loadFavicons', target.checked).catch(e => logger.debug('settings', 'Failed to save loadFavicons', e));
+        SettingsManager.setSetting('loadFavicons', target.checked).catch(e => logger.debug('settings', 'Failed to save loadFavicons', errorMeta(e)));
         syncToggleBar();
         showToast(`Favicons ${target.checked ? 'enabled' : 'disabled'}`, 'info');
         renderResults();
@@ -3511,7 +3511,7 @@ function initializePopup() {
     if (indexBookmarksInput) {
       indexBookmarksInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('indexBookmarks', target.checked).catch(e => logger.debug('settings', 'Failed to save indexBookmarks', e));
+        SettingsManager.setSetting('indexBookmarks', target.checked).catch(e => logger.debug('settings', 'Failed to save indexBookmarks', errorMeta(e)));
         syncToggleBar();
         if (target.checked) {
           showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
@@ -3529,11 +3529,11 @@ function initializePopup() {
       advBrowserInput.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement;
         if (!target.checked) {
-          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e => logger.debug('settings', 'Failed to save advancedBrowserCommands', e));
+          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e => logger.debug('settings', 'Failed to save advancedBrowserCommands', errorMeta(e)));
           await sendMessage({
             type: 'REMOVE_OPTIONAL_PERMISSIONS',
             permissions: [...ADV_BROWSER_OPTIONAL_PERMS],
-          }).catch(e => logger.debug('settings', 'Failed to revoke optional permissions', e));
+          }).catch(e => logger.debug('settings', 'Failed to revoke optional permissions', errorMeta(e)));
           syncToggleBar();
           showToast('Advanced Browser Commands disabled — optional permissions revoked.', 'info');
           return;
@@ -3546,7 +3546,7 @@ function initializePopup() {
           }) as { status?: string; granted?: boolean; error?: string };
           if (resp?.error) {
             target.checked = false;
-            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
+            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', errorMeta(e2)));
             showToast(
               'Advanced Browser Commands stay off (permission request failed). Try again from chrome://extensions → SmrutiCortex → Details → Permissions.',
               'warning',
@@ -3554,14 +3554,14 @@ function initializePopup() {
             return;
           }
           if (resp?.granted) {
-            await SettingsManager.setSetting('advancedBrowserCommands', true).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
+            await SettingsManager.setSetting('advancedBrowserCommands', true).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', errorMeta(e2)));
             showToast(
               'Advanced Browser Commands enabled. Tab groups, browsing data cleanup, and Top Sites are allowed.',
               'info',
             );
           } else {
             target.checked = false;
-            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
+            await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', errorMeta(e2)));
             showToast(
               'Advanced Browser Commands stay off because optional permissions were not granted. Chrome was asked for: tab groups, browsing data cleanup, and Top Sites. To try again: chrome://extensions → SmrutiCortex → Details → Permissions.',
               'warning',
@@ -3569,7 +3569,7 @@ function initializePopup() {
           }
         } catch {
           target.checked = false;
-          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', e2));
+          await SettingsManager.setSetting('advancedBrowserCommands', false).catch(e2 => logger.debug('settings', 'Failed to save advancedBrowserCommands', errorMeta(e2)));
           showToast(
             'Advanced Browser Commands stay off (could not complete permission request). Try again from chrome://extensions → SmrutiCortex → Details.',
             'warning',
@@ -3586,7 +3586,7 @@ function initializePopup() {
     if (showDuplicateUrlsInput) {
       showDuplicateUrlsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('showDuplicateUrls', target.checked).catch(e => logger.debug('settings', 'Failed to save showDuplicateUrls', e));
+        SettingsManager.setSetting('showDuplicateUrls', target.checked).catch(e => logger.debug('settings', 'Failed to save showDuplicateUrls', errorMeta(e)));
         syncToggleBar();
         showToast(`Duplicate URLs ${target.checked ? 'shown' : 'filtered for diversity'}`, 'info');
         const searchInput = $('search-input') as HTMLInputElement;
@@ -3601,7 +3601,7 @@ function initializePopup() {
     if (showNonMatchingResultsInput) {
       showNonMatchingResultsInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
-        SettingsManager.setSetting('showNonMatchingResults', target.checked).catch(e => logger.debug('settings', 'Failed to save showNonMatchingResults', e));
+        SettingsManager.setSetting('showNonMatchingResults', target.checked).catch(e => logger.debug('settings', 'Failed to save showNonMatchingResults', errorMeta(e)));
         syncToggleBar();
         showToast(`Non-matching results ${target.checked ? 'shown' : 'hidden (strict matching)'}`, 'info');
         const searchInput = $('search-input') as HTMLInputElement;
@@ -3617,7 +3617,7 @@ function initializePopup() {
       sensitiveUrlBlacklistInput.addEventListener('change', () => {
         const val = sensitiveUrlBlacklistInput.value.trim();
         const blacklist = val ? val.split('\n').map(s => s.trim()).filter(Boolean) : [];
-        SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist).catch(e => logger.debug('settings', 'Failed to save sensitiveUrlBlacklist', e));
+        SettingsManager.setSetting('sensitiveUrlBlacklist', blacklist).catch(e => logger.debug('settings', 'Failed to save sensitiveUrlBlacklist', errorMeta(e)));
         showToast(`Blacklist updated (${blacklist.length} entries)`, 'info');
       });
     }
@@ -3635,7 +3635,7 @@ function initializePopup() {
 
     if (cpMasterInput) {
       cpMasterInput.addEventListener('change', () => {
-        SettingsManager.setSetting('commandPaletteEnabled', cpMasterInput.checked).catch(e => logger.debug('settings', 'Failed to save commandPaletteEnabled', e));
+        SettingsManager.setSetting('commandPaletteEnabled', cpMasterInput.checked).catch(e => logger.debug('settings', 'Failed to save commandPaletteEnabled', errorMeta(e)));
         updatePaletteDisabledState();
         showToast('Command Palette ' + (cpMasterInput.checked ? 'enabled' : 'disabled'), 'info');
       });
@@ -3645,14 +3645,14 @@ function initializePopup() {
       cb.addEventListener('change', () => {
         const selected: string[] = [];
         cpModeCheckboxes.forEach(c => { if (c.checked) {selected.push(c.value);} });
-        SettingsManager.setSetting('commandPaletteModes', selected).catch(e => logger.debug('settings', 'Failed to save commandPaletteModes', e));
+        SettingsManager.setSetting('commandPaletteModes', selected).catch(e => logger.debug('settings', 'Failed to save commandPaletteModes', errorMeta(e)));
         showToast(`Active modes: ${selected.join(' ') || 'none'}`, 'info');
       });
     });
 
     if (cpInPopupInput2) {
       cpInPopupInput2.addEventListener('change', () => {
-        SettingsManager.setSetting('commandPaletteInPopup', cpInPopupInput2.checked).catch(e => logger.debug('settings', 'Failed to save commandPaletteInPopup', e));
+        SettingsManager.setSetting('commandPaletteInPopup', cpInPopupInput2.checked).catch(e => logger.debug('settings', 'Failed to save commandPaletteInPopup', errorMeta(e)));
         showToast('Popup command palette ' + (cpInPopupInput2.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
@@ -3662,7 +3662,7 @@ function initializePopup() {
       input.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         if (target.checked) {
-          SettingsManager.setSetting('webSearchEngine', target.value).catch(e => logger.debug('settings', 'Failed to save webSearchEngine', e));
+          SettingsManager.setSetting('webSearchEngine', target.value).catch(e => logger.debug('settings', 'Failed to save webSearchEngine', errorMeta(e)));
           showToast(`Web search engine set to ${target.value}`, 'info');
         }
       });
@@ -3672,7 +3672,7 @@ function initializePopup() {
     if (jiraUrlInput2) {
       jiraUrlInput2.addEventListener('change', () => {
         const raw = jiraUrlInput2.value.trim();
-        SettingsManager.setSetting('jiraSiteUrl', raw).catch(e => logger.debug('settings', 'Failed to save jiraSiteUrl', e));
+        SettingsManager.setSetting('jiraSiteUrl', raw).catch(e => logger.debug('settings', 'Failed to save jiraSiteUrl', errorMeta(e)));
         showToast(raw ? 'Jira site URL saved' : 'Jira site URL cleared', 'info');
       });
     }
@@ -3680,7 +3680,7 @@ function initializePopup() {
     if (confluenceUrlInput2) {
       confluenceUrlInput2.addEventListener('change', () => {
         const raw = confluenceUrlInput2.value.trim();
-        SettingsManager.setSetting('confluenceSiteUrl', raw).catch(e => logger.debug('settings', 'Failed to save confluenceSiteUrl', e));
+        SettingsManager.setSetting('confluenceSiteUrl', raw).catch(e => logger.debug('settings', 'Failed to save confluenceSiteUrl', errorMeta(e)));
         showToast(raw ? 'Confluence site URL saved' : 'Confluence site URL cleared', 'info');
       });
     }
@@ -3709,7 +3709,7 @@ function initializePopup() {
           toolbarOptionsContainer.querySelectorAll<HTMLInputElement>('input[data-toolbar-key]').forEach(cb => {
             if (cb.checked) {allChecked.push(cb.dataset.toolbarKey!);}
           });
-          SettingsManager.setSetting('toolbarToggles', allChecked).catch(e => logger.debug('settings', 'Failed to save toolbarToggles', e));
+          SettingsManager.setSetting('toolbarToggles', allChecked).catch(e => logger.debug('settings', 'Failed to save toolbarToggles', errorMeta(e)));
           renderToggleBar();
           showToast(`Toolbar updated (${allChecked.length} toggle${allChecked.length !== 1 ? 's' : ''})`, 'info');
         });
@@ -3724,8 +3724,8 @@ function initializePopup() {
         if (confirm('Reset settings to defaults?\n\nThis will:\n• Reset all settings to defaults\n• Clear favicon cache\n• Clear search debug history\n\nYour browsing history index will NOT be affected.')) {
           await SettingsManager.resetToDefaults();
           await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
-          sendMessage({ type: 'CLEAR_FAVICON_CACHE' }).catch(e => logger.debug('factoryReset', 'Failed to clear favicon cache', e));
-          sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }).catch(e => logger.debug('factoryReset', 'Failed to clear search debug', e));
+          sendMessage({ type: 'CLEAR_FAVICON_CACHE' }).catch(e => logger.debug('factoryReset', 'Failed to clear favicon cache', errorMeta(e)));
+          sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }).catch(e => logger.debug('factoryReset', 'Failed to clear search debug', errorMeta(e)));
           closeSettingsModal();
           renderResults();
           showToast('Settings reset to defaults', 'info');
@@ -4156,7 +4156,7 @@ function initializePopup() {
             showToast('❌ Troubleshooter failed', 'error');
           }
         } catch (err) {
-          logger.error('troubleshooter', 'Error', err);
+          logger.error('troubleshooter', 'Error', errorMeta(err));
           showToast('❌ Error running troubleshooter', 'error');
         }
         troubleshootBtn.disabled = false;
@@ -4204,7 +4204,7 @@ function initializePopup() {
         if (response?.enabled !== undefined) {
           searchDebugCheckbox.checked = response.enabled;
         }
-      }).catch(e => logger.debug('openSettingsModal', 'Failed to fetch search debug state', e));
+      }).catch(e => logger.debug('openSettingsModal', 'Failed to fetch search debug state', errorMeta(e)));
 
       // Toggle debug mode
       searchDebugCheckbox.addEventListener('change', async () => {
@@ -4323,7 +4323,7 @@ function initializePopup() {
 
   function applyRemoteSettingsChanges(settings: Record<string, unknown> | undefined): void {
     if (!settings) {return;}
-    SettingsManager.applyRemoteSettings(settings).catch(e => logger.debug('applyRemoteSettingsChanges', 'Failed to apply remote settings', e));
+    SettingsManager.applyRemoteSettings(settings).catch(e => logger.debug('applyRemoteSettingsChanges', 'Failed to apply remote settings', errorMeta(e)));
     const keys = Object.keys(settings);
 
     if (keys.includes('theme')) {
@@ -4372,7 +4372,7 @@ function initializePopup() {
       } else {
         loadRecentHistory();
       }
-    }).catch(e => logger.warn('onLoad', 'Service worker status check failed', e));
+    }).catch(e => logger.warn('onLoad', 'Service worker status check failed', errorMeta(e)));
 
     // Lazy load hints after initial render (non-critical)
     requestIdleCallback(() => {
@@ -4390,7 +4390,7 @@ function initializePopup() {
       if (!completed) {
         setTimeout(() => runTour(POPUP_TOUR_STEPS, document), 500);
       }
-    }).catch(e => logger.debug('onLoad', 'Tour completion check failed', e));
+    }).catch(e => logger.debug('onLoad', 'Tour completion check failed', errorMeta(e)));
   });
 
   // Ultra-fast keyboard shortcut handling

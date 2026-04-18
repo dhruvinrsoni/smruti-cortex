@@ -15,7 +15,7 @@ import { ingestHistory, performFullRebuild } from './indexing';
 import { runSearch } from './search/search-engine';
 import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring, recoverFromCorruption, ensureReady, handleQuotaExceeded } from './resilience';
 
@@ -244,7 +244,7 @@ function setupPortBasedMessaging() {
               try { port.postMessage({ results, aiStatus, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed during async search */ }
             }
           } catch (error) {
-            logger.error('portMessage', 'Search error:', error);
+            logger.error('portMessage', 'Search error:', errorMeta(error));
             if (!portDisconnected) {
               try { port.postMessage({ error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed */ }
             }
@@ -357,7 +357,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               const formatted = formatMetricsForDisplay(metrics, storage);
               sendResponse({ status: 'OK', metrics, formatted });
             } catch (error) {
-              logger.error('onMessage', 'GET_PERFORMANCE_METRICS failed:', error);
+              logger.error('onMessage', 'GET_PERFORMANCE_METRICS failed:', errorMeta(error));
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }
             break;
@@ -369,7 +369,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               await performanceTracker.reset();
               sendResponse({ status: 'OK' });
             } catch (error) {
-              logger.error('onMessage', 'RESET_PERFORMANCE_METRICS failed:', error);
+              logger.error('onMessage', 'RESET_PERFORMANCE_METRICS failed:', errorMeta(error));
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }
             break;
@@ -383,7 +383,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               logger.info('onMessage', '✅ EXPORT_DIAGNOSTICS completed');
               sendResponse({ status: 'OK', data: diagnosticsJson });
             } catch (error) {
-              logger.error('onMessage', 'EXPORT_DIAGNOSTICS failed:', error);
+              logger.error('onMessage', 'EXPORT_DIAGNOSTICS failed:', errorMeta(error));
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }
             break;
@@ -474,7 +474,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 sendResponse({ status: 'OK', method: 'url', issueUrl, reportBody: report.body });
               }
             } catch (error) {
-              logger.error('onMessage', 'GENERATE_RANKING_REPORT failed:', error);
+              logger.error('onMessage', 'GENERATE_RANKING_REPORT failed:', errorMeta(error));
               sendResponse({ status: 'ERROR', message: (error as Error).message });
             }
             break;
@@ -530,7 +530,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.debug('onMessage', `GET_RECENT_HISTORY completed, items: ${recentItems.length}`);
                   sendResponse({ results: recentItems });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_RECENT_HISTORY failed:', error);
+                  logger.error('onMessage', 'GET_RECENT_HISTORY failed:', errorMeta(error));
                   sendResponse({ results: [] });
                 }
                 break;
@@ -548,7 +548,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   if ((error as Error).name === 'QuotaExceededError') {
                     await handleQuotaExceeded();
                   }
-                  logger.error('onMessage', '❌ REBUILD_INDEX failed:', error);
+                  logger.error('onMessage', '❌ REBUILD_INDEX failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -562,7 +562,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.info('onMessage', '✅ INDEX_BOOKMARKS completed', result);
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-                  logger.error('onMessage', '❌ INDEX_BOOKMARKS failed:', error);
+                  logger.error('onMessage', '❌ INDEX_BOOKMARKS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -587,7 +587,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.info('onMessage', '✅ MANUAL_INDEX completed', result);
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-                  logger.error('onMessage', '❌ MANUAL_INDEX failed:', error);
+                  logger.error('onMessage', '❌ MANUAL_INDEX failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -607,7 +607,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     sendResponse({ status: 'ERROR', message: result.message });
                   }
                 } catch (error) {
-                  logger.error('onMessage', '❌ CLEAR_ALL_DATA failed:', error);
+                  logger.error('onMessage', '❌ CLEAR_ALL_DATA failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -620,7 +620,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.debug('onMessage', 'Storage quota retrieved', quotaInfo);
                   sendResponse({ status: 'OK', data: quotaInfo });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', error);
+                  logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -638,7 +638,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   };
                   sendResponse({ status: 'OK', data: exportData });
                 } catch (error) {
-                  logger.error('onMessage', '❌ EXPORT_INDEX failed:', error);
+                  logger.error('onMessage', '❌ EXPORT_INDEX failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -674,7 +674,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.info('onMessage', '✅ IMPORT_INDEX completed', { imported, skipped });
                   sendResponse({ status: 'OK', imported, skipped });
                 } catch (error) {
-                  logger.error('onMessage', '❌ IMPORT_INDEX failed:', error);
+                  logger.error('onMessage', '❌ IMPORT_INDEX failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -688,7 +688,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.info('onMessage', '✅ CLEAR_FAVICON_CACHE completed', result);
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-                  logger.error('onMessage', '❌ CLEAR_FAVICON_CACHE failed:', error);
+                  logger.error('onMessage', '❌ CLEAR_FAVICON_CACHE failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -701,7 +701,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   const stats = await getFaviconCacheStats();
                   sendResponse({ status: 'OK', ...stats });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_FAVICON_CACHE_STATS failed:', error);
+                  logger.error('onMessage', 'GET_FAVICON_CACHE_STATS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -715,7 +715,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   const dataUrl = await getFaviconWithCache(hostname);
                   sendResponse({ dataUrl });
                 } catch (error) {
-                  logger.warn('onMessage', 'GET_FAVICON failed:', error);
+                  logger.warn('onMessage', 'GET_FAVICON failed:', errorMeta(error));
                   sendResponse({ dataUrl: null });
                 }
                 break;
@@ -728,7 +728,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.debug('onMessage', 'Health status retrieved', health);
                   sendResponse({ status: 'OK', data: health });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_HEALTH_STATUS failed:', error);
+                  logger.error('onMessage', 'GET_HEALTH_STATUS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -749,7 +749,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     data: health
                   });
                 } catch (error) {
-                  logger.error('onMessage', 'SELF_HEAL failed:', error);
+                  logger.error('onMessage', 'SELF_HEAL failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -865,7 +865,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     },
                   });
                 } catch (error) {
-                  logger.error('onMessage', 'RUN_TROUBLESHOOTER failed:', error);
+                  logger.error('onMessage', 'RUN_TROUBLESHOOTER failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -889,7 +889,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     embeddingModel,
                   });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_EMBEDDING_STATS failed:', error);
+                  logger.error('onMessage', 'GET_EMBEDDING_STATS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -915,7 +915,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   logger.info('onMessage', `✅ Cleared embeddings from ${cleared} items`);
                   sendResponse({ status: 'OK', cleared });
                 } catch (error) {
-                  logger.error('onMessage', 'CLEAR_ALL_EMBEDDINGS failed:', error);
+                  logger.error('onMessage', 'CLEAR_ALL_EMBEDDINGS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -929,7 +929,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   await embeddingProcessor.start();
                   sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
                 } catch (error) {
-                  logger.error('onMessage', 'START_EMBEDDING_PROCESSOR failed:', error);
+                  logger.error('onMessage', 'START_EMBEDDING_PROCESSOR failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -942,7 +942,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   embeddingProcessor.pause();
                   sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
                 } catch (error) {
-                  logger.error('onMessage', 'PAUSE_EMBEDDING_PROCESSOR failed:', error);
+                  logger.error('onMessage', 'PAUSE_EMBEDDING_PROCESSOR failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -955,7 +955,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   embeddingProcessor.resume();
                   sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
                 } catch (error) {
-                  logger.error('onMessage', 'RESUME_EMBEDDING_PROCESSOR failed:', error);
+                  logger.error('onMessage', 'RESUME_EMBEDDING_PROCESSOR failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -979,7 +979,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   const stats = getCacheStats();
                   sendResponse({ status: 'OK', ...stats });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_AI_CACHE_STATS failed:', error);
+                  logger.error('onMessage', 'GET_AI_CACHE_STATS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -992,7 +992,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   const result = await clearAIKeywordCache();
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-                  logger.error('onMessage', 'CLEAR_AI_CACHE failed:', error);
+                  logger.error('onMessage', 'CLEAR_AI_CACHE failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -1796,7 +1796,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         logger.trace('onMessage', 'Message processing completed');
       } catch (error) {
-        logger.error('onMessage', 'Error processing message:', error);
+        logger.error('onMessage', 'Error processing message:', errorMeta(error));
         sendResponse({ error: (error as Error).message });
       }
     })();
@@ -1917,7 +1917,7 @@ async function init() {
                         const ollamaService = getOllamaService(config);
                         await ollamaService.warmup();
                     } catch (error) {
-                        logger.debug('init', '⚠️ Model warmup failed (non-critical):', error);
+                        logger.debug('init', '⚠️ Model warmup failed (non-critical):', errorMeta(error));
                     }
                 }
 
@@ -1928,7 +1928,7 @@ async function init() {
                         const { embeddingProcessor } = await import('./embedding-processor');
                         await embeddingProcessor.start();
                     } catch (error) {
-                        logger.debug('init', '⚠️ Embedding processor auto-start failed (non-critical):', error);
+                        logger.debug('init', '⚠️ Embedding processor auto-start failed (non-critical):', errorMeta(error));
                     }
                 }
             }).catch(() => {/* ignore */});
@@ -1942,8 +1942,8 @@ async function init() {
             logger.info('init', `✅ Service worker ready in ${initDuration}ms`);
             logger.info('init', '[SmrutiCortex] Service worker ready');
         } catch (error) {
-            logger.error('init', '❌ Init error:', error);
-            logger.error('init', '[SmrutiCortex] Init error:', error);
+            logger.error('init', '❌ Init error:', errorMeta(error));
+            logger.error('init', '[SmrutiCortex] Init error:', errorMeta(error));
             // Reset initialization state so it can be retried
             initialized = false;
             initializationPromise = null;
@@ -1990,7 +1990,7 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
             }
             logger.info('onInstalled', `🔄 Re-injected quick-search into ${injected}/${tabs.length} open tabs`);
         } catch (e) {
-            logger.warn('onInstalled', 'Content script re-injection failed', { error: (e as Error).message });
+            logger.warn('onInstalled', 'Content script re-injection failed', errorMeta(e));
         }
     }
     } catch (err) {
@@ -2054,7 +2054,7 @@ browserAPI.omnibox.onInputChanged.addListener(async (text, suggest) => {
             description: `${r.title || 'Untitled'} — ${r.url}`.replace(/&/g, '&amp;').replace(/</g, '&lt;'),
         })));
     } catch (err) {
-        logger.debug('omnibox', 'onInputChanged error:', err);
+        logger.debug('omnibox', 'onInputChanged error:', errorMeta(err));
         suggest([]);
     }
 });
@@ -2095,6 +2095,6 @@ browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) => {
             await browserAPI.tabs.create({ url, active: disposition !== 'newBackgroundTab' });
         }
     } catch (err) {
-        logger.error('omnibox', 'onInputEntered error:', err);
+        logger.error('omnibox', 'onInputEntered error:', errorMeta(err));
     }
 });

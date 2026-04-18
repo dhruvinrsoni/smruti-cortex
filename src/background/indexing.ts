@@ -5,7 +5,7 @@ import { saveIndexedItem, getIndexedItem, getSetting, setSetting, clearIndexedDB
 import { tokenize } from './search/tokenizer';
 import { IndexedItem } from './schema';
 import { BRAND_NAME } from '../core/constants';
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { buildEmbeddingText } from './embedding-text';
 import { performanceTracker } from './performance-monitor';
@@ -49,7 +49,7 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
             return undefined;
         }
     } catch (error) {
-        logger.debug('generateItemEmbedding', '⚠️ Embedding generation error (non-critical):', error);
+        logger.debug('generateItemEmbedding', '⚠️ Embedding generation error (non-critical):', errorMeta(error));
         return undefined; // Don't fail indexing if embeddings fail
     }
 }
@@ -96,7 +96,7 @@ export async function generateBatchEmbeddings(
         
         return results;
     } catch (error) {
-        logger.error('generateBatchEmbeddings', '❌ Batch embedding failed:', error);
+        logger.error('generateBatchEmbeddings', '❌ Batch embedding failed:', errorMeta(error));
         return items.map(() => undefined);
     }
 }
@@ -131,7 +131,7 @@ export async function performFullRebuild(): Promise<void> {
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
         logger.info('performFullRebuild', `✅ Full rebuild completed in ${duration}s`);
     } catch (error) {
-        logger.error('performFullRebuild', '❌ Full rebuild failed:', error);
+        logger.error('performFullRebuild', '❌ Full rebuild failed:', errorMeta(error));
         throw error;
     }
 }
@@ -715,7 +715,7 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
         performanceTracker.recordIndexing(duration, indexed + updated);
 
     } catch (error) {
-        logger.error('performBookmarksIndex', '❌ Bookmarks indexing failed:', error);
+        logger.error('performBookmarksIndex', '❌ Bookmarks indexing failed:', errorMeta(error));
     }
 
     return { indexed, updated };
@@ -743,7 +743,7 @@ export async function clearBookmarkFlags(): Promise<void> {
         
         logger.info('clearBookmarkFlags', `📚 Cleared bookmark flags from ${cleared} items`);
     } catch (error) {
-        logger.error('clearBookmarkFlags', '❌ Failed to clear bookmark flags:', error);
+        logger.error('clearBookmarkFlags', '❌ Failed to clear bookmark flags:', errorMeta(error));
     }
 }
 
@@ -791,6 +791,6 @@ export async function mergeMetadata(
         await saveIndexedItem(item);
         logger.debug('mergeMetadata', 'Metadata merge completed for:', url);
     } catch (err) {
-        logger.error('mergeMetadata', `[${BRAND_NAME}] mergeMetadata error:`, err);
+        logger.error('mergeMetadata', `[${BRAND_NAME}] mergeMetadata error:`, errorMeta(err));
     }
 }

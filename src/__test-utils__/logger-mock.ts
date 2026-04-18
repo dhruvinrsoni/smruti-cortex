@@ -38,5 +38,31 @@ export function mockLogger() {
       forComponent: vi.fn(() => createComponentLogger()),
       ComponentLogger: vi.fn().mockImplementation(() => createComponentLogger()),
     },
+    // Mirror the real implementation so callsites using errorMeta(err) inside
+    // mocked modules still get a JSON-friendly { name, message, code? } shape.
+    errorMeta: (err: unknown) => {
+      if (err instanceof Error) {
+        const meta: { name: string; message: string; code?: string | number } = {
+          name: err.name,
+          message: err.message,
+        };
+        const code = (err as Error & { code?: string | number }).code;
+        if (code !== undefined) {
+          meta.code = code;
+        }
+        return meta;
+      }
+      if (err && typeof err === 'object') {
+        const anyErr = err as { name?: unknown; message?: unknown; code?: unknown };
+        return {
+          name: typeof anyErr.name === 'string' ? anyErr.name : 'non-Error',
+          message: typeof anyErr.message === 'string' ? anyErr.message : String(err),
+          ...(typeof anyErr.code === 'string' || typeof anyErr.code === 'number'
+            ? { code: anyErr.code }
+            : {}),
+        };
+      }
+      return { name: 'non-Error', message: String(err) };
+    },
   };
 }

@@ -1,7 +1,7 @@
 // settings.ts — Centralized settings management with type safety and validation
 
 import { browserAPI } from './helpers';
-import { Logger, ComponentLogger } from './logger';
+import { Logger, ComponentLogger, errorMeta } from './logger';
 
 export enum DisplayMode {
     LIST = 'list',
@@ -374,7 +374,7 @@ export class SettingsManager {
                 await this.applySettings();
                 this.logger.info('init', '✅ Settings initialized and applied');
             } catch (error) {
-                this.logger.error('init', '❌ Settings initialization failed:', error);
+                this.logger.error('init', '❌ Settings initialization failed:', errorMeta(error));
                 this.logger.info('init', '📋 Using defaults:', this.settings);
             }
         })();
@@ -403,7 +403,7 @@ export class SettingsManager {
             await this.applySettings();
             this.logger.info('updateSettings', '✅ Settings updated and applied successfully');
         } catch (error) {
-            this.logger.error('updateSettings', '❌ Failed to update settings:', error);
+            this.logger.error('updateSettings', '❌ Failed to update settings:', errorMeta(error));
             throw error;
         }
     }
@@ -425,7 +425,7 @@ export class SettingsManager {
             }
             this.logger.debug('applyRemoteSettings', '✅ Remote settings applied (no re-broadcast)');
         } catch (error) {
-            this.logger.error('applyRemoteSettings', '❌ Failed to apply remote settings:', error);
+            this.logger.error('applyRemoteSettings', '❌ Failed to apply remote settings:', errorMeta(error));
         }
     }
 
@@ -483,7 +483,7 @@ export class SettingsManager {
                         resolve(null);
                     }
                 } catch (error) {
-                    this.logger.warn('loadFromStorage', 'Invalid stored settings, ignoring:', error);
+                    this.logger.warn('loadFromStorage', 'Invalid stored settings, ignoring:', errorMeta(error));
                     resolve(null);
                 }
             });
@@ -530,7 +530,7 @@ export class SettingsManager {
             // Notify other parts of the application about settings changes
             await this.notifySettingsChanged();
         } catch (error) {
-            Logger.error('[Settings] Failed to apply settings:', error);
+            Logger.error('[Settings] Failed to apply settings:', errorMeta(error));
         }
     }
 
@@ -555,7 +555,7 @@ export class SettingsManager {
                 });
             });
         } catch (error) {
-            Logger.trace('[Settings] Could not notify popup:', error);
+            Logger.trace('[Settings] Could not notify popup:', errorMeta(error));
         }
     }
 
@@ -605,7 +605,7 @@ export class SettingsManager {
             this.logger.debug('validateSettings', '✅ Validation complete:', validated);
             return validated as AppSettings;
         } catch (error) {
-            this.logger.warn('validateSettings', '❌ Validation failed:', error);
+            this.logger.warn('validateSettings', '❌ Validation failed:', errorMeta(error));
             return null;
         }
     }
@@ -631,7 +631,7 @@ export class SettingsManager {
                 throw new Error('Invalid settings format');
             }
         } catch (error) {
-            Logger.error('[Settings] Failed to import settings:', error);
+            Logger.error('[Settings] Failed to import settings:', errorMeta(error));
             throw error;
         }
     }

@@ -20,7 +20,7 @@
  */
 
 import { Scorer } from '../../../core/scorer-types';
-import { Logger } from '../../../core/logger';
+import { Logger, errorMeta } from '../../../core/logger';
 import { SettingsManager } from '../../../core/settings';
 import { getOllamaService, getOllamaConfigFromSettings, isCircuitBreakerOpen, checkMemoryPressure } from '../../ollama-service';
 import { buildEmbeddingText } from '../../embedding-text';
@@ -111,7 +111,7 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
     }
     return [];
   } catch (error) {
-    Logger.debug(COMPONENT, 'generateItemEmbedding', 'Failed to generate embedding:', error);
+    Logger.debug(COMPONENT, 'generateItemEmbedding', 'Failed to generate embedding:', errorMeta(error));
     return [];
   }
 }

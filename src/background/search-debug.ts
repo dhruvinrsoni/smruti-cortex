@@ -5,7 +5,7 @@
  * for debugging and algorithm analysis.
  */
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 
 const logger = Logger.forComponent('SearchDebug');
 
@@ -240,7 +240,7 @@ class SearchDebugService {
         );
       }
     } catch (err) {
-      logger.error('loadFromStorage', 'Failed to load search debug history', err);
+      logger.error('loadFromStorage', 'Failed to load search debug history', errorMeta(err));
     }
   }
 
@@ -254,7 +254,7 @@ class SearchDebugService {
         JSON.stringify(this.searchHistory)
       );
     } catch (err) {
-      logger.error('saveToStorage', 'Failed to save search debug history', err);
+      logger.error('saveToStorage', 'Failed to save search debug history', errorMeta(err));
     }
   }
 }

@@ -12,7 +12,7 @@ import {
     MATCH_WEIGHTS,
 } from './tokenizer';
 import { browserAPI } from '../../core/helpers';
-import { Logger } from '../../core/logger';
+import { Logger, errorMeta } from '../../core/logger';
 import { traced } from '../../core/traced';
 import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
@@ -144,7 +144,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             }
         } catch (error) {
             aiStatus.aiKeywords = 'error';
-            logger.warn('runSearch', '⚠️ Keyword expansion failed, using original query', { error });
+            logger.warn('runSearch', '⚠️ Keyword expansion failed, using original query', errorMeta(error));
         }
     } else if (ollamaEnabled && options?.skipAI) {
         logger.info('runSearch', '🔍 Keyword search (AI deferred — Phase 1)');
@@ -193,7 +193,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             } catch (error) {
                 aiStatus.semantic = 'error';
                 aiStatus.semanticError = `Embedding request failed: ${(error as Error).message || 'unknown error'}`;
-                logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', { error });
+                logger.warn('runSearch', '⚠️ Semantic search failed, falling back to keyword search', errorMeta(error));
             }
         }
     }
@@ -215,7 +215,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 logger.debug('runSearch', `Loaded ${loaded} pre-computed embeddings from IndexedDB`);
             }
         } catch (embErr) {
-            logger.warn('runSearch', 'Embedding hydration failed — continuing with keyword search only', { error: embErr });
+            logger.warn('runSearch', 'Embedding hydration failed — continuing with keyword search only', errorMeta(embErr));
         }
     }
 

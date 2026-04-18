@@ -17,7 +17,7 @@
  * Cache reduces repeated expansions for same queries, improving responsiveness.
  */
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess } from './ollama-service';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
@@ -194,7 +194,7 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
           sample: expanded.slice(0, 8)
         });
       } catch (error) {
-        logger.warn('expandQueryKeywords', `❌ Failed to expand "${keyword}", continuing`, { error });
+        logger.warn('expandQueryKeywords', `❌ Failed to expand "${keyword}", continuing`, errorMeta(error));
         // Continue with other keywords — don't fail entire expansion
       }
     }
@@ -209,7 +209,7 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
 
     return Array.from(allKeywords);
   } catch (error) {
-    logger.warn('expandQueryKeywords', '❌ Expansion failed, using available keywords', { error });
+    logger.warn('expandQueryKeywords', '❌ Expansion failed, using available keywords', errorMeta(error));
     lastExpansionSource = anyFromCache ? 'cache-hit' : 'error';
     return Array.from(allKeywords);
   } finally {

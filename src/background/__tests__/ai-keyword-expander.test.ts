@@ -64,6 +64,9 @@ describe('ai-keyword-expander', () => {
           debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
         }),
       },
+      errorMeta: (err: unknown) => err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { name: 'non-Error', message: String(err) },
     }));
     vi.doMock('../../core/settings', () => ({
       SettingsManager: {

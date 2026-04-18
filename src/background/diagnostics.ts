@@ -1,6 +1,6 @@
 // diagnostics.ts — Export diagnostics for bug reporting (Open-Closed Design)
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { getAllIndexedItems, getStorageQuotaInfo } from './database';
 import { checkHealth } from './resilience';
@@ -74,7 +74,7 @@ export async function initSearchDebugState(): Promise<void> {
         searchDebugEnabled = result.searchDebugEnabled ?? false;
         logger.debug('initSearchDebugState', `Search debug initialized: ${searchDebugEnabled}`);
     } catch (error) {
-        logger.error('initSearchDebugState', 'Failed to initialize:', error);
+        logger.error('initSearchDebugState', 'Failed to initialize:', errorMeta(error));
         searchDebugEnabled = false;
     }
 }
@@ -95,7 +95,7 @@ export async function setSearchDebugEnabled(enabled: boolean): Promise<void> {
         await chrome.storage.local.set({ searchDebugEnabled: enabled });
         logger.info('setSearchDebugEnabled', `Search debug ${enabled ? 'enabled' : 'disabled'}`);
     } catch (error) {
-        logger.error('setSearchDebugEnabled', 'Failed to persist:', error);
+        logger.error('setSearchDebugEnabled', 'Failed to persist:', errorMeta(error));
     }
 }
 
@@ -372,7 +372,7 @@ export async function generateDiagnosticReport(): Promise<DiagnosticReport> {
             logger.debug('generateDiagnosticReport', `Running collector: ${collector.name}`);
             report.collectors[collector.name] = await collector.collect();
         } catch (error) {
-            logger.warn('generateDiagnosticReport', `Collector ${collector.name} failed:`, error);
+            logger.warn('generateDiagnosticReport', `Collector ${collector.name} failed:`, errorMeta(error));
             report.collectors[collector.name] = { error: (error as Error).message };
         }
     }

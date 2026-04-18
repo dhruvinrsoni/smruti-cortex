@@ -21,6 +21,9 @@ describe('SettingsManager extra edge cases', () => {
         setLevelInternal: vi.fn(),
       },
       ComponentLogger: class {},
+      errorMeta: (err: unknown) => err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { name: 'non-Error', message: String(err) },
     }));
 
     vi.doMock('../helpers', () => ({
@@ -57,6 +60,9 @@ describe('SettingsManager extra edge cases', () => {
         setLevelInternal: vi.fn(),
       },
       ComponentLogger: class {},
+      errorMeta: (err: unknown) => err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { name: 'non-Error', message: String(err) },
     }));
 
     vi.doMock('../helpers', () => ({
@@ -81,6 +87,9 @@ describe('SettingsManager extra edge cases', () => {
         setLevelInternal: vi.fn(),
       },
       ComponentLogger: class {},
+      errorMeta: (err: unknown) => err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { name: 'non-Error', message: String(err) },
     }));
     vi.doMock('../helpers', () => ({ browserAPI: { storage: { local: { get: vi.fn((_k, cb) => cb({ smrutiCortexSettings: { webSearchEngine: 'youtube' } })), set: vi.fn((_i, cb) => cb?.()) } }, runtime: { lastError: null, sendMessage: vi.fn((_m, cb?: () => void) => cb?.()) } } }));
 
@@ -102,6 +111,9 @@ describe('SettingsManager extra edge cases', () => {
         setLevelInternal: vi.fn(),
       },
       ComponentLogger: class {},
+      errorMeta: (err: unknown) => err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { name: 'non-Error', message: String(err) },
     }));
 
     vi.doMock('../helpers', () => {

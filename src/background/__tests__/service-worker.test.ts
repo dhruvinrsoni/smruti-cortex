@@ -156,6 +156,9 @@ vi.mock('../../core/logger', () => ({
     getLevel: vi.fn(() => 2),
     setLevel: vi.fn(async () => {}),
   },
+  errorMeta: (err: unknown) => err instanceof Error
+    ? { name: err.name, message: err.message }
+    : { name: 'non-Error', message: String(err) },
 }));
 
 vi.mock('../../core/settings', () => ({

@@ -11,7 +11,7 @@
  * - TRACE: Detailed data flow (exact payloads, response parsing)
  */
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 
 const COMPONENT = 'OllamaService';
 const logger = Logger.forComponent(COMPONENT);
@@ -526,7 +526,7 @@ export class OllamaService {
         return false;
       }
     } catch (error) {
-      logger.warn('warmup', '⚠️ Warmup error (non-critical):', error);
+      logger.warn('warmup', '⚠️ Warmup error (non-critical):', errorMeta(error));
       return false;
     }
   }

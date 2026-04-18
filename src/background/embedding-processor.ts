@@ -1,6 +1,6 @@
 // embedding-processor.ts — Background embedding generation with pause/resume and search priority
 
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { Traced } from '../core/traced';
 import { SettingsManager } from '../core/settings';
 import { countItemsWithoutEmbeddings, getItemsWithoutEmbeddingsBatch, saveIndexedItem } from './database';
@@ -181,7 +181,7 @@ class EmbeddingProcessorImpl {
             this.total = counts.total;
             this.withEmbeddings = counts.total - counts.withoutEmbeddings;
         } catch (error) {
-            logger.warn('refreshCounts', 'Failed to count items:', error);
+            logger.warn('refreshCounts', 'Failed to count items:', errorMeta(error));
         }
     }
 

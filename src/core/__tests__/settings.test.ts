@@ -50,6 +50,9 @@ vi.mock('../logger', () => ({
     setLevelInternal: vi.fn(),
   },
   ComponentLogger: class {},
+  errorMeta: (err: unknown) => err instanceof Error
+    ? { name: err.name, message: err.message }
+    : { name: 'non-Error', message: String(err) },
 }));
 
 vi.mock('../helpers', () => {
@@ -75,6 +78,9 @@ async function getManager() {
       setLevelInternal: vi.fn(),
     },
     ComponentLogger: class {},
+    errorMeta: (err: unknown) => err instanceof Error
+      ? { name: err.name, message: err.message }
+      : { name: 'non-Error', message: String(err) },
   }));
 
   vi.doMock('../helpers', () => {
@@ -98,6 +104,9 @@ async function getManagerWithStoredSettings(stored: Record<string, unknown>) {
       setLevelInternal: vi.fn(),
     },
     ComponentLogger: class {},
+    errorMeta: (err: unknown) => err instanceof Error
+      ? { name: err.name, message: err.message }
+      : { name: 'non-Error', message: String(err) },
   }));
 
   vi.doMock('../helpers', () => {
@@ -121,6 +130,9 @@ async function getManagerWithNoStorage() {
       setLevelInternal: vi.fn(),
     },
     ComponentLogger: class {},
+    errorMeta: (err: unknown) => err instanceof Error
+      ? { name: err.name, message: err.message }
+      : { name: 'non-Error', message: String(err) },
   }));
 
   vi.doMock('../helpers', () => ({
@@ -147,6 +159,9 @@ async function getManagerWithSaveError(errorMessage: string) {
       setLevelInternal: vi.fn(),
     },
     ComponentLogger: class {},
+    errorMeta: (err: unknown) => err instanceof Error
+      ? { name: err.name, message: err.message }
+      : { name: 'non-Error', message: String(err) },
   }));
 
   vi.doMock('../helpers', () => {
@@ -181,6 +196,9 @@ async function getManagerWithSendMessageError() {
       setLevelInternal: vi.fn(),
     },
     ComponentLogger: class {},
+    errorMeta: (err: unknown) => err instanceof Error
+      ? { name: err.name, message: err.message }
+      : { name: 'non-Error', message: String(err) },
   }));
 
   vi.doMock('../helpers', () => {
@@ -332,6 +350,9 @@ describe('SettingsManager', () => {
           setLevelInternal: vi.fn(),
         },
         ComponentLogger: class {},
+        errorMeta: (err: unknown) => err instanceof Error
+          ? { name: err.name, message: err.message }
+          : { name: 'non-Error', message: String(err) },
       }));
       vi.doMock('../helpers', () => {
         const storageMock = {

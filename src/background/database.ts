@@ -3,7 +3,7 @@
 import { browserAPI } from '../core/helpers';
 import { IndexedItem } from './schema';
 import { DB_NAME } from '../core/constants';
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { traced } from '../core/traced';
 
 const DB_VERSION = 1;
@@ -35,7 +35,7 @@ function openDatabaseImpl(): Promise<IDBDatabase> {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = () => {
-            Logger.error('Open error:', request.error);
+            Logger.error('Open error:', errorMeta(request.error));
             reject(request.error);
         };
         request.onsuccess = () => {
@@ -480,7 +480,7 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
         logger.info('getStorageQuotaInfo', 'Storage quota info', info);
         return info;
     } catch (error) {
-        logger.error('getStorageQuotaInfo', 'Failed to get storage quota', error);
+        logger.error('getStorageQuotaInfo', 'Failed to get storage quota', errorMeta(error));
         return {
             used: 0,
             total: 0,
