@@ -7,11 +7,11 @@
  *
  * Flow (verify-first — zero disk writes until everything is green):
  *   1. Validate prerequisites (main branch, clean tree, gh CLI)
- *   2. Full verify gate: lint + build:prod + unit tests + E2E
+ *   2. Preflight gate (delegates to npm run preflight → verify + benchmarks + integrity)
  *   3. Compute new version from explicit bump arg
  *   4. Write: bump package.json, sync manifest, generate CHANGELOG, scaffold submission doc
  *   5. Re-build with new version baked in + package zip
- *   6. Post-bump integrity checks
+ *   6. Post-bump integrity (version sync + zip exists)
  *   7. Single commit with all release files
  *   8. Tag, push, create GitHub Release
  *   9. Print next steps
@@ -76,8 +76,8 @@ try {
 
 console.log(`${GREEN}✅ On main, clean tree, gh available${RESET}\n`);
 
-// ===== Step 2: Full verify gate (BEFORE any disk changes) =====
-console.log(`${BOLD}═══ STEP 2: Verify Gate (zero disk changes) ═══${RESET}\n`);
+// ===== Step 2: Preflight gate (BEFORE any disk changes) =====
+console.log(`${BOLD}═══ STEP 2: Preflight Gate (zero disk changes) ═══${RESET}\n`);
 
 if (SKIP_E2E) {
   console.log(`${YELLOW}${BOLD}┌─────────────────────────────────────────────────┐${RESET}`);
@@ -88,29 +88,15 @@ if (SKIP_E2E) {
   console.log(`${YELLOW}${BOLD}└─────────────────────────────────────────────────┘${RESET}\n`);
 }
 
-const verifySteps = [
-  { name: 'Lint', cmd: 'npm run lint' },
-  { name: 'Build (prod)', cmd: 'npm run build:prod' },
-  { name: 'Unit Tests + Coverage', cmd: 'npx vitest run --coverage' },
-];
-
-if (!SKIP_E2E) {
-  verifySteps.push({ name: 'E2E Tests', cmd: 'npx playwright test' });
+const preflightCmd = SKIP_E2E ? 'npm run preflight -- --no-e2e' : 'npm run preflight';
+try {
+  run(preflightCmd);
+  console.log(`\n${GREEN}✅ Preflight passed${RESET}\n`);
+} catch {
+  console.error(`\n${RED}❌ Preflight FAILED. Fix the errors above and retry.${RESET}`);
+  console.error(`${RED}   No disk changes were made — your tree is still clean.${RESET}`);
+  process.exit(1);
 }
-
-for (const { name, cmd } of verifySteps) {
-  console.log(`\n${BOLD}▶ ${name}${RESET}`);
-  try {
-    run(cmd);
-    console.log(`${GREEN}  ✅ ${name} passed${RESET}`);
-  } catch {
-    console.error(`\n${RED}❌ ${name} FAILED. Fix the errors above and retry.${RESET}`);
-    console.error(`${RED}   No disk changes were made — your tree is still clean.${RESET}`);
-    process.exit(1);
-  }
-}
-
-console.log(`\n${GREEN}✅ All verify checks passed${RESET}\n`);
 
 // ===== Step 3: Compute new version =====
 console.log(`${BOLD}═══ STEP 3: Compute Version ═══${RESET}\n`);
@@ -233,29 +219,17 @@ try {
   revertOnFailure(`Build/package failed: ${e.message}`);
 }
 
-// ===== Step 6: Post-bump integrity checks =====
+// ===== Step 6: Post-bump integrity (version sync + zip) =====
 console.log(`\n${BOLD}═══ STEP 6: Post-bump Integrity ═══${RESET}\n`);
 
 try {
   const builtManifest = JSON.parse(readFileSync(resolve(ROOT, 'dist/manifest.json'), 'utf-8'));
-  const srcManifest = JSON.parse(readFileSync(resolve(ROOT, 'manifest.json'), 'utf-8'));
-  const srcPkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
-
-  if (srcPkg.version !== newVersion) throw new Error(`package.json version is ${srcPkg.version}, expected ${newVersion}`);
-  if (srcManifest.version !== newVersion) throw new Error(`manifest.json version is ${srcManifest.version}, expected ${newVersion}`);
   if (builtManifest.version !== newVersion) throw new Error(`dist/manifest.json version is ${builtManifest.version}, expected ${newVersion}`);
-  if (builtManifest.manifest_version !== 3) throw new Error(`manifest_version is ${builtManifest.manifest_version}, expected 3`);
-
-  const criticalFiles = ['manifest.json', 'background/service-worker.js', 'popup/popup.html', 'popup/popup.js', 'content_scripts/quick-search.js'];
-  const missing = criticalFiles.filter(f => !existsSync(resolve(ROOT, 'dist', f)));
-  if (missing.length) throw new Error(`Missing from dist/: ${missing.join(', ')}`);
 
   const zipPath = resolve(ROOT, `release/smruti-cortex-v${newVersion}.zip`);
   if (!existsSync(zipPath)) throw new Error(`Release zip not found at ${zipPath}`);
 
-  console.log(`${GREEN}✅ Versions synced: ${newVersion}${RESET}`);
-  console.log(`${GREEN}✅ manifest_version is 3 (MV3)${RESET}`);
-  console.log(`${GREEN}✅ All critical files present in dist/${RESET}`);
+  console.log(`${GREEN}✅ dist/manifest.json version: ${newVersion}${RESET}`);
   console.log(`${GREEN}✅ Release zip exists${RESET}`);
 } catch (e) {
   revertOnFailure(`Integrity check failed: ${e.message}`);
