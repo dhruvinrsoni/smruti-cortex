@@ -268,8 +268,13 @@ setupPortBasedMessaging();
 // laptop hibernation). The handler itself gates init-dependent messages behind
 // `await initializationPromise` so they wait for DB/indexing to finish.
 browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  logger.trace('onMessage', 'Message listener triggered with message:', msg);
-  logger.trace('onMessage', 'Sender:', sender);
+  logger.trace('onMessage', `Message received: type=${msg?.type ?? 'unknown'}`);
+  logger.trace('onMessage', 'Sender:', {
+    tabId: sender.tab?.id,
+    url: sender.tab?.url,
+    frameId: sender.frameId,
+    origin: sender.origin,
+  });
   (async () => {
     logger.trace('onMessage', 'Processing message asynchronously');
     try {

@@ -1887,7 +1887,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Remove aggressive refocus from blur — prefer native focus behavior and Tab navigation.
     // Keep a light debug hook for visibility only.
     inputEl.addEventListener('blur', (e) => {
-      log.debug('focus', 'Input blurred. relatedTarget:', (e as FocusEvent).relatedTarget);
+      const rt = (e as FocusEvent).relatedTarget as Element | null;
+      const summary = rt
+        ? `${rt.tagName?.toLowerCase() ?? '?'}${rt.id ? `#${rt.id}` : ''}${rt.className ? `.${String(rt.className).split(/\s+/).slice(0, 2).join('.')}` : ''}`
+        : 'null';
+      log.debug('focus', `Input blurred. relatedTarget: ${summary}`);
     });
 
     perfLog('Overlay created with Shadow DOM (in-memory, not yet attached)', t0);

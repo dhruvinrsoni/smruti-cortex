@@ -361,21 +361,20 @@ export class SettingsManager {
             try {
                 this.logger.info('init', '🔄 Loading settings from storage...');
                 const stored = await this.loadFromStorage();
-                this.logger.info('init', '📦 Loaded from storage:', stored || 'null');
-                
+                this.logger.info('init', `📦 Loaded from storage: ${stored ? `${Object.keys(stored).length} keys` : 'null'}`);
+
                 if (stored) {
-                    this.logger.info('init', '🔀 Merging with defaults...');
                     this.settings = { ...this.settings, ...stored };
-                    this.logger.info('init', '✅ Merged settings:', this.settings);
+                    this.logger.info('init', '✅ Merged settings:', this.summarize(this.settings));
                 } else {
-                    this.logger.info('init', '⚠️ No stored settings, using defaults:', this.settings);
+                    this.logger.info('init', '⚠️ No stored settings, using defaults:', this.summarize(this.settings));
                 }
 
                 await this.applySettings();
                 this.logger.info('init', '✅ Settings initialized and applied');
             } catch (error) {
                 this.logger.error('init', '❌ Settings initialization failed:', errorMeta(error));
-                this.logger.info('init', '📋 Using defaults:', this.settings);
+                this.logger.info('init', '📋 Using defaults:', this.summarize(this.settings));
             }
         })();
 
@@ -390,14 +389,32 @@ export class SettingsManager {
     }
 
     /**
+     * Compact summary used by debug/info logs. Avoids dumping the full
+     * 30+ field settings tree on every update — that creates DevTools noise
+     * and bloats the in-memory log buffer. Includes the booleans/keys most
+     * useful when diagnosing settings issues.
+     */
+    private static summarize(s: Partial<AppSettings> | null | undefined): Record<string, unknown> {
+        if (!s || typeof s !== 'object') {return { keys: 0 };}
+        const k = Object.keys(s);
+        return {
+            keys: k.length,
+            logLevel: (s as AppSettings).logLevel,
+            ollamaEnabled: (s as AppSettings).ollamaEnabled,
+            embeddingsEnabled: (s as AppSettings).embeddingsEnabled,
+            displayMode: (s as AppSettings).displayMode,
+        };
+    }
+
+    /**
      * Update settings and persist to storage
      */
     static async updateSettings(updates: Partial<AppSettings>): Promise<void> {
         try {
-            this.logger.debug('updateSettings', '📝 Before update:', this.settings);
-            this.logger.info('updateSettings', '📝 Applying updates:', updates);
+            this.logger.debug('updateSettings', '📝 Before update:', this.summarize(this.settings));
+            this.logger.info('updateSettings', `📝 Applying updates: ${Object.keys(updates).join(', ') || '(none)'}`, updates);
             this.settings = { ...this.settings, ...updates };
-            this.logger.info('updateSettings', '📝 After merge:', this.settings);
+            this.logger.info('updateSettings', '📝 After merge:', this.summarize(this.settings));
             await this.saveToStorage();
             this.logger.info('updateSettings', '💾 Saved to storage');
             await this.applySettings();
@@ -501,7 +518,7 @@ export class SettingsManager {
                 return;
             }
 
-            this.logger.debug('saveToStorage', 'Saving to storage:', this.settings);
+            this.logger.debug('saveToStorage', 'Saving to storage:', this.summarize(this.settings));
             browserAPI.storage.local.set({ [this.STORAGE_KEY]: this.settings }, () => {
                 this.logger.debug('saveToStorage', 'chrome.runtime.lastError after save:', browserAPI.runtime.lastError);
                 if (browserAPI.runtime.lastError) {

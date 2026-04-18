@@ -2992,7 +2992,7 @@ function initializePopup() {
           storageBarEl.classList.add('warning');
         }
         
-        logger.debug('openSettingsPage', 'Storage quota updated', resp.data);
+        logger.debug('openSettingsPage', `Storage quota updated: ${usedFormatted} / ${totalFormatted} (${percentage}%, ${itemCount} items)`);
       } else {
         storageUsedEl.textContent = 'Unknown';
         storageItemsEl.textContent = '-- items';
