@@ -3455,7 +3455,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Start safety timeout — hides spinner if no response arrives
     clearSpinnerTimeout();
     spinnerTimeoutTimer = window.setTimeout(() => {
-      log.warn('spinner', `Spinner timeout after ${SPINNER_TIMEOUT_MS}ms — hiding stuck spinner`);
+      log.debug('spinner', `Spinner timeout after ${SPINNER_TIMEOUT_MS}ms — hiding stuck spinner`);
       aiSearchPending = false;
       hideSpinner();
     }, SPINNER_TIMEOUT_MS);
