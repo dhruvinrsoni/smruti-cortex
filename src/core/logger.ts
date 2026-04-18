@@ -123,28 +123,34 @@ export class Logger {
     }
 
     /**
-     * Format log entry in Spring Boot style
+     * Build the prefix string for an entry. Data is intentionally NOT inlined here
+     * for objects/arrays/Errors — those are passed as separate console args so that
+     * DevTools renders them as interactive expandable values (no `\"` escaping, no
+     * 500-char truncation).
      */
-    private static formatLogEntry(entry: LogEntry): string {
+    private static formatLogEntry(entry: LogEntry, originalData?: unknown): string {
         const contextStr = entry.context.methodName
             ? `${entry.context.className}.${entry.context.methodName}`
             : entry.context.className;
 
-        let formatted = `${entry.timestamp} [${entry.levelName}] [${contextStr}] - ${entry.message}`;
+        let prefix = `${entry.timestamp} [${entry.levelName}] [${contextStr}] - ${entry.message}`;
 
-        if (entry.data) {
-            formatted += ` | data=${JSON.stringify(entry.data)}`;
-        }
-
-        if (entry.error) {
-            formatted += ` | error=${entry.error.message}`;
-            // Include stack trace for DEBUG level and above
-            if (this.currentLevel >= LogLevel.DEBUG && entry.error.stack) {
-                formatted += `\nStack Trace:\n${entry.error.stack}`;
+        if (originalData !== undefined) {
+            const t = typeof originalData;
+            if (originalData === null) {
+                prefix += ' | data=null';
+            } else if (t === 'string' || t === 'number' || t === 'boolean' || t === 'bigint') {
+                prefix += ` | data=${String(originalData)}`;
+            } else {
+                prefix += ' | data=';
             }
         }
 
-        return formatted;
+        if (entry.error) {
+            prefix += ` | error=${entry.error.message}`;
+        }
+
+        return prefix;
     }
 
     /**
@@ -181,22 +187,33 @@ export class Logger {
             this.logBuffer.shift();
         }
 
-        // Output to console with appropriate method
-        const formatted = this.formatLogEntry(entry);
+        const prefix = this.formatLogEntry(entry, data);
+        const args: unknown[] = [prefix];
+        // For complex values, pass the original (live) reference so DevTools renders
+        // an expandable interactive object instead of an escaped string.
+        if (data !== undefined && data !== null) {
+            const t = typeof data;
+            if (t === 'object' || t === 'function' || t === 'symbol') {
+                args.push(data);
+            }
+        }
+        if (error) {
+            args.push(error);
+        }
 
         switch (level) {
             case LogLevel.ERROR:
-                console.error(formatted);
+                console.error(...args);
                 break;
             case LogLevel.WARN:
-                console.warn(formatted);
+                console.warn(...args);
                 break;
             case LogLevel.INFO:
-                console.info(formatted);
+                console.info(...args);
                 break;
             case LogLevel.DEBUG:
             case LogLevel.TRACE:
-                console.log(formatted); // Changed from console.debug() to console.log() for better visibility
+                console.log(...args);
                 break;
         }
     }
@@ -337,6 +354,36 @@ export class ComponentLogger {
     trace(methodName: string, message: string, data?: any): void { // eslint-disable-line @typescript-eslint/no-explicit-any
         Logger.trace(this.className, methodName, message, data);
     }
+}
+
+/**
+ * Flatten an unknown caught value into a small, JSON-friendly meta object suitable
+ * for the `data` parameter on logger calls. Use this anywhere a `catch (err)` block
+ * currently passes the raw error as `data` — `JSON.stringify(new Error())` returns
+ * `"{}"`, which loses both message and name. `errorMeta` preserves both (plus
+ * `code` when present, e.g. on `DOMException`).
+ */
+export function errorMeta(err: unknown): { name: string; message: string; code?: string | number } {
+    if (err instanceof Error) {
+        const meta: { name: string; message: string; code?: string | number } = {
+            name: err.name,
+            message: err.message,
+        };
+        const code = (err as Error & { code?: string | number }).code;
+        if (code !== undefined) {
+            meta.code = code;
+        }
+        return meta;
+    }
+    if (err && typeof err === 'object') {
+        const anyErr = err as { name?: unknown; message?: unknown; code?: unknown };
+        return {
+            name: typeof anyErr.name === 'string' ? anyErr.name : 'non-Error',
+            message: typeof anyErr.message === 'string' ? anyErr.message : String(err),
+            ...(typeof anyErr.code === 'string' || typeof anyErr.code === 'number' ? { code: anyErr.code } : {}),
+        };
+    }
+    return { name: 'non-Error', message: String(err) };
 }
 
 // ===== LEGACY COMPATIBILITY METHODS =====
