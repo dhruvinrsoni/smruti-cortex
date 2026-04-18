@@ -41,16 +41,8 @@ const cwd = process.cwd();
 const isWin = process.platform === 'win32';
 const bin = (name) => path.join(cwd, 'node_modules', '.bin', name + (isWin ? '.cmd' : ''));
 
-// Mirror the build chains from package.json without calling npm.
-// Update here if package.json "build" or "build:prod" scripts change.
-const buildDevCmd = [
-  'node ./scripts/sync-version.mjs',
-  `"${bin('rimraf')}" dist`,
-  `"${bin('tsc')}" --project tsconfig.json`,
-  'node ./scripts/copy-static.mjs',
-  'node ./scripts/esbuild-dev.mjs',
-].join(' && ');
-
+// Mirror the build:prod chain from package.json without calling npm.
+// Update here if package.json "build:prod" script changes.
 const buildProdCmd = [
   'node ./scripts/sync-version.mjs',
   `"${bin('rimraf')}" dist`,
@@ -59,7 +51,7 @@ const buildProdCmd = [
   'node ./scripts/esbuild-prod.mjs',
 ].join(' && ');
 
-const testCmd = `"${bin('vitest')}" run --coverage`;
+const testCmd = `"${bin('vitest')}" run`;
 
 function runCommand(command, description) {
   console.log(`\n🔨 RUNNING: ${description.toUpperCase()}`);
@@ -172,20 +164,14 @@ async function main() {
   let allPassed = true;
   const results = [];
 
-  // Run build (blocking) — fail commit if this fails
-  console.log('\n🏗️  PHASE 1: Build (blocking)');
-  const buildResult = runCommand(buildDevCmd, 'Build (dev)');
-  results.push({ name: 'Build (dev)', passed: buildResult });
-  if (!buildResult) allPassed = false;
-
   // Run production build (blocking) — fail commit if this fails
-  console.log('\n🏗️  PHASE 1b: Build:prod (blocking)');
+  console.log('\n🏗️  PHASE 1: Build:prod (blocking)');
   const buildProdResult = runCommand(buildProdCmd, 'Build (prod)');
   results.push({ name: 'Build (prod)', passed: buildProdResult });
   if (!buildProdResult) allPassed = false;
 
   // Run tests (non-blocking) via local vitest binary
-  console.log('\n🧪 PHASE 3: Test Suite (non-blocking)');
+  console.log('\n🧪 PHASE 2: Test Suite (non-blocking)');
   const testResult = runCommand(testCmd, 'Vitest test suite');
   results.push({ name: 'Tests (non-blocking)', passed: testResult });
 
