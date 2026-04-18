@@ -1,9 +1,15 @@
-name: Staging Build
+# Staging Build — minimal develop-branch build for pre-release testing.
+#
+# When to use:
+#   Push to `develop` when you want to test destabilising changes before merging
+#   to main. Download the artifact, extract, and Load Unpacked in Chrome.
+#
+# How to extend (e.g. add tests, lint, matrix):
+#   This file was trimmed from ~180 lines to ~40 for LTS simplicity.
+#   Full history is in git — `git log --follow .github/workflows/staging.yml`.
+#   Add steps between "Install dependencies" and "Build" as needed.
 
-# Purpose: Automated staging builds from develop branch for pre-release testing.
-# Produces: staging-extension artifact (14 days) for manual testing.
-# Use case: Test changes in develop before merging to main/production.
-# Note: Does NOT auto-deploy - creates artifacts for manual testing only.
+name: Staging Build
 
 on:
   push:
@@ -11,171 +17,36 @@ on:
   pull_request:
     branches: [develop]
   workflow_dispatch:
-    inputs:
-      test_type:
-        description: 'Type of testing to perform'
-        required: false
-        default: 'functional'
-        type: choice
-        options:
-          - functional
-          - performance
-          - integration
-          - all
 
 jobs:
   staging-build:
     name: Build Staging Extension
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Add staging marker to manifest
+
+      - run: npm ci
+
+      - name: Mark as staging
         run: |
-          # Add " (STAGING)" to extension name in manifest
           node -e "
             const fs = require('fs');
-            const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-            manifest.name = manifest.name + ' (STAGING)';
-            manifest.version = manifest.version + '.dev';
-            fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2));
+            const m = JSON.parse(fs.readFileSync('manifest.json','utf8'));
+            m.name += ' (STAGING)';
+            fs.writeFileSync('manifest.json', JSON.stringify(m, null, 2));
           "
-          
-          echo "✅ Manifest updated for staging" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat manifest.json | head -10 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-      
-      - name: Run tests (if requested)
-        if: inputs.test_type == 'all' || inputs.test_type == 'functional'
-        run: |
-          echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          npm test -- --reporter=json > test-results.json 2>&1
-          
-          TESTS_PASSED=$(jq '.numPassedTests // 0' test-results.json 2>/dev/null || echo "0")
-          TESTS_FAILED=$(jq '.numFailedTests // 0' test-results.json 2>/dev/null || echo "0")
-          TESTS_TOTAL=$(jq '.numTotalTests // 0' test-results.json 2>/dev/null || echo "0")
-          
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ✅ Passed | $TESTS_PASSED |" >> $GITHUB_STEP_SUMMARY
-          echo "| ❌ Failed | $TESTS_FAILED |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📊 Total | $TESTS_TOTAL |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "$TESTS_FAILED" -gt 0 ]; then
-            echo "::warning::$TESTS_FAILED tests failed in staging build"
-          fi
-      
-      - name: Lint check
-        run: |
-          echo "## 📝 Linting Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          npm run lint > lint.txt 2>&1 || true
-          LINT_WARNINGS=$(grep -c "warning" lint.txt 2>/dev/null || echo "0")
-          LINT_ERRORS=$(grep -c "error" lint.txt 2>/dev/null || echo "0")
-          
-          echo "| Type | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Errors | $LINT_ERRORS |" >> $GITHUB_STEP_SUMMARY
-          echo "| Warnings | $LINT_WARNINGS |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "$LINT_ERRORS" -gt 0 ]; then
-            echo "⚠️ **Linting errors found - review recommended**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "✅ No linting errors" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Build staging extension
-        run: |
-          npm run build:prod
-          
-          echo "## 📦 Staging Build" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Staging extension built successfully" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Build artifacts:**" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ls -lh dist/ | head -20 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-      
-      - name: Package staging extension
-        run: |
-          npm run package
-          # Packaging script now places the ZIP in `release/` with versioned name.
-          # Copy the created release zip into `dist/` as the expected staging artifact.
-          mkdir -p dist
-          # Derive version from package.json so staging artifacts include version info
-          VERSION=$(node -e "console.log(require('./package.json').version)")
-          RELEASE_ZIP=$(ls -t release/*.zip 2>/dev/null | head -n1 || true)
-          ARTIFACT_NAME=smruti-cortex-v${VERSION}-staging.zip
-          if [ -z "$RELEASE_ZIP" ]; then
-            echo "No release zip found in release/; looking for dist/smruti-cortex.zip as fallback"
-            if [ -f dist/smruti-cortex.zip ]; then
-              cp dist/smruti-cortex.zip dist/$ARTIFACT_NAME
-            else
-              echo "Error: no package zip found to upload" >&2
-              exit 1
-            fi
-          else
-            cp "$RELEASE_ZIP" dist/$ARTIFACT_NAME
-          fi
 
-          # Export artifact name for subsequent steps
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+      - run: npm run build:prod
 
-          SIZE=$(ls -lh dist/$ARTIFACT_NAME | awk '{print $5}')
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package size:** $SIZE" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Upload staging artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: smruti-cortex-staging
-          path: dist/${{ env.ARTIFACT_NAME }}
+          path: dist/
           retention-days: 14
-          compression-level: 0  # Already compressed
-      
-      - name: Staging Summary
-        run: |
-          echo "## 🚀 Staging Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ✅ Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`develop\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifact:** \`$ARTIFACT_NAME\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Retention:** 14 days" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📥 How to Test" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the \`$ARTIFACT_NAME\` artifact from this workflow" >> $GITHUB_STEP_SUMMARY
-          echo "2. Extract the ZIP file" >> $GITHUB_STEP_SUMMARY
-          echo "3. Open Chrome and navigate to \`chrome://extensions\`" >> $GITHUB_STEP_SUMMARY
-          echo "4. Enable \"Developer mode\"" >> $GITHUB_STEP_SUMMARY
-          echo "5. Click \"Load unpacked\" and select the extracted folder" >> $GITHUB_STEP_SUMMARY
-          echo "6. Test the staging build thoroughly" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ Pre-Production Checklist" >> $GITHUB_STEP_SUMMARY
-          echo "- [ ] All tests passing" >> $GITHUB_STEP_SUMMARY
-          echo "- [ ] No linting errors" >> $GITHUB_STEP_SUMMARY
-          echo "- [ ] Manual testing completed" >> $GITHUB_STEP_SUMMARY
-          echo "- [ ] Performance acceptable" >> $GITHUB_STEP_SUMMARY
-          echo "- [ ] Security scan passed" >> $GITHUB_STEP_SUMMARY
-          echo "- [ ] Ready to merge to main" >> $GITHUB_STEP_SUMMARY
