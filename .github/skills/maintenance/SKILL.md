@@ -43,25 +43,33 @@ node scripts/release.mjs <patch|minor|major>
 # 2. Package for Chrome Web Store
 npm run package
 
-# 3. Generate store submission text
+# 3. Scaffold the store submission doc from the previous version
+npm run store:init -- <new-version>       # e.g. npm run store:init -- 9.2.0
+#    -> writes docs/store-submissions/v<new>-chrome-web-store.md with a TODO
+#       preamble and a raw git-log dump of commits since the previous tag.
+#    Edit Sections 7 (Changes from Previous) and 9 (Checklist), then delete
+#    the TODO comment block.
+
+# 4. Generate store submission text for the dashboard paste
 node scripts/store-prep.mjs
 
-# 4. REQUIRED: Create the submission record file (see "Chrome Web Store Submission" below)
-#    cp docs/store-submissions/v<previous>-chrome-web-store.md \
-#       docs/store-submissions/v<new>-chrome-web-store.md
-#    Then edit the "What's New" + "Changes from Previous Submission" sections.
+# 5. Upload zip to the Chrome Web Store dashboard
+#    https://chrome.google.com/webstore/devconsole
 
-# 5. Manual: upload zip to Chrome Web Store dashboard
-#    Dashboard: https://chrome.google.com/webstore/devconsole
+# 6. After the store accepts the submission, verify everything lines up
+npm run store:check                        # defaults to the latest git tag
+#    -> asserts: submission doc exists, "Submitted" date is filled, zip
+#       present, CHANGELOG entry present, public listing is on the expected
+#       version, and the public "What's New" text is not stale.
 ```
 
 **Release-doc invariant:** every released version MUST have a matching
 `docs/store-submissions/vX.Y.Z-chrome-web-store.md` file, even for
 reliability-only patch releases with no permission changes. Missing docs
 force the next reviewer (human or AI) to reconstruct the submission state
-from commit history — which is slow and error-prone. If you find a gap
-(e.g. v9.1.0 shipped but no doc exists), backfill it retroactively from
-CHANGELOG + git log.
+from commit history — which is slow and error-prone. `npm run store:check`
+is the machine-enforced gate for this invariant; run it as part of any
+post-release sanity pass and treat a failing run as a blocker.
 
 ### Semver Decision Tree
 
@@ -89,11 +97,13 @@ Use `--dry-run` to preview without making changes.
 ## Chrome Web Store Submission
 
 ### Quick Steps
-1. **Write the submission record first** — copy the most recent
-   `docs/store-submissions/vX.Y.Z-chrome-web-store.md` to the new version
-   and edit Sections 7 ("Changes from Previous Submission") and 9
-   ("Submission Checklist"). If permissions are unchanged, say so
-   explicitly — it speeds up review.
+1. **Scaffold the submission record first:** `npm run store:init -- X.Y.Z`.
+   This copies the most recent doc, updates headers, and inserts a TODO
+   preamble with a raw git-log dump of commits since the previous tag.
+   Rewrite Sections 7 ("Changes from Previous Submission") and 9
+   ("Submission Checklist") from that dump, then delete the TODO block.
+   If permissions are unchanged, say so explicitly in Section 7 — it is a
+   reviewer fast-path.
 2. Commit the doc: `git commit -m "docs: add Chrome Web Store submission record for vX.Y.Z"`
 3. Run `node scripts/store-prep.mjs` — prints all text you need
 4. Go to https://chrome.google.com/webstore/devconsole
@@ -102,15 +112,18 @@ Use `--dry-run` to preview without making changes.
 7. Go to "Store listing" → paste "What's new" text from Section 7 of the doc
 8. Submit for review (typically 1-3 business days)
 9. After submission: fill in the "Submitted" date at the top of the doc and commit
+10. Run `npm run store:check` — verifies the submission doc, CHANGELOG,
+    zip, and public listing are all in sync. Treat failures as blockers.
 
 ### Backfilling a missed submission doc
 
 If a version was released without a submission doc (e.g. v9.1.0):
-- Copy the previous version's doc as a starting point
-- Use `git log v<prev>..v<current> --oneline` to enumerate changes
-- Use `git diff v<prev>..v<current> manifest.json` to confirm any permission deltas
-- Explicitly state "No new permissions" in Section 7 if true — it's a reviewer fast-path
-- File the doc even if the version has already been submitted; it's the historical record
+- `npm run store:init -- <missed-version>` — scaffolds from the previous doc
+  and generates the git-log dump automatically.
+- `git diff v<prev>..v<current> manifest.json` — confirm any permission deltas
+- Explicitly state "No new permissions" in Section 7 if true — reviewer fast-path
+- File the doc even if the version has already been submitted — it is the
+  historical record and unblocks `npm run store:check`.
 
 ### Permission Justifications (if reviewer asks)
 
