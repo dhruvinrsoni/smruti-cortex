@@ -45,93 +45,77 @@ Navigate here first — don't broad-search when the location is known:
 
 ## Common Commands
 
+**Develop:**
+
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm test` | Run full unit test suite (1,233+ tests, 46 files) | ~60s |
-| `npx playwright test` | Run E2E tests (45 tests, 7 specs, requires `npm run build:prod` first) | ~60s |
-| `node scripts/e2e-slowmo.mjs [ms]` | E2E tests in slow-mo (visual debugging, default 400ms) | ~5min |
-| `npx vitest run --coverage --pool=forks` | Unit tests + v8 coverage report | ~30s |
+| `npm run build` | Dev build (source maps) | ~10s |
+| `npm run build:prod` | Production build (minified) | ~30s |
+| `npm run start:watch` | Watch mode (rebuild on file save) | continuous |
+
+**Test:**
+
+| Command | Purpose | Speed |
+|---------|---------|-------|
+| `npm test` | Unit tests (1,233+ tests, 46 files) | ~60s |
+| `npm run test:watch` | Unit tests in watch mode | continuous |
+| `npm run coverage` | Unit tests + v8 coverage report | ~30s |
+| `npm run test:e2e` | Build + E2E tests (45 tests, 7 specs) | ~90s |
 | `npm run lint` | ESLint check (errors block, warnings inform) | ~5s |
 | `npm run lint:strict` | ESLint zero-warning check (manual cleanup use) | ~5s |
-| `npm run build:prod` | Production build (minified) | ~30s |
-| `npm run build:dev` | Dev build (source maps) | ~10s |
-| `npm run package` | Build + zip for Chrome Web Store | ~35s |
-| `npm run verify` | Full codebase verification (runs ALL steps, reports at end) | ~4min |
-| `npm run verify -- --no-e2e` | Same as verify but skips E2E tests | ~2min |
-| `npm run verify -- --e2e-slowmo` | Verify with E2E in slow-mo (visual debugging) | ~8min |
-| `npm run preflight` | Pre-release check: verify + prod release validations | ~6min |
+
+**Ship:**
+
+| Command | Purpose | Speed |
+|---------|---------|-------|
+| `npm run verify` | Full verification (lint + builds + tests, reports at end) | ~4min |
+| `npm run preflight` | Verify + prod release validations | ~6min |
 | `npm run release:patch` | Full release pipeline (patch bump) | ~60s |
 | `npm run release:minor` | Full release pipeline (minor bump) | ~60s |
 | `npm run release:major` | Full release pipeline (major bump) | ~60s |
-| `npm run release:patch -- --dry-run` | Dry-run: preview a patch release without pushing | ~30s |
-| `npm version patch\|minor\|major` | Quick version bump only (syncs manifest.json, commits, tags) | instant |
 | `npm run store-prep` | Print Chrome Web Store submission text | instant |
+| `npm run store:check` | Verify store submission doc exists for current version | instant |
 
-**Note:** Pre-commit hook (`scripts/pre-commit-check.js`) runs build+test+coverage for product files. Skips for docs-only changes. Override with `FORCE_PRE_COMMIT=1`.
+**Tips:**
+- Append `-- --dry-run` to any release command to preview without pushing.
+- Append `-- --no-e2e` to verify to skip E2E tests, or `-- --e2e-slowmo` for visual debugging.
+- Run `npm run publish:coverage` after `npm run coverage` to publish the report to GitHub Pages.
+- Pre-commit hook runs build+test+coverage automatically. Override with `FORCE_PRE_COMMIT=1`.
 
 ---
 
 ## Scripts Quick Reference
 
-Quick-reference for the build/release scripts. Useful if you come back after 6 months.
+Quick-reference for when you come back after 6 months.
 
-### `npm run verify` (`scripts/verify.mjs`)
-**What:** Runs lint → build:dev → build:prod → unit tests with coverage → E2E tests (full speed).
-**Key behavior:** Runs ALL steps even if one fails, then shows a summary table at the end so you can fix everything in one go. Pass `--no-e2e` to skip E2E, or `--e2e-slowmo` to run E2E with visual slow-motion for debugging.
-**When to use:** After big changes, before merging, or whenever you want full confidence.
+### Verification & Release Pipeline
 
-### `npm run preflight` (`scripts/preflight.mjs`)
-**What:** Runs `npm run verify` first, then adds production release checks:
-- **Version sync** — confirms `package.json` and `manifest.json` have the same version (they can drift if you manually edit one)
-- **Manifest MV3 validation** — confirms `manifest_version: 3`, name/description present, required permissions (`history`, `storage`, `activeTab`, `tabs`) are declared
-- **dist/ integrity** — no underscore directories (Chrome MV3 rejects `_` dirs), all 6 critical output files exist
-- **Package zip** — creates the `release/smruti-cortex-vX.Y.Z.zip` ready to upload
-- **Git status** — warns if working tree is dirty or you're not on `main`
-- **Store prep preview** — prints the "What's New" text, permission justifications, and privacy summary
-**When to use:** Right before running `release.mjs`. This is your "are we cleared for takeoff?" check.
+| Script | What it does |
+|--------|-------------|
+| `npm run verify` | Runs lint, dev build, prod build, unit tests (with coverage), E2E tests. Runs ALL steps even if one fails, reports at end. Flags: `--no-e2e`, `--e2e-slowmo`. |
+| `npm run preflight` | Runs verify, then checks version sync, manifest MV3 validation, dist/ integrity, package zip, git status. "Cleared for takeoff?" check. |
+| `npm run release:patch\|minor\|major` | Full release: preflight, bump, changelog, commit, tag, push, GitHub Release, zip. Append `-- --dry-run` to preview. |
+| `npm run store-prep` | Prints "What's New", permission justifications, privacy summary for Chrome Web Store submission form. |
+| `npm run store:check` | Verifies `docs/store-submissions/vX.Y.Z-chrome-web-store.md` exists for the current version. Use `--init` to scaffold it. |
 
-### `npm run release:patch/minor/major` (`scripts/release.mjs`)
-**What:** Fully automated release pipeline:
-1. Validates: must be on `main`, clean tree, `gh` CLI installed
-2. Bumps version in `package.json` (e.g. 9.0.0 → 9.1.0)
-3. Syncs version to `manifest.json` via `sync-version.mjs`
-4. Generates changelog from git commit history (grouped by `feat:`, `fix:`, etc.)
-5. Runs tests and prod build (aborts and reverts if either fails)
-6. Commits `package.json` + `manifest.json` + `CHANGELOG.md`
-7. Creates git tag `vX.Y.Z`
-8. Pushes commit and tag to origin
-9. Creates GitHub Release with changelog notes
-10. Packages zip for Chrome Web Store upload
+### Version Syncing
 
-**Convenience scripts:**
-- `npm run release:patch` / `release:minor` / `release:major` — real release
-- Append `-- --dry-run` to any of the above to preview without pushing
+`package.json` is the single source of truth for version numbers. Two mechanisms keep `manifest.json` in sync:
+- **Tier 3 (npm lifecycle):** `npm version patch/minor/major` triggers the `version` hook which calls `sync-version.mjs` and stages `manifest.json`.
+- **Tier 2 (build-time fallback):** `sync-version.mjs` runs at the start of every `build` and `build:prod`, catching any drift.
 
-### `npm run store-prep` (`scripts/store-prep.mjs`)
-**What:** Generates copy-paste text for Chrome Web Store submission:
-- "What's New" text (≤500 chars, extracted from `CHANGELOG.md`)
-- Permission justifications (one-liner for each permission explaining why it's needed)
-- Privacy summary (all data local, no telemetry, etc.)
-- Upload path for the zip file
-**When to use:** After `release.mjs`, when you're filling out the Chrome Web Store submission form.
-
-### `scripts/sync-version.mjs` + npm version lifecycle hooks
-**What:** Copies the version string from `package.json` → `manifest.json`. `package.json` is the single source of truth for version numbers.
-
-**Two paths keep versions in sync (Tier 3 with Tier 2 fallback):**
-- **Tier 3 (npm lifecycle):** Running `npm version patch/minor/major` triggers the `version` hook in `package.json`, which calls `sync-version.mjs` and stages `manifest.json` — both files are committed together automatically by npm.
-- **Tier 2 (build-time fallback):** `sync-version.mjs` also runs at the start of every `npm run build` and `npm run build:prod`, so even if `npm version` is bypassed, the next build catches any drift.
-
-**Quick bump (no full release):** `npm version patch` — bumps both files, commits, and tags. Does NOT push, build, or create a GitHub Release. Use `npm run release:*` for the full pipeline.
+Quick bump (no full release): `npm version patch` — bumps both files, commits, tags. Does NOT push or create a GitHub Release.
 
 ### Pre-commit hook (`scripts/pre-commit-check.js`)
-**What:** Runs automatically on every `git commit`:
+
+Runs automatically on every `git commit`:
 1. Detects staged files — skips if only docs/config changed
 2. ESLint auto-fix on staged `.ts` files
 3. Build (dev) — blocking
 4. Build (prod) — blocking
 5. Unit tests with coverage — non-blocking (warns but doesn't block)
-**Override:** `FORCE_PRE_COMMIT=1 git commit ...` to force checks even for docs-only changes.
+
+Override: `FORCE_PRE_COMMIT=1 git commit ...` to force checks even for docs-only changes.
 
 ---
 
