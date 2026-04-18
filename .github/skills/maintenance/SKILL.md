@@ -208,6 +208,13 @@ Each layer adds exactly one concern. Lower layers never depend on upper layers.
 
 ---
 
+## Troubleshooting
+
+- **`_metadata` error on Load Unpacked**: CWS adds `_metadata/` to published packages for integrity verification. Chrome rejects it during "Load Unpacked". Fix: unzip, then run `npm run unpack:cws -- <folder>` to strip reserved entries.
+- **Canonical local testing**: Use `npm run build:prod` then "Load Unpacked" on `dist/` — this is identical to shipped code and has no `_metadata/`.
+
+---
+
 ## Commit Convention
 
 | Prefix | Meaning | Triggers |
