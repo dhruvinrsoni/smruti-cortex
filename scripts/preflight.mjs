@@ -3,13 +3,12 @@
 /**
  * preflight.mjs — Full pre-release verification pipeline.
  *
- * Runs `npm run verify` (lint + build + build:prod + coverage + E2E)
+ * Runs `npm run verify` (lint + build:prod + coverage + E2E)
  * then performs additional prod-release checks:
  *   - Bundle size benchmark (thresholds + dist integrity)
  *   - manifest.json / package.json version sync
  *   - manifest_version === 3
  *   - No forbidden underscore dirs in dist/
- *   - Package zip creation
  *   - store-prep output preview
  *   - Git working tree cleanliness
  *
@@ -23,6 +22,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
+const noE2E = process.argv.includes('--no-e2e');
 
 const BOLD = '\x1b[1m';
 const GREEN = '\x1b[32m';
@@ -64,8 +64,9 @@ function runInherit(cmd) {
 // Phase 1: npm run verify (lint + build + coverage + E2E)
 // ─────────────────────────────────────────────────
 header('PHASE 1 — Full Verification (npm run verify)');
+const verifyCmd = noE2E ? 'npm run verify -- --no-e2e' : 'npm run verify';
 try {
-  runInherit('npm run verify');
+  runInherit(verifyCmd);
   pass('npm run verify passed');
 } catch {
   fail('npm run verify failed — fix errors above before releasing');
@@ -168,20 +169,9 @@ if (!existsSync(distDir)) {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 5: Package Zip
+// Phase 5: Git Status
 // ─────────────────────────────────────────────────
-header('PHASE 5 — Package Zip');
-try {
-  runInherit('node ./scripts/package.mjs');
-  pass('Package zip created successfully');
-} catch {
-  fail('Package zip creation failed');
-}
-
-// ─────────────────────────────────────────────────
-// Phase 6: Git Status
-// ─────────────────────────────────────────────────
-header('PHASE 6 — Git Status');
+header('PHASE 5 — Git Status');
 
 try {
   const status = run('git status --porcelain').trim();
@@ -207,9 +197,9 @@ try {
 }
 
 // ─────────────────────────────────────────────────
-// Phase 7: Store Prep Preview
+// Phase 6: Store Prep Preview
 // ─────────────────────────────────────────────────
-header('PHASE 7 — Store Prep Preview');
+header('PHASE 6 — Store Prep Preview');
 try {
   const storeOutput = run('node ./scripts/store-prep.mjs');
   console.log(storeOutput);
@@ -229,8 +219,7 @@ if (failCount === 0 && warnCount === 0) {
   console.log(`\n${GREEN}${BOLD}🚀 ALL CLEAR — Ready for takeoff!${RESET}`);
   console.log(`${GREEN}   Version ${pkg.version} is production-ready.${RESET}`);
   console.log(`\n   Next steps:`);
-  console.log(`   1. node scripts/release.mjs <patch|minor|major>`);
-  console.log(`   2. Upload zip from release/ to Chrome Web Store`);
+  console.log(`   1. npm run ship <patch|minor|major>`);
 } else if (failCount === 0) {
   console.log(`\n${YELLOW}${BOLD}⚠️  CLEAR WITH WARNINGS — ${warnCount} warning(s)${RESET}`);
   console.log(`${YELLOW}   Review warnings above before releasing.${RESET}`);
