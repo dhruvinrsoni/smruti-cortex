@@ -179,6 +179,8 @@ Emergency release override: `npm run ship patch -- --skip-e2e` — skips only E2
 | `npm run test:e2e` | Build + run Playwright E2E tests |
 
 The daily commands above call these internally; these are the escape hatches.
+
+`verify` → `preflight` → `ship` is a strict hierarchy: each layer includes the one below it. `verify` and `preflight` are read-only; only `ship` writes.
 </details>
 
 **Project Structure:**

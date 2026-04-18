@@ -190,6 +190,17 @@ npm run ship patch
 
 ## CI Notes
 
+### Release Pipeline Hierarchy
+
+```
+verify       Codebase is sound           (no writes)
+  └─ preflight  Ready to release         (no writes, includes verify)
+       └─ ship  Do the release           (writes, includes preflight)
+```
+
+Each layer adds exactly one concern. Lower layers never depend on upper layers.
+`--skip-e2e` (ship) translates to `--no-e2e` (verify/preflight) at the boundary.
+
 - **Pre-commit hook** (~20s): build:prod + unit tests. Smart-skips for docs-only changes.
 - **Archived workflows**: `.github/workflows/archived/` — intentionally disabled. See `archived/README.md` for revive instructions.
 - **Dependabot**: weekly grouped npm PRs (minor+patch), monthly GitHub Actions bumps. Existing CI gates enforce safety on every PR.
