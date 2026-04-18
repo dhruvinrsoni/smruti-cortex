@@ -214,7 +214,7 @@ function setupPortBasedMessaging() {
             portRateWindowStart = now;
           }
           if (++portSearchCount > PORT_RATE_LIMIT) {
-            logger.warn('portMessage', `Rate limited: ${portSearchCount} searches in window`);
+            logger.debug('portMessage', `Rate limited: ${portSearchCount} searches in window`);
             try { port.postMessage({ error: 'Rate limited', query: msg.query }); } catch { /* port closed */ }
             return;
           }

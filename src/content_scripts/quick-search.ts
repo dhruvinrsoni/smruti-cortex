@@ -1221,13 +1221,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
             return;
           }
+          if (response.error === 'Rate limited') {
+            log.debug('port', 'Rate limited by service worker — debounce will retry');
+            aiSearchPending = false;
+            hideSpinner();
+            const query = inputEl?.value?.trim() || '';
+            if (!query) { loadRecentHistory(); }
+            return;
+          }
           log.warn('port', 'Error response from service worker:', response.error);
           aiSearchPending = false;
           hideSpinner();
-          if (response.error === 'Rate limited') {
-            const query = inputEl?.value?.trim() || '';
-            if (!query) { loadRecentHistory(); }
-          }
           return;
         }
 
