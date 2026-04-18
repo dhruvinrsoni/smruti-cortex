@@ -2,6 +2,44 @@
 
 All notable changes to SmrutiCortex are documented here.
 
+## [9.1.0] — 2026-04-16
+
+Reliability, observability, and release-infrastructure release. **No new permissions, no new user-facing features that require reviewer attention.** Chrome Web Store submission record: [`docs/store-submissions/v9.1.0-chrome-web-store.md`](docs/store-submissions/v9.1.0-chrome-web-store.md).
+
+### Features
+- **AOP-inspired tracing framework** — New `@Traced` decorator and `traced()` function wrapper for end-to-end observability; applied to embedding, search, cache, and database modules
+- **Self-healing hardening** — Unified Troubleshooter consolidates extension self-recovery paths
+- **`verify.mjs`** — Run-all-and-report script combining lint, tests, coverage, build, and E2E in a single invocation
+- **Coverage in pre-commit** — Coverage threshold gated in pre-commit hook and `verify`/`preflight` scripts
+- **Release convenience scripts** — Tier 3 version sync hooks and helper scripts for common release paths
+- **Bundle-size benchmark as release gate** — Preflight blocks release if bundle size regresses past configured thresholds
+
+### Bug Fixes
+- **Service-worker cold start** — Register `chrome.runtime.onMessage` listener synchronously so the very first message after SW hibernation is received reliably
+- **Quick-search blank overlay** — Fix regression caused by stale port and port rate-limiting edge cases; also eliminates popup `lastError: message port closed` warnings
+- **Favicon resilience** — Use fallback SVG for tab favicons with empty URLs in quick-search; harden against empty favicons, unchecked `lastError`, and context invalidation during favicon fetch
+- **Embedding processor** — Skip redundant restart when already completed
+- **Embedding semantics** — Correct 0-dimension embedding handling (no longer treated as valid); reduce AI/embedding log noise; remove session-cap busy-wait
+- **E2E speed** — Run E2E at full speed by default; slow-mo is now explicit opt-in
+- **Lint** — Remove unused variables flagged by ESLint
+
+### Code Quality / Infrastructure
+- **`lint:strict` script** — Zero-warning lint invocation for CI; ESLint rules relaxed appropriately for test files
+- **`.gitattributes`** — Enforces LF line endings, eliminating phantom diffs across Windows/macOS contributors
+- **Build pipeline consolidation** — Inlined `clean` / `sync-version` / `tsc` steps into the build pipelines; removed redundant `release:*:dry` / `test:coverage` / base `release` npm scripts; removed Docker npm scripts
+- **E2E slow-mo aliases collapsed** into a smaller, clearer npm script surface
+- **Benchmark + screenshots-index + e2e-slowmo scripts** — All now support `--help` with usage docs
+- **Test update** — Omnibox `sendMessage` assertion updated to expect `lastError` callback
+
+### Testing
+- **1,233 unit tests across 46 files + 45 E2E tests across 7 specs** — Unchanged totals from v9.0.0; existing tests updated to cover the reliability fixes above
+
+### Docs
+- Documented E2E fast vs slow-mo modes, verify flags, and troubleshooting
+- Added screenshots for AI embedding completion and semantic search results
+
+---
+
 ## [9.0.0] — 2026-04-13
 
 ### Features
