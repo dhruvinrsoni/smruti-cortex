@@ -51,24 +51,23 @@ function makeNoOpProxy(): any {
 }
 
 export const browserAPI = (() => {
-    if (typeof chrome !== 'undefined') {
-        // MV3 Chrome, Edge, Brave, Opera
-        return chrome;
-    }
-    if (typeof browser !== 'undefined') {
-        // Firefox, Safari (WebExtension polyfill)
-        return browser;
-    }
-    // Fallback proxy for test/non-extension environments.
-    // Reads from globalThis.chrome/browser at access time so test mocks
-    // set up after module evaluation are still picked up.
+    // Always use a dynamic proxy that reads from `globalThis.chrome` or
+    // `globalThis.browser` on property access. This avoids capturing a
+    // snapshot of the `chrome` object at module-eval time which makes
+    // tests brittle when they `vi.stubGlobal('chrome', ...)` during a
+    // single test run. The proxy forwards functions with the correct
+    // receiver so calls like `chrome.tabs.query()` continue to work.
     const handler = {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         get(_target: any, prop: string) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const real = (globalThis as any).chrome ?? (globalThis as any).browser;
             if (real && prop in real) {
-                return real[prop];
+                const val = real[prop];
+                if (typeof val === 'function') {
+                    return val.bind(real);
+                }
+                return val;
             }
             // Return a deep no-op proxy so nested access like
             // .runtime.onConnect.addListener never throws.
