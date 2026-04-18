@@ -46,9 +46,22 @@ npm run package
 # 3. Generate store submission text
 node scripts/store-prep.mjs
 
-# 4. Manual: upload zip to Chrome Web Store dashboard
+# 4. REQUIRED: Create the submission record file (see "Chrome Web Store Submission" below)
+#    cp docs/store-submissions/v<previous>-chrome-web-store.md \
+#       docs/store-submissions/v<new>-chrome-web-store.md
+#    Then edit the "What's New" + "Changes from Previous Submission" sections.
+
+# 5. Manual: upload zip to Chrome Web Store dashboard
 #    Dashboard: https://chrome.google.com/webstore/devconsole
 ```
+
+**Release-doc invariant:** every released version MUST have a matching
+`docs/store-submissions/vX.Y.Z-chrome-web-store.md` file, even for
+reliability-only patch releases with no permission changes. Missing docs
+force the next reviewer (human or AI) to reconstruct the submission state
+from commit history — which is slow and error-prone. If you find a gap
+(e.g. v9.1.0 shipped but no doc exists), backfill it retroactively from
+CHANGELOG + git log.
 
 ### Semver Decision Tree
 
@@ -76,12 +89,28 @@ Use `--dry-run` to preview without making changes.
 ## Chrome Web Store Submission
 
 ### Quick Steps
-1. Run `node scripts/store-prep.mjs` — prints all text you need
-2. Go to https://chrome.google.com/webstore/devconsole
-3. Select SmrutiCortex → "Package" tab → Upload new package
-4. Upload `release/smruti-cortex-vX.Y.Z.zip`
-5. Go to "Store listing" → paste "What's new" text
-6. Submit for review (typically 1-3 business days)
+1. **Write the submission record first** — copy the most recent
+   `docs/store-submissions/vX.Y.Z-chrome-web-store.md` to the new version
+   and edit Sections 7 ("Changes from Previous Submission") and 9
+   ("Submission Checklist"). If permissions are unchanged, say so
+   explicitly — it speeds up review.
+2. Commit the doc: `git commit -m "docs: add Chrome Web Store submission record for vX.Y.Z"`
+3. Run `node scripts/store-prep.mjs` — prints all text you need
+4. Go to https://chrome.google.com/webstore/devconsole
+5. Select SmrutiCortex → "Package" tab → Upload new package
+6. Upload `release/smruti-cortex-vX.Y.Z.zip`
+7. Go to "Store listing" → paste "What's new" text from Section 7 of the doc
+8. Submit for review (typically 1-3 business days)
+9. After submission: fill in the "Submitted" date at the top of the doc and commit
+
+### Backfilling a missed submission doc
+
+If a version was released without a submission doc (e.g. v9.1.0):
+- Copy the previous version's doc as a starting point
+- Use `git log v<prev>..v<current> --oneline` to enumerate changes
+- Use `git diff v<prev>..v<current> manifest.json` to confirm any permission deltas
+- Explicitly state "No new permissions" in Section 7 if true — it's a reviewer fast-path
+- File the doc even if the version has already been submitted; it's the historical record
 
 ### Permission Justifications (if reviewer asks)
 
