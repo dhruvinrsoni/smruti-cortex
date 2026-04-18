@@ -26,6 +26,7 @@
     "build": "node ./scripts/sync-version.mjs && rimraf dist && tsc --project tsconfig.json && node ./scripts/copy-static.mjs && node ./scripts/esbuild-dev.mjs",
     "build:prod": "node ./scripts/sync-version.mjs && rimraf dist && tsc --project tsconfig.json && node ./scripts/copy-static.mjs && node ./scripts/esbuild-prod.mjs",
     "package": "npm run build:prod && node ./scripts/package.mjs",
+    "ship": "node ./scripts/release.mjs",
     "release:patch": "node ./scripts/release.mjs patch",
     "release:minor": "node ./scripts/release.mjs minor",
     "release:major": "node ./scripts/release.mjs major",
