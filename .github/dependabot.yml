@@ -1,0 +1,25 @@
+# Dependabot — automated dependency updates.
+#
+# PRs go through existing CI gates (build.yml + e2e.yml + security.yml)
+# so regressions fail before merge. Most minor/patch bumps are rubber-stamp.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      dev-minor:
+        dependency-type: development
+        update-types: [minor, patch]
+      prod-minor:
+        dependency-type: production
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
