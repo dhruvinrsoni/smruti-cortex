@@ -17,7 +17,7 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
    - For quick-search: press `Ctrl+Shift+S` on any page → test
    - For settings: open popup → gear icon → verify setting works
 7. **Commit** — `fix: <concise description of what was broken and how it's fixed>`
-8. **Release** — If user wants to ship: `node scripts/release.mjs patch`
+8. **Release** — If user wants to ship: `npm run ship patch`
 
 ---
 
@@ -30,46 +30,37 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
 5. **Build** — `npm run build:prod` must succeed.
 6. **Manual test** — Same as bug fix above, focused on the new feature.
 7. **Commit** — `feat: <concise description of the new capability>`
-8. **Release** — If user wants to ship: `node scripts/release.mjs minor`
+8. **Release** — If user wants to ship: `npm run ship minor`
 
 ---
 
 ## Release Flow
 
+One command does everything:
+
 ```bash
-# 1. Automated: bumps version, updates changelog, tags, pushes, creates GitHub Release
-node scripts/release.mjs <patch|minor|major>
-
-# 2. Package for Chrome Web Store
-npm run package
-
-# 3. Scaffold the store submission doc from the previous version
-npm run store:init -- <new-version>       # e.g. npm run store:init -- 9.2.0
-#    -> writes docs/store-submissions/v<new>-chrome-web-store.md with a TODO
-#       preamble and a raw git-log dump of commits since the previous tag.
-#    Edit Sections 7 (Changes from Previous) and 9 (Checklist), then delete
-#    the TODO comment block.
-
-# 4. Generate store submission text for the dashboard paste
-node scripts/store-prep.mjs
-
-# 5. Upload zip to the Chrome Web Store dashboard
-#    https://chrome.google.com/webstore/devconsole
-
-# 6. After the store accepts the submission, verify everything lines up
-npm run store:check                        # defaults to the latest git tag
-#    -> asserts: submission doc exists, "Submitted" date is filled, zip
-#       present, CHANGELOG entry present, public listing is on the expected
-#       version, and the public "What's New" text is not stale.
+npm run ship <patch|minor|major>
 ```
 
+This runs, in strict order:
+1. Validate prerequisites (main branch, clean tree, gh CLI)
+2. Full verify gate: lint + build:prod + unit tests + E2E — **before any disk writes**
+3. Bump package.json, sync manifest.json
+4. Re-build with new version, package zip
+5. Generate CHANGELOG, scaffold submission doc via `store:init`
+6. Single commit, tag, push, create GitHub Release
+7. Print next-steps (zip path, CWS dashboard URL)
+
+After it finishes: drag-drop the zip into the CWS dashboard, paste the "What's New" text, submit.
+
+**Emergency override:** `npm run ship patch -- --skip-e2e` skips only E2E tests. Prints a warning and records `[ship-override: skip-e2e]` in the commit body. Lint, build, and unit tests always run.
+
+**Post-release:** `npm run store:check` verifies the submission doc, CHANGELOG entry, zip, and public CWS listing are all in sync. Treat failures as blockers.
+
 **Release-doc invariant:** every released version MUST have a matching
-`docs/store-submissions/vX.Y.Z-chrome-web-store.md` file, even for
-reliability-only patch releases with no permission changes. Missing docs
-force the next reviewer (human or AI) to reconstruct the submission state
-from commit history — which is slow and error-prone. `npm run store:check`
-is the machine-enforced gate for this invariant; run it as part of any
-post-release sanity pass and treat a failing run as a blocker.
+`docs/store-submissions/vX.Y.Z-chrome-web-store.md` file. The ship command
+auto-scaffolds this. Edit Sections 7 (Changes) and 9 (Checklist), then
+delete the TODO preamble. `npm run store:check` is the machine-enforced gate.
 
 ### Semver Decision Tree
 
@@ -80,50 +71,29 @@ post-release sanity pass and treat a failing run as a blocker.
 | Breaking change, removed feature | `major` | Change settings schema, remove API |
 | Docs only, CI only | No release needed | README, workflows, screenshots |
 
-### Release Script Details (`scripts/release.mjs`)
-
-The script does everything automatically:
-- Validates: clean tree, on main branch, tests pass, build succeeds
-- Bumps version in `package.json` → syncs to `manifest.json`
-- Generates changelog from conventional commits since last tag
-- Commits, tags, pushes to origin
-- Creates GitHub Release with changelog
-- Runs `npm run package` for the store zip
-
-Use `--dry-run` to preview without making changes.
+Use `--dry-run` to preview the version bump without making changes.
 
 ---
 
 ## Chrome Web Store Submission
 
 ### Quick Steps
-1. **Scaffold the submission record first:** `npm run store:init -- X.Y.Z`.
-   This copies the most recent doc, updates headers, and inserts a TODO
-   preamble with a raw git-log dump of commits since the previous tag.
-   Rewrite Sections 7 ("Changes from Previous Submission") and 9
-   ("Submission Checklist") from that dump, then delete the TODO block.
-   If permissions are unchanged, say so explicitly in Section 7 — it is a
-   reviewer fast-path.
-2. Commit the doc: `git commit -m "docs: add Chrome Web Store submission record for vX.Y.Z"`
-3. Run `node scripts/store-prep.mjs` — prints all text you need
+1. `npm run ship <patch|minor|major>` — auto-scaffolds the submission doc
+2. Edit `docs/store-submissions/vX.Y.Z-chrome-web-store.md` — fill Sections 7 and 9, delete TODO preamble
+3. If permissions unchanged, say so explicitly in Section 7 (reviewer fast-path)
 4. Go to https://chrome.google.com/webstore/devconsole
-5. Select SmrutiCortex → "Package" tab → Upload new package
-6. Upload `release/smruti-cortex-vX.Y.Z.zip`
-7. Go to "Store listing" → paste "What's new" text from Section 7 of the doc
-8. Submit for review (typically 1-3 business days)
-9. After submission: fill in the "Submitted" date at the top of the doc and commit
-10. Run `npm run store:check` — verifies the submission doc, CHANGELOG,
-    zip, and public listing are all in sync. Treat failures as blockers.
+5. Upload `release/smruti-cortex-vX.Y.Z.zip` (path printed by ship command)
+6. Paste "What's new" text from Section 7 of the doc
+7. Submit for review (typically 1-3 business days)
+8. After submission: fill in the "Submitted" date and commit
+9. `npm run store:check` — verify everything is in sync
 
 ### Backfilling a missed submission doc
 
-If a version was released without a submission doc (e.g. v9.1.0):
+If a version was released without a submission doc:
 - `npm run store:init -- <missed-version>` — scaffolds from the previous doc
-  and generates the git-log dump automatically.
-- `git diff v<prev>..v<current> manifest.json` — confirm any permission deltas
-- Explicitly state "No new permissions" in Section 7 if true — reviewer fast-path
-- File the doc even if the version has already been submitted — it is the
-  historical record and unblocks `npm run store:check`.
+- `git diff v<prev>..v<current> manifest.json` — confirm permission deltas
+- File the doc even if already submitted — it unblocks `npm run store:check`
 
 ### Permission Justifications (if reviewer asks)
 
@@ -184,11 +154,12 @@ After loading unpacked from `dist/`:
 Run after ANY code change:
 
 ```bash
-npm test                    # all tests pass (1,233+ unit tests across 46 files)
-npm run build:prod          # Compiles with zero errors
-npm run lint                # No new warnings above threshold
-npx playwright test         # 45 E2E tests across 7 spec files (requires build first)
+npm run verify              # lint + build:prod + unit tests + E2E — one command
 ```
+
+Or individually: `npm test`, `npm run build:prod`, `npm run lint`, `npx playwright test`.
+
+Pre-commit hook runs build:prod + unit tests (~20s) on every commit automatically.
 
 Critical paths to manually verify:
 1. Popup opens and shows results
@@ -210,12 +181,19 @@ git revert HEAD             # If only the release commit needs reverting
 git reset --hard v8.0.0     # Reset to last known good tag (destructive)
 
 # 2. Bump patch and re-release
-node scripts/release.mjs patch
+npm run ship patch
 
-# 3. Re-upload to Chrome Web Store
-npm run package
-node scripts/store-prep.mjs
+# 3. Drag-drop the printed zip into the CWS dashboard
 ```
+
+---
+
+## CI Notes
+
+- **Pre-commit hook** (~20s): build:prod + unit tests. Smart-skips for docs-only changes.
+- **Archived workflows**: `.github/workflows/archived/` — intentionally disabled. See `archived/README.md` for revive instructions.
+- **Dependabot**: weekly grouped npm PRs (minor+patch), monthly GitHub Actions bumps. Existing CI gates enforce safety on every PR.
+- **CWS upload**: always manual (drag-drop). No API automation — minimal security surface for LTS.
 
 ---
 

@@ -151,65 +151,34 @@ Enable/disable modes in Settings → Command Palette. Advanced Browser Commands 
 
 ## 🛠️ Development
 
-```bash
-# Build
-npm run build        # Development (with source maps)
-npm run build:prod   # Production (minified)
+### Daily Commands
 
-# Quality
-npm run lint         # Check code
-npm run test         # Run tests
-npm run coverage     # Run tests with coverage report
+| Command | When to use |
+|---------|-------------|
+| `git commit` | Pre-commit hook runs lint + build + tests (~20s). That's the safety net. |
+| `npm test` | Iterate on unit tests (fast, ~5s focused run with `-- <pattern>` args). |
+| `npm run verify` | Paranoid "did I break anything?" check before opening a PR. |
+| `npm run ship <patch\|minor\|major>` | Full release: verify gate, bump, changelog, commit, tag, push, GitHub Release, zip. Drag-drop the printed zip into the CWS dashboard. |
+| `npm run store:check` | Post-release: confirm CWS listing reflects the new version. |
 
-# Publish local coverage (for contributors)
-# - Copies the local `coverage/` HTML into `docs/quality-report/coverage` so it can be published.
-# - CI already publishes coverage for runs on `main`; this helper is for local snapshots.
-```bash
-# 1. Run tests with coverage
-npm run coverage
-# 2. Copy coverage HTML into the docs tree (helper)
-npm run publish:coverage
-# 3. To publish the snapshot publicly, force-add and commit the generated docs (these files are ignored by default)
-git add -f docs/quality-report/coverage
-git commit -m "docs: publish coverage HTML to docs/quality-report/coverage [skip ci]"
-git push origin HEAD
-```
-
-# Quality report workflow (non-blocking quality indicator)
-# See GitHub Actions -> "Quality Report" for shareable summary and artifacts
-
-# Pre-commit hooks (automatic)
-# Husky automatically runs builds before each commit
-# If builds fail, you'll be prompted to continue or abort
-
-# Package
-npm run package      # Create store-ready zip
-
-# Docker (alternative build method)
-npm run docker-compose-build  # Build in container
-npm run docker-compose-dev    # Watch mode in container
-npm run docker-compose-test   # Test in container
-npm run docker-validate       # Validate Docker setup (auto-cleanup)
-npm run docker-clean          # Manual cleanup volumes/containers
-```
+Emergency release override: `npm run ship patch -- --skip-e2e` — skips only E2E; prints a warning and records `[ship-override]` in the commit.
 
 <details>
-<summary><strong>Docker Build (Optional)</strong></summary>
+<summary><strong>Advanced / occasional commands</strong></summary>
 
-Build without installing Node.js locally:
-```bash
-# Prerequisites: Docker Desktop or Docker Engine
-npm run docker-validate       # Full validation with auto-cleanup
+| Command | Purpose |
+|---------|---------|
+| `npm run lint` | ESLint check |
+| `npm run build:prod` | Production build (minified) |
+| `npm run build` | Dev build (source maps) |
+| `npm run coverage` | Unit tests + v8 coverage report |
+| `npm run preflight` | Full pre-release verification pipeline |
+| `npm run store:init -- <version>` | Scaffold store submission doc from previous |
+| `npm run store-prep` | Print Chrome Web Store submission text |
+| `npm run package` | Create store-ready zip |
+| `npm run test:e2e` | Build + run Playwright E2E tests |
 
-# Or build directly
-npm run docker-compose-build  # Produces dist/ using containerized build
-
-# Manual cleanup if needed
-npm run docker-clean
-
-# Or use docker-compose directly
-docker-compose run --rm build
-```
+The daily commands above call these internally; these are the escape hatches.
 </details>
 
 **Project Structure:**
@@ -349,16 +318,6 @@ Production-grade safety layers protect your browser — every AI feature degrade
 
 > **Important:** You must manually pull models before enabling features. SmrutiCortex cannot download models — Ollama manages model downloads.
 
-### 🔍 Quality Checks
-
-```bash
-npm run lint        # ESLint code quality
-npm run test        # Run all tests
-npm run build       # Verify build
-```
-
-**Before committing:** Run all three commands above.
-
 ---
 
 ## 🧪 Test Infrastructure
@@ -399,9 +358,9 @@ node scripts/e2e-slowmo.mjs                 # E2E in slow-motion (see docs/E2E_T
 1. Fork repo
 2. Create feature branch
 3. Make changes
-4. **Pre-commit hooks automatically run `npm run build` and `npm run build:prod`**
-   - If builds pass: commit proceeds
-   - If builds fail: you'll be prompted to continue or abort
+4. **Pre-commit hook automatically runs build:prod + tests (~20s)**
+   - If checks pass: commit proceeds
+   - If checks fail: you'll be prompted to continue or abort
 5. Submit PR
 
 **Keep it minimal.** No unnecessary code.
