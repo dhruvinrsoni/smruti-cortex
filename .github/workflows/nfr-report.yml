@@ -1,4 +1,4 @@
-﻿name: Quality Report
+name: Quality Report
 
 # Purpose: Consolidated quality checks (informational only).
 # Includes: lint, tests, coverage, security audit, bundle/performance checks.
@@ -589,7 +589,7 @@ jobs:
 
       - name: PR coverage comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const marker = '<!-- nfr-coverage-comment -->';
