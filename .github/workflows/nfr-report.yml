@@ -1,4 +1,4 @@
-﻿name: Quality Report
+name: Quality Report
 
 # Purpose: Consolidated quality checks (informational only).
 # Includes: lint, tests, coverage, security audit, bundle/performance checks.
@@ -501,7 +501,7 @@ jobs:
 
       - name: Upload NFR artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-report-bundle-${{ github.run_number }}
           path: |
