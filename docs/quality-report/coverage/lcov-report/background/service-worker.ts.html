@@ -30,9 +30,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">46.62% </span>
+                <span class="strong">46.63% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>276/592</span>
+                <span class='fraction'>277/594</span>
             </div>
         
             
@@ -2162,7 +2162,12 @@
 <a name='L2097'></a><a href='#L2097'>2097</a>
 <a name='L2098'></a><a href='#L2098'>2098</a>
 <a name='L2099'></a><a href='#L2099'>2099</a>
-<a name='L2100'></a><a href='#L2100'>2100</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L2100'></a><a href='#L2100'>2100</a>
+<a name='L2101'></a><a href='#L2101'>2101</a>
+<a name='L2102'></a><a href='#L2102'>2102</a>
+<a name='L2103'></a><a href='#L2103'>2103</a>
+<a name='L2104'></a><a href='#L2104'>2104</a>
+<a name='L2105'></a><a href='#L2105'>2105</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -2434,6 +2439,11 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">78x</span>
 <span class="cline-any cline-yes">78x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">78x</span>
 <span class="cline-any cline-yes">78x</span>
 <span class="cline-any cline-yes">78x</span>
@@ -4278,7 +4288,7 @@ import { ingestHistory, performFullRebuild } from './indexing';
 import { runSearch } from './search/search-engine';
 import { mergeMetadata } from './indexing';
 import { browserAPI } from '../core/helpers';
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { clearAndRebuild, checkHealth, selfHeal, startHealthMonitoring, recoverFromCorruption, ensureReady, handleQuotaExceeded } from './resilience';
 &nbsp;
@@ -4477,7 +4487,7 @@ function setupPortBasedMessaging() {
 <span class="cstat-no" title="statement not covered" >            portRateWindowStart = now;</span>
           }
           <span class="missing-if-branch" title="if path not taken" >I</span>if (++portSearchCount &gt; PORT_RATE_LIMIT) {
-<span class="cstat-no" title="statement not covered" >            logger.warn('portMessage', `Rate limited: ${portSearchCount} searches in window`);</span>
+<span class="cstat-no" title="statement not covered" >            logger.debug('portMessage', `Rate limited: ${portSearchCount} searches in window`);</span>
 <span class="cstat-no" title="statement not covered" >            try { <span class="cstat-no" title="statement not covered" >port.postMessage({ error: 'Rate limited', query: msg.query }); }</span> catch { /* port closed */ }</span>
 <span class="cstat-no" title="statement not covered" >            return;</span>
           }
@@ -4507,7 +4517,7 @@ function setupPortBasedMessaging() {
               try { port.postMessage({ results, aiStatus, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed during async search */ }
             }
           } catch (error) {
-<span class="cstat-no" title="statement not covered" >            logger.error('portMessage', 'Search error:', error);</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('portMessage', 'Search error:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >            if (!portDisconnected) {</span>
 <span class="cstat-no" title="statement not covered" >              try { <span class="cstat-no" title="statement not covered" >port.postMessage({ error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI }); }</span> catch { /* port closed */ }</span>
             }
@@ -4531,8 +4541,13 @@ setupPortBasedMessaging();
 // laptop hibernation). The handler itself gates init-dependent messages behind
 // `await initializationPromise` so they wait for DB/indexing to finish.
 browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
-  logger.trace('onMessage', 'Message listener triggered with message:', msg);
-  logger.trace('onMessage', 'Sender:', sender);
+  logger.trace('onMessage', `Message received: type=${msg?.type ?? <span class="branch-1 cbranch-no" title="branch not covered" >'unknown'}</span>`);
+  logger.trace('onMessage', 'Sender:', {
+    tabId: sender.tab?.id,
+    url: sender.tab?.url,
+    frameId: sender.frameId,
+    origin: sender.origin,
+  });
   (async () =&gt; {
     logger.trace('onMessage', 'Processing message asynchronously');
     try {
@@ -4620,7 +4635,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
               const formatted = formatMetricsForDisplay(metrics, storage);
               sendResponse({ status: 'OK', metrics, formatted });
             } catch (error) {
-<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'GET_PERFORMANCE_METRICS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'GET_PERFORMANCE_METRICS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >              sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
             }
             break;
@@ -4632,7 +4647,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
 <span class="cstat-no" title="statement not covered" >              await performanceTracker.reset();</span>
 <span class="cstat-no" title="statement not covered" >              sendResponse({ status: 'OK' });</span>
             } catch (error) {
-<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'RESET_PERFORMANCE_METRICS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'RESET_PERFORMANCE_METRICS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >              sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
             }
 <span class="cstat-no" title="statement not covered" >            break;</span>
@@ -4646,7 +4661,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
               logger.info('onMessage', '✅ EXPORT_DIAGNOSTICS completed');
               sendResponse({ status: 'OK', data: diagnosticsJson });
             } catch (error) {
-<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'EXPORT_DIAGNOSTICS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'EXPORT_DIAGNOSTICS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >              sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
             }
             break;
@@ -4737,7 +4752,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
 <span class="cstat-no" title="statement not covered" >                sendResponse({ status: 'OK', method: 'url', issueUrl, reportBody: report.body });</span>
               }
             } catch (error) {
-<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'GENERATE_RANKING_REPORT failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >              logger.error('onMessage', 'GENERATE_RANKING_REPORT failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >              sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
             }
 <span class="cstat-no" title="statement not covered" >            break;</span>
@@ -4793,7 +4808,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.debug('onMessage', `GET_RECENT_HISTORY completed, items: ${recentItems.length}`);
                   sendResponse({ results: recentItems });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_RECENT_HISTORY failed:', error);
+                  logger.error('onMessage', 'GET_RECENT_HISTORY failed:', errorMeta(error));
                   sendResponse({ results: [] });
                 }
                 break;
@@ -4811,7 +4826,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   <span class="missing-if-branch" title="if path not taken" >I</span>if ((error as Error).name === 'QuotaExceededError') {
 <span class="cstat-no" title="statement not covered" >                    await handleQuotaExceeded();</span>
                   }
-                  logger.error('onMessage', '❌ REBUILD_INDEX failed:', error);
+                  logger.error('onMessage', '❌ REBUILD_INDEX failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -4825,7 +4840,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.info('onMessage', '✅ INDEX_BOOKMARKS completed', result);
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ INDEX_BOOKMARKS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ INDEX_BOOKMARKS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -4850,7 +4865,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.info('onMessage', '✅ MANUAL_INDEX completed', result);
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ MANUAL_INDEX failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ MANUAL_INDEX failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -4870,7 +4885,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
 <span class="cstat-no" title="statement not covered" >                    sendResponse({ status: 'ERROR', message: result.message });</span>
                   }
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ CLEAR_ALL_DATA failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ CLEAR_ALL_DATA failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -4883,7 +4898,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.debug('onMessage', 'Storage quota retrieved', quotaInfo);
                   sendResponse({ status: 'OK', data: quotaInfo });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', error);
+                  logger.error('onMessage', 'GET_STORAGE_QUOTA failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -4901,7 +4916,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   };
                   sendResponse({ status: 'OK', data: exportData });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ EXPORT_INDEX failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ EXPORT_INDEX failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -4937,7 +4952,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.info('onMessage', '✅ IMPORT_INDEX completed', { imported, skipped });
                   sendResponse({ status: 'OK', imported, skipped });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ IMPORT_INDEX failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', '❌ IMPORT_INDEX failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -4951,7 +4966,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.info('onMessage', '✅ CLEAR_FAVICON_CACHE completed', result);
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-                  logger.error('onMessage', '❌ CLEAR_FAVICON_CACHE failed:', error);
+                  logger.error('onMessage', '❌ CLEAR_FAVICON_CACHE failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -4964,7 +4979,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   const stats = await getFaviconCacheStats();
                   sendResponse({ status: 'OK', ...stats });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'GET_FAVICON_CACHE_STATS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'GET_FAVICON_CACHE_STATS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -4978,7 +4993,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   const dataUrl = await getFaviconWithCache(hostname);
                   sendResponse({ dataUrl });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.warn('onMessage', 'GET_FAVICON failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.warn('onMessage', 'GET_FAVICON failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ dataUrl: null });</span>
                 }
                 break;
@@ -4991,7 +5006,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.debug('onMessage', 'Health status retrieved', health);
                   sendResponse({ status: 'OK', data: health });
                 } catch (error) {
-                  logger.error('onMessage', 'GET_HEALTH_STATUS failed:', error);
+                  logger.error('onMessage', 'GET_HEALTH_STATUS failed:', errorMeta(error));
                   sendResponse({ status: 'ERROR', message: (error as Error).message });
                 }
                 break;
@@ -5012,7 +5027,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                     data: health
                   });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'SELF_HEAL failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'SELF_HEAL failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5128,7 +5143,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                     },
                   });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'RUN_TROUBLESHOOTER failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'RUN_TROUBLESHOOTER failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
 <span class="cstat-no" title="statement not covered" >                break;</span>
@@ -5152,7 +5167,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                     embeddingModel,
                   });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'GET_EMBEDDING_STATS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'GET_EMBEDDING_STATS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5178,7 +5193,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   logger.info('onMessage', `✅ Cleared embeddings from ${cleared} items`);
                   sendResponse({ status: 'OK', cleared });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'CLEAR_ALL_EMBEDDINGS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'CLEAR_ALL_EMBEDDINGS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5192,7 +5207,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   await embeddingProcessor.start();
                   sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'START_EMBEDDING_PROCESSOR failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'START_EMBEDDING_PROCESSOR failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5205,7 +5220,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   embeddingProcessor.pause();
                   sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'PAUSE_EMBEDDING_PROCESSOR failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'PAUSE_EMBEDDING_PROCESSOR failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5218,7 +5233,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   embeddingProcessor.resume();
                   sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'RESUME_EMBEDDING_PROCESSOR failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'RESUME_EMBEDDING_PROCESSOR failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5242,7 +5257,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   const stats = getCacheStats();
                   sendResponse({ status: 'OK', ...stats });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'GET_AI_CACHE_STATS failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'GET_AI_CACHE_STATS failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -5255,7 +5270,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
                   const result = await clearAIKeywordCache();
                   sendResponse({ status: 'OK', ...result });
                 } catch (error) {
-<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'CLEAR_AI_CACHE failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >                  logger.error('onMessage', 'CLEAR_AI_CACHE failed:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >                  sendResponse({ status: 'ERROR', message: (error as Error).message });</span>
                 }
                 break;
@@ -6059,7 +6074,7 @@ browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) =&gt; {
         }
         logger.trace('onMessage', 'Message processing completed');
       } catch (error) {
-<span class="cstat-no" title="statement not covered" >        logger.error('onMessage', 'Error processing message:', error);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('onMessage', 'Error processing message:', errorMeta(error));</span>
 <span class="cstat-no" title="statement not covered" >        sendResponse({ error: (error as Error).message });</span>
       }
     })();
@@ -6180,7 +6195,7 @@ async function init() {
                         const ollamaService = <span class="cstat-no" title="statement not covered" >getOllamaService(config);</span>
 <span class="cstat-no" title="statement not covered" >                        await ollamaService.warmup();</span>
                     } catch (error) {
-<span class="cstat-no" title="statement not covered" >                        logger.debug('init', '⚠️ Model warmup failed (non-critical):', error);</span>
+<span class="cstat-no" title="statement not covered" >                        logger.debug('init', '⚠️ Model warmup failed (non-critical):', errorMeta(error));</span>
                     }
                 }
 &nbsp;
@@ -6191,7 +6206,7 @@ async function init() {
                         const { embeddingProcessor } = <span class="cstat-no" title="statement not covered" >await import('./embedding-processor');</span>
 <span class="cstat-no" title="statement not covered" >                        await embeddingProcessor.start();</span>
                     } catch (error) {
-<span class="cstat-no" title="statement not covered" >                        logger.debug('init', '⚠️ Embedding processor auto-start failed (non-critical):', error);</span>
+<span class="cstat-no" title="statement not covered" >                        logger.debug('init', '⚠️ Embedding processor auto-start failed (non-critical):', errorMeta(error));</span>
                     }
                 }
             }).catch(<span class="fstat-no" title="function not covered" >() =&gt; {</span>/* ignore */});
@@ -6205,8 +6220,8 @@ async function init() {
             logger.info('init', `✅ Service worker ready in ${initDuration}ms`);
             logger.info('init', '[SmrutiCortex] Service worker ready');
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            logger.error('init', '❌ Init error:', error);</span>
-<span class="cstat-no" title="statement not covered" >            logger.error('init', '[SmrutiCortex] Init error:', error);</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('init', '❌ Init error:', errorMeta(error));</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('init', '[SmrutiCortex] Init error:', errorMeta(error));</span>
             // Reset initialization state so it can be retried
 <span class="cstat-no" title="statement not covered" >            initialized = false;</span>
 <span class="cstat-no" title="statement not covered" >            initializationPromise = null;</span>
@@ -6253,7 +6268,7 @@ browserAPI.runtime.onInstalled.addListener(<span class="fstat-no" title="functio
             }
 <span class="cstat-no" title="statement not covered" >            logger.info('onInstalled', `🔄 Re-injected quick-search into ${injected}/${tabs.length} open tabs`);</span>
         } catch (e) {
-<span class="cstat-no" title="statement not covered" >            logger.warn('onInstalled', 'Content script re-injection failed', { error: (e as Error).message });</span>
+<span class="cstat-no" title="statement not covered" >            logger.warn('onInstalled', 'Content script re-injection failed', errorMeta(e));</span>
         }
     }
     } catch (err) {
@@ -6317,7 +6332,7 @@ browserAPI.omnibox.onInputChanged.addListener(async (text, suggest) =&gt; {
             description: `${r.title || <span class="branch-1 cbranch-no" title="branch not covered" >'Untitled'}</span> — ${r.url}`.replace(/&amp;/g, '&amp;amp;').replace(/&lt;/g, '&amp;lt;'),
         })));
     } catch (err) {
-        logger.debug('omnibox', 'onInputChanged error:', err);
+        logger.debug('omnibox', 'onInputChanged error:', errorMeta(err));
         suggest([]);
     }
 });
@@ -6358,7 +6373,7 @@ browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) =&gt; {
             await browserAPI.tabs.create({ url, active: disposition !== 'newBackgroundTab' });
         }
     } catch (err) {
-        logger.error('omnibox', 'onInputEntered error:', err);
+        logger.error('omnibox', 'onInputEntered error:', errorMeta(err));
     }
 });</pre></td></tr></table></pre>
 
@@ -6367,7 +6382,7 @@ browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) =&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-18T11:44:40.453Z
+                at 2026-04-19T18:38:48.580Z
             </div>
         <script src="../prettify.js"></script>
         <script>

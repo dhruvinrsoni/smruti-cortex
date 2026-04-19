@@ -863,7 +863,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// favicon-cache.ts — Local favicon caching to reduce Google API calls
 &nbsp;
-import { Logger } from '../core/logger';
+import { Logger, errorMeta } from '../core/logger';
 &nbsp;
 const logger = Logger.forComponent('FaviconCache');
 &nbsp;
@@ -926,7 +926,7 @@ export async function openFaviconDatabase(): Promise&lt;IDBDatabase&gt; {
         const request = indexedDB.open(FAVICON_DB_NAME, FAVICON_DB_VERSION);
 &nbsp;
         request.onerror = () =&gt; {
-            logger.error('openFaviconDatabase', 'Failed to open favicon database:', request.error);
+            logger.error('openFaviconDatabase', 'Failed to open favicon database:', errorMeta(request.error));
             reject(request.error);
         };
 &nbsp;
@@ -991,12 +991,12 @@ async function getCachedEntry(hostname: string): Promise&lt;{ dataUrl: string | 
             };
 &nbsp;
             request.onerror = () =&gt; {
-                logger.warn('getCachedEntry', `Failed to get cached favicon for ${hostname}:`, request.error);
+                logger.warn('getCachedEntry', `Failed to get cached favicon for ${hostname}:`, errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.warn('getCachedEntry', 'Error getting cached favicon:', error);
+        logger.warn('getCachedEntry', 'Error getting cached favicon:', errorMeta(error));
         return { dataUrl: null, isNegative: false };
     }
 }
@@ -1033,12 +1033,12 @@ async function storeNegativeEntry(hostname: string): Promise&lt;void&gt; {
                 resolve();
             };
             request.onerror = () =&gt; {
-                logger.warn('storeNegativeEntry', `Failed to store negative entry for ${hostname}:`, request.error);
+                logger.warn('storeNegativeEntry', `Failed to store negative entry for ${hostname}:`, errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.warn('storeNegativeEntry', 'Error storing negative entry:', error);
+        logger.warn('storeNegativeEntry', 'Error storing negative entry:', errorMeta(error));
     }
 }
 &nbsp;
@@ -1100,12 +1100,12 @@ export async function cacheFavicon(hostname: string): Promise&lt;string | null&g
             };
 &nbsp;
             request.onerror = () =&gt; {
-                logger.warn('cacheFavicon', `Failed to cache favicon for ${hostname}:`, request.error);
+                logger.warn('cacheFavicon', `Failed to cache favicon for ${hostname}:`, errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.warn('cacheFavicon', `Error caching favicon for ${hostname}:`, error);
+        logger.warn('cacheFavicon', `Error caching favicon for ${hostname}:`, errorMeta(error));
         // Store negative entry so we don't retry on network/timeout errors
         await storeNegativeEntry(hostname);
         return null;
@@ -1170,12 +1170,12 @@ export async function clearFaviconCache(): Promise&lt;{ cleared: number; freedBy
             };
 &nbsp;
             request.onerror = () =&gt; {
-                logger.error('clearFaviconCache', 'Failed to clear favicon cache:', request.error);
+                logger.error('clearFaviconCache', 'Failed to clear favicon cache:', errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.error('clearFaviconCache', 'Error clearing favicon cache:', error);
+        logger.error('clearFaviconCache', 'Error clearing favicon cache:', errorMeta(error));
         return { cleared: 0, freedBytes: 0 };
     }
 }
@@ -1220,7 +1220,7 @@ export async function clearExpiredFavicons(): Promise&lt;number&gt; {
             };
         });
     } catch (error) {
-        logger.error('clearExpiredFavicons', 'Error clearing expired favicons:', error);
+        logger.error('clearExpiredFavicons', 'Error clearing expired favicons:', errorMeta(error));
         return 0;
     }
 }
@@ -1251,12 +1251,12 @@ export async function getFaviconCacheStats(): Promise&lt;{ count: number; totalS
             };
 &nbsp;
             request.onerror = () =&gt; {
-                logger.error('getFaviconCacheStats', 'Failed to get favicon cache stats:', request.error);
+                logger.error('getFaviconCacheStats', 'Failed to get favicon cache stats:', errorMeta(request.error));
                 reject(request.error);
             };
         });
     } catch (error) {
-        logger.error('getFaviconCacheStats', 'Error getting favicon cache stats:', error);
+        logger.error('getFaviconCacheStats', 'Error getting favicon cache stats:', errorMeta(error));
         return { count: 0, totalSize: 0, oldestCacheDate: null };
     }
 }
@@ -1267,7 +1267,7 @@ export async function getFaviconCacheStats(): Promise&lt;{ count: number; totalS
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-18T11:44:40.453Z
+                at 2026-04-19T18:38:48.580Z
             </div>
         <script src="../prettify.js"></script>
         <script>
