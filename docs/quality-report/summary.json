@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-04-19T18:38:52.521Z",
+  "generatedAt": "2026-04-20T19:32:45.678Z",
   "repository": "dhruvinrsoni/smruti-cortex",
   "ref": "main",
-  "runId": "24636243108",
-  "runNumber": "55",
-  "coverageLinesPct": "82.19",
+  "runId": "24686091506",
+  "runNumber": "67",
+  "coverageLinesPct": "96.08",
   "coverageSource": "summary",
   "coverageDelta": "n/a",
   "lintErrors": 0,
-  "lintWarnings": 57,
+  "lintWarnings": 96,
   "auditTotal": 5,
   "auditCritical": 0,
   "auditHigh": 4,
@@ -17,8 +17,8 @@
   "coverageStatus": "pass",
   "securityStatus": "warn",
   "perfStatus": "pass",
-  "swKb": 195,
+  "swKb": 196,
   "popupKb": 162,
   "qsKb": 163,
-  "totalJsKb": 939
+  "totalJsKb": 1026
 }
