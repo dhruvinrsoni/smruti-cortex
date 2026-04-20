@@ -261,7 +261,7 @@ describe('OllamaService', () => {
       const config = service.getConfig();
 
       expect(config.endpoint).toBe('http://localhost:11434');
-      expect(config.model).toBe('nomic-embed-text:latest');
+      expect(config.model).toBe('nomic-embed-text');
       expect(config.timeout).toBe(10000);
       expect(config.maxRetries).toBe(1);
     });
@@ -812,7 +812,7 @@ describe('OllamaService', () => {
       const { getOllamaConfigFromSettings } = await import('../ollama-service');
       const config = await getOllamaConfigFromSettings(true);
 
-      expect(config.model).toBe('nomic-embed-text:latest');
+      expect(config.model).toBe('nomic-embed-text');
       expect(config.endpoint).toBe('http://myhost:11434');
       expect(config.timeout).toBe(20000);
     });
@@ -935,6 +935,168 @@ describe('OllamaService', () => {
       } else {
         delete (performance as any).memory;
       }
+    });
+  });
+
+  // === normalizeModelName ===
+
+  describe('normalizeModelName', () => {
+    it('should strip :latest suffix', async () => {
+      const { normalizeModelName } = await import('../ollama-service');
+      expect(normalizeModelName('nomic-embed-text:latest')).toBe('nomic-embed-text');
+    });
+
+    it('should preserve other tags', async () => {
+      const { normalizeModelName } = await import('../ollama-service');
+      expect(normalizeModelName('llama3.2:1b')).toBe('llama3.2:1b');
+    });
+
+    it('should preserve name without tag', async () => {
+      const { normalizeModelName } = await import('../ollama-service');
+      expect(normalizeModelName('llama3.2')).toBe('llama3.2');
+    });
+  });
+
+  // === recordCircuitBreakerFailure / recordCircuitBreakerSuccess exports ===
+
+  describe('exported circuit breaker helpers', () => {
+    it('recordCircuitBreakerFailure trips breaker after threshold', async () => {
+      const { recordCircuitBreakerFailure, recordCircuitBreakerSuccess, isCircuitBreakerOpen } = await import('../ollama-service');
+      recordCircuitBreakerSuccess();
+
+      recordCircuitBreakerFailure();
+      recordCircuitBreakerFailure();
+      recordCircuitBreakerFailure();
+
+      expect(isCircuitBreakerOpen()).toBe(true);
+
+      vi.useFakeTimers();
+      vi.advanceTimersByTime(61_000);
+      expect(isCircuitBreakerOpen()).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it('recordCircuitBreakerSuccess resets failure count', async () => {
+      const { recordCircuitBreakerFailure, recordCircuitBreakerSuccess, isCircuitBreakerOpen } = await import('../ollama-service');
+
+      recordCircuitBreakerFailure();
+      recordCircuitBreakerFailure();
+      recordCircuitBreakerSuccess();
+      recordCircuitBreakerFailure();
+
+      expect(isCircuitBreakerOpen()).toBe(false);
+    });
+  });
+
+  // === getOllamaConfigFromSettings — remote host warning ===
+
+  describe('getOllamaConfigFromSettings — remote host', () => {
+    it('should warn when endpoint is not localhost', async () => {
+      vi.doMock('../../core/settings', () => ({
+        SettingsManager: {
+          getSetting: (key: string) => {
+            const map: Record<string, any> = {
+              ollamaEndpoint: 'http://remote-server.example.com:11434',
+              ollamaTimeout: 30000,
+              embeddingModel: 'nomic-embed-text',
+              ollamaModel: 'llama3.2:1b',
+            };
+            return map[key];
+          },
+        },
+      }));
+
+      const { getOllamaConfigFromSettings } = await import('../ollama-service');
+      const config = await getOllamaConfigFromSettings();
+
+      expect(config.endpoint).toBe('http://remote-server.example.com:11434');
+    });
+
+    it('should not warn for 127.0.0.1', async () => {
+      vi.doMock('../../core/settings', () => ({
+        SettingsManager: {
+          getSetting: (key: string) => {
+            const map: Record<string, any> = {
+              ollamaEndpoint: 'http://127.0.0.1:11434',
+              ollamaTimeout: 30000,
+              ollamaModel: 'llama3.2:1b',
+            };
+            return map[key];
+          },
+        },
+      }));
+
+      const { getOllamaConfigFromSettings } = await import('../ollama-service');
+      const config = await getOllamaConfigFromSettings();
+
+      expect(config.endpoint).toBe('http://127.0.0.1:11434');
+    });
+
+    it('should handle invalid URL in endpoint gracefully', async () => {
+      vi.doMock('../../core/settings', () => ({
+        SettingsManager: {
+          getSetting: (key: string) => {
+            const map: Record<string, any> = {
+              ollamaEndpoint: 'not-a-valid-url',
+              ollamaTimeout: 5000,
+              ollamaModel: 'llama3.2:1b',
+            };
+            return map[key];
+          },
+        },
+      }));
+
+      const { getOllamaConfigFromSettings } = await import('../ollama-service');
+      const config = await getOllamaConfigFromSettings();
+
+      expect(config.endpoint).toBe('not-a-valid-url');
+      expect(config.timeout).toBe(5000);
+    });
+  });
+
+  // === generateEmbedding — abort signal forwarding ===
+
+  describe('generateEmbedding — abort signal mid-request scenarios', () => {
+    it('should abort when external signal fires after availability check', async () => {
+      const { OllamaService } = await import('../ollama-service');
+      const service = new OllamaService({ model: 'test:latest' });
+
+      const controller = new AbortController();
+
+      mockFetch
+        .mockResolvedValueOnce(mockTagsOk())
+        .mockImplementationOnce((_url: string, opts: { signal: AbortSignal }) => {
+          return new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => {
+              reject(new Error('The operation was aborted'));
+            });
+            setTimeout(() => controller.abort(), 10);
+          });
+        });
+
+      const result = await service.generateEmbedding('test', controller.signal);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('abort');
+    });
+  });
+
+  // === readResponseWithLimit — streaming body ===
+
+  describe('readResponseWithLimit edge cases', () => {
+    it('should fallback to json() when response has no text() method', async () => {
+      const { OllamaService } = await import('../ollama-service');
+      const service = new OllamaService({ model: 'test:latest' });
+
+      mockFetch
+        .mockResolvedValueOnce(mockTagsOk())
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ embeddings: [[0.1, 0.2]] }),
+        });
+
+      const result = await service.generateEmbedding('test');
+      expect(result.success).toBe(true);
+      expect(result.embedding).toEqual([0.1, 0.2]);
     });
   });
 });
