@@ -23,6 +23,12 @@ export default defineConfig({
         'src/core/scorer-types.ts',           // type definitions only
         'src/background/schema.ts',           // type definitions only
       ],
+      thresholds: {
+        lines: 95,
+        branches: 90,
+        functions: 95,
+        statements: 95,
+      },
     },
   },
 });

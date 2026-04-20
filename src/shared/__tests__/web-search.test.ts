@@ -5,6 +5,10 @@ import {
   buildWebSearchUrl,
   sortedWebSearchPrefixKeys,
   escapeAtlassianSearchQuotedFragment,
+  getWebSearchEngineDisplayName,
+  getWebSearchPrefixHintLines,
+  webSearchSiteUrlToastMessage,
+  webSearchSiteUrlPreviewLabel,
 } from '../web-search';
 
 describe('web-search parseWebSearchQuery', () => {
@@ -141,5 +145,104 @@ describe('web-search sortedWebSearchPrefixKeys', () => {
     const iGh = keys.indexOf('gh');
     const iG = keys.indexOf('g');
     expect(iGh).toBeLessThan(iG);
+  });
+});
+
+describe('getWebSearchEngineDisplayName', () => {
+  it('returns display name for known engines', () => {
+    expect(getWebSearchEngineDisplayName('google')).toBe('Google');
+    expect(getWebSearchEngineDisplayName('youtube')).toBe('YouTube');
+    expect(getWebSearchEngineDisplayName('github')).toBe('GitHub');
+    expect(getWebSearchEngineDisplayName('gcp')).toBe('Google Cloud console');
+    expect(getWebSearchEngineDisplayName('jira')).toBe('Jira');
+    expect(getWebSearchEngineDisplayName('confluence')).toBe('Confluence');
+  });
+
+  it('capitalizes first letter for unknown engines', () => {
+    expect(getWebSearchEngineDisplayName('duckduckgo')).toBe('Duckduckgo');
+    expect(getWebSearchEngineDisplayName('bing')).toBe('Bing');
+  });
+});
+
+describe('getWebSearchPrefixHintLines', () => {
+  it('returns hint lines for all valid prefixes', () => {
+    const lines = getWebSearchPrefixHintLines();
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line.prefix).toBeTruthy();
+      expect(line.engineKey).toBeTruthy();
+      expect(line.engineLabel).toBeTruthy();
+    }
+  });
+
+  it('includes gh, gc, g, y, j, c prefixes', () => {
+    const lines = getWebSearchPrefixHintLines();
+    const prefixes = lines.map(l => l.prefix);
+    expect(prefixes).toContain('gh');
+    expect(prefixes).toContain('g');
+    expect(prefixes).toContain('y');
+    expect(prefixes).toContain('j');
+    expect(prefixes).toContain('c');
+  });
+});
+
+describe('webSearchSiteUrlToastMessage', () => {
+  it('returns Jira message for no-jira-site', () => {
+    expect(webSearchSiteUrlToastMessage('no-jira-site')).toContain('Jira site URL');
+  });
+
+  it('returns Confluence message for no-confluence-site', () => {
+    expect(webSearchSiteUrlToastMessage('no-confluence-site')).toContain('Confluence site URL');
+  });
+});
+
+describe('webSearchSiteUrlPreviewLabel', () => {
+  it('returns Jira preview label', () => {
+    expect(webSearchSiteUrlPreviewLabel('no-jira-site', 'Jira')).toContain('set Jira site URL');
+  });
+
+  it('returns Confluence preview label', () => {
+    expect(webSearchSiteUrlPreviewLabel('no-confluence-site', 'Confluence')).toContain('set Confluence site URL');
+  });
+});
+
+describe('parseWebSearchQuery edge cases', () => {
+  it('returns default engine for empty string', () => {
+    const result = parseWebSearchQuery('', 'google');
+    expect(result).toEqual({
+      engineKey: 'google',
+      searchTerms: '',
+      usedPrefix: false,
+    });
+  });
+
+  it('returns default engine for whitespace-only input', () => {
+    const result = parseWebSearchQuery('   ', 'google');
+    expect(result).toEqual({
+      engineKey: 'google',
+      searchTerms: '',
+      usedPrefix: false,
+    });
+  });
+});
+
+describe('buildWebSearchUrl edge cases', () => {
+  it('returns no-terms for unknown engine key', () => {
+    const result = buildWebSearchUrl(
+      { engineKey: 'unknown_engine', searchTerms: 'test', usedPrefix: false },
+      {},
+    );
+    expect(result).toEqual({ error: 'no-terms' });
+  });
+
+  it('builds Google URL for default engine', () => {
+    const result = buildWebSearchUrl(
+      { engineKey: 'google', searchTerms: 'hello', usedPrefix: false },
+      {},
+    );
+    expect('url' in result).toBe(true);
+    if ('url' in result) {
+      expect(result.url).toBe(SEARCH_ENGINES.google + encodeURIComponent('hello'));
+    }
   });
 });

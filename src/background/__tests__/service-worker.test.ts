@@ -312,6 +312,7 @@ vi.mock('../ollama-service', () => ({
   checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
   getOllamaConfigFromSettings: vi.fn(async () => ({})),
   getOllamaService: vi.fn(() => ({ checkStatus: vi.fn(async () => ({ available: false })), warmup: vi.fn(async () => true) })),
+  normalizeModelName: vi.fn((name: string) => name.replace(/:latest$/, '')),
 }));
 
 vi.mock('../ai-keyword-cache', () => ({
@@ -1389,5 +1390,735 @@ describe('omnibox listeners', () => {
     m.tabsGet.mockRejectedValueOnce(new Error('missing'));
     const onInputEntered = o.omniboxOnInputEntered[0];
     await expect(onInputEntered('@tab:99', 'currentTab')).resolves.toBeUndefined();
+  });
+});
+
+vi.mock('../ranking-report', () => ({
+  generateRankingReport: vi.fn(() => null),
+  createGitHubIssue: vi.fn(async () => 'https://github.com/test/issues/1'),
+  buildGitHubIssueUrl: vi.fn(() => 'https://github.com/test/issues/new?title=test'),
+}));
+
+describe('tab management commands', () => {
+  const m = swBrowserMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('GET_OPEN_TABS returns queried tabs', async () => {
+    m.tabsQuery.mockResolvedValueOnce([{ id: 1, title: 'T' }]);
+    const res = (await sendMessage({ type: 'GET_OPEN_TABS' })) as any;
+    expect(res.tabs).toEqual([{ id: 1, title: 'T' }]);
+  });
+
+  it('SWITCH_TO_TAB activates tab and focuses window', async () => {
+    const res = (await sendMessage({ type: 'SWITCH_TO_TAB', tabId: 5, windowId: 10 })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsUpdate).toHaveBeenCalledWith(5, { active: true });
+  });
+
+  it('CLOSE_TAB removes specified tabId', async () => {
+    const res = (await sendMessage({ type: 'CLOSE_TAB', tabId: 3 })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsRemove).toHaveBeenCalledWith(3);
+  });
+
+  it('CLOSE_TAB falls back to sender.tab.id', async () => {
+    const res = (await sendMessage({ type: 'CLOSE_TAB' }, { tab: { id: 7 } })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsRemove).toHaveBeenCalledWith(7);
+  });
+
+  it('CLOSE_TAB returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'CLOSE_TAB' })) as any;
+    expect(res.error).toBe('No tab to close');
+  });
+
+  it('DUPLICATE_TAB duplicates tab', async () => {
+    const res = (await sendMessage({ type: 'DUPLICATE_TAB', tabId: 4 })) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('DUPLICATE_TAB returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'DUPLICATE_TAB' })) as any;
+    expect(res.error).toBe('No tab to duplicate');
+  });
+
+  it('PIN_TAB toggles pinned state', async () => {
+    m.tabsGet.mockResolvedValueOnce({ id: 2, pinned: false });
+    const res = (await sendMessage({ type: 'PIN_TAB', tabId: 2 })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsUpdate).toHaveBeenCalledWith(2, { pinned: true });
+  });
+
+  it('PIN_TAB returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'PIN_TAB' })) as any;
+    expect(res.error).toBe('No tab to pin');
+  });
+
+  it('MUTE_TAB toggles muted state', async () => {
+    m.tabsGet.mockResolvedValueOnce({ id: 6, mutedInfo: { muted: false } });
+    const res = (await sendMessage({ type: 'MUTE_TAB', tabId: 6 })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsUpdate).toHaveBeenCalledWith(6, { muted: true });
+  });
+
+  it('MUTE_TAB returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'MUTE_TAB' })) as any;
+    expect(res.error).toBe('No tab to mute');
+  });
+
+  it('TAB_RELOAD reloads tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_RELOAD', tabId: 8 })) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('TAB_RELOAD returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_RELOAD' })) as any;
+    expect(res.error).toBe('No tab to reload');
+  });
+
+  it('TAB_HARD_RELOAD reloads with cache bypass', async () => {
+    const res = (await sendMessage({ type: 'TAB_HARD_RELOAD', tabId: 9 })) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('TAB_HARD_RELOAD returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_HARD_RELOAD' })) as any;
+    expect(res.error).toBe('No tab to reload');
+  });
+
+  it('TAB_GO_BACK navigates back', async () => {
+    const res = (await sendMessage({ type: 'TAB_GO_BACK', tabId: 10 })) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('TAB_GO_BACK returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_GO_BACK' })) as any;
+    expect(res.error).toBe('No tab');
+  });
+
+  it('TAB_GO_FORWARD navigates forward', async () => {
+    const res = (await sendMessage({ type: 'TAB_GO_FORWARD', tabId: 11 })) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('TAB_GO_FORWARD returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_GO_FORWARD' })) as any;
+    expect(res.error).toBe('No tab');
+  });
+
+  it('TAB_VIEW_SOURCE opens view-source URL', async () => {
+    const res = (await sendMessage(
+      { type: 'TAB_VIEW_SOURCE' },
+      { tab: { id: 12, url: 'https://example.com' } },
+    )) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsCreate).toHaveBeenCalledWith({ url: 'view-source:https://example.com' });
+  });
+
+  it('TAB_VIEW_SOURCE returns error without sender tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_VIEW_SOURCE' })) as any;
+    expect(res.error).toBe('No tab URL');
+  });
+});
+
+describe('TAB_ZOOM commands', () => {
+  const m = swBrowserMocks;
+   
+  let tabsProxy: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    const { browserAPI } = await import('../../core/helpers');
+    tabsProxy = browserAPI.tabs;
+    (tabsProxy as any).getZoom = (_: number, cb: (z: number) => void) => { cb(1.0); };
+    (tabsProxy as any).setZoom = vi.fn();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  afterEach(() => {
+    delete (tabsProxy as any).getZoom;
+    delete (tabsProxy as any).setZoom;
+  });
+
+  it('zoom in increases zoom', async () => {
+    const res = (await sendMessage({ type: 'TAB_ZOOM', tabId: 5, direction: 'in' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.zoom).toBeCloseTo(1.1, 1);
+  });
+
+  it('zoom out decreases zoom', async () => {
+    const res = (await sendMessage({ type: 'TAB_ZOOM', tabId: 5, direction: 'out' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.zoom).toBeCloseTo(0.9, 1);
+  });
+
+  it('zoom reset sets zoom to 1', async () => {
+    const res = (await sendMessage({ type: 'TAB_ZOOM', tabId: 5, direction: 'reset' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.zoom).toBe(1);
+  });
+
+  it('returns error without tab', async () => {
+    const res = (await sendMessage({ type: 'TAB_ZOOM' })) as any;
+    expect(res.error).toBe('No tab');
+  });
+});
+
+describe('window management commands', () => {
+  const m = swBrowserMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('WINDOW_CREATE incognito', async () => {
+    const res = (await sendMessage({ type: 'WINDOW_CREATE', windowType: 'incognito' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.windowsCreate).toHaveBeenCalledWith({ incognito: true });
+  });
+
+  it('WINDOW_CREATE window', async () => {
+    const res = (await sendMessage({ type: 'WINDOW_CREATE', windowType: 'window' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.windowsCreate).toHaveBeenCalledWith({});
+  });
+
+  it('WINDOW_CREATE background-tab with valid URL', async () => {
+    const res = (await sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: 'https://example.com' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsCreate).toHaveBeenCalledWith({ url: 'https://example.com', active: false });
+  });
+
+  it('WINDOW_CREATE background-tab rejects invalid scheme', async () => {
+    const res = (await sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url: 'javascript:void(0)' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toContain('Invalid');
+  });
+
+  it('WINDOW_CREATE default opens new tab', async () => {
+    const res = (await sendMessage({ type: 'WINDOW_CREATE' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsCreate).toHaveBeenCalledWith({ url: 'chrome://newtab' });
+  });
+});
+
+describe('bookmarks and sessions commands', () => {
+  const o = swOmniboxMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    o.bookmarksSearch.mockResolvedValue([]);
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('SEARCH_BOOKMARKS returns bookmarks with folderPath', async () => {
+    o.bookmarksSearch.mockResolvedValueOnce([
+      { id: '1', title: 'Test', url: 'https://test.com', parentId: '5' },
+    ]);
+    const res = (await sendMessage({ type: 'SEARCH_BOOKMARKS', query: 'test' })) as any;
+    expect(res.bookmarks).toHaveLength(1);
+    expect(res.bookmarks[0]).toHaveProperty('folderPath');
+  });
+
+  it('SEARCH_BOOKMARKS returns error on failure', async () => {
+    o.bookmarksSearch.mockRejectedValueOnce(new Error('search failed'));
+    const res = (await sendMessage({ type: 'SEARCH_BOOKMARKS', query: 'fail' })) as any;
+    expect(res.bookmarks).toEqual([]);
+    expect(res.error).toBe('search failed');
+  });
+
+  it('GET_RECENT_BOOKMARKS returns response', async () => {
+    const res = (await sendMessage({ type: 'GET_RECENT_BOOKMARKS' })) as any;
+    expect(res).toHaveProperty('bookmarks');
+  });
+
+  it('ADD_BOOKMARK with sender.tab succeeds', async () => {
+    const sender = { tab: { id: 1, url: 'https://example.com', title: 'Example' } };
+    const res = (await sendMessage({ type: 'ADD_BOOKMARK' }, sender as any)) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('ADD_BOOKMARK without sender.tab returns error', async () => {
+    const res = (await sendMessage({ type: 'ADD_BOOKMARK' })) as any;
+    expect(res.error).toBe('No active tab info available');
+  });
+
+  it('REOPEN_TAB restores session', async () => {
+    const res = (await sendMessage({ type: 'REOPEN_TAB', sessionId: 'abc' })) as any;
+    expect(res.status).toBe('OK');
+  });
+});
+
+describe('browsing data commands', () => {
+  const m = swBrowserMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('CLEAR_COOKIES clears cookies when permitted', async () => {
+    const res = (await sendMessage({ type: 'CLEAR_COOKIES' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.browsingDataRemoveCookies).toHaveBeenCalledWith({});
+  });
+
+  it('CLEAR_LOCAL_STORAGE clears storage when permitted', async () => {
+    const res = (await sendMessage({ type: 'CLEAR_LOCAL_STORAGE' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.browsingDataRemoveLocalStorage).toHaveBeenCalledWith({});
+  });
+
+  it('CLEAR_LOCAL_STORAGE returns error when permission denied', async () => {
+    m.permissionsContains.mockImplementation((_p: unknown, cb: (r: boolean) => void) => { cb(false); });
+    const res = (await sendMessage({ type: 'CLEAR_LOCAL_STORAGE' })) as any;
+    expect(res.error).toContain('browsingData');
+    expect(m.browsingDataRemoveLocalStorage).not.toHaveBeenCalled();
+  });
+
+  it('CLEAR_DOWNLOADS_HISTORY clears downloads', async () => {
+    const res = (await sendMessage({ type: 'CLEAR_DOWNLOADS_HISTORY' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.browsingDataRemoveDownloads).toHaveBeenCalledWith({});
+  });
+
+  it('CLEAR_FORM_DATA clears form data', async () => {
+    const res = (await sendMessage({ type: 'CLEAR_FORM_DATA' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.browsingDataRemoveFormData).toHaveBeenCalledWith({});
+  });
+
+  it('CLEAR_PASSWORDS clears passwords', async () => {
+    const res = (await sendMessage({ type: 'CLEAR_PASSWORDS' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.browsingDataRemovePasswords).toHaveBeenCalledWith({});
+  });
+
+  it('CLEAR_LAST_DAY clears 24h of data', async () => {
+    const res = (await sendMessage({ type: 'CLEAR_LAST_DAY' })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.browsingDataRemove).toHaveBeenCalled();
+    const arg0 = m.browsingDataRemove.mock.calls[0][0];
+    expect(arg0).toHaveProperty('since');
+    expect(m.browsingDataRemove.mock.calls[0][1]).toMatchObject({
+      cache: true, cookies: true, history: true, localStorage: true,
+    });
+  });
+});
+
+describe('additional error paths', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('EXPORT_DIAGNOSTICS returns ERROR on throw', async () => {
+    const { exportDiagnosticsAsJson } = await import('../diagnostics');
+    (exportDiagnosticsAsJson as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('diag fail'));
+    const res = (await sendMessage({ type: 'EXPORT_DIAGNOSTICS' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('diag fail');
+  });
+
+  it('GET_SEARCH_ANALYTICS returns ERROR on throw', async () => {
+    const { getSearchAnalytics } = await import('../diagnostics');
+    (getSearchAnalytics as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('analytics fail'); });
+    const res = (await sendMessage({ type: 'GET_SEARCH_ANALYTICS' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('analytics fail');
+  });
+
+  it('CLEAR_SEARCH_DEBUG returns ERROR on throw', async () => {
+    const { searchDebugService } = await import('../search-debug');
+    (searchDebugService.clearHistory as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('clear fail'); });
+    const res = (await sendMessage({ type: 'CLEAR_SEARCH_DEBUG' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('clear fail');
+  });
+
+  it('CLEAR_RECENT_SEARCHES returns ERROR on throw', async () => {
+    const local = (globalThis as any).chrome.storage.local;
+    local.remove = () => { throw new Error('remove fail'); };
+    try {
+      const res = (await sendMessage({ type: 'CLEAR_RECENT_SEARCHES' })) as any;
+      expect(res.status).toBe('ERROR');
+      expect(res.message).toBe('remove fail');
+    } finally {
+      delete local.remove;
+    }
+  });
+
+  it('GET_EMBEDDING_PROGRESS returns ERROR on throw', async () => {
+    const { embeddingProcessor } = await import('../embedding-processor');
+    (embeddingProcessor.getProgress as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('progress fail'); });
+    const res = (await sendMessage({ type: 'GET_EMBEDDING_PROGRESS' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('progress fail');
+  });
+
+  it('CLEAR_ALL_EMBEDDINGS returns ERROR on throw', async () => {
+    const { embeddingProcessor } = await import('../embedding-processor');
+    (embeddingProcessor.stop as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('stop fail'); });
+    const res = (await sendMessage({ type: 'CLEAR_ALL_EMBEDDINGS' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('stop fail');
+  });
+
+  it('GET_AI_CACHE_STATS returns ERROR on throw', async () => {
+    const { loadCache } = await import('../ai-keyword-cache');
+    (loadCache as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('cache load fail'));
+    const res = (await sendMessage({ type: 'GET_AI_CACHE_STATS' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('cache load fail');
+  });
+
+  it('CLEAR_AI_CACHE returns ERROR on throw', async () => {
+    const { clearAIKeywordCache } = await import('../ai-keyword-cache');
+    (clearAIKeywordCache as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('cache clear fail'));
+    const res = (await sendMessage({ type: 'CLEAR_AI_CACHE' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('cache clear fail');
+  });
+
+  it('SELF_HEAL returns ERROR on throw', async () => {
+    const { selfHeal } = await import('../resilience');
+    (selfHeal as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('heal fail'));
+    const res = (await sendMessage({ type: 'SELF_HEAL' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('heal fail');
+  });
+
+  it('GET_FAVICON returns null dataUrl on throw', async () => {
+    const { getFaviconWithCache } = await import('../favicon-cache');
+    (getFaviconWithCache as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('favicon fail'));
+    const res = (await sendMessage({ type: 'GET_FAVICON', hostname: 'bad.com' })) as any;
+    expect(res.dataUrl).toBeNull();
+  });
+
+  it('START_EMBEDDING_PROCESSOR returns ERROR on throw', async () => {
+    const { embeddingProcessor } = await import('../embedding-processor');
+    (embeddingProcessor.start as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('start fail'));
+    const res = (await sendMessage({ type: 'START_EMBEDDING_PROCESSOR' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('start fail');
+  });
+
+  it('PAUSE_EMBEDDING_PROCESSOR returns ERROR on throw', async () => {
+    const { embeddingProcessor } = await import('../embedding-processor');
+    (embeddingProcessor.pause as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('pause fail'); });
+    const res = (await sendMessage({ type: 'PAUSE_EMBEDDING_PROCESSOR' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('pause fail');
+  });
+
+  it('RESUME_EMBEDDING_PROCESSOR returns ERROR on throw', async () => {
+    const { embeddingProcessor } = await import('../embedding-processor');
+    (embeddingProcessor.resume as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('resume fail'); });
+    const res = (await sendMessage({ type: 'RESUME_EMBEDDING_PROCESSOR' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('resume fail');
+  });
+});
+
+describe('SETTINGS_CHANGED branches', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('without settings field just responds ok', async () => {
+    const res = (await sendMessage({ type: 'SETTINGS_CHANGED' })) as any;
+    expect(res.status).toBe('ok');
+  });
+
+  it('embeddings on→off stops processor', async () => {
+    const { SettingsManager } = await import('../../core/settings');
+    (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce('nomic-embed-text')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce('nomic-embed-text');
+    const res = (await sendMessage({ type: 'SETTINGS_CHANGED', settings: { embeddingsEnabled: false } })) as any;
+    expect(res.status).toBe('ok');
+    const { embeddingProcessor } = await import('../embedding-processor');
+    expect(embeddingProcessor.stop).toHaveBeenCalled();
+  });
+
+  it('embeddings off→on starts processor', async () => {
+    const { SettingsManager } = await import('../../core/settings');
+    (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce('nomic-embed-text')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce('nomic-embed-text');
+    const { embeddingProcessor } = await import('../embedding-processor');
+    (embeddingProcessor.start as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+    const res = (await sendMessage({ type: 'SETTINGS_CHANGED', settings: { embeddingsEnabled: true } })) as any;
+    expect(res.status).toBe('ok');
+    expect(embeddingProcessor.start).toHaveBeenCalled();
+  });
+});
+
+describe('IMPORT_INDEX validation', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('rejects non-array items', async () => {
+    const res = (await sendMessage({ type: 'IMPORT_INDEX', items: 'not-an-array' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toContain('items must be an array');
+  });
+
+  it('rejects items exceeding 50000', async () => {
+    const res = (await sendMessage({ type: 'IMPORT_INDEX', items: new Array(50001).fill({}) })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toContain('exceeds limit');
+  });
+
+  it('handles mixed valid and invalid rows', async () => {
+    const res = (await sendMessage({
+      type: 'IMPORT_INDEX',
+      items: [
+        { url: 'https://good.com', title: 'Good', lastVisit: Date.now() },
+        { url: '', title: 'Bad', lastVisit: Date.now() },
+        { url: 'https://also-good.com', title: 'OK', lastVisit: Date.now() },
+      ],
+    })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.imported).toBe(2);
+    expect(res.skipped).toBe(1);
+  });
+
+  it('returns ERROR when saveIndexedItem throws', async () => {
+    const { saveIndexedItem } = await import('../database');
+    (saveIndexedItem as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('save fail'));
+    const res = (await sendMessage({
+      type: 'IMPORT_INDEX',
+      items: [{ url: 'https://x.com', title: 'X', lastVisit: Date.now() }],
+    })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('save fail');
+  });
+});
+
+describe('SEARCH_QUERY edge cases', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('truncates query longer than 500 chars', async () => {
+    const longQuery = 'a'.repeat(600);
+    const res = (await sendMessage({ type: 'SEARCH_QUERY', query: longQuery })) as any;
+    expect(res.query).toBe('a'.repeat(500));
+  });
+
+  it('handles non-string query as empty string', async () => {
+    const res = (await sendMessage({ type: 'SEARCH_QUERY', query: 12345 })) as any;
+    expect(res.query).toBe('');
+  });
+});
+
+describe('GENERATE_RANKING_REPORT', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('returns ERROR when report is null', async () => {
+    const res = (await sendMessage({ type: 'GENERATE_RANKING_REPORT' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toContain('No search snapshot');
+  });
+
+  it('method=api success returns issue URL', async () => {
+    const { generateRankingReport } = await import('../ranking-report');
+    (generateRankingReport as ReturnType<typeof vi.fn>).mockReturnValueOnce({ title: 'Report', body: 'body' });
+    const res = (await sendMessage({ type: 'GENERATE_RANKING_REPORT', method: 'api' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.method).toBe('api');
+    expect(res.issueUrl).toBeDefined();
+    expect(res.reportBody).toBe('body');
+  });
+
+  it('method=api failure falls back to URL', async () => {
+    const { generateRankingReport, createGitHubIssue } = await import('../ranking-report');
+    (generateRankingReport as ReturnType<typeof vi.fn>).mockReturnValueOnce({ title: 'Report', body: 'body' });
+    (createGitHubIssue as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API down'));
+    const res = (await sendMessage({ type: 'GENERATE_RANKING_REPORT', method: 'api' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.method).toBe('url');
+    expect(res.apiError).toBe('API down');
+  });
+
+  it('method=url builds URL directly', async () => {
+    const { generateRankingReport } = await import('../ranking-report');
+    (generateRankingReport as ReturnType<typeof vi.fn>).mockReturnValueOnce({ title: 'Report', body: 'body' });
+    const res = (await sendMessage({ type: 'GENERATE_RANKING_REPORT', method: 'url' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.method).toBe('url');
+    expect(res.issueUrl).toBeDefined();
+  });
+
+  it('catch path returns ERROR', async () => {
+    const { generateRankingReport } = await import('../ranking-report');
+    (generateRankingReport as ReturnType<typeof vi.fn>).mockImplementationOnce(() => { throw new Error('report crash'); });
+    const res = (await sendMessage({ type: 'GENERATE_RANKING_REPORT' })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toBe('report crash');
+  });
+});
+
+describe('additional commands and permissions', () => {
+  const m = swBrowserMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('EXECUTE_COMMAND responds OK', async () => {
+    const res = (await sendMessage({ type: 'EXECUTE_COMMAND', commandId: 'test-cmd' })) as any;
+    expect(res.status).toBe('OK');
+  });
+
+  it('FACTORY_RESET resets settings and rebuilds', async () => {
+    const { SettingsManager } = await import('../../core/settings');
+    (SettingsManager as any).resetToDefaults = vi.fn(async () => {});
+    const res = (await sendMessage({ type: 'FACTORY_RESET' })) as any;
+    expect(res.status).toBe('OK');
+    expect((SettingsManager as any).resetToDefaults).toHaveBeenCalled();
+  });
+
+  it('RESET_SETTINGS resets to defaults', async () => {
+    const { SettingsManager } = await import('../../core/settings');
+    (SettingsManager as any).resetToDefaults = vi.fn(async () => {});
+    const res = (await sendMessage({ type: 'RESET_SETTINGS' })) as any;
+    expect(res.status).toBe('OK');
+    expect((SettingsManager as any).resetToDefaults).toHaveBeenCalled();
+  });
+
+  it('RESET_PERFORMANCE_METRICS resets tracker', async () => {
+    const { performanceTracker } = await import('../performance-monitor');
+    (performanceTracker as any).reset = vi.fn(async () => {});
+    const res = (await sendMessage({ type: 'RESET_PERFORMANCE_METRICS' })) as any;
+    expect(res.status).toBe('OK');
+    expect((performanceTracker as any).reset).toHaveBeenCalled();
+  });
+
+  it('REMOVE_OPTIONAL_PERMISSIONS returns removed flag', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI.permissions as any).remove = (_p: unknown, cb: (r: boolean) => void) => { cb(true); };
+    try {
+      const res = (await sendMessage({ type: 'REMOVE_OPTIONAL_PERMISSIONS', permissions: ['topSites'] })) as any;
+      expect(res.status).toBe('OK');
+      expect(res.removed).toBe(true);
+    } finally {
+      delete (browserAPI.permissions as any).remove;
+    }
+  });
+});
+
+describe('RUN_TROUBLESHOOTER', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('returns OK with all diagnostic steps', async () => {
+    const { getAllIndexedItems } = await import('../database');
+    (getAllIndexedItems as ReturnType<typeof vi.fn>).mockResolvedValue([{ url: 'https://test.com' }]);
+    const res = (await sendMessage({ type: 'RUN_TROUBLESHOOTER' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.data.steps.length).toBeGreaterThanOrEqual(7);
+    expect(['healthy', 'issues-remain', 'healed']).toContain(res.data.overallStatus);
+    expect(res.data).toHaveProperty('totalDurationMs');
+  });
+
+  it('returns ERROR on outer catch', async () => {
+    const { openDatabase } = await import('../database');
+    const { getAllIndexedItems } = await import('../database');
+    (openDatabase as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('troubleshoot fail'));
+    (getAllIndexedItems as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('troubleshoot fail'));
+    const { recoverFromCorruption } = await import('../resilience');
+    (recoverFromCorruption as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('troubleshoot fail'));
+    const res = (await sendMessage({ type: 'RUN_TROUBLESHOOTER' })) as any;
+    expect(res.status).toBe('OK');
+    expect(res.data.steps.some((s: any) => s.status === 'fail')).toBe(true);
+  });
+});
+
+describe('GET_WINDOWS and MOVE_TAB_TO_WINDOW', () => {
+  const m = swBrowserMocks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    m.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('GET_WINDOWS returns filtered window list', async () => {
+    m.windowsGetAll.mockResolvedValueOnce([
+      { id: 1, type: 'normal', tabs: [{ id: 10, active: true, title: 'Active', favIconUrl: 'icon.png' }] },
+      { id: 2, type: 'popup', tabs: [] },
+    ]);
+    const res = (await sendMessage({ type: 'GET_WINDOWS' })) as any;
+    expect(res.windows).toHaveLength(1);
+    expect(res.windows[0].id).toBe(1);
+    expect(res.windows[0].activeTabTitle).toBe('Active');
+  });
+
+  it('MOVE_TAB_TO_WINDOW moves tab', async () => {
+    const res = (await sendMessage({ type: 'MOVE_TAB_TO_WINDOW', tabId: 5, targetWindowId: 2 })) as any;
+    expect(res.status).toBe('OK');
+    expect(m.tabsMove).toHaveBeenCalledWith(5, { windowId: 2, index: -1 });
+  });
+
+  it('MOVE_TAB_TO_WINDOW errors without tabId', async () => {
+    const res = (await sendMessage({ type: 'MOVE_TAB_TO_WINDOW', targetWindowId: 2 })) as any;
+    expect(res.error).toBe('No tab to move');
+  });
+
+  it('MOVE_TAB_TO_WINDOW errors without targetWindowId', async () => {
+    const res = (await sendMessage({ type: 'MOVE_TAB_TO_WINDOW', tabId: 5 })) as any;
+    expect(res.error).toBe('No target window specified');
+  });
+});
+
+describe('METADATA_CAPTURE validation', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    swBrowserMocks.resetSwBrowserCommandMocks();
+    await new Promise(r => setTimeout(r, 500));
+  });
+
+  it('rejects missing payload url', async () => {
+    const res = (await sendMessage({ type: 'METADATA_CAPTURE', payload: {} })) as any;
+    expect(res.status).toBe('ERROR');
+    expect(res.message).toContain('METADATA_CAPTURE');
+  });
+
+  it('rejects empty url string', async () => {
+    const res = (await sendMessage({ type: 'METADATA_CAPTURE', payload: { url: '' } })) as any;
+    expect(res.status).toBe('ERROR');
   });
 });

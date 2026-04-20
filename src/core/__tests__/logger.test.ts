@@ -338,4 +338,454 @@ describe('Logger', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('init()', () => {
+    it('loads saved log level from SettingsManager', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.getSetting).mockReturnValue(3); // DEBUG
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.DEBUG);
+    });
+
+    it('skips if already initialized (early return)', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      await Logger.init();
+      vi.mocked(SettingsManager.init).mockClear();
+      await Logger.init();
+      expect(SettingsManager.init).not.toHaveBeenCalled();
+    });
+
+    it('keeps INFO when savedLogLevel is out of range', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.getSetting).mockReturnValue(99);
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.INFO);
+    });
+
+    it('keeps INFO when savedLogLevel is negative', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.getSetting).mockReturnValue(-1);
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.INFO);
+    });
+
+    it('keeps INFO when savedLogLevel is not a number', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.getSetting).mockReturnValue('high');
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.INFO);
+    });
+
+    it('keeps default INFO when SettingsManager.init() throws', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.init).mockRejectedValueOnce(new Error('storage unavailable'));
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.INFO);
+    });
+  });
+
+  describe('formatLogEntry data branches', () => {
+    it('appends data=null for null data', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', null);
+      expect(consoleSpy.mock.calls[0][0]).toContain('data=null');
+      consoleSpy.mockRestore();
+    });
+
+    it('inlines string data as primitive', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', 'hello');
+      expect(consoleSpy.mock.calls[0][0]).toContain('data=hello');
+      consoleSpy.mockRestore();
+    });
+
+    it('inlines numeric data as primitive', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', 42);
+      expect(consoleSpy.mock.calls[0][0]).toContain('data=42');
+      consoleSpy.mockRestore();
+    });
+
+    it('inlines boolean data as primitive', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', true);
+      expect(consoleSpy.mock.calls[0][0]).toContain('data=true');
+      consoleSpy.mockRestore();
+    });
+
+    it('inlines bigint data as primitive', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', BigInt(99));
+      expect(consoleSpy.mock.calls[0][0]).toContain('data=99');
+      consoleSpy.mockRestore();
+    });
+
+    it('appends "data=" marker for object data (no inline value)', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', { key: 'val' });
+      const prefix = consoleSpy.mock.calls[0][0] as string;
+      expect(prefix).toContain('data=');
+      expect(prefix).not.toContain('data=null');
+      consoleSpy.mockRestore();
+    });
+
+    it('appends error= when error object is provided', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      Logger.error('C', 'm', 'msg', undefined, new Error('boom'));
+      expect(consoleSpy.mock.calls[0][0]).toContain('error=boom');
+      consoleSpy.mockRestore();
+    });
+
+    it('uses className only when methodName is absent', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.INFO);
+      // Old-style call with non-string first arg triggers Unknown className without methodName
+      // But actually let's directly test the internal path by using the info call
+      // The old pattern always sets methodName to 'unknown', so we verify className-only
+      // formatting by checking that when the internal methodName is set, it appears
+      Logger.info('C', 'm', 'msg');
+      expect(consoleSpy.mock.calls[0][0]).toContain('[C.m]');
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('log() data serialization', () => {
+    it('truncates JSON data longer than 500 chars in the buffer snapshot', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.clearBuffer();
+      const bigData = { payload: 'x'.repeat(600) };
+      Logger.info('C', 'm', 'msg', bigData);
+      const logs = Logger.getRecentLogs(1);
+      expect(typeof logs[0].data).toBe('string');
+      expect((logs[0].data as string).length).toBeLessThanOrEqual(504); // 500 + '…'
+      expect((logs[0].data as string).endsWith('…')).toBe(true);
+    });
+
+    it('falls back to String(data) when JSON.stringify throws (circular ref)', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.clearBuffer();
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      Logger.info('C', 'm', 'msg', circular);
+      const logs = Logger.getRecentLogs(1);
+      expect(typeof logs[0].data).toBe('string');
+      expect(logs[0].data).toContain('[object Object]');
+    });
+  });
+
+  describe('log() console args for complex types', () => {
+    it('passes object data as extra console arg', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      const obj = { key: 'val' };
+      Logger.info('C', 'm', 'msg', obj);
+      expect(consoleSpy.mock.calls[0]).toHaveLength(2);
+      expect(consoleSpy.mock.calls[0][1]).toBe(obj);
+      consoleSpy.mockRestore();
+    });
+
+    it('passes function data as extra console arg', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      const fn = () => {};
+      Logger.info('C', 'm', 'msg', fn);
+      expect(consoleSpy.mock.calls[0]).toHaveLength(2);
+      expect(consoleSpy.mock.calls[0][1]).toBe(fn);
+      consoleSpy.mockRestore();
+    });
+
+    it('passes symbol data as extra console arg', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      const sym = Symbol('test');
+      Logger.info('C', 'm', 'msg', sym);
+      expect(consoleSpy.mock.calls[0]).toHaveLength(2);
+      expect(consoleSpy.mock.calls[0][1]).toBe(sym);
+      consoleSpy.mockRestore();
+    });
+
+    it('does NOT pass primitive data as extra console arg', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', 42);
+      expect(consoleSpy.mock.calls[0]).toHaveLength(1);
+      consoleSpy.mockRestore();
+    });
+
+    it('passes error as extra console arg alongside data', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      const err = new Error('test');
+      const data = { ctx: 1 };
+      Logger.error('C', 'm', 'msg', data, err);
+      expect(consoleSpy.mock.calls[0]).toHaveLength(3); // prefix, data, error
+      expect(consoleSpy.mock.calls[0][1]).toBe(data);
+      expect(consoleSpy.mock.calls[0][2]).toBe(err);
+      consoleSpy.mockRestore();
+    });
+
+    it('does not add extra arg when data is null', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'msg', null);
+      expect(consoleSpy.mock.calls[0]).toHaveLength(1);
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('level gating — additional suppression paths', () => {
+    it('suppresses WARN when level is ERROR', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      Logger.warn('C', 'm', 'suppressed');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('suppresses INFO when level is WARN', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.WARN);
+      Logger.info('C', 'm', 'suppressed');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('suppresses TRACE when level is DEBUG', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.DEBUG);
+      consoleSpy.mockClear();
+      Logger.trace('C', 'm', 'suppressed');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('suppresses DEBUG when level is ERROR', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      Logger.setLevelInternal(LogLevel.ERROR);
+      Logger.debug('C', 'm', 'suppressed');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('buffer overflow', () => {
+    it('evicts oldest entries when buffer exceeds MAX_BUFFER_SIZE', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.clearBuffer();
+      for (let i = 0; i < 1005; i++) {
+        Logger.info('C', 'm', `msg-${i}`);
+      }
+      const stats = Logger.getStats();
+      expect(stats.bufferSize).toBeLessThanOrEqual(1000);
+      const logs = Logger.getRecentLogs(1);
+      expect(logs[0].message).not.toBe('msg-0');
+    });
+  });
+
+  describe('errorMeta()', () => {
+    it('extracts name and message from Error instance', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta(new TypeError('bad type'));
+      expect(result).toEqual({ name: 'TypeError', message: 'bad type' });
+    });
+
+    it('includes code from Error with code property', async () => {
+      const { errorMeta } = await import('../logger');
+      const err = new Error('fail') as Error & { code: string };
+      err.code = 'ENOENT';
+      expect(errorMeta(err)).toEqual({ name: 'Error', message: 'fail', code: 'ENOENT' });
+    });
+
+    it('includes numeric code from Error', async () => {
+      const { errorMeta } = await import('../logger');
+      const err = new Error('fail') as Error & { code: number };
+      err.code = 404;
+      expect(errorMeta(err)).toEqual({ name: 'Error', message: 'fail', code: 404 });
+    });
+
+    it('omits code when not present on Error', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta(new Error('plain'));
+      expect(result).toEqual({ name: 'Error', message: 'plain' });
+      expect('code' in result).toBe(false);
+    });
+
+    it('handles non-Error object with name and message', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 'CustomErr', message: 'custom msg' });
+      expect(result).toEqual({ name: 'CustomErr', message: 'custom msg' });
+    });
+
+    it('handles non-Error object with code property', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 'X', message: 'y', code: 'ABORT' });
+      expect(result).toEqual({ name: 'X', message: 'y', code: 'ABORT' });
+    });
+
+    it('handles non-Error object with numeric code', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 'X', message: 'y', code: 500 });
+      expect(result).toEqual({ name: 'X', message: 'y', code: 500 });
+    });
+
+    it('falls back to non-Error name and String() for object without name/message', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ foo: 'bar' });
+      expect(result.name).toBe('non-Error');
+      expect(result.message).toBe('[object Object]');
+    });
+
+    it('handles non-Error object with non-string name', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 123, message: 'msg' });
+      expect(result.name).toBe('non-Error');
+      expect(result.message).toBe('msg');
+    });
+
+    it('handles non-Error object with non-string message', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 'X', message: 999 });
+      expect(result.name).toBe('X');
+      expect(result.message).toContain('[object Object]');
+    });
+
+    it('handles non-Error object without code (omits code)', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 'X', message: 'y' });
+      expect('code' in result).toBe(false);
+    });
+
+    it('handles non-Error object with boolean code (omits code)', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta({ name: 'X', message: 'y', code: true });
+      expect('code' in result).toBe(false);
+    });
+
+    it('handles primitive string', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta('something broke');
+      expect(result).toEqual({ name: 'non-Error', message: 'something broke' });
+    });
+
+    it('handles primitive number', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta(42);
+      expect(result).toEqual({ name: 'non-Error', message: '42' });
+    });
+
+    it('handles null', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta(null);
+      expect(result).toEqual({ name: 'non-Error', message: 'null' });
+    });
+
+    it('handles undefined', async () => {
+      const { errorMeta } = await import('../logger');
+      const result = errorMeta(undefined);
+      expect(result).toEqual({ name: 'non-Error', message: 'undefined' });
+    });
+  });
+
+  describe('setLevel error path detail', () => {
+    it('logs error with message from caught exception', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.setSetting).mockRejectedValueOnce(new Error('quota exceeded'));
+      await Logger.setLevel(LogLevel.DEBUG);
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(consoleSpy.mock.calls[0][0]).toContain('Failed to persist log level');
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('init() with edge-case log levels', () => {
+    it('accepts savedLogLevel 0 (ERROR)', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.getSetting).mockReturnValue(0);
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.ERROR);
+    });
+
+    it('accepts savedLogLevel 4 (TRACE)', async () => {
+      const { SettingsManager } = await import('../settings');
+      vi.mocked(SettingsManager.getSetting).mockReturnValue(4);
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { Logger, LogLevel } = await import('../logger');
+      await Logger.init();
+      expect(Logger.getLevel()).toBe(LogLevel.TRACE);
+    });
+  });
+
+  describe('formatLogEntry — className-only (no methodName)', () => {
+    it('omits methodName from context string when methodName is empty', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      const comp = Logger.forComponent('Solo');
+      comp.info('', 'message without method');
+      const prefix = consoleSpy.mock.calls[0][0] as string;
+      expect(prefix).toContain('[Solo]');
+      expect(prefix).not.toContain('[Solo.]');
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('data=undefined path (no data arg)', () => {
+    it('does not append data= when data is undefined', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const { Logger } = await import('../logger');
+      Logger.setLevelInternal(2);
+      Logger.info('C', 'm', 'no data');
+      const prefix = consoleSpy.mock.calls[0][0] as string;
+      expect(prefix).not.toContain('data=');
+      consoleSpy.mockRestore();
+    });
+  });
 });

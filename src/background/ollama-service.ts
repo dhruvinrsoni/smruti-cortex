@@ -54,7 +54,7 @@ async function readJsonWithLimit<T = unknown>(response: Response, limitBytes: nu
 
 export interface OllamaConfig {
   endpoint: string;          // Default: 'http://localhost:11434'
-  model: string;             // Default: 'nomic-embed-text:latest'
+  model: string;             // Default: 'nomic-embed-text'
   timeout: number;           // Max time for embedding generation (ms)
   maxRetries: number;        // Retry attempts on failure
 }
@@ -86,7 +86,7 @@ export class OllamaService {
   constructor(config?: Partial<OllamaConfig>) {
     this.config = {
       endpoint: config?.endpoint || 'http://localhost:11434',
-      model: config?.model || 'nomic-embed-text:latest',
+      model: config?.model || 'nomic-embed-text',
       timeout: config?.timeout || 10000,    // 10s max (first request needs time for model loading)
       maxRetries: config?.maxRetries || 1
     };
@@ -645,6 +645,15 @@ export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: n
 let ollamaService: OllamaService | null = null;
 
 /**
+ * Normalize an Ollama model name for consistent comparison.
+ * Ollama treats "model" and "model:latest" identically,
+ * so we strip the `:latest` suffix to avoid false model-change detections.
+ */
+export function normalizeModelName(name: string): string {
+  return name.replace(/:latest$/, '');
+}
+
+/**
  * Build OllamaConfig from SettingsManager (reads user's actual settings)
  * This ensures the service always uses the user's configured model, endpoint, and timeout.
  */
@@ -663,9 +672,10 @@ export async function getOllamaConfigFromSettings(forEmbeddings = false): Promis
       }
     } catch { /* invalid URL handled downstream */ }
 
-    const model = forEmbeddings
-      ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text:latest')
+    const rawModel = forEmbeddings
+      ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text')
       : (SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
+    const model = normalizeModelName(rawModel);
 
     return { endpoint, model, timeout, maxRetries: 1 };
   } catch {

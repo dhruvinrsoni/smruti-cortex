@@ -24,11 +24,15 @@ module.exports = {
     '@typescript-eslint/no-non-null-assertion': 'warn',
     
     // General
-    'no-console': 'off', // Extension needs console for debugging
+    'no-console': 'warn',
     'prefer-const': 'error',
     'no-var': 'error',
     'eqeqeq': ['error', 'always'],
     'curly': ['error', 'all'],
+
+    // Complexity guardrails
+    'max-lines-per-function': ['warn', { max: 80, skipBlankLines: true, skipComments: true }],
+    'complexity': ['warn', 15],
     
     // Code style
     'semi': ['error', 'always'],
@@ -42,6 +46,16 @@ module.exports = {
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-non-null-assertion': 'off',
+        'max-lines-per-function': 'off',
+        'no-console': 'off',
+      },
+    },
+    {
+      files: ['src/popup/popup.ts', 'src/content_scripts/quick-search.ts'],
+      rules: {
+        'max-lines-per-function': 'off',
+        'no-console': 'off',
+        'complexity': 'off',
       },
     },
   ],

@@ -134,6 +134,9 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | `workflows-ci` | Modifying GitHub Actions or Docker |
 | `test-generation` | Generating new test files (full rules + mock patterns) |
 | `maintenance` | Bug fixes, releases, Chrome Web Store submissions |
+| `coverage-policy` | **MANDATORY** before any test/coverage work — thresholds, ratchet, exclusion rules |
+| `solid-design` | **MANDATORY** before any refactor — ports, Result type, bounded contexts |
+| `atomic-commits` | **MANDATORY** before committing — verified, one-logical-change commits |
 
 Full test generation agent: `.github/copilot/agents/test-coverage-agent.md`
 
@@ -245,3 +248,26 @@ Then:
 - `minor` — new features, backward compatible
 - `major` — breaking changes
 - No bump — `docs:`, `chore:`, `style:`, `test:` commits
+
+---
+
+## Test & Refactor Constitution
+
+Hard rules that apply to **every** code change — human or AI. These are non-negotiable.
+
+### Coverage
+- **95% lines / 90% branches / 95% functions / 95% statements** — enforced by `vitest.config.ts` thresholds and the ratchet script.
+- Coverage must **never decrease**. The ratchet (`scripts/coverage-ratchet.mjs`) blocks commits that lower any metric.
+- Run `npm run coverage` before every commit. Run `node scripts/coverage-ratchet.mjs` to verify.
+- See `.github/skills/coverage-policy/SKILL.md` for exclusion rules and characterization-test-first pattern.
+
+### SOLID Architecture
+- `service-worker.ts` is a thin bootstrap (<200 lines). Business logic lives in `handlers/`.
+- Handlers depend on **port interfaces** (`src/background/ports/`), never on concrete implementations.
+- Use `Result<T, E>` from `src/core/result.ts` for fallible operations — do not throw for expected failures.
+- See `.github/skills/solid-design/SKILL.md` for the full architecture guide.
+
+### Commit Discipline
+- One logical change per commit. Always review `git diff --staged` before committing.
+- Run `npm run coverage` + ratchet check before every commit.
+- See `.github/skills/atomic-commits/SKILL.md` for the complete protocol.

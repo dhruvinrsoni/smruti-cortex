@@ -365,6 +365,136 @@ describe('ai-keyword-expander', () => {
     });
   });
 
+  describe('parseKeywordResponse — markdown code block extraction', () => {
+    it('should unwrap markdown ```json code fences before parsing', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '```json\n["search", "find", "query", "lookup"]\n```' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('search');
+      expect(result).toContain('search');
+      expect(result).toContain('find');
+      expect(result).toContain('query');
+      expect(result).toContain('lookup');
+    });
+
+    it('should unwrap markdown ``` fences without json tag', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: { content: '```\n["code", "program", "script"]\n```' },
+        }),
+        text: async () => '',
+      } as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('code');
+      expect(result).toContain('code');
+      expect(result).toContain('program');
+      expect(result).toContain('script');
+    });
+  });
+
+  describe('readResponseText fallback paths', () => {
+    it('should use json() when text() returns empty string', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => '',
+        json: async () => ({
+          message: { content: '["alpha", "beta"]' },
+        }),
+      } as unknown as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('alpha');
+      expect(result).toContain('alpha');
+      expect(result).toContain('beta');
+    });
+
+    it('should return original tokens when response has neither text nor json', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+      } as unknown as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('lonely');
+      expect(result).toContain('lonely');
+    });
+
+    it('should handle streaming ReadableStream body', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+
+      const encoder = new TextEncoder();
+      const chunks = [
+        encoder.encode('{"message":{"content":"[\\"stream\\",'),
+        encoder.encode(' \\"flow\\"]"}}'),
+      ];
+      let idx = 0;
+      const mockBody = {
+        getReader: () => ({
+          read: async () => {
+            if (idx < chunks.length) {
+              return { done: false, value: chunks[idx++] };
+            }
+            return { done: true, value: undefined };
+          },
+          cancel: vi.fn(),
+        }),
+      };
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        body: mockBody,
+      } as unknown as Response));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('stream');
+      expect(result).toContain('stream');
+      expect(result).toContain('flow');
+    });
+  });
+
+  describe('callOllamaForKeywords — AbortError path', () => {
+    it('should throw wrapped error when fetch throws AbortError', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      const abortErr = new Error('The operation was aborted');
+      abortErr.name = 'AbortError';
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abortErr));
+
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('test');
+      expect(result).toContain('test');
+      expect(ollamaMocks.recordCircuitBreakerFailure).not.toHaveBeenCalled();
+    });
+
+    it('should remove abort listener in catch path', async () => {
+      cacheMocks.getCachedExpansion.mockReturnValue(null);
+      cacheMocks.getPrefixMatch.mockReturnValue(null);
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+
+      const controller = new AbortController();
+      const { expandQueryKeywords } = await importFreshModule();
+      const result = await expandQueryKeywords('test', controller.signal);
+      expect(result).toContain('test');
+      expect(ollamaMocks.recordCircuitBreakerFailure).toHaveBeenCalled();
+    });
+  });
+
   describe('parseKeywordResponse — regex fallback', () => {
     // Regex fallback is reached when no valid [ ] or { } JSON is found.
     // It extracts quoted alphanumeric strings matching /"([a-zA-Z0-9]+)"/g.

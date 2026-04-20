@@ -37,6 +37,11 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
         // Create clean, bounded text for embedding (strips query params, enforces limits)
         const text = buildEmbeddingText(item);
 
+        if (!text) {
+            logger.trace('generateItemEmbedding', `Skipping item with empty embeddable text: "${item.url.substring(0, 60)}"`);
+            return undefined;
+        }
+
         logger.debug('generateItemEmbedding', `🧠 Generating embedding for: "${item.title.substring(0, 50)}..."`);
 
         const result = await ollamaService.generateEmbedding(text);

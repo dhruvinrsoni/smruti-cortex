@@ -94,5 +94,41 @@ describe('titleScorer', () => {
       expect(score).toBeLessThanOrEqual(1.0);
       expect(score).toBeGreaterThan(0.9);
     });
+
+    it('should return 1 for exact title match', () => {
+      const item = makeItem({ title: 'react docs' });
+      expect(titleScorer.score(item, 'react docs', [])).toBe(1);
+    });
+
+    it('should handle all-prefix matches (compositionBonus = 0.08)', () => {
+      const item = makeItem({ title: 'reactify documentation' });
+      const score = titleScorer.score(item, 'reac doc', []);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThanOrEqual(1.0);
+    });
+
+    it('should handle mixed exact+prefix composition branch', () => {
+      const item = makeItem({ title: 'react documentation' });
+      const score = titleScorer.score(item, 'react doc', []);
+      expect(score).toBeGreaterThan(0.5);
+    });
+
+    it('should handle partial coverage compositionBonus branch', () => {
+      const item = makeItem({ title: 'react tutorial' });
+      const score = titleScorer.score(item, 'react zzzzz', []);
+      expect(score).toBeGreaterThan(0);
+    });
+
+    it('should give position bonus of 0 when no tokens match', () => {
+      const item = makeItem({ title: 'something completely different' });
+      const score = titleScorer.score(item, 'zzz qqq', []);
+      expect(score).toBe(0);
+    });
+
+    it('should handle single token with no startsWith bonus', () => {
+      const item = makeItem({ title: 'my big react app' });
+      const score = titleScorer.score(item, 'react', []);
+      expect(score).toBeGreaterThan(0);
+    });
   });
 });

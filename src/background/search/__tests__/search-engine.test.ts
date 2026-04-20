@@ -1110,4 +1110,357 @@ describe('search-engine', () => {
       expect(debugScores!.finalScore).toBeGreaterThan(0);
     });
   });
+
+  // ── Coverage improvement tests ──────────────────────────────────────────
+
+  function setupCoverageMocks(overrides: Partial<{
+    items: IndexedItem[];
+    scorerFactory: () => Array<{ name: string; weight: number; score: (_item: IndexedItem, query: string, items: IndexedItem[], ctx: unknown) => number }>;
+    expandQueryKeywords: (q: string, signal: AbortSignal) => Promise<string[]>;
+    getLastExpansionSource: () => string;
+    isCircuitBreakerOpen: () => boolean;
+    checkMemoryPressure: () => { ok: boolean; permanent: boolean };
+    generateEmbedding: (text: string, signal: AbortSignal) => Promise<{ success: boolean; embedding: number[]; error?: string }>;
+    getAllIndexedItems: () => Promise<IndexedItem[]>;
+    loadEmbeddingsInto: (items: IndexedItem[]) => Promise<number>;
+    historySearch: (_q: unknown, cb: (r: unknown[]) => void) => void;
+  }> = {}) {
+    vi.resetModules();
+    const items = overrides.items ?? [];
+    vi.doMock('../../../core/logger', () => ({
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      errorMeta: (err: unknown) => err instanceof Error ? { name: err.name, message: err.message } : { name: 'non-Error', message: String(err) },
+    }));
+    vi.doMock('../../../core/settings', () => ({
+      SettingsManager: { getSetting: vi.fn((key: string) => settingsMap[key]), init: vi.fn() },
+    }));
+    const defaultScorer = {
+      name: 'test-scorer', weight: 1.0,
+      score: (_item: IndexedItem, query: string) => {
+        const h = (_item.title + ' ' + _item.url).toLowerCase();
+        return h.includes(query) ? 1.0 : 0.0;
+      },
+    };
+    vi.doMock('../scorer-manager', () => ({
+      getAllScorers: vi.fn(() => overrides.scorerFactory ? overrides.scorerFactory() : [defaultScorer]),
+    }));
+    vi.doMock('../../database', () => ({
+      getAllIndexedItems: overrides.getAllIndexedItems ? vi.fn(overrides.getAllIndexedItems) : vi.fn(async () => items),
+      loadEmbeddingsInto: overrides.loadEmbeddingsInto ? vi.fn(overrides.loadEmbeddingsInto) : vi.fn(async () => 0),
+      saveIndexedItem: vi.fn(),
+    }));
+    vi.doMock('../tokenizer', () => ({
+      tokenize: vi.fn((text: string) => text.toLowerCase().split(/\s+/).filter((t: string) => t.length > 0)),
+      classifyTokenMatches: vi.fn((tokens: string[], text: string) => tokens.map((t: string) => (text.includes(t) ? 1 : 0))),
+      graduatedMatchScore: vi.fn(() => 0.5),
+      countConsecutiveMatches: vi.fn(() => 0),
+      MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+      MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+    }));
+    vi.doMock('../../../core/helpers', () => ({
+      browserAPI: {
+        history: {
+          search: overrides.historySearch ? vi.fn(overrides.historySearch) : vi.fn((_q: unknown, cb: (r: unknown[]) => void) => cb([])),
+        },
+      },
+    }));
+    vi.doMock('../../ai-keyword-expander', () => ({
+      expandQueryKeywords: overrides.expandQueryKeywords
+        ? vi.fn(overrides.expandQueryKeywords)
+        : vi.fn(async (q: string) => q.toLowerCase().split(/\s+/).filter((t: string) => t.length > 0)),
+      getLastExpansionSource: overrides.getLastExpansionSource ? vi.fn(overrides.getLastExpansionSource) : vi.fn(() => 'disabled'),
+    }));
+    vi.doMock('../diversity-filter', () => ({ applyDiversityFilter: vi.fn((i: unknown[]) => i) }));
+    vi.doMock('../../performance-monitor', () => ({ performanceTracker: { recordSearch: vi.fn() } }));
+    vi.doMock('../query-expansion', () => ({
+      getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+    }));
+    vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
+    vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
+    vi.doMock('../../embedding-processor', () => ({ embeddingProcessor: { setSearchActive: vi.fn() } }));
+    vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test text') }));
+    vi.doMock('../../ollama-service', () => ({
+      isCircuitBreakerOpen: overrides.isCircuitBreakerOpen ? vi.fn(overrides.isCircuitBreakerOpen) : vi.fn(() => true),
+      checkMemoryPressure: overrides.checkMemoryPressure ? vi.fn(overrides.checkMemoryPressure) : vi.fn(() => ({ ok: true, permanent: false })),
+      getOllamaConfigFromSettings: vi.fn(async () => ({})),
+      getOllamaService: vi.fn(() => ({
+        generateEmbedding: overrides.generateEmbedding
+          ? vi.fn(overrides.generateEmbedding)
+          : vi.fn(async () => ({ success: false, embedding: [], error: 'mocked' })),
+      })),
+    }));
+    vi.doMock('../../../core/scorer-types', () => ({}));
+  }
+
+  describe('sortBy branches within same relevance tier', () => {
+    it('should sort by visitCount when sortBy is most-visited', async () => {
+      settingsMap.sortBy = 'most-visited';
+      setupCoverageMocks({
+        items: [
+          makeItem({ url: 'https://a.com/test', title: 'Test Alpha', hostname: 'a.com', visitCount: 5 }),
+          makeItem({ url: 'https://b.com/test', title: 'Test Beta', hostname: 'b.com', visitCount: 100 }),
+        ],
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('test');
+      expect(results.length).toBe(2);
+      expect(results[0].title).toBe('Test Beta');
+      expect(results[1].title).toBe('Test Alpha');
+      settingsMap.sortBy = 'best-match';
+    });
+
+    it('should sort alphabetically when sortBy is alphabetical', async () => {
+      settingsMap.sortBy = 'alphabetical';
+      setupCoverageMocks({
+        items: [
+          makeItem({ url: 'https://b.com/test', title: 'Zebra Test', hostname: 'b.com' }),
+          makeItem({ url: 'https://a.com/test', title: 'Alpha Test', hostname: 'a.com' }),
+        ],
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('test');
+      expect(results.length).toBe(2);
+      expect(results[0].title).toBe('Alpha Test');
+      expect(results[1].title).toBe('Zebra Test');
+      settingsMap.sortBy = 'best-match';
+    });
+  });
+
+  describe('scorer error handling', () => {
+    it('should catch scorer errors and continue scoring with remaining scorers', async () => {
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com/test', title: 'Test Page', hostname: 'example.com' })],
+        scorerFactory: () => [
+          { name: 'crash-scorer', weight: 1.0, score: () => { throw new Error('Scorer blew up'); } },
+          {
+            name: 'good-scorer', weight: 1.0,
+            score: (_item: IndexedItem, query: string) => {
+              const h = (_item.title + ' ' + _item.url).toLowerCase();
+              return h.includes(query) ? 1.0 : 0.0;
+            },
+          },
+        ],
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('test');
+      expect(results.length).toBe(1);
+    });
+  });
+
+  describe('AI keyword expansion status paths', () => {
+    it('should report cache-hit when expansion source is cache-hit', async () => {
+      settingsMap.ollamaEnabled = true;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        expandQueryKeywords: async () => ['example', 'sample', 'illustration'],
+        getLastExpansionSource: () => 'cache-hit',
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example', { skipAI: false });
+      const status = getLastAIStatus();
+      expect(status?.aiKeywords).toBe('cache-hit');
+      expect(status?.expandedCount).toBe(2);
+      expect(status?.aiExpandedKeywords).toContain('sample');
+    });
+
+    it('should report prefix-hit when expansion source is prefix-hit', async () => {
+      settingsMap.ollamaEnabled = true;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        expandQueryKeywords: async () => ['example', 'exemplar'],
+        getLastExpansionSource: () => 'prefix-hit',
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example', { skipAI: false });
+      expect(getLastAIStatus()?.aiKeywords).toBe('prefix-hit');
+    });
+
+    it('should report error when keyword expansion throws', async () => {
+      settingsMap.ollamaEnabled = true;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        expandQueryKeywords: async () => { throw new Error('Ollama unreachable'); },
+        getLastExpansionSource: () => 'disabled',
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example', { skipAI: false });
+      expect(getLastAIStatus()?.aiKeywords).toBe('error');
+    });
+  });
+
+  describe('semantic search status paths', () => {
+    it('should set semantic to active when query embedding succeeds', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => false,
+        generateEmbedding: async () => ({ success: true, embedding: [0.1, 0.2, 0.3] }),
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+      expect(getLastAIStatus()?.semantic).toBe('active');
+    });
+
+    it('should set semantic to error when embedding returns success=false', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => false,
+        generateEmbedding: async () => ({ success: false, embedding: [], error: 'model not loaded' }),
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+      const status = getLastAIStatus();
+      expect(status?.semantic).toBe('error');
+      expect(status?.semanticError).toContain('model not loaded');
+    });
+
+    it('should set semantic to error when embedding throws exception', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => false,
+        generateEmbedding: async () => { throw new Error('Connection refused'); },
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+      const status = getLastAIStatus();
+      expect(status?.semantic).toBe('error');
+      expect(status?.semanticError).toContain('Connection refused');
+    });
+
+    it('should set semantic to circuit-breaker when circuit breaker is open', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => true,
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+      expect(getLastAIStatus()?.semantic).toBe('circuit-breaker');
+    });
+  });
+
+  describe('database error fallback', () => {
+    it('should fall back to browser history when getAllIndexedItems throws', async () => {
+      setupCoverageMocks({
+        getAllIndexedItems: async () => { throw new Error('DB corrupted'); },
+        historySearch: (_q: unknown, cb: (r: unknown[]) => void) => cb([
+          { url: 'https://fallback.com', title: 'Fallback Page', visitCount: 3, lastVisitTime: Date.now() },
+        ]),
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('fallback');
+      expect(results.length).toBe(1);
+      expect(results[0].url).toBe('https://fallback.com');
+      expect(results[0].title).toBe('Fallback Page');
+      expect(results[0].hostname).toBe('fallback.com');
+    });
+  });
+
+  describe('on-demand embedding generation', () => {
+    it('should generate embeddings and track count (lines 637-638)', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => false,
+        checkMemoryPressure: () => ({ ok: true, permanent: false }),
+        generateEmbedding: async () => ({ success: true, embedding: [0.1, 0.2, 0.3] }),
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+      expect(getLastAIStatus()?.embeddingsGenerated).toBeGreaterThan(0);
+    });
+  });
+
+  describe('embedding hydration', () => {
+    it('should log when loadEmbeddingsInto returns count > 0', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        loadEmbeddingsInto: async () => 5,
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('example');
+      expect(Array.isArray(results)).toBe(true);
+    });
+
+    it('should continue when loadEmbeddingsInto throws', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        loadEmbeddingsInto: async () => { throw new Error('IDB read failed'); },
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('example');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('bookmark strict matching exclusion', () => {
+    it('should exclude bookmarks that fail all strict matching criteria', async () => {
+      setupCoverageMocks({
+        items: [makeItem({
+          url: 'https://github.com',
+          title: 'GitHub',
+          hostname: 'github.com',
+          isBookmark: true,
+        })],
+        scorerFactory: () => [{
+          name: 'token-scorer', weight: 1.0,
+          score: (_item: IndexedItem, query: string) => {
+            const h = (_item.title + ' ' + _item.url).toLowerCase();
+            const tokens = query.toLowerCase().split(/\s+/);
+            const matched = tokens.filter((t: string) => h.includes(t)).length;
+            return matched > 0 ? 0.5 : 0.0;
+          },
+        }],
+      });
+      const { runSearch } = await import('../search-engine');
+      // "hub" matches substring in "github" but not at word boundary;
+      // "xyz" doesn't match → allOriginalTokensMatch=false, hasWordBoundaryMatch=false
+      const results = await runSearch('hub xyz');
+      expect(results.length).toBe(0);
+    });
+  });
+
+  describe('browser history fallback format', () => {
+    it('should convert history items to IndexedItem format with hostname', async () => {
+      setupCoverageMocks({
+        items: [],
+        historySearch: (_q: unknown, cb: (r: unknown[]) => void) => cb([
+          { url: 'https://docs.test.com/page', title: 'Test Docs', visitCount: 7, lastVisitTime: Date.now() },
+          { url: 'https://other.com', title: '', visitCount: 1 },
+        ]),
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('test');
+      expect(results.length).toBe(2);
+      expect(results[0].hostname).toBe('docs.test.com');
+      expect(results[0].visitCount).toBe(7);
+      expect(results[1].title).toBe('');
+    });
+  });
+
+  describe('skipEmbeddingThisPhase', () => {
+    it('should skip embedding when skipAI=true and ollamaEnabled=true', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = true;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => false,
+        generateEmbedding: async () => ({ success: true, embedding: [0.1, 0.2, 0.3] }),
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example', { skipAI: true });
+      expect(getLastAIStatus()?.semantic).toBe('disabled');
+    });
+  });
 });
