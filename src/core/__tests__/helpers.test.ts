@@ -173,3 +173,65 @@ describe('promisify', () => {
     await expect(promisify(throwingApi)).rejects.toThrow('sync error');
   });
 });
+
+describe('browserAPI fallback proxy', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('deep property access on noOpProxy does not throw', async () => {
+    vi.stubGlobal('chrome', undefined);
+    vi.stubGlobal('browser', undefined);
+    vi.resetModules();
+
+    const { browserAPI } = await import('../helpers');
+    expect(() => {
+      (browserAPI as any).runtime.onConnect.addListener(() => {});
+    }).not.toThrow();
+  });
+
+  it('noOpProxy apply returns undefined', async () => {
+    vi.stubGlobal('chrome', undefined);
+    vi.stubGlobal('browser', undefined);
+    vi.resetModules();
+
+    const { browserAPI } = await import('../helpers');
+    const result = (browserAPI as any).runtime.sendMessage('test');
+    expect(result).toBeUndefined();
+  });
+
+  it('proxy handler reads from globalThis.chrome when set after import', async () => {
+    vi.stubGlobal('chrome', undefined);
+    vi.stubGlobal('browser', undefined);
+    vi.resetModules();
+
+    const { browserAPI } = await import('../helpers');
+    const mockChrome = {
+      runtime: { id: 'test-id', getManifest: () => ({ manifest_version: 3, version: '1.0' }) },
+    };
+    vi.stubGlobal('chrome', mockChrome);
+
+    expect((browserAPI as any).runtime.id).toBe('test-id');
+  });
+});
+
+describe('getBrowserCompatibility edge cases', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('defaults manifestVersion to 3 when getManifest is unavailable', async () => {
+    vi.stubGlobal('chrome', {
+      omnibox: {},
+      runtime: {},
+    });
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 Chrome/120.0.0.0',
+    });
+    vi.stubGlobal('window', { indexedDB: {} });
+
+    const { getBrowserCompatibility } = await import('../helpers');
+    const result = getBrowserCompatibility();
+    expect(result.manifestVersion).toBe(3);
+  });
+});
