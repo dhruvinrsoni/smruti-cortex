@@ -122,7 +122,7 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'boolean',
     },
     embeddingModel: {
-        default: 'nomic-embed-text:latest',  // Dedicated embedding model (smaller, faster than generation models)
+        default: 'nomic-embed-text',  // Dedicated embedding model (smaller, faster than generation models)
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
     

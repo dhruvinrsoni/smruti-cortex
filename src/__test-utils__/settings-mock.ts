@@ -19,7 +19,7 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   ollamaTimeout: 30000,
   aiSearchDelayMs: 500,
   embeddingsEnabled: false,
-  embeddingModel: 'nomic-embed-text:latest',
+  embeddingModel: 'nomic-embed-text',
   loadFavicons: true,
   sensitiveUrlBlacklist: [],
   indexBookmarks: true,

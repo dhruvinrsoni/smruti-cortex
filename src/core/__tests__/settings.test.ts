@@ -1005,7 +1005,7 @@ describe('SettingsManager', () => {
           const defaults: Record<string, string> = {
             ollamaEndpoint: 'http://localhost:11434',
             ollamaModel: 'llama3.2:1b',
-            embeddingModel: 'nomic-embed-text:latest',
+            embeddingModel: 'nomic-embed-text',
           };
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
@@ -1016,7 +1016,7 @@ describe('SettingsManager', () => {
           const defaults: Record<string, string> = {
             ollamaEndpoint: 'http://localhost:11434',
             ollamaModel: 'llama3.2:1b',
-            embeddingModel: 'nomic-embed-text:latest',
+            embeddingModel: 'nomic-embed-text',
           };
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
