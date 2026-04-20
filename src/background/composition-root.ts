@@ -1,27 +1,33 @@
 /**
  * Composition Root — single place where all dependencies are wired together.
  *
- * service-worker.ts calls createMessageRegistry() to get a fully-wired
- * MessageHandlerRegistry. All handler modules register their handlers here.
- * Adding a new message type = add a handler function + register it below.
+ * service-worker.ts calls createRegistries() to get fully-wired
+ * MessageHandlerRegistry instances. Adding a new message type =
+ * add a handler function in the appropriate handler module + register it.
  */
 import { MessageHandlerRegistry } from './handlers/registry';
+import { registerSettingsHandlers } from './handlers/settings-handlers';
+import { registerSearchHandlers } from './handlers/search-handlers';
+import { registerOllamaHandlers } from './handlers/ollama-handlers';
+import { registerDiagnosticsPreInitHandlers, registerDiagnosticsPostInitHandlers } from './handlers/diagnostics-handlers';
+import { registerCommandHandlers } from './handlers/command-handlers';
 
-export function createMessageRegistry(): MessageHandlerRegistry {
-  const registry = new MessageHandlerRegistry();
+export interface ServiceRegistries {
+  preInit: MessageHandlerRegistry;
+  postInit: MessageHandlerRegistry;
+}
 
-  // Handler modules will be registered here in C3.4.
-  // Each domain module exports a function:
-  //   registerXxxHandlers(registry: MessageHandlerRegistry): void
-  //
-  // Example:
-  //   registerSearchHandlers(registry);
-  //   registerSettingsHandlers(registry);
-  //   registerIndexHandlers(registry);
-  //   registerOllamaHandlers(registry);
-  //   registerDiagnosticsHandlers(registry);
-  //   registerTabHandlers(registry);
-  //   registerBrowserHandlers(registry);
+export function createRegistries(): ServiceRegistries {
+  const preInit = new MessageHandlerRegistry();
+  const postInit = new MessageHandlerRegistry();
 
-  return registry;
+  registerSettingsHandlers(preInit, postInit);
+  registerDiagnosticsPreInitHandlers(preInit);
+
+  registerSearchHandlers(postInit);
+  registerOllamaHandlers(postInit);
+  registerDiagnosticsPostInitHandlers(postInit);
+  registerCommandHandlers(postInit);
+
+  return { preInit, postInit };
 }
