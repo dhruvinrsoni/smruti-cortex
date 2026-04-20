@@ -68,6 +68,16 @@ vi.mock('../performance-monitor', () => ({
   },
 }));
 
+// Mock ollama-service (used by generateItemEmbedding via dynamic import)
+vi.mock('../ollama-service', () => ({
+  getOllamaService: vi.fn(() => ({
+    generateEmbedding: vi.fn(async () => ({ success: true, embedding: [0.1, 0.2, 0.3] })),
+  })),
+  getOllamaConfigFromSettings: vi.fn(async () => ({})),
+  isCircuitBreakerOpen: vi.fn(() => true),
+  checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
+}));
+
 // Mock constants
 vi.mock('../../core/constants', () => ({
   BRAND_NAME: 'SmrutiCortex',
@@ -647,5 +657,608 @@ describe('clearBookmarkFlags', () => {
 
     await clearBookmarkFlags();
     expect(saveIndexedItem).not.toHaveBeenCalled();
+  });
+});
+
+// ── generateItemEmbedding (with embeddings enabled) ───────────────────────
+
+describe('generateItemEmbedding (embeddings enabled paths)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(true as never);
+    const mod = await import('../ollama-service');
+    vi.mocked(mod.isCircuitBreakerOpen).mockReturnValue(false);
+    vi.mocked(mod.checkMemoryPressure).mockReturnValue({ ok: true, permanent: false });
+    vi.mocked(mod.getOllamaConfigFromSettings).mockResolvedValue({} as never);
+    vi.mocked(mod.getOllamaService).mockReturnValue({
+      generateEmbedding: vi.fn(async () => ({ success: true, embedding: [0.1, 0.2, 0.3] })),
+    } as never);
+    const { buildEmbeddingText } = await import('../embedding-text');
+    vi.mocked(buildEmbeddingText).mockReturnValue('test embedding text');
+  });
+
+  it('should return undefined when circuit breaker is open', async () => {
+    const { isCircuitBreakerOpen } = await import('../ollama-service');
+    vi.mocked(isCircuitBreakerOpen).mockReturnValue(true);
+
+    const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });
+    expect(result).toBeUndefined();
+  });
+
+  it('should return undefined when memory pressure is not ok', async () => {
+    const { checkMemoryPressure } = await import('../ollama-service');
+    vi.mocked(checkMemoryPressure).mockReturnValue({ ok: false, permanent: false });
+
+    const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });
+    expect(result).toBeUndefined();
+  });
+
+  it('should return undefined when buildEmbeddingText returns empty string', async () => {
+    const { buildEmbeddingText } = await import('../embedding-text');
+    vi.mocked(buildEmbeddingText).mockReturnValue('');
+
+    const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });
+    expect(result).toBeUndefined();
+  });
+
+  it('should return embedding array on successful generation', async () => {
+    const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5];
+    const { getOllamaService } = await import('../ollama-service');
+    vi.mocked(getOllamaService).mockReturnValue({
+      generateEmbedding: vi.fn(async () => ({ success: true, embedding: mockEmbedding })),
+    } as never);
+
+    const result = await generateItemEmbedding({ title: 'Test Page', url: 'https://test.com' });
+    expect(result).toEqual(mockEmbedding);
+  });
+
+  it('should return undefined when embedding result has success false', async () => {
+    const { getOllamaService } = await import('../ollama-service');
+    vi.mocked(getOllamaService).mockReturnValue({
+      generateEmbedding: vi.fn(async () => ({ success: false, embedding: [] })),
+    } as never);
+
+    const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });
+    expect(result).toBeUndefined();
+  });
+
+  it('should return undefined when embedding result is empty array', async () => {
+    const { getOllamaService } = await import('../ollama-service');
+    vi.mocked(getOllamaService).mockReturnValue({
+      generateEmbedding: vi.fn(async () => ({ success: true, embedding: [] })),
+    } as never);
+
+    const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });
+    expect(result).toBeUndefined();
+  });
+
+  it('should catch embedding generation errors and return undefined', async () => {
+    const { getOllamaService } = await import('../ollama-service');
+    vi.mocked(getOllamaService).mockReturnValue({
+      generateEmbedding: vi.fn(async () => { throw new Error('Connection refused'); }),
+    } as never);
+
+    const result = await generateItemEmbedding({ title: 'Test', url: 'https://test.com' });
+    expect(result).toBeUndefined();
+  });
+
+  it('should pass the item to buildEmbeddingText', async () => {
+    const { buildEmbeddingText } = await import('../embedding-text');
+    const item = { title: 'My Page', metaDescription: 'A description', url: 'https://test.com/page' };
+    await generateItemEmbedding(item);
+
+    expect(buildEmbeddingText).toHaveBeenCalledWith(item);
+  });
+});
+
+// ── generateBatchEmbeddings (with embeddings enabled) ─────────────────────
+
+describe('generateBatchEmbeddings (embeddings enabled paths)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(true as never);
+    const mod = await import('../ollama-service');
+    vi.mocked(mod.isCircuitBreakerOpen).mockReturnValue(false);
+    vi.mocked(mod.checkMemoryPressure).mockReturnValue({ ok: true, permanent: false });
+    vi.mocked(mod.getOllamaConfigFromSettings).mockResolvedValue({} as never);
+    vi.mocked(mod.getOllamaService).mockImplementation(() => ({
+      generateEmbedding: async () => ({ success: true, embedding: [0.1, 0.2] }),
+    }) as never);
+    const { buildEmbeddingText } = await import('../embedding-text');
+    vi.mocked(buildEmbeddingText).mockReturnValue('test text');
+  });
+
+  it('should process items and return embeddings when enabled', async () => {
+    const items = [
+      { title: 'A', url: 'https://a.com' },
+      { title: 'B', url: 'https://b.com' },
+    ];
+    const result = await generateBatchEmbeddings(items, 1);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual([0.1, 0.2]);
+    expect(result[1]).toEqual([0.1, 0.2]);
+  });
+
+  it('should process items in specified batch sizes', async () => {
+    const items = Array.from({ length: 5 }, (_, i) => ({
+      title: `Item ${i}`,
+      url: `https://item${i}.com`,
+    }));
+    const result = await generateBatchEmbeddings(items, 2);
+    expect(result).toHaveLength(5);
+  });
+
+  it('should handle mixed success and failure in batch', async () => {
+    const mod = await import('../ollama-service');
+    let callCount = 0;
+    vi.mocked(mod.getOllamaService).mockImplementation(() => ({
+      generateEmbedding: async () => {
+        callCount++;
+        if (callCount === 2) {return { success: false, embedding: [] };}
+        return { success: true, embedding: [0.1] };
+      },
+    }) as never);
+
+    const items = [
+      { title: 'A', url: 'https://a.com' },
+      { title: 'B', url: 'https://b.com' },
+      { title: 'C', url: 'https://c.com' },
+    ];
+    const result = await generateBatchEmbeddings(items, 1);
+    expect(result).toHaveLength(3);
+    const defined = result.filter(r => r !== undefined);
+    expect(defined).toHaveLength(2);
+  });
+});
+
+// ── performFullRebuild (additional) ───────────────────────────────────────
+
+describe('performFullRebuild (additional)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(clearIndexedDB).mockResolvedValue(undefined);
+    vi.mocked(setSetting).mockResolvedValue(undefined);
+    vi.mocked(saveIndexedItem).mockResolvedValue(undefined);
+    vi.mocked(getIndexedItem).mockResolvedValue(null);
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => { (cb as (r: unknown[]) => void)([]); }
+    );
+  });
+
+  it('should re-throw errors after logging', async () => {
+    vi.mocked(clearIndexedDB).mockRejectedValue(new Error('DB clear failed'));
+    await expect(performFullRebuild()).rejects.toThrow('DB clear failed');
+  });
+
+  it('should index bookmarks when setting is enabled', async () => {
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockImplementation((key: string) => {
+      if (key === 'indexBookmarks') {return true;}
+      return false;
+    });
+
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [{ url: 'https://bookmark.com', title: 'Bookmark' }] },
+      ])),
+    };
+
+    await performFullRebuild();
+
+    expect(clearIndexedDB).toHaveBeenCalled();
+    expect(setSetting).toHaveBeenCalledWith('lastIndexedVersion', '3.0.0');
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ isBookmark: true, url: 'https://bookmark.com' })
+    );
+  });
+
+  it('should handle items with missing title and visitCount', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://example.com', title: undefined, visitCount: undefined, lastVisitTime: undefined },
+        ]);
+      }
+    );
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(false);
+
+    await performFullRebuild();
+
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '', visitCount: 1 })
+    );
+  });
+
+  it('should handle invalid URLs in history items gracefully', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'not-a-valid-url', title: 'Bad', visitCount: 1, lastVisitTime: Date.now() },
+          { url: 'https://valid.com', title: 'Good', visitCount: 1, lastVisitTime: Date.now() },
+        ]);
+      }
+    );
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(false);
+
+    await performFullRebuild();
+
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://valid.com' })
+    );
+  });
+});
+
+// ── ingestHistory (additional) ────────────────────────────────────────────
+
+describe('ingestHistory (additional)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(setSetting).mockResolvedValue(undefined);
+    vi.mocked(saveIndexedItem).mockResolvedValue(undefined);
+    vi.mocked(getIndexedItem).mockResolvedValue(null);
+  });
+
+  it('should perform incremental index when version matches but enough time passed', async () => {
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    vi.mocked(getSetting).mockImplementation(async (key: string, defaultValue: unknown) => {
+      if (key === 'lastIndexedVersion') {return '3.0.0';}
+      if (key === 'lastIndexedTimestamp') {return twoHoursAgo;}
+      if (key === 'lastBookmarksIndexedTimestamp') {return Date.now();}
+      return defaultValue;
+    });
+
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://new.com', title: 'New', visitCount: 1, lastVisitTime: Date.now() },
+        ]);
+      }
+    );
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(false);
+
+    await ingestHistory();
+
+    expect(setSetting).toHaveBeenCalledWith('lastIndexedTimestamp', expect.any(Number));
+  });
+
+  it('should refresh bookmarks when stale and indexBookmarks enabled', async () => {
+    vi.mocked(getSetting).mockImplementation(async (key: string, defaultValue: unknown) => {
+      if (key === 'lastIndexedVersion') {return '3.0.0';}
+      if (key === 'lastIndexedTimestamp') {return Date.now();}
+      if (key === 'lastBookmarksIndexedTimestamp') {return 0;}
+      return defaultValue;
+    });
+
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(true);
+
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => { (cb as (r: unknown[]) => void)([]); }
+    );
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [{ url: 'https://bm.com', title: 'BM' }] },
+      ])),
+    };
+
+    await ingestHistory();
+
+    expect(setSetting).toHaveBeenCalledWith('lastBookmarksIndexedTimestamp', expect.any(Number));
+  });
+
+  it('should full re-index and refresh bookmarks on version upgrade', async () => {
+    vi.mocked(getSetting).mockImplementation(async (key: string, defaultValue: unknown) => {
+      if (key === 'lastIndexedVersion') {return '1.0.0';}
+      if (key === 'lastBookmarksIndexedTimestamp') {return 0;}
+      return defaultValue;
+    });
+
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => { (cb as (r: unknown[]) => void)([]); }
+    );
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(true);
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [] },
+      ])),
+    };
+
+    await ingestHistory();
+
+    expect(setSetting).toHaveBeenCalledWith('lastIndexedVersion', '3.0.0');
+    expect(setSetting).toHaveBeenCalledWith('lastBookmarksIndexedTimestamp', expect.any(Number));
+  });
+
+  it('should perform incremental index with updates and adds', async () => {
+    const now = Date.now();
+    const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+    vi.mocked(getSetting).mockImplementation(async (key: string, defaultValue: unknown) => {
+      if (key === 'lastIndexedVersion') {return '3.0.0';}
+      if (key === 'lastIndexedTimestamp') {return twoHoursAgo;}
+      if (key === 'lastBookmarksIndexedTimestamp') {return now;}
+      return defaultValue;
+    });
+
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://existing.com', title: 'Updated', visitCount: 10, lastVisitTime: now },
+          { url: 'https://brand-new.com', title: 'Brand New', visitCount: 1, lastVisitTime: now },
+        ]);
+      }
+    );
+    vi.mocked(getIndexedItem).mockImplementation(async (url: string) => {
+      if (url === 'https://existing.com') {
+        return {
+          url: 'https://existing.com', title: 'Old', hostname: 'existing.com',
+          visitCount: 1, lastVisit: twoHoursAgo, tokens: ['old'],
+        };
+      }
+      return null;
+    });
+    const { SettingsManager } = await import('../../core/settings');
+    vi.mocked(SettingsManager.getSetting).mockReturnValue(false);
+
+    await ingestHistory();
+
+    expect(saveIndexedItem).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── performIncrementalHistoryIndexManual (additional) ──────────────────────
+
+describe('performIncrementalHistoryIndexManual (additional)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(saveIndexedItem).mockResolvedValue(undefined);
+  });
+
+  it('should handle errors for individual items gracefully', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://error.com', title: 'Error', visitCount: 1, lastVisitTime: Date.now() },
+          { url: 'https://good.com', title: 'Good', visitCount: 1, lastVisitTime: Date.now() },
+        ]);
+      }
+    );
+    vi.mocked(getIndexedItem)
+      .mockRejectedValueOnce(new Error('DB read error'))
+      .mockResolvedValueOnce(null);
+
+    const { performIncrementalHistoryIndexManual } = await import('../indexing');
+    const result = await performIncrementalHistoryIndexManual(0);
+    expect(result.added).toBe(1);
+  });
+
+  it('should use higher visitCount when updating existing items', async () => {
+    const now = Date.now();
+    vi.mocked(getIndexedItem).mockResolvedValue({
+      url: 'https://page.com', title: 'Page', hostname: 'page.com',
+      visitCount: 10, lastVisit: now - 5000, tokens: ['page'],
+    });
+
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://page.com', title: 'Page Updated', visitCount: 3, lastVisitTime: now },
+        ]);
+      }
+    );
+
+    const { performIncrementalHistoryIndexManual } = await import('../indexing');
+    const result = await performIncrementalHistoryIndexManual(0);
+    expect(result.updated).toBe(1);
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ visitCount: 10, lastVisit: now, title: 'Page Updated' })
+    );
+  });
+
+  it('should preserve existing title when new title is empty', async () => {
+    const now = Date.now();
+    vi.mocked(getIndexedItem).mockResolvedValue({
+      url: 'https://page.com', title: 'Original Title', hostname: 'page.com',
+      visitCount: 1, lastVisit: now - 5000, tokens: ['page'],
+    });
+
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://page.com', title: '', visitCount: 2, lastVisitTime: now },
+        ]);
+      }
+    );
+
+    const { performIncrementalHistoryIndexManual } = await import('../indexing');
+    const result = await performIncrementalHistoryIndexManual(0);
+    expect(result.updated).toBe(1);
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Original Title' })
+    );
+  });
+
+  it('should return correct duration and total', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    vi.mocked(browserAPI.history.search).mockImplementation(
+      (_query: unknown, cb: unknown) => {
+        (cb as (r: unknown[]) => void)([
+          { url: 'https://a.com', title: 'A', visitCount: 1, lastVisitTime: Date.now() },
+          { url: 'https://b.com', title: 'B', visitCount: 1, lastVisitTime: Date.now() },
+        ]);
+      }
+    );
+    vi.mocked(getIndexedItem).mockResolvedValue(null);
+
+    const { performIncrementalHistoryIndexManual } = await import('../indexing');
+    const result = await performIncrementalHistoryIndexManual(0);
+    expect(result.duration).toBeGreaterThanOrEqual(0);
+    expect(result.total).toBe(2);
+    expect(result.added).toBe(2);
+  });
+});
+
+// ── performBookmarksIndex (additional) ────────────────────────────────────
+
+describe('performBookmarksIndex (additional)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(saveIndexedItem).mockResolvedValue(undefined);
+  });
+
+  it('should set bookmarkTitle when it differs from page title', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [{ url: 'https://page.com', title: 'Custom BM Title' }] },
+      ])),
+    };
+    vi.mocked(getIndexedItem).mockResolvedValue({
+      url: 'https://page.com', title: 'Original Page Title', hostname: 'page.com',
+      visitCount: 5, lastVisit: Date.now(), tokens: ['page'],
+    });
+
+    const result = await performBookmarksIndex(true);
+
+    expect(result.updated).toBe(1);
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ bookmarkTitle: 'Custom BM Title', isBookmark: true })
+    );
+  });
+
+  it('should not set bookmarkTitle when it matches page title', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [{ url: 'https://page.com', title: 'Same Title' }] },
+      ])),
+    };
+    vi.mocked(getIndexedItem).mockResolvedValue({
+      url: 'https://page.com', title: 'Same Title', hostname: 'page.com',
+      visitCount: 5, lastVisit: Date.now(), tokens: ['page'],
+    });
+
+    const result = await performBookmarksIndex(true);
+
+    expect(result.updated).toBe(1);
+    const savedItem = vi.mocked(saveIndexedItem).mock.calls[0][0];
+    expect(savedItem.bookmarkTitle).toBeUndefined();
+  });
+
+  it('should handle individual bookmark save errors gracefully', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [
+          { url: 'https://good.com', title: 'Good' },
+          { url: 'https://bad.com', title: 'Bad' },
+        ] },
+      ])),
+    };
+    vi.mocked(getIndexedItem).mockResolvedValue(null);
+    vi.mocked(saveIndexedItem)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Save failed'));
+
+    const result = await performBookmarksIndex(true);
+    expect(result.indexed).toBe(1);
+  });
+
+  it('should handle getTree error gracefully', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn(() => { throw new Error('Bookmarks API unavailable'); }),
+    };
+
+    const result = await performBookmarksIndex(true);
+
+    expect(result.indexed).toBe(0);
+    expect(result.updated).toBe(0);
+  });
+
+  it('should track folder paths for deeply nested bookmarks', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [
+          { title: 'Work', children: [
+            { title: 'Projects', children: [
+              { url: 'https://deep.com', title: 'Deep Bookmark' },
+            ] },
+          ] },
+        ] },
+      ])),
+    };
+    vi.mocked(getIndexedItem).mockResolvedValue(null);
+
+    const result = await performBookmarksIndex(true);
+
+    expect(result.indexed).toBe(1);
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ bookmarkFolders: ['Work', 'Projects'], isBookmark: true })
+    );
+  });
+
+  it('should skip bookmarks without URL or with empty URL', async () => {
+    const { browserAPI } = await import('../../core/helpers');
+    (browserAPI as unknown as Record<string, unknown>).bookmarks = {
+      getTree: vi.fn((cb: (results: unknown[]) => void) => cb([
+        { children: [
+          { url: '', title: 'Empty URL' },
+          { url: 'https://valid.com', title: 'Valid' },
+        ] },
+      ])),
+    };
+    vi.mocked(getIndexedItem).mockResolvedValue(null);
+
+    const result = await performBookmarksIndex(true);
+    expect(result.indexed).toBe(1);
+  });
+});
+
+// ── clearBookmarkFlags (additional) ───────────────────────────────────────
+
+describe('clearBookmarkFlags (additional)', () => {
+  it('should handle getAllIndexedItems error gracefully', async () => {
+    vi.clearAllMocks();
+    const { getAllIndexedItems } = await import('../database');
+    vi.mocked(getAllIndexedItems).mockRejectedValue(new Error('DB connection error'));
+
+    await expect(clearBookmarkFlags()).resolves.not.toThrow();
+  });
+
+  it('should clear bookmarkFolders along with isBookmark flag', async () => {
+    vi.clearAllMocks();
+    const { getAllIndexedItems } = await import('../database');
+    vi.mocked(getAllIndexedItems).mockResolvedValue([
+      {
+        url: 'https://bm.com', title: 'BM', hostname: 'bm.com',
+        visitCount: 1, lastVisit: Date.now(), tokens: ['bm'],
+        isBookmark: true, bookmarkFolders: ['Dev', 'Tools'],
+      },
+    ]);
+    vi.mocked(saveIndexedItem).mockResolvedValue(undefined);
+
+    await clearBookmarkFlags();
+
+    expect(saveIndexedItem).toHaveBeenCalledWith(
+      expect.objectContaining({ isBookmark: false, bookmarkFolders: undefined })
+    );
   });
 });

@@ -525,4 +525,464 @@ describe('database', () => {
       expect(mockObjectStore.getAll).toHaveBeenCalledTimes(2);
     });
   });
+
+  // ── resetDbInstance ──────────────────────────────────────────────────────
+
+  describe('resetDbInstance', () => {
+    it('should force re-open on next DB operation', async () => {
+      const mod = await importModule();
+      await mod.openDatabase(); // first open
+      mod.resetDbInstance();
+      await mod.openDatabase(); // should open again
+      expect(indexedDB.open).toHaveBeenCalledTimes(2);
+    });
+
+    it('should invalidate item cache', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      const mod = await importModule();
+      await mod.getAllIndexedItems(); // populate cache
+      mod.resetDbInstance();
+      await mod.getAllIndexedItems(); // should re-read
+      expect(mockObjectStore.getAll).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── loadEmbeddingsInto ─────────────────────────────────────────────────
+
+  describe('loadEmbeddingsInto', () => {
+    it('should load embeddings into matching items', async () => {
+      const embedding = [0.1, 0.2, 0.3];
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding }));
+      store.set('https://b.com', makeItem({ url: 'https://b.com' }));
+
+      const { loadEmbeddingsInto } = await importModule();
+      const items = [
+        makeItem({ url: 'https://a.com' }),
+        makeItem({ url: 'https://b.com' }),
+      ];
+
+      const loaded = await loadEmbeddingsInto(items);
+      expect(loaded).toBe(1);
+      expect(items[0].embedding).toEqual(embedding);
+      expect(items[1].embedding).toBeUndefined();
+    });
+
+    it('should skip DB rows not present in the provided items array', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding: [0.5] }));
+      store.set('https://orphan.com', makeItem({ url: 'https://orphan.com', embedding: [0.9] }));
+
+      const { loadEmbeddingsInto } = await importModule();
+      const items = [makeItem({ url: 'https://a.com' })];
+      const loaded = await loadEmbeddingsInto(items);
+      expect(loaded).toBe(1);
+    });
+
+    it('should return 0 when no items have embeddings', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      const { loadEmbeddingsInto } = await importModule();
+      const items = [makeItem({ url: 'https://a.com' })];
+      const loaded = await loadEmbeddingsInto(items);
+      expect(loaded).toBe(0);
+    });
+
+    it('should return 0 for empty items array', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding: [0.1] }));
+      const { loadEmbeddingsInto } = await importModule();
+      const loaded = await loadEmbeddingsInto([]);
+      expect(loaded).toBe(0);
+    });
+
+    it('should return 0 when DB is empty', async () => {
+      const { loadEmbeddingsInto } = await importModule();
+      const items = [makeItem({ url: 'https://a.com' })];
+      const loaded = await loadEmbeddingsInto(items);
+      expect(loaded).toBe(0);
+    });
+
+    it('should skip items with empty embedding arrays', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding: [] }));
+      const { loadEmbeddingsInto } = await importModule();
+      const items = [makeItem({ url: 'https://a.com' })];
+      const loaded = await loadEmbeddingsInto(items);
+      expect(loaded).toBe(0);
+    });
+  });
+
+  // ── db.onclose / db.onversionchange handlers ──────────────────────────
+
+  describe('database connection event handlers', () => {
+    it('should clear dbInstance and cache when db.onclose fires', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      const mod = await importModule();
+      await mod.getAllIndexedItems(); // populate cache + set dbInstance
+
+      // Trigger onclose handler
+      (mockDb.onclose as () => void)();
+
+      // Next operation should re-open DB
+      await mod.getAllIndexedItems();
+      expect(indexedDB.open).toHaveBeenCalledTimes(2);
+      expect(mockObjectStore.getAll).toHaveBeenCalledTimes(2);
+    });
+
+    it('should close db and clear state when db.onversionchange fires', async () => {
+      mockDb.close = vi.fn();
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      const mod = await importModule();
+      await mod.getAllIndexedItems(); // populate cache + set dbInstance
+
+      // Trigger onversionchange handler
+      (mockDb.onversionchange as () => void)();
+
+      expect(mockDb.close).toHaveBeenCalled();
+
+      // Next operation should re-open DB
+      await mod.getAllIndexedItems();
+      expect(indexedDB.open).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── getAllIndexedItems — embedding stripping ───────────────────────────
+
+  describe('getAllIndexedItems — embedding stripping', () => {
+    it('should strip embedding arrays from cached items', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding: [0.1, 0.2] }));
+      const { getAllIndexedItems } = await importModule();
+      const items = await getAllIndexedItems();
+      expect(items[0].embedding).toBeUndefined();
+    });
+  });
+
+  // ── IDB error paths ───────────────────────────────────────────────────
+
+  describe('IDB error paths', () => {
+    function setupErrorStore(method: string) {
+      const errStore = buildMockObjectStore();
+      (errStore as Record<string, unknown>)[method] = vi.fn(() => mockRequest(new Error(`${method} failed`)));
+      mockDb.transaction = vi.fn(() => ({ objectStore: vi.fn(() => errStore) }));
+    }
+
+    it('saveIndexedItem should reject on put error', async () => {
+      setupErrorStore('put');
+      const { saveIndexedItem } = await importModule();
+      await expect(saveIndexedItem(makeItem())).rejects.toThrow('put failed');
+    });
+
+    it('getAllIndexedItems should reject on getAll error', async () => {
+      setupErrorStore('getAll');
+      const { getAllIndexedItems } = await importModule();
+      await expect(getAllIndexedItems()).rejects.toThrow('getAll failed');
+    });
+
+    it('getIndexedItem should reject on get error', async () => {
+      setupErrorStore('get');
+      const { getIndexedItem } = await importModule();
+      await expect(getIndexedItem('https://x.com')).rejects.toThrow('get failed');
+    });
+
+    it('deleteIndexedItem should reject on delete error', async () => {
+      setupErrorStore('delete');
+      const { deleteIndexedItem } = await importModule();
+      await expect(deleteIndexedItem('https://x.com')).rejects.toThrow('delete failed');
+    });
+
+    it('clearIndexedDB should reject on clear error', async () => {
+      setupErrorStore('clear');
+      const { clearIndexedDB } = await importModule();
+      await expect(clearIndexedDB()).rejects.toThrow('clear failed');
+    });
+
+    it('getIndexedItemsPage should reject on count error', async () => {
+      setupErrorStore('count');
+      const { getIndexedItemsPage } = await importModule();
+      await expect(getIndexedItemsPage()).rejects.toThrow('count failed');
+    });
+
+    it('getRecentIndexedItems should reject on cursor error', async () => {
+      const errIndex = {
+        openCursor: vi.fn(() => mockRequest(new Error('cursor failed'))),
+      };
+      const errStore = buildMockObjectStore();
+      errStore.index = vi.fn(() => errIndex);
+      mockDb.transaction = vi.fn(() => ({ objectStore: vi.fn(() => errStore) }));
+
+      const { getRecentIndexedItems } = await importModule();
+      await expect(getRecentIndexedItems()).rejects.toThrow('cursor failed');
+    });
+
+    it('loadEmbeddingsInto should reject on cursor error', async () => {
+      setupErrorStore('openCursor');
+      const { loadEmbeddingsInto } = await importModule();
+      await expect(loadEmbeddingsInto([makeItem()])).rejects.toThrow('openCursor failed');
+    });
+
+    it('getIndexedItemsBatches should reject on cursor error', async () => {
+      setupErrorStore('openCursor');
+      const { getIndexedItemsBatches } = await importModule();
+      await expect(getIndexedItemsBatches()).rejects.toThrow('openCursor failed');
+    });
+
+    it('countItemsWithoutEmbeddings should reject on cursor error', async () => {
+      setupErrorStore('openCursor');
+      const { countItemsWithoutEmbeddings } = await importModule();
+      await expect(countItemsWithoutEmbeddings()).rejects.toThrow('openCursor failed');
+    });
+
+    it('getItemsWithoutEmbeddingsBatch should reject on cursor error', async () => {
+      setupErrorStore('openCursor');
+      const { getItemsWithoutEmbeddingsBatch } = await importModule();
+      await expect(getItemsWithoutEmbeddingsBatch(10)).rejects.toThrow('openCursor failed');
+    });
+  });
+
+  // ── clearIndexedDB — cache invalidation ───────────────────────────────
+
+  describe('clearIndexedDB — cache invalidation', () => {
+    it('should invalidate cache so next getAll re-reads from IDB', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      const mod = await importModule();
+      await mod.getAllIndexedItems(); // populate cache
+      await mod.clearIndexedDB();
+      await mod.getAllIndexedItems(); // should re-read
+      expect(mockObjectStore.getAll).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── getIndexedItemsPage — edge cases ──────────────────────────────────
+
+  describe('getIndexedItemsPage — edge cases', () => {
+    it('should use default offset=0 and limit=100', async () => {
+      for (let i = 0; i < 3; i++) {
+        store.set(`https://${i}.com`, makeItem({ url: `https://${i}.com` }));
+      }
+      const { getIndexedItemsPage } = await importModule();
+      const result = await getIndexedItemsPage();
+      expect(result.total).toBe(3);
+      expect(result.items).toHaveLength(3);
+    });
+
+    it('should stop at limit when more items available', async () => {
+      for (let i = 0; i < 10; i++) {
+        store.set(`https://${i}.com`, makeItem({ url: `https://${i}.com` }));
+      }
+      const { getIndexedItemsPage } = await importModule();
+      const result = await getIndexedItemsPage(0, 5);
+      expect(result.total).toBe(10);
+      expect(result.items).toHaveLength(5);
+    });
+
+    it('should return empty when DB is empty', async () => {
+      const { getIndexedItemsPage } = await importModule();
+      const result = await getIndexedItemsPage();
+      expect(result.total).toBe(0);
+      expect(result.items).toHaveLength(0);
+    });
+  });
+
+  // ── getRecentIndexedItems — edge cases ────────────────────────────────
+
+  describe('getRecentIndexedItems — edge cases', () => {
+    it('should use default limit of 50', async () => {
+      for (let i = 0; i < 3; i++) {
+        store.set(`https://${i}.com`, makeItem({ url: `https://${i}.com`, lastVisit: i }));
+      }
+      const { getRecentIndexedItems } = await importModule();
+      const items = await getRecentIndexedItems();
+      expect(items).toHaveLength(3);
+    });
+
+    it('should return empty when DB is empty', async () => {
+      const { getRecentIndexedItems } = await importModule();
+      const items = await getRecentIndexedItems();
+      expect(items).toHaveLength(0);
+    });
+  });
+
+  // ── getIndexedItemsBatches — edge cases ───────────────────────────────
+
+  describe('getIndexedItemsBatches — edge cases', () => {
+    it('should use default batch size of 1000', async () => {
+      for (let i = 0; i < 3; i++) {
+        store.set(`https://${i}.com`, makeItem({ url: `https://${i}.com` }));
+      }
+      const { getIndexedItemsBatches } = await importModule();
+      const batches = await getIndexedItemsBatches();
+      expect(batches).toHaveLength(1);
+      expect(batches[0]).toHaveLength(3);
+    });
+
+    it('should produce exact batch when items equal batchSize', async () => {
+      for (let i = 0; i < 4; i++) {
+        store.set(`https://${i}.com`, makeItem({ url: `https://${i}.com` }));
+      }
+      const { getIndexedItemsBatches } = await importModule();
+      const batches = await getIndexedItemsBatches(4);
+      expect(batches).toHaveLength(1);
+      expect(batches[0]).toHaveLength(4);
+    });
+  });
+
+  // ── getStorageQuotaInfo — additional branches ─────────────────────────
+
+  describe('getStorageQuotaInfo — additional branches', () => {
+    it('should return percentage 0 when total is 0', async () => {
+      vi.stubGlobal('navigator', {
+        storage: {
+          estimate: vi.fn(async () => ({ usage: 100, quota: 0 })),
+        },
+      });
+      const { getStorageQuotaInfo } = await importModule();
+      const info = await getStorageQuotaInfo();
+      expect(info.percentage).toBe(0);
+      expect(info.totalFormatted).toBe('Unlimited');
+    });
+
+    it('should return fallback with zeroes when DB open fails', async () => {
+      openShouldFail = true;
+      setupIndexedDB();
+      vi.stubGlobal('navigator', {});
+      const { getStorageQuotaInfo } = await importModule();
+      const info = await getStorageQuotaInfo();
+      expect(info.used).toBe(0);
+      expect(info.total).toBe(0);
+      expect(info.usedFormatted).toBe('Unknown');
+      expect(info.totalFormatted).toBe('Unknown');
+      expect(info.percentage).toBe(0);
+      expect(info.itemCount).toBe(0);
+    });
+
+    it('should handle navigator.storage.estimate returning undefined usage/quota', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      vi.stubGlobal('navigator', {
+        storage: {
+          estimate: vi.fn(async () => ({})),
+        },
+      });
+      const { getStorageQuotaInfo } = await importModule();
+      const info = await getStorageQuotaInfo();
+      // Falls back to item-based estimate: 1 item * 1024
+      expect(info.used).toBe(1024);
+      expect(info.itemCount).toBe(1);
+    });
+
+    it('should format bytes as 0 B when used is 0 and no items', async () => {
+      vi.stubGlobal('navigator', {});
+      const { getStorageQuotaInfo } = await importModule();
+      const info = await getStorageQuotaInfo();
+      expect(info.usedFormatted).toBe('0 B');
+    });
+
+    it('should format large values correctly (MB range)', async () => {
+      const usageMB = 5 * 1024 * 1024; // 5 MB
+      const quotaGB = 2 * 1024 * 1024 * 1024; // 2 GB
+      vi.stubGlobal('navigator', {
+        storage: {
+          estimate: vi.fn(async () => ({ usage: usageMB, quota: quotaGB })),
+        },
+      });
+      const { getStorageQuotaInfo } = await importModule();
+      const info = await getStorageQuotaInfo();
+      expect(info.usedFormatted).toBe('5 MB');
+      expect(info.totalFormatted).toBe('2 GB');
+    });
+  });
+
+  // ── getItemsWithoutEmbeddingsBatch — edge cases ───────────────────────
+
+  describe('getItemsWithoutEmbeddingsBatch — edge cases', () => {
+    it('should return all items without embeddings when batchSize exceeds count', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      store.set('https://b.com', makeItem({ url: 'https://b.com' }));
+      const { getItemsWithoutEmbeddingsBatch } = await importModule();
+      const batch = await getItemsWithoutEmbeddingsBatch(100);
+      expect(batch).toHaveLength(2);
+    });
+
+    it('should return empty when DB is empty', async () => {
+      const { getItemsWithoutEmbeddingsBatch } = await importModule();
+      const batch = await getItemsWithoutEmbeddingsBatch(10);
+      expect(batch).toHaveLength(0);
+    });
+
+    it('should skip items with empty embedding arrays', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding: [] }));
+      store.set('https://b.com', makeItem({ url: 'https://b.com', embedding: [0.5] }));
+      const { getItemsWithoutEmbeddingsBatch } = await importModule();
+      const batch = await getItemsWithoutEmbeddingsBatch(10);
+      expect(batch).toHaveLength(1);
+      expect(batch[0].url).toBe('https://a.com');
+    });
+  });
+
+  // ── countItemsWithoutEmbeddings — edge cases ──────────────────────────
+
+  describe('countItemsWithoutEmbeddings — edge cases', () => {
+    it('should count all items as without embeddings when none have them', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      store.set('https://b.com', makeItem({ url: 'https://b.com' }));
+      const { countItemsWithoutEmbeddings } = await importModule();
+      const result = await countItemsWithoutEmbeddings();
+      expect(result.total).toBe(2);
+      expect(result.withoutEmbeddings).toBe(2);
+    });
+
+    it('should count zero without embeddings when all have them', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com', embedding: [0.1] }));
+      store.set('https://b.com', makeItem({ url: 'https://b.com', embedding: [0.2] }));
+      const { countItemsWithoutEmbeddings } = await importModule();
+      const result = await countItemsWithoutEmbeddings();
+      expect(result.total).toBe(2);
+      expect(result.withoutEmbeddings).toBe(0);
+    });
+  });
+
+  // ── setForceRebuildFlag — clearing the flag ───────────────────────────
+
+  describe('setForceRebuildFlag — clearing', () => {
+    it('should set flag to false', async () => {
+      const { setForceRebuildFlag } = await importModule();
+      await setForceRebuildFlag(false);
+      expect(storageMock.set).toHaveBeenCalledWith(
+        { forceRebuildIndex: false },
+        expect.any(Function),
+      );
+    });
+  });
+
+  // ── saveIndexedItem — re-opens DB when dbInstance is null ──────────────
+
+  describe('saveIndexedItem — DB re-open', () => {
+    it('should re-open DB when dbInstance was reset', async () => {
+      const mod = await importModule();
+      await mod.openDatabase();
+      mod.resetDbInstance();
+      await mod.saveIndexedItem(makeItem({ url: 'https://new.com' }));
+      expect(indexedDB.open).toHaveBeenCalledTimes(2);
+      expect(store.has('https://new.com')).toBe(true);
+    });
+  });
+
+  // ── getIndexedItemsPage — cursor error path ───────────────────────────
+
+  describe('getIndexedItemsPage — cursor error during pagination', () => {
+    it('should reject when cursor request fails during pagination', async () => {
+      store.set('https://a.com', makeItem({ url: 'https://a.com' }));
+      const mod = await importModule();
+
+      // Override openCursor after initial count succeeds
+      const errStore = buildMockObjectStore();
+      errStore.openCursor = vi.fn(() => mockRequest(new Error('pagination cursor error')));
+      let callCount = 0;
+      mockDb.transaction = vi.fn(() => ({
+        objectStore: vi.fn(() => {
+          callCount++;
+          // First transaction is for count(), second is for cursor pagination
+          if (callCount <= 1) {return mockObjectStore;}
+          return errStore;
+        }),
+      }));
+
+      await expect(mod.getIndexedItemsPage(0, 10)).rejects.toThrow('pagination cursor error');
+    });
+  });
 });
