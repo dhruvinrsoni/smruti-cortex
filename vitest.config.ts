@@ -24,10 +24,10 @@ export default defineConfig({
         'src/background/schema.ts',           // type definitions only
       ],
       thresholds: {
-        lines: 80,
-        branches: 70,
-        functions: 83,
-        statements: 79,
+        lines: 95,
+        branches: 90,
+        functions: 95,
+        statements: 95,
       },
     },
   },
