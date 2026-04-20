@@ -1,10 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { MessageHandlerRegistry } from './registry';
 import { Logger, errorMeta } from '../../core/logger';
-import { browserAPI } from '../../core/helpers';
-import { SettingsManager } from '../../core/settings';
 import { runSearch } from '../search/search-engine';
-import { openDatabase, getStorageQuotaInfo, getAllIndexedItems, saveIndexedItem } from '../database';
+import { getStorageQuotaInfo, getAllIndexedItems, saveIndexedItem } from '../database';
 import { performFullRebuild, mergeMetadata } from '../indexing';
 import { clearAndRebuild, checkHealth, selfHeal, recoverFromCorruption, handleQuotaExceeded } from '../resilience';
 import type { IndexedItem } from '../schema';

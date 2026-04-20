@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const mockTabsQuery = vi.fn();

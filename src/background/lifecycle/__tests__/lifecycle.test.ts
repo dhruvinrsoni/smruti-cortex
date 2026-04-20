@@ -1,5 +1,5 @@
-/* eslint-disable max-lines */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
+ 
 /**
  * Combined unit tests for lifecycle modules:
  *   - commands-listener.ts

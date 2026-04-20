@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { MessageHandlerRegistry } from './registry';
 import { Logger, errorMeta } from '../../core/logger';
 import { SettingsManager } from '../../core/settings';

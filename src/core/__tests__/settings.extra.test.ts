@@ -182,7 +182,7 @@ describe('SettingsManager extra coverage', () => {
       async (key) => {
         const { SettingsManager } = await freshModule({ [key]: true });
         await SettingsManager.init();
-        expect(SettingsManager.getSetting(key as any)).toBe(true); // eslint-disable-line @typescript-eslint/no-explicit-any
+        expect(SettingsManager.getSetting(key as any)).toBe(true);
       },
     );
 
@@ -191,7 +191,7 @@ describe('SettingsManager extra coverage', () => {
       async (key, defaultVal) => {
         const { SettingsManager } = await freshModule({ [key]: 'yes' });
         await SettingsManager.init();
-        expect(SettingsManager.getSetting(key as any)).toBe(defaultVal); // eslint-disable-line @typescript-eslint/no-explicit-any
+        expect(SettingsManager.getSetting(key as any)).toBe(defaultVal);
       },
     );
   });
@@ -306,7 +306,7 @@ describe('SettingsManager extra coverage', () => {
         browserAPI: {
           storage: {
             local: {
-              get: vi.fn((_k: unknown, cb: (r: any) => void) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+              get: vi.fn((_k: unknown, cb: (r: any) => void) => {
                 const result: Record<string, unknown> = {};
                 Object.defineProperty(result, 'smrutiCortexSettings', {
                   get() { throw new Error('corrupted storage'); },

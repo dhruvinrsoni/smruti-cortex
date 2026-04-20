@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+ 
+ 
 /**
  * Combined branch-coverage tests for diagnostics-handlers and settings-handlers.
  *

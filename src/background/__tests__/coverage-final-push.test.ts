@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+ 
+ 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IndexedItem } from '../schema';
 import type { AppSettings } from '../../core/settings';

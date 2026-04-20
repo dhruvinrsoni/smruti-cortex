@@ -1528,7 +1528,7 @@ describe('tab management commands', () => {
 
 describe('TAB_ZOOM commands', () => {
   const m = swBrowserMocks;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let tabsProxy: any;
 
   beforeEach(async () => {
