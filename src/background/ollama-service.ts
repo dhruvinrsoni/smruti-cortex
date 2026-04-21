@@ -209,6 +209,18 @@ export class OllamaService {
       logger.debug('generateEmbedding', `Truncated input to ${MAX_EMBEDDING_TEXT_LENGTH} chars`);
     }
 
+    // === GUARD 0.5: Empty input rejection ===
+    // buildEmbeddingText() returns "" for items whose title is empty and URL is
+    // chrome://, about:, data:, etc. Sending those wastes a round-trip and
+    // produces "0 dimensions" warnings. Refuse at the edge.
+    if (!text.trim()) {
+      logger.debug('generateEmbedding', 'Refusing embedding for empty/whitespace text');
+      return {
+        embedding: [], model: this.config.model, success: false,
+        duration: 0, error: 'Empty input text',
+      };
+    }
+
     const textPreview = text.length > 100 ? text.substring(0, 100) + '...' : text;
 
     // === GUARD 1: Circuit breaker ===

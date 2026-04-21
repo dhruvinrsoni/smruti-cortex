@@ -293,6 +293,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                     const embStart = performance.now();
                     const embConfig = await ollamaModule.getOllamaConfigFromSettings(true);
                     const text = buildEmbeddingText(item);
+                    if (!text) { continue; }
                     const embeddingResult = await ollamaModule.getOllamaService(embConfig)
                         .generateEmbedding(text, searchAbort.signal);
                     embeddingTimeSpent += performance.now() - embStart;

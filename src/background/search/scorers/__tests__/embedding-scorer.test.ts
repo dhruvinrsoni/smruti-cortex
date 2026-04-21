@@ -18,8 +18,9 @@ vi.mock('../../../ollama-service', () => ({
   checkMemoryPressure: () => mockCheckMemoryPressure(),
 }));
 
+const mockBuildEmbeddingText = vi.fn(() => 'mocked embedding text');
 vi.mock('../../../embedding-text', () => ({
-  buildEmbeddingText: vi.fn(() => 'mocked embedding text'),
+  buildEmbeddingText: (...args: unknown[]) => mockBuildEmbeddingText(...args),
 }));
 
 describe('embeddingScorer', () => {
@@ -28,6 +29,7 @@ describe('embeddingScorer', () => {
     // Re-establish defaults (vi.restoreAllMocks resets mock implementations)
     mockIsCircuitBreakerOpen.mockReturnValue(false);
     mockCheckMemoryPressure.mockReturnValue({ ok: true, usedMB: 100, limitMB: 512, permanent: false });
+    mockBuildEmbeddingText.mockReturnValue('mocked embedding text');
   });
 
   // Lazy import to ensure mocks are registered
@@ -152,6 +154,16 @@ describe('embeddingScorer', () => {
 
       const result = await generateItemEmbedding({ title: 'Test', url: 'https://example.com' });
       expect(result).toEqual([]);
+    });
+
+    it('should return empty array WITHOUT calling Ollama when buildEmbeddingText returns empty', async () => {
+      const { generateItemEmbedding } = await getModule();
+      mockBuildEmbeddingText.mockReturnValue('');
+
+      const result = await generateItemEmbedding({ title: '', url: 'chrome://newtab' });
+
+      expect(result).toEqual([]);
+      expect(mockGenerateEmbedding).not.toHaveBeenCalled();
     });
   });
 });

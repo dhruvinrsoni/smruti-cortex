@@ -1121,6 +1121,7 @@ describe('search-engine', () => {
     isCircuitBreakerOpen: () => boolean;
     checkMemoryPressure: () => { ok: boolean; permanent: boolean };
     generateEmbedding: (text: string, signal: AbortSignal) => Promise<{ success: boolean; embedding: number[]; error?: string }>;
+    buildEmbeddingText: (item: IndexedItem) => string;
     getAllIndexedItems: () => Promise<IndexedItem[]>;
     loadEmbeddingsInto: (items: IndexedItem[]) => Promise<number>;
     historySearch: (_q: unknown, cb: (r: unknown[]) => void) => void;
@@ -1178,7 +1179,9 @@ describe('search-engine', () => {
     vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
     vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => ({ get: vi.fn(() => null), set: vi.fn() })) }));
     vi.doMock('../../embedding-processor', () => ({ embeddingProcessor: { setSearchActive: vi.fn() } }));
-    vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test text') }));
+    vi.doMock('../../embedding-text', () => ({
+      buildEmbeddingText: overrides.buildEmbeddingText ? vi.fn(overrides.buildEmbeddingText) : vi.fn(() => 'test text'),
+    }));
     vi.doMock('../../ollama-service', () => ({
       isCircuitBreakerOpen: overrides.isCircuitBreakerOpen ? vi.fn(overrides.isCircuitBreakerOpen) : vi.fn(() => true),
       checkMemoryPressure: overrides.checkMemoryPressure ? vi.fn(overrides.checkMemoryPressure) : vi.fn(() => ({ ok: true, permanent: false })),
@@ -1375,6 +1378,35 @@ describe('search-engine', () => {
       const { runSearch, getLastAIStatus } = await import('../search-engine');
       await runSearch('example');
       expect(getLastAIStatus()?.embeddingsGenerated).toBeGreaterThan(0);
+    });
+
+    it('should skip generateEmbedding for items where buildEmbeddingText returns empty', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      const generateEmbeddingMock = vi.fn(async () => ({ success: true, embedding: [0.1, 0.2, 0.3] }));
+      setupCoverageMocks({
+        items: [
+          makeItem({ url: 'chrome://newtab', title: '', hostname: 'newtab' }),
+          makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' }),
+        ],
+        isCircuitBreakerOpen: () => false,
+        checkMemoryPressure: () => ({ ok: true, permanent: false }),
+        // First item -> empty (chrome://), second item -> normal text
+        buildEmbeddingText: (item: IndexedItem) =>
+          item.url.startsWith('chrome://') ? '' : 'embeddable text',
+        generateEmbedding: generateEmbeddingMock,
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+
+      // Critical assertion: no Ollama call ever received an empty/whitespace string.
+      // (search-engine may also call generateEmbedding for the query itself; that is fine.)
+      const callTexts = generateEmbeddingMock.mock.calls.map(c => c[0] as string);
+      expect(callTexts.every(t => t.trim().length > 0)).toBe(true);
+      expect(callTexts).not.toContain('');
+
+      // The non-empty item should still have produced an embedding count of 1
+      expect(getLastAIStatus()?.embeddingsGenerated).toBe(1);
     });
   });
 

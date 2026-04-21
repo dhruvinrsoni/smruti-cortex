@@ -129,6 +129,35 @@ describe('OllamaService', () => {
       });
     });
 
+    // --- Guard 0.5: empty/whitespace input rejection ---
+
+    describe('Guard 0.5: empty input rejection', () => {
+      it('should refuse empty string without making any HTTP call', async () => {
+        const { OllamaService } = await import('../ollama-service');
+        const service = new OllamaService({ model: 'test:latest' });
+
+        const result = await service.generateEmbedding('');
+
+        expect(result.success).toBe(false);
+        expect(result.embedding).toEqual([]);
+        expect(result.error).toBe('Empty input text');
+        expect(result.model).toBe('test:latest');
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should refuse whitespace-only string without making any HTTP call', async () => {
+        const { OllamaService } = await import('../ollama-service');
+        const service = new OllamaService({ model: 'test:latest' });
+
+        const result = await service.generateEmbedding('   \t\n  ');
+
+        expect(result.success).toBe(false);
+        expect(result.embedding).toEqual([]);
+        expect(result.error).toBe('Empty input text');
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+    });
+
     // --- 400 context-length error handling ---
 
     describe('400 context-length error handling', () => {

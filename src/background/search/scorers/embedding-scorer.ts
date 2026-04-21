@@ -104,6 +104,7 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
     const config = await getOllamaConfigFromSettings(true);
     const ollamaService = getOllamaService(config);
     const text = buildEmbeddingText(item);
+    if (!text) { return []; }
     const result = await ollamaService.generateEmbedding(text);
 
     if (result.success && result.embedding.length > 0) {
