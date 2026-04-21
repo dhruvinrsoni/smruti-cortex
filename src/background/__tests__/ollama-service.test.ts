@@ -967,22 +967,171 @@ describe('OllamaService', () => {
     });
   });
 
-  // === normalizeModelName ===
+  // === canonicalizeModelId ===
 
-  describe('normalizeModelName', () => {
-    it('should strip :latest suffix', async () => {
+  describe('canonicalizeModelId', () => {
+    it('treats tag-less and :latest as the same canonical id', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('mxbai-embed-large')).toBe('mxbai-embed-large');
+      expect(canonicalizeModelId('mxbai-embed-large:latest')).toBe('mxbai-embed-large');
+      expect(canonicalizeModelId('mxbai-embed-large'))
+        .toBe(canonicalizeModelId('mxbai-embed-large:latest'));
+    });
+
+    it('preserves explicit non-latest tags', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('llama3.2:3b')).toBe('llama3.2:3b');
+    });
+
+    it('keeps differently-tagged variants distinct', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('llama3.2:1b')).not.toBe(canonicalizeModelId('llama3.2:3b'));
+    });
+
+    it('strips Ollama Hub library/ namespace', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('library/nomic-embed-text')).toBe('nomic-embed-text');
+      expect(canonicalizeModelId('library/nomic-embed-text:latest')).toBe('nomic-embed-text');
+    });
+
+    it('strips registry hostname prefix', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('registry.ollama.ai/library/mistral:7b'))
+        .toBe('mistral:7b');
+      expect(canonicalizeModelId('registry.example.com/org/custom-model:latest'))
+        .toBe('org/custom-model');
+    });
+
+    it('is case-insensitive', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('MXBAI-Embed-Large')).toBe('mxbai-embed-large');
+      expect(canonicalizeModelId('Llama3.2:3B')).toBe('llama3.2:3b');
+    });
+
+    it('trims surrounding whitespace', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('  mxbai-embed-large  ')).toBe('mxbai-embed-large');
+      expect(canonicalizeModelId('\tllama3.2:3b\n')).toBe('llama3.2:3b');
+    });
+
+    it('returns empty string for empty or whitespace input', async () => {
+      const { canonicalizeModelId } = await import('../ollama-service');
+      expect(canonicalizeModelId('')).toBe('');
+      expect(canonicalizeModelId('   ')).toBe('');
+    });
+
+    it('preserves the back-compat behaviour of normalizeModelName', async () => {
       const { normalizeModelName } = await import('../ollama-service');
       expect(normalizeModelName('nomic-embed-text:latest')).toBe('nomic-embed-text');
-    });
-
-    it('should preserve other tags', async () => {
-      const { normalizeModelName } = await import('../ollama-service');
       expect(normalizeModelName('llama3.2:1b')).toBe('llama3.2:1b');
+      expect(normalizeModelName('llama3.2')).toBe('llama3.2');
+    });
+  });
+
+  // === checkAvailability canonical-id matching ===
+
+  describe('checkAvailability model matching', () => {
+    beforeEach(() => {
+      vi.resetModules();
     });
 
-    it('should preserve name without tag', async () => {
-      const { normalizeModelName } = await import('../ollama-service');
-      expect(normalizeModelName('llama3.2')).toBe('llama3.2');
+    it('matches when config is tag-less and API reports :latest', async () => {
+      // Reset singleton via fresh module import
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: null,
+        text: async () => JSON.stringify({
+          models: [{ name: 'mxbai-embed-large:latest' }],
+          version: '0.3.0',
+        }),
+        json: async () => ({
+          models: [{ name: 'mxbai-embed-large:latest' }],
+          version: '0.3.0',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { OllamaService } = await import('../ollama-service');
+      const svc = new OllamaService({ model: 'mxbai-embed-large' });
+      const status = await svc.checkAvailability();
+
+      expect(status.available).toBe(true);
+      expect(status.error).toBeUndefined();
+    });
+
+    it('matches when config has :latest and API reports tag-less', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: null,
+        text: async () => JSON.stringify({
+          models: [{ name: 'mxbai-embed-large' }],
+          version: '0.3.0',
+        }),
+        json: async () => ({
+          models: [{ name: 'mxbai-embed-large' }],
+          version: '0.3.0',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { OllamaService } = await import('../ollama-service');
+      const svc = new OllamaService({ model: 'mxbai-embed-large:latest' });
+      const status = await svc.checkAvailability();
+
+      expect(status.available).toBe(true);
+    });
+
+    it('matches across library/ namespace and case differences', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: null,
+        text: async () => JSON.stringify({
+          models: [{ name: 'library/Mxbai-Embed-Large:latest' }],
+          version: '0.3.0',
+        }),
+        json: async () => ({
+          models: [{ name: 'library/Mxbai-Embed-Large:latest' }],
+          version: '0.3.0',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { OllamaService } = await import('../ollama-service');
+      const svc = new OllamaService({ model: 'mxbai-embed-large' });
+      const status = await svc.checkAvailability();
+
+      expect(status.available).toBe(true);
+    });
+
+    it('does not match when tags differ', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: null,
+        text: async () => JSON.stringify({
+          models: [{ name: 'llama3.2:1b' }],
+          version: '0.3.0',
+        }),
+        json: async () => ({
+          models: [{ name: 'llama3.2:1b' }],
+          version: '0.3.0',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { OllamaService } = await import('../ollama-service');
+      const svc = new OllamaService({ model: 'llama3.2:3b' });
+      const status = await svc.checkAvailability();
+
+      expect(status.available).toBe(false);
+      expect(status.error).toContain('not found');
     });
   });
 

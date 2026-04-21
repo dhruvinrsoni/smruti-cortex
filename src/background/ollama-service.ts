@@ -141,7 +141,10 @@ export class OllamaService {
       const data = await readJsonWithLimit<{ models?: Array<{ name?: string }>; version?: string }>(response, MAX_RESPONSE_BYTES);
       const models = Array.isArray(data.models) ? data.models : [];
       const modelNames = models.map(m => m.name || 'unknown');
-      const hasModel = models.some(m => m.name === this.config.model);
+      // Compare canonicalized ids so tag-less vs `:latest`, `library/` namespace,
+      // registry prefixes, casing, and whitespace all resolve to the same model.
+      const targetId = canonicalizeModelId(this.config.model);
+      const hasModel = targetId.length > 0 && models.some(m => canonicalizeModelId(m.name || '') === targetId);
 
         this.isAvailable = hasModel;
         this.lastCheckTime = now;
@@ -658,12 +661,58 @@ export function checkMemoryPressure(): { ok: boolean; usedMB: number; limitMB: n
 let ollamaService: OllamaService | null = null;
 
 /**
- * Normalize an Ollama model name for consistent comparison.
- * Ollama treats "model" and "model:latest" identically,
- * so we strip the `:latest` suffix to avoid false model-change detections.
+ * Canonicalize an Ollama model id so two equivalent spellings compare equal.
+ *
+ * Ollama accepts the same model under several forms, all of which should be
+ * treated as identical by the extension:
+ *   - `mxbai-embed-large`              (tag-less, implicitly `:latest`)
+ *   - `mxbai-embed-large:latest`       (explicit `:latest` tag)
+ *   - `library/mxbai-embed-large`      (Ollama Hub `library/` namespace)
+ *   - `registry.ollama.ai/.../foo`     (registry prefix)
+ *   - `Mxbai-Embed-Large` / ` foo `    (casing, whitespace)
+ *
+ * Canonicalization steps (applied in order):
+ *   1. Trim whitespace.
+ *   2. Lowercase (Ollama tags are case-insensitive).
+ *   3. Strip any `<host>/` registry prefix (detected via a `.` in the first
+ *      segment, e.g. `registry.ollama.ai/...`).
+ *   4. Strip a leading `library/` namespace (Ollama Hub's default namespace).
+ *   5. Strip a trailing `:latest` tag.
+ *
+ * Other explicit tags (e.g. `:3b`, `:q4_K_M`) are preserved so differently-
+ * tagged variants of the same model remain distinct.
+ */
+export function canonicalizeModelId(name: string): string {
+  if (typeof name !== 'string') {return '';}
+  let id = name.trim().toLowerCase();
+  if (!id) {return '';}
+
+  // Strip a registry prefix (first path segment contains a `.` — i.e. a host).
+  const firstSlash = id.indexOf('/');
+  if (firstSlash > 0) {
+    const firstSegment = id.slice(0, firstSlash);
+    if (firstSegment.includes('.')) {
+      id = id.slice(firstSlash + 1);
+    }
+  }
+
+  // Strip the default `library/` namespace.
+  if (id.startsWith('library/')) {
+    id = id.slice('library/'.length);
+  }
+
+  // `:latest` is implicit; drop it so tag-less and tagged-latest forms match.
+  id = id.replace(/:latest$/, '');
+
+  return id;
+}
+
+/**
+ * Back-compat alias kept for consumers that imported the previous name.
+ * @deprecated Use `canonicalizeModelId` — covers more edge cases.
  */
 export function normalizeModelName(name: string): string {
-  return name.replace(/:latest$/, '');
+  return canonicalizeModelId(name);
 }
 
 /**
@@ -688,7 +737,7 @@ export async function getOllamaConfigFromSettings(forEmbeddings = false): Promis
     const rawModel = forEmbeddings
       ? (SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL)
       : (SettingsManager.getSetting('ollamaModel') || DEFAULT_GENERATION_MODEL);
-    const model = normalizeModelName(rawModel);
+    const model = canonicalizeModelId(rawModel);
 
     return { endpoint, model, timeout, maxRetries: 1 };
   } catch {
