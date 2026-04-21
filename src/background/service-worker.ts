@@ -184,6 +184,16 @@ export function setupIdleWakeListener(
   try { idleApi.setDetectionInterval?.(60); } catch { /* Firefox MV3 compat */ }
   idleApi.onStateChanged.addListener(async (state) => {
     if (state !== 'active') {return;}
+    // `active` transition is a strong signal that the user is back at
+    // the machine. Feed it into the keep-alive scheduler so the idle
+    // cadence snaps back to 0.5 min before the user's first click.
+    try {
+      const { recordUserInteraction } = await import('./lifecycle/commands-listener');
+      recordUserInteraction();
+    } catch {
+      // Lazy import may fail in degenerate test environments — the
+      // init path below is independent and still runs.
+    }
     if (isInitialized()) {return;}
     try {
       logger.info('onIdleActive', '⏰ idle → active transition, ensuring SW is warm');

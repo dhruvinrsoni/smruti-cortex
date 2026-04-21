@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   tabsQuery: vi.fn(),
   scriptingExecuteScript: vi.fn(),
   alarmsCreate: vi.fn(),
+  alarmsClear: vi.fn(),
   alarmsOnAlarmAdd: vi.fn(),
   runtimeOnStartupAdd: vi.fn(),
   runtimeOnInstalledAdd: vi.fn(),
@@ -72,6 +73,7 @@ vi.mock('../../../core/helpers', () => ({
     },
     alarms: {
       create: (...a: unknown[]) => state.alarmsCreate(...a),
+      clear: (...a: unknown[]) => state.alarmsClear(...a),
       onAlarm: { addListener: (cb: (a: { name: string }) => void) => state.alarmsOnAlarmAdd(cb) },
     },
     action: {
@@ -90,6 +92,7 @@ function resetState() {
   state.tabsQuery = vi.fn();
   state.scriptingExecuteScript = vi.fn();
   state.alarmsCreate = vi.fn();
+  state.alarmsClear = vi.fn();
   state.alarmsOnAlarmAdd = vi.fn();
   state.runtimeOnStartupAdd = vi.fn();
   state.runtimeOnInstalledAdd = vi.fn();
@@ -423,22 +426,26 @@ describe('commands-listener', () => {
   // keepServiceWorkerAlive
   // -------------------------------------------------------------------------
   describe('keepServiceWorkerAlive', () => {
-    it('should create 3 alarms with correct parameters', async () => {
+    it('should create one main alarm at active cadence (0.5 min)', async () => {
       const { keepServiceWorkerAlive } = await importFreshCommands();
       keepServiceWorkerAlive();
-      expect(state.alarmsCreate).toHaveBeenCalledTimes(3);
+      // Collapsed from the previous 3-alarm setup to a single main alarm:
+      // the old keep-alive-2 / keep-alive-3 added no uptime gain beyond
+      // the 30 s cadence of keep-alive-1 and multiplied battery cost on
+      // idle laptops. See module docstring for details.
+      expect(state.alarmsCreate).toHaveBeenCalledTimes(1);
       expect(state.alarmsCreate).toHaveBeenCalledWith(
-        'keep-alive-1',
+        'keep-alive-main',
         expect.objectContaining({ delayInMinutes: 0.5, periodInMinutes: 0.5 }),
       );
-      expect(state.alarmsCreate).toHaveBeenCalledWith(
-        'keep-alive-2',
-        expect.objectContaining({ delayInMinutes: 1, periodInMinutes: 1 }),
-      );
-      expect(state.alarmsCreate).toHaveBeenCalledWith(
-        'keep-alive-3',
-        expect.objectContaining({ delayInMinutes: 2, periodInMinutes: 2 }),
-      );
+    });
+
+    it('should clear legacy keep-alive-1/2/3 alarms left by older versions', async () => {
+      const { keepServiceWorkerAlive } = await importFreshCommands();
+      keepServiceWorkerAlive();
+      expect(state.alarmsClear).toHaveBeenCalledWith('keep-alive-1');
+      expect(state.alarmsClear).toHaveBeenCalledWith('keep-alive-2');
+      expect(state.alarmsClear).toHaveBeenCalledWith('keep-alive-3');
     });
 
     it('should register alarm listener', async () => {
@@ -451,8 +458,97 @@ describe('commands-listener', () => {
       const { keepServiceWorkerAlive } = await importFreshCommands();
       keepServiceWorkerAlive();
       const cb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
-      expect(() => cb({ name: 'keep-alive-1' })).not.toThrow();
+      expect(() => cb({ name: 'keep-alive-main' })).not.toThrow();
       expect(() => cb({ name: 'unrelated-alarm' })).not.toThrow();
+    });
+
+    it('alarm tick with recent interaction stays in active mode', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      state.alarmsCreate.mockClear();
+      const cb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
+      // Very recent interaction (< 30 min) → no mode change.
+      mod.__testing.setLastUserInteractionAt(Date.now() - 5_000);
+      cb({ name: 'keep-alive-main' });
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('active');
+      expect(state.alarmsCreate).not.toHaveBeenCalled();
+    });
+
+    it('alarm tick after 30+ min idle downshifts to idle cadence (5 min)', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      state.alarmsCreate.mockClear();
+      const cb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
+      // Simulate the user having been idle for 31 min.
+      mod.__testing.setLastUserInteractionAt(Date.now() - (31 * 60 * 1000));
+      cb({ name: 'keep-alive-main' });
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('idle');
+      expect(state.alarmsCreate).toHaveBeenCalledWith(
+        'keep-alive-main',
+        expect.objectContaining({ delayInMinutes: 5, periodInMinutes: 5 }),
+      );
+    });
+
+    it('alarm tick while already in idle mode is a no-op (no alarm thrash)', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      const cb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
+      // First tick: transition to idle.
+      mod.__testing.setLastUserInteractionAt(Date.now() - (31 * 60 * 1000));
+      cb({ name: 'keep-alive-main' });
+      state.alarmsCreate.mockClear();
+      // Second tick while still idle must not re-create the alarm —
+      // `setAlarmMode` is idempotent by design.
+      cb({ name: 'keep-alive-main' });
+      expect(state.alarmsCreate).not.toHaveBeenCalled();
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('idle');
+    });
+
+    it('alarm tick with non-main keep-alive name does not trigger mode switch', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      state.alarmsCreate.mockClear();
+      const cb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
+      mod.__testing.setLastUserInteractionAt(Date.now() - (31 * 60 * 1000));
+      cb({ name: 'keep-alive-restart' });
+      // Startup/install seed alarms run on their own fixed cadence and
+      // are explicitly filtered out of the active/idle state machine.
+      expect(state.alarmsCreate).not.toHaveBeenCalled();
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('active');
+    });
+
+    it('recordUserInteraction bumps timestamp and snaps idle→active', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      const cb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
+      // Move into idle first.
+      mod.__testing.setLastUserInteractionAt(Date.now() - (31 * 60 * 1000));
+      cb({ name: 'keep-alive-main' });
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('idle');
+      state.alarmsCreate.mockClear();
+
+      const before = mod.__testing.getLastUserInteractionAt();
+      // Force a measurable wall-clock gap.
+      await new Promise((r) => setTimeout(r, 2));
+      mod.recordUserInteraction();
+
+      expect(mod.__testing.getLastUserInteractionAt()).toBeGreaterThan(before);
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('active');
+      expect(state.alarmsCreate).toHaveBeenCalledWith(
+        'keep-alive-main',
+        expect.objectContaining({ delayInMinutes: 0.5, periodInMinutes: 0.5 }),
+      );
+    });
+
+    it('recordUserInteraction while already active only bumps timestamp (no alarm churn)', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      state.alarmsCreate.mockClear();
+      const before = mod.__testing.getLastUserInteractionAt();
+      await new Promise((r) => setTimeout(r, 2));
+      mod.recordUserInteraction();
+      expect(mod.__testing.getLastUserInteractionAt()).toBeGreaterThan(before);
+      expect(state.alarmsCreate).not.toHaveBeenCalled();
     });
 
     it('should register onStartup listener that creates restart alarm', async () => {
@@ -488,13 +584,44 @@ describe('commands-listener', () => {
       expect(state.tabsOnUpdatedAdd).toHaveBeenCalledTimes(1);
     });
 
-    it('tab listeners are no-ops that do not throw', async () => {
-      const { keepServiceWorkerAlive } = await importFreshCommands();
-      keepServiceWorkerAlive();
+    it('tab listeners record user interaction (feeds idle/active switch)', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
       const onActivated = state.tabsOnActivatedAdd.mock.calls[0][0] as () => void;
       const onUpdated = state.tabsOnUpdatedAdd.mock.calls[0][0] as () => void;
+      // Put us into idle mode first.
+      const alarmCb = state.alarmsOnAlarmAdd.mock.calls[0][0] as (a: { name: string }) => void;
+      mod.__testing.setLastUserInteractionAt(Date.now() - (31 * 60 * 1000));
+      alarmCb({ name: 'keep-alive-main' });
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('idle');
+      // Either listener should snap us back to active.
       expect(() => onActivated()).not.toThrow();
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('active');
+      // Reset to idle and try the other listener.
+      mod.__testing.setLastUserInteractionAt(Date.now() - (31 * 60 * 1000));
+      alarmCb({ name: 'keep-alive-main' });
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('idle');
       expect(() => onUpdated()).not.toThrow();
+      expect(mod.__testing.getCurrentAlarmMode()).toBe('active');
+    });
+
+    it('onStartup listener seeds restart alarm and bumps interaction timestamp', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      // Pretend idle so we can detect the bump.
+      mod.__testing.setLastUserInteractionAt(0);
+      const onStartup = state.runtimeOnStartupAdd.mock.calls[0][0] as () => void;
+      onStartup();
+      expect(mod.__testing.getLastUserInteractionAt()).toBeGreaterThan(0);
+    });
+
+    it('onInstalled listener seeds install alarm and bumps interaction timestamp', async () => {
+      const mod = await importFreshCommands();
+      mod.keepServiceWorkerAlive();
+      mod.__testing.setLastUserInteractionAt(0);
+      const onInstalled = state.runtimeOnInstalledAdd.mock.calls[0][0] as () => void;
+      onInstalled();
+      expect(mod.__testing.getLastUserInteractionAt()).toBeGreaterThan(0);
     });
   });
 });
