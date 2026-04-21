@@ -9,6 +9,7 @@ import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
 import { sendMessageWithRetry } from '../shared/runtime-messaging';
+import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
@@ -1615,15 +1616,44 @@ function initializePopup() {
   async function loadRecentHistory() {
     const myGen = ++recentHistoryGen;
 
+    // Fire-and-forget warm-cache paint. Runs in parallel with the SW
+    // readiness check + GET_RECENT_HISTORY round-trip below. Covers the
+    // two slow paths: (a) `checkServiceWorkerStatus()` discovers the SW
+    // is cold and we would otherwise show "Initializing...", and (b)
+    // the SW is warm but the IDB read adds a perceptible latency.
+    // Skipped silently if the cache is empty, stale, or the open has
+    // been superseded by a newer call.
+    void (async () => {
+      try {
+        const cache = await getRecentHistoryCache<IndexedItem>();
+        if (myGen !== recentHistoryGen) { return; }
+        if (!cache || !cache.items?.length) { return; }
+        if (resultsLocal.length > 0) { return; }
+        resultsLocal = cache.items;
+        const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
+        sortResults(resultsLocal, sortBy);
+        activeIndex = -1;
+        renderResults();
+      } catch {
+        // Cache is a hint; failure degrades silently to the port path.
+      }
+    })();
+
     await SettingsManager.init();
     const isServiceWorkerReady = await checkServiceWorkerStatus();
     if (myGen !== recentHistoryGen) { return; }
     if (!isServiceWorkerReady) {
-      clearRecentSectionsContainer();
-      resultsLocal = [];
-      activeIndex = -1;
-      renderResults();
-      resultCountNode.textContent = 'Initializing...';
+      // Keep whatever the warm-cache painted (if any); only wipe results
+      // when there was nothing to paint from cache so the user sees a
+      // coherent "initializing" message instead of a bare list.
+      if (resultsLocal.length === 0) {
+        clearRecentSectionsContainer();
+        activeIndex = -1;
+        renderResults();
+        resultCountNode.textContent = 'Initializing...';
+      } else {
+        resultCountNode.textContent = `${resultsLocal.length} cached · SW starting…`;
+      }
       return;
     }
 

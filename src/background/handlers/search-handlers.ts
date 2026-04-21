@@ -31,6 +31,15 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
         const recentItems = await getRecentIndexedItems(historyLimit);
         log.debug('GET_RECENT_HISTORY', `Completed, items: ${recentItems.length}`);
         sendResponse({ results: recentItems });
+        // Warm the session cache so the next quick-search / popup open
+        // can render these rows instantly without waiting for a new SW
+        // cold start + IndexedDB round-trip. Fire-and-forget: cache
+        // failures must not impact the user-visible response.
+        if (recentItems.length > 0) {
+          void import('../../shared/recent-history-cache').then(
+            ({ setRecentHistoryCache }) => setRecentHistoryCache(recentItems, historyLimit),
+          ).catch(() => { /* module load failure is non-fatal */ });
+        }
       } catch (error) {
         log.error('GET_RECENT_HISTORY', 'Failed:', errorMeta(error));
         sendResponse({ results: [] });
@@ -43,6 +52,11 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
         await performFullRebuild();
         const { clearSearchCache } = await import('../search/search-cache');
         clearSearchCache();
+        // Rebuild may produce a different item set; drop the warm cache
+        // so the next open rehydrates from the rebuilt IDB rather than
+        // painting pre-rebuild rows.
+        const { clearRecentHistoryCache } = await import('../../shared/recent-history-cache');
+        void clearRecentHistoryCache();
         log.info('REBUILD_INDEX', '✅ Completed successfully');
         sendResponse({ status: 'OK', message: 'Index rebuilt successfully' });
       } catch (error) {
@@ -94,6 +108,8 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
         const result = await clearAndRebuild();
 
         if (result.success) {
+          const { clearRecentHistoryCache } = await import('../../shared/recent-history-cache');
+          void clearRecentHistoryCache();
           log.info('CLEAR_ALL_DATA', '✅ Completed', { itemCount: result.itemCount });
           sendResponse({ status: 'OK', message: result.message, itemCount: result.itemCount });
         } else {

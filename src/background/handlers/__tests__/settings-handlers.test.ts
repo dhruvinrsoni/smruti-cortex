@@ -64,6 +64,10 @@ vi.mock('../../resilience', () => ({
   clearAndRebuild: vi.fn(),
 }));
 
+vi.mock('../../../shared/recent-history-cache', () => ({
+  clearRecentHistoryCache: vi.fn().mockResolvedValue(undefined),
+}));
+
 function dispatch(
   registry: MessageHandlerRegistry,
   msg: { type: string; [k: string]: unknown },
@@ -325,6 +329,7 @@ describe('registerSettingsHandlers', () => {
     it('FACTORY_RESET resets settings and rebuilds on success', async () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { clearAndRebuild } = await import('../../resilience');
+      const { clearRecentHistoryCache } = await import('../../../shared/recent-history-cache');
       (SettingsManager.resetToDefaults as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
       (clearAndRebuild as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
 
@@ -333,6 +338,25 @@ describe('registerSettingsHandlers', () => {
       expect(res).toEqual({ status: 'OK' });
       expect(SettingsManager.resetToDefaults).toHaveBeenCalled();
       expect(clearAndRebuild).toHaveBeenCalled();
+      // Cache of the session-scoped recent-history list must be wiped so
+      // post-reset opens do not render pre-reset rows.
+      expect(clearRecentHistoryCache).toHaveBeenCalled();
+    });
+
+    it('FACTORY_RESET does not clear recent-history cache if rebuild fails', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { clearAndRebuild } = await import('../../resilience');
+      const { clearRecentHistoryCache } = await import('../../../shared/recent-history-cache');
+      (SettingsManager.resetToDefaults as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+      (clearAndRebuild as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('rebuild fail'));
+
+      const res = await dispatch(postInit, { type: 'FACTORY_RESET' });
+
+      expect(res).toEqual({ error: 'rebuild fail' });
+      // If rebuild fails, the underlying data is in an unknown state —
+      // we deliberately do not touch the cache so the existing warm
+      // entry can still be served while the user retries.
+      expect(clearRecentHistoryCache).not.toHaveBeenCalled();
     });
 
     it('FACTORY_RESET returns { error } when resetToDefaults rejects', async () => {

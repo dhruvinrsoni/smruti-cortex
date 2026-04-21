@@ -96,6 +96,11 @@ export function registerSettingsHandlers(
       await SettingsManager.resetToDefaults();
       const { clearAndRebuild: clearRebuild } = await import('../resilience');
       await clearRebuild();
+      // Factory reset wipes every persisted store; the session-scoped
+      // recent-history cache would otherwise linger and paint pre-reset
+      // rows on the next quick-search open.
+      const { clearRecentHistoryCache } = await import('../../shared/recent-history-cache');
+      void clearRecentHistoryCache();
       sendResponse({ status: 'OK' });
     } catch (err) {
       sendResponse({ error: (err as Error).message });

@@ -40,6 +40,7 @@ import {
 
 import { type AppSettings, DisplayMode } from '../core/settings';
 import { sendMessageWithRetry } from '../shared/runtime-messaging';
+import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
@@ -3875,9 +3876,49 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // Exponential-ish backoff schedule for post-hibernate SW boot, where cold
   // init can take ~1-2s and the first few messages may race the init gate.
   const LOAD_RECENT_RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
+
+  // Monotonic token so a slow warm-cache read from an earlier open cannot
+  // clobber fresh results from a later open. Incremented at the top of
+  // each loadRecentHistory call; the warm-cache painter captures the
+  // token and only paints if it still matches on resume.
+  let loadRecentHistoryToken = 0;
+
+  /**
+   * Fire-and-forget warm-cache paint. Runs in parallel with the SW
+   * message; whichever returns first paints, and the second paint
+   * (fresh results from the SW) naturally overwrites the cached paint.
+   *
+   * Precedence rules, in order:
+   * - Token drift (a newer loadRecentHistory started): abort.
+   * - Mode changed (user opened palette / web-search): abort.
+   * - currentResults already populated (fresh paint won the race): abort.
+   * - Otherwise: sort cached items with the user's current sortBy and render.
+   */
+  async function paintFromWarmCacheIfAvailable(token: number): Promise<void> {
+    try {
+      const cache = await getRecentHistoryCache<SearchResult>();
+      if (token !== loadRecentHistoryToken) {return;}
+      if (!cache || !cache.items?.length) {return;}
+      if (currentMode !== 'history') {return;}
+      if (currentResults.length > 0) {return;}
+      const sortBy = cachedSettings?.sortBy || 'most-recent';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted = sortResults(cache.items, sortBy as any);
+      currentResults = sorted;
+      selectedIndex = -1;
+      renderResults(currentResults);
+      const ageMs = Date.now() - cache.writtenAt;
+      perfLog(`Warm-cache painted ${sorted.length} items (age=${ageMs}ms)`);
+    } catch (e) {
+      perfLog('Warm-cache paint failed: ' + (e as Error).message);
+    }
+  }
+
   async function loadRecentHistory(): Promise<void> {
     const t0 = performance.now();
     perfLog('loadRecentHistory called');
+
+    const myToken = ++loadRecentHistoryToken;
 
     if (!isExtensionContextValid()) {
       perfLog('Extension context invalid - showing error');
@@ -3888,6 +3929,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       );
       return;
     }
+
+    // Kick off the warm-cache read in parallel with the SW message below.
+    // After hibernate/long idle the SW is cold and the fresh response can
+    // take 0.5-1.5s; the cached paint typically lands in under 10 ms,
+    // giving the user an instant first frame.
+    void paintFromWarmCacheIfAvailable(myToken);
 
     try {
       const showRecentlyVisited = cachedSettings?.showRecentHistory ?? true;
