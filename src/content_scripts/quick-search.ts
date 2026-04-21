@@ -160,6 +160,23 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let overlayFocusInterval: ReturnType<typeof setInterval> | null = null; // Tracked to prevent leaks
   let overlayFocusTimeouts: ReturnType<typeof setTimeout>[] = [];         // Tracked backup timeouts
   let searchPort: chrome.runtime.Port | null = null;
+  // Heartbeat: periodic PING on the port, stale if no PONG within deadline.
+  // Protects against silent port death after SW eviction (post-hibernate) that
+  // does not always trigger `onDisconnect` in time.
+  let portHeartbeatInterval: number | null = null;
+  let portHeartbeatDeadline: number | null = null; // pending PING deadline timer
+  const PORT_HEARTBEAT_INTERVAL_MS = 15_000;
+  const PORT_HEARTBEAT_TIMEOUT_MS = 3_000;
+  // Exponential reconnect backoff after onDisconnect / stale detection.
+  let portReconnectAttempts = 0;
+  let portReconnectTimer: number | null = null;
+  const PORT_RECONNECT_BASE_MS = 300;
+  const PORT_RECONNECT_CAP_MS = 1200;
+  // "Service worker not ready" retry ladder for the port error response.
+  // Reset whenever we receive any successful response or when a new user
+  // intent comes in through performSearch / loadRecentHistory.
+  let portNotReadyRetryCount = 0;
+  const PORT_NOT_READY_RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
   let prewarmed = false;
   let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
@@ -1193,33 +1210,153 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== PORT-BASED MESSAGING =====
+
+  /**
+   * Fire-and-forget sendMessage PING to force-wake the SW before port work.
+   *
+   * The `sendMessage` path in the SW calls `ensureReady()` / self-heal;
+   * the port path (after the fix in Commit 1) also does so, but sendMessage
+   * has better guaranteed wake semantics in practice (e.g. Chrome fast-paths
+   * it through existing handlers). We cap at 2s so we never block the UI.
+   */
+  function forceWakeServiceWorker(): void {
+    if (!isExtensionContextValid()) {return;}
+    try {
+      const t0 = performance.now();
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          perfLog('forceWakeServiceWorker: timed out (2s cap)', t0);
+        }
+      }, 2000);
+      chrome.runtime.sendMessage({ type: 'PING', t: Date.now() }, () => {
+        settled = true;
+        clearTimeout(timer);
+        void chrome.runtime.lastError;
+        perfLog('forceWakeServiceWorker: SW awake', t0);
+      });
+    } catch {
+      // Context invalidated between check and call — ignore.
+    }
+  }
+
+  function clearHeartbeatTimers(): void {
+    if (portHeartbeatInterval !== null) {
+      clearInterval(portHeartbeatInterval);
+      portHeartbeatInterval = null;
+    }
+    if (portHeartbeatDeadline !== null) {
+      clearTimeout(portHeartbeatDeadline);
+      portHeartbeatDeadline = null;
+    }
+  }
+
+  /**
+   * Mark the current port stale and trigger a reconnect.
+   * Idempotent: safe to call from both try/catch throws and heartbeat timeouts.
+   */
+  function handleStalePort(reason: string): void {
+    if (!searchPort) {return;}
+    log.warn('port', `Stale port detected (${reason}) — reconnecting`);
+    clearHeartbeatTimers();
+    try { searchPort.disconnect(); } catch { /* already gone */ }
+    searchPort = null;
+    if (isExtensionContextValid()) {
+      // Don't reset portReconnectAttempts here — onDisconnect fires next
+      // and drives the exponential backoff.
+      openSearchPort();
+    }
+  }
+
+  function startHeartbeat(): void {
+    clearHeartbeatTimers();
+    if (!searchPort) {return;}
+    portHeartbeatInterval = window.setInterval(() => {
+      if (!searchPort) {
+        clearHeartbeatTimers();
+        return;
+      }
+      try {
+        searchPort.postMessage({ type: 'PING', t: Date.now() });
+      } catch (err) {
+        handleStalePort(`postMessage threw: ${(err as Error).message}`);
+        return;
+      }
+      // Arm a per-PING deadline — if PONG doesn't arrive, treat as stale.
+      if (portHeartbeatDeadline !== null) {clearTimeout(portHeartbeatDeadline);}
+      portHeartbeatDeadline = window.setTimeout(() => {
+        portHeartbeatDeadline = null;
+        handleStalePort('no PONG within 3s');
+      }, PORT_HEARTBEAT_TIMEOUT_MS) as unknown as number;
+    }, PORT_HEARTBEAT_INTERVAL_MS) as unknown as number;
+  }
+
   function openSearchPort(): void {
     // Don't try to reconnect if port already exists
     if (searchPort) {return;}
-    
+
+    // Also skip if a backoff-scheduled reconnect is already queued.
+    if (portReconnectTimer !== null) {
+      log.debug('port', 'openSearchPort: reconnect already scheduled, skipping');
+      return;
+    }
+
     // Check extension context validity first
     if (!isExtensionContextValid()) {
       log.debug('port', 'Cannot open port: extension context invalidated');
       return;
     }
-    
+
     const t0 = performance.now();
     try {
       searchPort = chrome.runtime.connect({ name: 'quick-search' });
       perfLog('Search port opened', t0);
-      
+
+      // Healthy open resets the reconnect attempt counter — a subsequent
+      // disconnect will start its own fresh backoff sequence.
+      portReconnectAttempts = 0;
+      startHeartbeat();
+
       searchPort.onMessage.addListener((response) => {
+        // Heartbeat: any PONG clears the per-PING deadline.
+        if (response?.type === 'PONG') {
+          if (portHeartbeatDeadline !== null) {
+            clearTimeout(portHeartbeatDeadline);
+            portHeartbeatDeadline = null;
+          }
+          return;
+        }
+
         // Handle error responses from service worker
         if (response?.error) {
           if (response.error === 'Service worker not ready') {
-            log.debug('port', 'Service worker still initializing — will retry');
+            // Exponential-ish backoff ladder mirrors loadRecentHistory — cold
+            // SW init after hibernate can take ~1-2s, and bursts of 500ms
+            // retries just pile up in the queue and log-flood.
             const query = inputEl?.value?.trim() || '';
-            if (query.length > 0) {
-              setTimeout(() => performSearch(query, true), 500);
+            const attempt = Math.min(portNotReadyRetryCount, PORT_NOT_READY_RETRY_DELAYS_MS.length - 1);
+            const delay = PORT_NOT_READY_RETRY_DELAYS_MS[attempt];
+            if (portNotReadyRetryCount < PORT_NOT_READY_RETRY_DELAYS_MS.length) {
+              portNotReadyRetryCount++;
+              log.debug(
+                'port',
+                `Service worker still initializing — retry ${portNotReadyRetryCount}/${PORT_NOT_READY_RETRY_DELAYS_MS.length} in ${delay}ms`,
+              );
+              if (query.length > 0) {
+                setTimeout(() => performSearch(query, true), delay);
+              } else {
+                setTimeout(() => loadRecentHistory(), delay);
+              }
             } else {
-              setTimeout(() => loadRecentHistory(), 500);
+              log.warn('port', 'Service worker not ready — retry budget exhausted, giving up');
+              portNotReadyRetryCount = 0;
             }
             return;
+          }
+          // Any non-error response resets the not-ready retry budget.
+          if (response?.results) {
+            portNotReadyRetryCount = 0;
           }
           if (response.error === 'Rate limited') {
             log.debug('port', 'Rate limited by service worker — debounce will retry');
@@ -1296,25 +1433,42 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           hideSpinner();
         }
 
+        clearHeartbeatTimers();
         searchPort = null;
-        
-        // If context is still valid, automatically try to reconnect after a delay
+
+        // Exponential backoff reconnect: 300/600/1200 ms (cap 1200). Prevents
+        // thrash when the SW is being repeatedly evicted, while still
+        // recovering quickly from a single eviction.
         if (isExtensionContextValid()) {
-          setTimeout(() => {
+          const delay = Math.min(
+            PORT_RECONNECT_BASE_MS * Math.pow(2, portReconnectAttempts),
+            PORT_RECONNECT_CAP_MS,
+          );
+          portReconnectAttempts++;
+          if (portReconnectTimer !== null) {clearTimeout(portReconnectTimer);}
+          portReconnectTimer = window.setTimeout(() => {
+            portReconnectTimer = null;
             if (!searchPort && isExtensionContextValid()) {
-              log.debug('port', 'Auto-reconnecting search port');
+              log.debug('port', `Auto-reconnecting search port (attempt ${portReconnectAttempts}, delay ${delay}ms)`);
               openSearchPort();
             }
-          }, 500);
+          }, delay) as unknown as number;
         }
       });
     } catch (e) {
       log.error('port', 'Failed to open search port:', (e as Error).message);
       searchPort = null;
+      clearHeartbeatTimers();
     }
   }
 
   function closeSearchPort(): void {
+    clearHeartbeatTimers();
+    if (portReconnectTimer !== null) {
+      clearTimeout(portReconnectTimer);
+      portReconnectTimer = null;
+    }
+    portReconnectAttempts = 0;
     if (searchPort) {
       searchPort.disconnect();
       searchPort = null;
@@ -1946,6 +2100,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Show empty state immediately so overlay is never visually blank
     renderResults([]);
     recentHistoryRetryCount = 0;
+    portNotReadyRetryCount = 0;
 
     // Await fresh settings before loading defaults so toggles are respected
     fetchSettings().then(() => {
@@ -2017,8 +2172,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       overlayFocusTimeouts.push(tid);
     });
 
-    // Open port for faster messaging (only if extension context is valid)
+    // Open port for faster messaging (only if extension context is valid).
+    // Force-wake the SW first via sendMessage — this path guarantees
+    // ensureReady()/self-heal is called on the SW, which is crucial after
+    // hibernate-induced eviction. Port connect races the SW boot otherwise.
     if (chrome.runtime?.id) {
+      forceWakeServiceWorker();
       openSearchPort();
     }
   }
@@ -3723,6 +3882,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // Load recent history (smart default results when query is empty)
   let recentHistoryRetryCount = 0;
+  // Exponential-ish backoff schedule for post-hibernate SW boot, where cold
+  // init can take ~1-2s and the first few messages may race the init gate.
+  const LOAD_RECENT_RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
   async function loadRecentHistory(): Promise<void> {
     const t0 = performance.now();
     perfLog('loadRecentHistory called');
@@ -3762,13 +3924,19 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       }
 
       // Service worker not ready or connection failed (e.g., SW still cold-starting
-      // after hibernation wake) — retry with backoff before giving up
-      const shouldRetry = (response.error || response._lastError) && recentHistoryRetryCount < 2;
+      // after hibernation wake) — retry with exponential backoff before giving up.
+      const shouldRetry =
+        (response.error || response._lastError) &&
+        recentHistoryRetryCount < LOAD_RECENT_RETRY_DELAYS_MS.length;
       if (shouldRetry) {
+        const delay = LOAD_RECENT_RETRY_DELAYS_MS[recentHistoryRetryCount];
         recentHistoryRetryCount++;
         const reason = response.error || 'lastError (connection failed)';
-        log.debug('loadRecentHistory', `SW unavailable: "${reason}", retry ${recentHistoryRetryCount}/2`);
-        setTimeout(() => loadRecentHistory(), 500);
+        log.debug(
+          'loadRecentHistory',
+          `SW unavailable: "${reason}", retry ${recentHistoryRetryCount}/${LOAD_RECENT_RETRY_DELAYS_MS.length} in ${delay}ms`,
+        );
+        setTimeout(() => loadRecentHistory(), delay);
         return;
       }
 
