@@ -26,6 +26,7 @@ registerCommandsListenerEarly();
 setupPortBasedMessaging({
   isInitialized: () => initialized,
   getInitPromise: () => initializationPromise,
+  ensureReady,
 });
 
 // Chrome MV3 requires synchronous listener registration at module load.

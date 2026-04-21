@@ -553,17 +553,19 @@ function setupPortMessaging(
   overrides: Partial<{
     isInitialized: () => boolean;
     getInitPromise: () => Promise<void> | null;
+    ensureReady: () => Promise<boolean>;
   }> = {},
 ) {
   state.runtimeOnConnectAdd = vi.fn();
   const isInitialized = overrides.isInitialized ?? vi.fn(() => true);
   const getInitPromise = overrides.getInitPromise ?? vi.fn(() => null);
-  setupPortBasedMessaging({ isInitialized, getInitPromise });
+  const ensureReady = overrides.ensureReady ?? vi.fn(async () => true);
+  setupPortBasedMessaging({ isInitialized, getInitPromise, ensureReady });
   if (!state.runtimeOnConnectAdd.mock.calls.length) {
     throw new Error('onConnect listener was not registered');
   }
   const onConnectHandler = state.runtimeOnConnectAdd.mock.calls[0][0] as (port: TestPort) => void;
-  return { onConnectHandler, isInitialized, getInitPromise };
+  return { onConnectHandler, isInitialized, getInitPromise, ensureReady };
 }
 
 describe('port-messaging', () => {
@@ -682,28 +684,70 @@ describe('port-messaging', () => {
     );
   });
 
-  it('when not initialized + initPromise rejects → sends error', async () => {
+  it('when not initialized + initPromise rejects → ensureReady heals and proceeds', async () => {
+    const ensureReady = vi.fn(async () => true);
     const { onConnectHandler } = setupPortMessaging({
       isInitialized: vi.fn(() => false),
       getInitPromise: vi.fn(() => Promise.reject(new Error('init failed'))),
+      ensureReady,
     });
     const port = createTestPort('quick-search');
     onConnectHandler(port);
     await port.send({ type: 'SEARCH_QUERY', query: 'x' });
     await flushMicrotasks();
+    expect(ensureReady).toHaveBeenCalled();
+    expect(state.mockRunSearch).toHaveBeenCalledWith('x', { skipAI: false });
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'x', aiStatus: 'ok' }),
+    );
+  });
+
+  it('when not initialized + initPromise rejects + ensureReady fails → sends error', async () => {
+    const ensureReady = vi.fn(async () => false);
+    const { onConnectHandler } = setupPortMessaging({
+      isInitialized: vi.fn(() => false),
+      getInitPromise: vi.fn(() => Promise.reject(new Error('init failed'))),
+      ensureReady,
+    });
+    const port = createTestPort('quick-search');
+    onConnectHandler(port);
+    await port.send({ type: 'SEARCH_QUERY', query: 'x' });
+    await flushMicrotasks();
+    expect(ensureReady).toHaveBeenCalled();
     expect(state.mockRunSearch).not.toHaveBeenCalled();
     expect(port.postMessage).toHaveBeenCalledWith({ error: 'Service worker not ready' });
   });
 
-  it('when not initialized + no initPromise → sends error', async () => {
+  it('when not initialized + no initPromise → calls ensureReady and proceeds on success', async () => {
+    const ensureReady = vi.fn(async () => true);
     const { onConnectHandler } = setupPortMessaging({
       isInitialized: vi.fn(() => false),
       getInitPromise: vi.fn(() => null),
+      ensureReady,
     });
     const port = createTestPort('quick-search');
     onConnectHandler(port);
     await port.send({ type: 'SEARCH_QUERY', query: 'x' });
     await flushMicrotasks();
+    expect(ensureReady).toHaveBeenCalledTimes(1);
+    expect(state.mockRunSearch).toHaveBeenCalledWith('x', { skipAI: false });
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'x', aiStatus: 'ok' }),
+    );
+  });
+
+  it('when not initialized + no initPromise + ensureReady returns false → sends error', async () => {
+    const ensureReady = vi.fn(async () => false);
+    const { onConnectHandler } = setupPortMessaging({
+      isInitialized: vi.fn(() => false),
+      getInitPromise: vi.fn(() => null),
+      ensureReady,
+    });
+    const port = createTestPort('quick-search');
+    onConnectHandler(port);
+    await port.send({ type: 'SEARCH_QUERY', query: 'x' });
+    await flushMicrotasks();
+    expect(ensureReady).toHaveBeenCalledTimes(1);
     expect(state.mockRunSearch).not.toHaveBeenCalled();
     expect(port.postMessage).toHaveBeenCalledWith({ error: 'Service worker not ready' });
   });
@@ -740,15 +784,40 @@ describe('port-messaging', () => {
     expect(port.postMessage).not.toHaveBeenCalled();
   });
 
-  it('non-SEARCH_QUERY messages are ignored', async () => {
+  it('non-SEARCH_QUERY / non-PING messages are ignored', async () => {
     const { onConnectHandler } = setupPortMessaging();
     const port = createTestPort('quick-search');
     onConnectHandler(port);
-    await port.send({ type: 'PING' });
     await port.send({ type: 'HEARTBEAT', query: 'x' });
+    await port.send({ type: 'UNKNOWN' });
     await flushMicrotasks();
     expect(state.mockRunSearch).not.toHaveBeenCalled();
     expect(port.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('PING short-circuits with PONG regardless of init state', async () => {
+    const isInitialized = vi.fn(() => false);
+    const getInitPromise = vi.fn(() => null);
+    const ensureReady = vi.fn(async () => true);
+    const { onConnectHandler } = setupPortMessaging({ isInitialized, getInitPromise, ensureReady });
+    const port = createTestPort('quick-search');
+    onConnectHandler(port);
+    await port.send({ type: 'PING', t: 12345 });
+    await flushMicrotasks();
+    expect(port.postMessage).toHaveBeenCalledWith({ type: 'PONG', t: 12345 });
+    // Must not trigger init/search just because of a liveness probe.
+    expect(ensureReady).not.toHaveBeenCalled();
+    expect(state.mockRunSearch).not.toHaveBeenCalled();
+  });
+
+  it('PING swallows postMessage errors if port is mid-close', async () => {
+    const { onConnectHandler } = setupPortMessaging();
+    const port = createTestPort('quick-search');
+    port.postMessage.mockImplementation(() => {
+      throw new Error('port closed');
+    });
+    onConnectHandler(port);
+    await expect(port.send({ type: 'PING', t: 1 })).resolves.toBeUndefined();
   });
 
   it('truncates queries longer than 500 characters', async () => {
@@ -837,6 +906,7 @@ describe('port-messaging', () => {
     const { onConnectHandler } = setupPortMessaging({
       isInitialized: vi.fn(() => false),
       getInitPromise: vi.fn(() => null),
+      ensureReady: vi.fn(async () => false),
     });
     const port = createTestPort('quick-search');
     port.postMessage.mockImplementation(() => {
@@ -852,6 +922,7 @@ describe('port-messaging', () => {
     const { onConnectHandler } = setupPortMessaging({
       isInitialized: vi.fn(() => false),
       getInitPromise: vi.fn(() => Promise.reject(new Error('init died'))),
+      ensureReady: vi.fn(async () => false),
     });
     const port = createTestPort('quick-search');
     port.postMessage.mockImplementation(() => {
