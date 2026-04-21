@@ -8,6 +8,7 @@ import { Logger, LogLevel, ComponentLogger, errorMeta } from '../core/logger'; /
 import { SettingsManager, DisplayMode } from '../core/settings';
 import { SearchDebugEntry } from '../background/diagnostics';
 import { IndexedItem } from '../background/schema';
+import { sendMessageWithRetry } from '../shared/runtime-messaging';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
@@ -633,32 +634,18 @@ function initializePopup() {
     });
   }
 
-  // Fast message sending
+  // Thin wrapper around the shared wake-safe helper. Defaults preserve the
+  // popup's historical behavior (no timeout, no retry); callers that need
+  // retries/timeouts can call `sendMessageWithRetry` directly with options.
+  // The historical no-runtime fallback returned `{ results: [] }` so
+  // legacy call sites can treat the response uniformly; we preserve that
+  // by mapping the shared helper's empty `{}` back to `{ results: [] }`.
   function sendMessage(msg: unknown): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return new Promise((resolve, reject) => {
-      try {
-        const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : (typeof browser !== 'undefined' ? browser.runtime : null);
-        if (!runtime || !runtime.sendMessage) {
-          resolve({ results: [] });
-          return;
-        }
-        runtime.sendMessage(msg, (resp: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          // If we got a response, resolve it (even if lastError is set due to bfcache)
-          // bfcache navigation causes port closure after response is sent
-          if (resp) {
-            resolve(resp);
-            return;
-          }
-          // Only reject on actual errors (no response + lastError)
-          if (chrome && chrome.runtime && chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message || 'Runtime error'));
-            return;
-          }
-          resolve(resp);
-        });
-      } catch (e) {
-        reject(e);
+    return sendMessageWithRetry<any>(msg).then((resp) => {
+      if (resp && typeof resp === 'object' && Object.keys(resp as object).length === 0) {
+        return { results: [] };
       }
+      return resp;
     });
   }
 

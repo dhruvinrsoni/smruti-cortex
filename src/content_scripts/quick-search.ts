@@ -39,6 +39,7 @@ import {
 } from '../shared/search-ui-base';
 
 import { type AppSettings, DisplayMode } from '../core/settings';
+import { sendMessageWithRetry } from '../shared/runtime-messaging';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
@@ -1221,24 +1222,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
    */
   function forceWakeServiceWorker(): void {
     if (!isExtensionContextValid()) {return;}
-    try {
-      const t0 = performance.now();
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          perfLog('forceWakeServiceWorker: timed out (2s cap)', t0);
-        }
-      }, 2000);
-      chrome.runtime.sendMessage({ type: 'PING', t: Date.now() }, () => {
-        settled = true;
-        clearTimeout(timer);
-        void chrome.runtime.lastError;
-        perfLog('forceWakeServiceWorker: SW awake', t0);
-      });
-    } catch {
-      // Context invalidated between check and call — ignore.
-    }
+    const t0 = performance.now();
+    // Shared wake-safe helper. 2s timeout keeps us from blocking the UI if
+    // the SW never responds; we intentionally ignore both success and
+    // failure — this is a fire-and-forget wake probe.
+    sendMessageWithRetry({ type: 'PING', t: Date.now() }, { timeoutMs: 2000 })
+      .then(() => perfLog('forceWakeServiceWorker: SW awake', t0))
+      .catch(() => perfLog('forceWakeServiceWorker: wake probe failed (ignored)', t0));
   }
 
   function clearHeartbeatTimers(): void {
@@ -3904,19 +3894,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       const showSearches = cachedSettings?.showRecentSearches ?? true;
 
       const defaultResultCount = cachedSettings?.defaultResultCount ?? 50;
-      const response = await new Promise<{ results?: SearchResult[]; error?: string; _lastError?: boolean }>((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
-          (resp) => {
-            if (chrome.runtime.lastError) {
-              perfLog('GET_RECENT_HISTORY error: ' + chrome.runtime.lastError.message);
-              resolve({ results: [], _lastError: true });
-            } else {
-              resolve(resp || { results: [] });
-            }
-          }
-        );
-      });
+      type RecentHistoryResp = { results?: SearchResult[]; error?: string; _lastError?: boolean };
+      const response = await sendMessageWithRetry<RecentHistoryResp>(
+        { type: 'GET_RECENT_HISTORY', limit: defaultResultCount },
+      ).then((resp): RecentHistoryResp => resp ?? { results: [] })
+        .catch((err: Error): RecentHistoryResp => {
+          // Map `lastError` rejections to the legacy `_lastError` flag so
+          // the retry logic below (shared with "SW still booting" errors)
+          // can treat them the same way.
+          perfLog('GET_RECENT_HISTORY error: ' + err.message);
+          return { results: [], _lastError: true };
+        });
 
       if (currentMode !== 'history') {
         perfLog('loadRecentHistory — aborting, palette mode active: ' + currentMode);
