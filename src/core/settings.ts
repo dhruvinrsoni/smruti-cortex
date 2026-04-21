@@ -2,6 +2,7 @@
 
 import { browserAPI } from './helpers';
 import { Logger, ComponentLogger, errorMeta } from './logger';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL } from '../shared/ollama-models';
 
 export enum DisplayMode {
     LIST = 'list',
@@ -23,11 +24,11 @@ export interface AppSettings {
     // AI settings
     ollamaEnabled?: boolean;      // Enable/disable Ollama integration (default: false)
     ollamaEndpoint?: string;      // Ollama API endpoint (default: 'http://localhost:11434')
-    ollamaModel?: string;         // Ollama model for keyword expansion (default: 'llama3.2:1b')
+    ollamaModel?: string;         // Ollama model for keyword expansion (default: see DEFAULT_GENERATION_MODEL in src/shared/ollama-models.ts)
     ollamaTimeout?: number;       // Max embedding generation time in ms (default: 30000 = 30s, -1 = infinite/no timeout)
     aiSearchDelayMs?: number;     // Delay in ms before AI expansion triggers after user stops typing (default: 500)
     embeddingsEnabled?: boolean;  // Enable semantic search with embeddings (default: false)
-    embeddingModel?: string;      // Ollama model for embeddings (default: 'nomic-embed-text')
+    embeddingModel?: string;      // Ollama model for embeddings (default: see DEFAULT_EMBEDDING_MODEL in src/shared/ollama-models.ts)
     // Privacy settings
     loadFavicons?: boolean;       // Load favicons from Google API (default: true)
     sensitiveUrlBlacklist?: string[];  // User-defined domains/patterns to skip metadata extraction (default: [])
@@ -105,7 +106,7 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
     ollamaModel: {
-        default: 'llama3.2:1b',  // Generation model for keyword expansion (NOT embedding model)
+        default: DEFAULT_GENERATION_MODEL,  // Generation model for keyword expansion (NOT embedding model) — defined in src/shared/ollama-models.ts
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
     ollamaTimeout: {
@@ -122,7 +123,7 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'boolean',
     },
     embeddingModel: {
-        default: 'nomic-embed-text',  // Dedicated embedding model (smaller, faster than generation models)
+        default: DEFAULT_EMBEDDING_MODEL,  // Dedicated embedding model — defined in src/shared/ollama-models.ts
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
     

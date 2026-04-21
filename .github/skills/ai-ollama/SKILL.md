@@ -13,7 +13,7 @@ metadata:
 SmrutiCortex has two optional AI features, both using local Ollama. They are **independent toggles**:
 
 ### 1. AI Keyword Expansion (`ollamaEnabled`)
-- **What:** Sends query to an LLM (llama3.2:1b) which returns related search terms
+- **What:** Sends query to an LLM (llama3.2:3b — 3B params Q4, ~2.0 GB) which returns related search terms
 - **Example:** "python tutorial" -> adds "django", "flask", "jupyter", "beginner"
 - **How:** Single text-generation call per search query
 - **Cache:** Results cached by query prefix (avoids redundant LLM calls while typing)
@@ -22,7 +22,7 @@ SmrutiCortex has two optional AI features, both using local Ollama. They are **i
 ### 2. Semantic Search / Embeddings (`embeddingsEnabled`)
 - **What:** Converts pages + queries into mathematical vectors, finds matches by meaning
 - **Example:** "how to cook pasta" finds "Italian dinner recipes" (no keyword overlap)
-- **How:** Embedding model (nomic-embed-text) generates vectors; cosine similarity scoring
+- **How:** Embedding model (mxbai-embed-large — 334M params, 1024-dim, ~670 MB) generates vectors; cosine similarity scoring
 - **Background:** Embedding processor runs during idle, generating vectors for indexed pages
 - **Setting:** `embeddingsEnabled` toggle in settings
 
@@ -69,10 +69,12 @@ The UI shows Phase 1 results immediately, then replaces with Phase 2 when ready.
 
 ## Ollama Settings
 
+<!-- Model defaults sourced from src/shared/ollama-models.ts -->
+
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `ollamaEndpoint` | `http://localhost:11434` | Ollama API URL |
-| `ollamaModel` | `llama3.2:1b` | Model for keyword expansion |
-| `embeddingModel` | `nomic-embed-text:latest` | Model for embeddings |
+| `ollamaModel` | `llama3.2:3b` | Model for keyword expansion (3B params Q4, ~2.0 GB) |
+| `embeddingModel` | `mxbai-embed-large` | Model for embeddings (334M params, 1024-dim, ~670 MB) |
 | `ollamaTimeout` | 30000 (ms) | Max time for Ollama calls |
 | `aiSearchDelayMs` | 500 (ms) | Debounce before Phase 2 fires |

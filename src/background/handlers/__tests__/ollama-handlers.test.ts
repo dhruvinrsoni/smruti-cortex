@@ -116,7 +116,7 @@ describe('registerOllamaHandlers', () => {
 
       const res = await dispatch(registry, { type: 'GET_EMBEDDING_STATS' });
 
-      expect(res.embeddingModel).toBe('nomic-embed-text');
+      expect(res.embeddingModel).toBe('mxbai-embed-large');
       expect(res.total).toBe(0);
       expect(res.withEmbeddings).toBe(0);
       expect(res.estimatedBytes).toBe(0);

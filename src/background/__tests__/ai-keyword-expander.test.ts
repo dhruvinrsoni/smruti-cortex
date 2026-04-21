@@ -234,10 +234,10 @@ describe('ai-keyword-expander', () => {
       const { expandQueryKeywords } = await importFreshModule();
       await expandQueryKeywords('test');
 
-      // Should have used llama3.2:1b fallback, not nomic-embed-text
+      // Should have used DEFAULT_GENERATION_MODEL fallback, not nomic-embed-text
       const fetchCall = vi.mocked(globalThis.fetch).mock.calls[0];
       const body = JSON.parse(fetchCall[1]?.body as string);
-      expect(body.model).toBe('llama3.2:1b');
+      expect(body.model).toBe('llama3.2:3b');
     });
 
     it('should mix cached and fresh results for multi-word queries', async () => {

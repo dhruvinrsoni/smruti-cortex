@@ -206,11 +206,13 @@ src/
 
 **Per-keyword cache:** Each word is cached independently. Type "github issues tracker" → `github` reuses cached expansion, only `tracker` calls Ollama. Gets faster with every search.
 
+<!-- Defaults sourced from src/shared/ollama-models.ts -->
+
 **Setup:**
 ```bash
 # 1. Install Ollama: https://ollama.ai
 # 2. Pull model
-ollama pull llama3.2:1b
+ollama pull llama3.2:3b
 
 # 3. Enable CORS (REQUIRED)
 # Windows: setx OLLAMA_ORIGINS "*" (restart Ollama)
@@ -229,7 +231,7 @@ ollama pull llama3.2:1b
 ```bash
 # 1. Install Ollama + keyword expansion setup above
 # 2. Pull embedding model
-ollama pull nomic-embed-text:latest
+ollama pull mxbai-embed-large
 
 # 3. Enable in Settings → Semantic Search
 ```
@@ -315,8 +317,8 @@ Production-grade safety layers protect your browser — every AI feature degrade
 
 | Feature | Model | Command | Size |
 |---------|-------|---------|------|
-| AI Keyword Expansion | `llama3.2:1b` ★ | `ollama pull llama3.2:1b` | 1.3 GB |
-| Semantic Search | `nomic-embed-text:latest` ★ | `ollama pull nomic-embed-text:latest` | 274 MB |
+| AI Keyword Expansion | `llama3.2:3b` ★ | `ollama pull llama3.2:3b` | 3B params Q4, ~2.0 GB |
+| Semantic Search | `mxbai-embed-large` ★ | `ollama pull mxbai-embed-large` | 334M params, 1024-dim, ~670 MB |
 
 > **Important:** You must manually pull models before enabling features. SmrutiCortex cannot download models — Ollama manages model downloads.
 

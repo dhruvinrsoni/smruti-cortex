@@ -12,6 +12,7 @@
  */
 
 import { Logger, errorMeta } from '../core/logger';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL } from '../shared/ollama-models';
 
 const COMPONENT = 'OllamaService';
 const logger = Logger.forComponent(COMPONENT);
@@ -54,7 +55,7 @@ async function readJsonWithLimit<T = unknown>(response: Response, limitBytes: nu
 
 export interface OllamaConfig {
   endpoint: string;          // Default: 'http://localhost:11434'
-  model: string;             // Default: 'nomic-embed-text'
+  model: string;             // Default: DEFAULT_EMBEDDING_MODEL (see src/shared/ollama-models.ts)
   timeout: number;           // Max time for embedding generation (ms)
   maxRetries: number;        // Retry attempts on failure
 }
@@ -86,7 +87,7 @@ export class OllamaService {
   constructor(config?: Partial<OllamaConfig>) {
     this.config = {
       endpoint: config?.endpoint || 'http://localhost:11434',
-      model: config?.model || 'nomic-embed-text',
+      model: config?.model || DEFAULT_EMBEDDING_MODEL,
       timeout: config?.timeout || 10000,    // 10s max (first request needs time for model loading)
       maxRetries: config?.maxRetries || 1
     };
@@ -685,8 +686,8 @@ export async function getOllamaConfigFromSettings(forEmbeddings = false): Promis
     } catch { /* invalid URL handled downstream */ }
 
     const rawModel = forEmbeddings
-      ? (SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text')
-      : (SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
+      ? (SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL)
+      : (SettingsManager.getSetting('ollamaModel') || DEFAULT_GENERATION_MODEL);
     const model = normalizeModelName(rawModel);
 
     return { endpoint, model, timeout, maxRetries: 1 };

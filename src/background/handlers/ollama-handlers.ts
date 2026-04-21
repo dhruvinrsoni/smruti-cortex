@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { MessageHandlerRegistry } from './registry';
 import { Logger, errorMeta } from '../../core/logger';
+import { DEFAULT_EMBEDDING_MODEL } from '../../shared/ollama-models';
 
 const log = Logger.forComponent('OllamaHandlers');
 
@@ -14,7 +15,7 @@ export function registerOllamaHandlers(registry: MessageHandlerRegistry): void {
       const totalDims = withEmbeddings.reduce((sum: number, i: any) => sum + (i.embedding?.length || 0), 0);
       const estimatedBytes = totalDims * 8;
       const { SettingsManager } = await import('../../core/settings');
-      const embeddingModel = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+      const embeddingModel = SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL;
       sendResponse({
         status: 'OK',
         total: items.length,

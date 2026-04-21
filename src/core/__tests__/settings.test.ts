@@ -1004,8 +1004,8 @@ describe('SettingsManager', () => {
           // Should use schema default
           const defaults: Record<string, string> = {
             ollamaEndpoint: 'http://localhost:11434',
-            ollamaModel: 'llama3.2:1b',
-            embeddingModel: 'nomic-embed-text',
+            ollamaModel: 'llama3.2:3b',
+            embeddingModel: 'mxbai-embed-large',
           };
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
@@ -1015,8 +1015,8 @@ describe('SettingsManager', () => {
           await SettingsManager.init();
           const defaults: Record<string, string> = {
             ollamaEndpoint: 'http://localhost:11434',
-            ollamaModel: 'llama3.2:1b',
-            embeddingModel: 'nomic-embed-text',
+            ollamaModel: 'llama3.2:3b',
+            embeddingModel: 'mxbai-embed-large',
           };
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });

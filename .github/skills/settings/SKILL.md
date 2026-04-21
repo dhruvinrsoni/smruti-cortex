@@ -52,11 +52,14 @@ interface SettingSchema<T> {
 | `selectAllOnFocus` | boolean | false | Select all on Tab-return |
 | `ollamaEnabled` | boolean | false | AI keyword expansion |
 | `ollamaEndpoint` | string | `http://localhost:11434` | Ollama API URL |
-| `ollamaModel` | string | `llama3.2:1b` | Keyword expansion model |
+| `ollamaModel` | string | `llama3.2:3b` | Keyword expansion model (3B params Q4, ~2.0 GB) |
 | `ollamaTimeout` | number | 30000 | Ollama call timeout (ms) |
 | `aiSearchDelayMs` | number | 500 | Phase 2 debounce (ms) |
 | `embeddingsEnabled` | boolean | false | Semantic search |
-| `embeddingModel` | string | `nomic-embed-text:latest` | Embedding model |
+| `embeddingModel` | string | `mxbai-embed-large` | Embedding model (334M params, 1024-dim, ~670 MB) |
+
+<!-- Model defaults sourced from src/shared/ollama-models.ts -->
+
 | `loadFavicons` | boolean | true | Fetch favicons |
 | `sensitiveUrlBlacklist` | string[] | [] | Domains to skip extraction |
 | `indexBookmarks` | boolean | true | Include bookmarks in index |

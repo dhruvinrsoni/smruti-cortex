@@ -290,7 +290,7 @@ describe('OllamaService', () => {
       const config = service.getConfig();
 
       expect(config.endpoint).toBe('http://localhost:11434');
-      expect(config.model).toBe('nomic-embed-text');
+      expect(config.model).toBe('mxbai-embed-large');
       expect(config.timeout).toBe(10000);
       expect(config.maxRetries).toBe(1);
     });
@@ -885,8 +885,8 @@ describe('OllamaService', () => {
       const { getOllamaConfigFromSettings } = await import('../ollama-service');
       const config = await getOllamaConfigFromSettings();
 
-      // forEmbeddings defaults to false, empty ollamaModel falls back to 'llama3.2:1b'
-      expect(config.model).toBe('llama3.2:1b');
+      // forEmbeddings defaults to false, empty ollamaModel falls back to DEFAULT_GENERATION_MODEL
+      expect(config.model).toBe('llama3.2:3b');
     });
 
     it('should return empty config when SettingsManager import fails', async () => {

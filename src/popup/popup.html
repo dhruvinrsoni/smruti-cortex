@@ -222,16 +222,7 @@
             <div class="setup-steps">
               <p><b>Step 1:</b> Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener">ollama.ai</a></p>
               <p><b>Step 2:</b> Pull required models:</p>
-              <pre class="setup-code"># AI keyword expansion (recommended):
-ollama pull llama3.2:1b
-
-# Semantic search (embeddings):
-ollama pull nomic-embed-text:latest
-
-# Enable CORS (required):
-# Windows: setx OLLAMA_ORIGINS "*"
-# Mac/Linux: export OLLAMA_ORIGINS="*"
-# Then restart Ollama</pre>
+              <pre class="setup-code" id="ai-setup-code"># Loading recommended models…</pre>
               <p><b>Step 3:</b> Enable features below and click 🔄 to verify connection</p>
             </div>
           </details>
@@ -261,7 +252,7 @@ ollama pull nomic-embed-text:latest
               <div style="display:flex; gap:8px; align-items:center;">
                 <div class="model-select-wrap" id="model-select-wrap">
                   <div class="model-select-trigger" id="model-select-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-label="AI Model">
-                    <span class="model-select-value" id="model-select-value">llama3.2:1b</span>
+                    <span class="model-select-value" id="model-select-value"></span>
                     <span class="model-select-arrow">▾</span>
                   </div>
                   <div class="model-select-dropdown" id="model-select-dropdown" role="listbox" hidden>
@@ -269,7 +260,7 @@ ollama pull nomic-embed-text:latest
                     <div class="model-select-list" id="model-select-list"></div>
                   </div>
                 </div>
-                <input type="hidden" id="modal-ollamaModel" value="llama3.2:1b">
+                <input type="hidden" id="modal-ollamaModel" value="">
                 <button type="button" id="refresh-models-btn" class="refresh-models-btn" title="Fetch installed models from Ollama">🔄</button>
               </div>
               <span class="option-indicator"></span>
@@ -305,7 +296,7 @@ ollama pull nomic-embed-text:latest
               <div style="display:flex; gap:8px; align-items:center;">
                 <div class="model-select-wrap" id="embed-select-wrap">
                   <div class="model-select-trigger" id="embed-select-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-label="Embedding Model">
-                    <span class="model-select-value" id="embed-select-value">nomic-embed-text</span>
+                    <span class="model-select-value" id="embed-select-value"></span>
                     <span class="model-select-arrow">▾</span>
                   </div>
                   <div class="model-select-dropdown" id="embed-select-dropdown" role="listbox" hidden>
@@ -313,7 +304,7 @@ ollama pull nomic-embed-text:latest
                     <div class="model-select-list" id="embed-select-list"></div>
                   </div>
                 </div>
-                <input type="hidden" id="modal-embeddingModel" value="nomic-embed-text">
+                <input type="hidden" id="modal-embeddingModel" value="">
                 <button type="button" id="refresh-embed-models-btn" class="refresh-models-btn" title="Fetch embedding models from Ollama (filters by 'embed')">🔄</button>
               </div>
               <span class="option-indicator"></span>

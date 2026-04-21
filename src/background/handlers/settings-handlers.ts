@@ -3,6 +3,7 @@ import { MessageHandlerRegistry } from './registry';
 import { Logger } from '../../core/logger';
 import { browserAPI } from '../../core/helpers';
 import { SettingsManager } from '../../core/settings';
+import { DEFAULT_EMBEDDING_MODEL } from '../../shared/ollama-models';
 
 const log = Logger.forComponent('SettingsHandlers');
 
@@ -42,7 +43,7 @@ export function registerSettingsHandlers(
     log.debug('handle', 'Handling SETTINGS_CHANGED:', msg.settings);
     if (msg.settings) {
       const wasEmbeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
-      const oldEmbeddingModel = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+      const oldEmbeddingModel = SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL;
 
       await SettingsManager.applyRemoteSettings(msg.settings);
       log.debug('handle', 'SettingsManager cache updated (no re-broadcast)');
@@ -52,7 +53,7 @@ export function registerSettingsHandlers(
       log.debug('handle', 'Search cache cleared after settings change');
 
       const nowEmbeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
-      const nowEmbeddingModel = SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text';
+      const nowEmbeddingModel = SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL;
 
       const { embeddingProcessor } = await import('../embedding-processor');
       const { normalizeModelName } = await import('../ollama-service');

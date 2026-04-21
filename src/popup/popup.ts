@@ -34,6 +34,13 @@ import {
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
+import {
+  DEFAULT_GENERATION_MODEL,
+  DEFAULT_EMBEDDING_MODEL,
+  RECOMMENDED_GENERATION_MODELS,
+  RECOMMENDED_EMBEDDING_MODELS,
+  getPullCommand,
+} from '../shared/ollama-models';
 import type { AppSettings } from '../core/settings';
 import {
   type PopupPaletteMode,
@@ -329,6 +336,39 @@ function initializePopup() {
 
   // Assign global $
   $ = $local;
+
+  // Populate the Ollama Quick-Setup block from shared constants so the commands
+  // shown to users always match the current default models. Keeps the HTML
+  // free of hardcoded model literals.
+  const setupCodeEl = $local('ai-setup-code') as HTMLPreElement | null;
+  if (setupCodeEl) {
+    setupCodeEl.textContent = [
+      '# AI keyword expansion (recommended):',
+      getPullCommand(DEFAULT_GENERATION_MODEL),
+      '',
+      '# Semantic search (embeddings):',
+      getPullCommand(DEFAULT_EMBEDDING_MODEL),
+      '',
+      '# Enable CORS (required):',
+      '# Windows: setx OLLAMA_ORIGINS "*"',
+      '# Mac/Linux: export OLLAMA_ORIGINS="*"',
+      '# Then restart Ollama',
+    ].join('\n');
+  }
+
+  // Seed the model select displays with the current defaults so the UI is not
+  // blank before the settings modal is opened (initModelSelect /
+  // initEmbedSelect will overwrite these with the stored value when the modal
+  // is first shown).
+  const modelSelectValueEl = $local('model-select-value') as HTMLSpanElement | null;
+  const modelHiddenInputEl = $local('modal-ollamaModel') as HTMLInputElement | null;
+  if (modelSelectValueEl && !modelSelectValueEl.textContent) {modelSelectValueEl.textContent = DEFAULT_GENERATION_MODEL;}
+  if (modelHiddenInputEl && !modelHiddenInputEl.value) {modelHiddenInputEl.value = DEFAULT_GENERATION_MODEL;}
+
+  const embedSelectValueEl = $local('embed-select-value') as HTMLSpanElement | null;
+  const embedHiddenInputEl = $local('modal-embeddingModel') as HTMLInputElement | null;
+  if (embedSelectValueEl && !embedSelectValueEl.textContent) {embedSelectValueEl.textContent = DEFAULT_EMBEDDING_MODEL;}
+  if (embedHiddenInputEl && !embedHiddenInputEl.value) {embedHiddenInputEl.value = DEFAULT_EMBEDDING_MODEL;}
 
   // Get elements immediately
   const input = $local('search-input') as HTMLInputElement;
@@ -2367,7 +2407,7 @@ function initializePopup() {
     }
 
     // Initialize custom model select
-    initModelSelect(SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b');
+    initModelSelect(SettingsManager.getSetting('ollamaModel') || DEFAULT_GENERATION_MODEL);
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
@@ -2380,7 +2420,7 @@ function initializePopup() {
       embeddingsEnabledInput.checked = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     }
 
-    initEmbedSelect(SettingsManager.getSetting('embeddingModel') || 'nomic-embed-text');
+    initEmbedSelect(SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL);
 
     // Privacy settings
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
@@ -2473,14 +2513,9 @@ function initializePopup() {
 
   // ===== SEARCHABLE MODEL SELECT =====
 
-  const MODEL_SELECT_DEFAULTS = [
-    { value: 'llama3.2:1b',  hint: '1.3 GB · Fast ★' },
-    { value: 'llama3.2:3b',  hint: '2.0 GB · Best balance ★' },
-    { value: 'gemma2:2b',    hint: '1.6 GB · Google' },
-    { value: 'phi3:mini',    hint: '2.3 GB · Microsoft' },
-    { value: 'qwen2.5:1.5b', hint: '1.0 GB · Alibaba' },
-    { value: 'mistral:7b',   hint: '4.1 GB · High quality ★' },
-  ];
+  // Sourced from src/shared/ollama-models.ts so dropdowns, schema defaults, and
+  // Quick-Setup instructions stay in lockstep.
+  const MODEL_SELECT_DEFAULTS: Array<{ value: string; hint: string }> = RECOMMENDED_GENERATION_MODELS.map(m => ({ value: m.value, hint: m.hint }));
   let modelSelectOptions: Array<{ value: string; hint?: string }> = [...MODEL_SELECT_DEFAULTS];
   let modelSelectInitialized = false;
   let renderModelSelectList: ((filter?: string) => void) | null = null;
@@ -2613,12 +2648,7 @@ function initializePopup() {
   }
 
   // ===== SEARCHABLE EMBEDDING MODEL SELECT =====
-  const EMBED_SELECT_DEFAULTS = [
-    { value: 'nomic-embed-text',       hint: '274 MB · Best balance ★' },
-    { value: 'all-minilm',             hint: '46 MB · Lightest ★' },
-    { value: 'mxbai-embed-large',      hint: '670 MB · High quality ★' },
-    { value: 'snowflake-arctic-embed', hint: '669 MB · Retrieval-optimized' },
-  ];
+  const EMBED_SELECT_DEFAULTS: Array<{ value: string; hint: string }> = RECOMMENDED_EMBEDDING_MODELS.map(m => ({ value: m.value, hint: m.hint }));
   let embedSelectOptions: Array<{ value: string; hint?: string }> = [...EMBED_SELECT_DEFAULTS];
   let embedSelectInitialized = false;
   let renderEmbedSelectList: ((filter?: string) => void) | null = null;
@@ -3378,7 +3408,7 @@ function initializePopup() {
             if (renderEmbedSelectList) {renderEmbedSelectList();}
             showToast(`Found ${embedModels.length} embedding model${embedModels.length > 1 ? 's' : ''}`, 'info');
           } else if (allModels.length > 0) {
-            showToast('No embedding models found. Try: ollama pull nomic-embed-text', 'warning');
+            showToast(`No embedding models found. Try: ${getPullCommand(DEFAULT_EMBEDDING_MODEL)}`, 'warning');
           } else {
             showToast('No models found. Is Ollama running?', 'warning');
           }

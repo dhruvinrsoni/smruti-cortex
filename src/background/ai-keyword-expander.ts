@@ -21,6 +21,7 @@ import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess } from './ollama-service';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
+import { DEFAULT_GENERATION_MODEL, EMBEDDING_ONLY_NAME_PATTERNS } from '../shared/ollama-models';
 
 const COMPONENT = 'AIKeywordExpander';
 
@@ -169,7 +170,7 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
 
   // AI is enabled - call LLM for each uncached keyword individually
   const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
-  const model = SettingsManager.getSetting('ollamaModel') || 'llama3.2:1b';
+  const model = SettingsManager.getSetting('ollamaModel') || DEFAULT_GENERATION_MODEL;
   const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
   const generationModel = getGenerationModel(model);
 
@@ -222,26 +223,18 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
  * Embedding-only models (like embeddinggemma) can't do text generation
  */
 function getGenerationModel(configuredModel: string): string {
-  // Embedding-only models that can't generate text
-  const embeddingOnlyModels = [
-    'embeddinggemma',
-    'nomic-embed',
-    'all-minilm',
-    'mxbai-embed',
-    'bge-'
-  ];
-
-  const isEmbeddingOnly = embeddingOnlyModels.some(m => 
-    configuredModel.toLowerCase().includes(m)
-  );
+  // Embedding-only patterns live in the shared registry so new embedding
+  // families are picked up here automatically. See src/shared/ollama-models.ts.
+  const lower = configuredModel.toLowerCase();
+  const isEmbeddingOnly = EMBEDDING_ONLY_NAME_PATTERNS.some(p => lower.includes(p));
 
   if (isEmbeddingOnly) {
-    // Use a small, fast generation model for keyword expansion
-    // User can override by setting a generation-capable model
-    logger.debug('getGenerationModel', 
-      `Model "${configuredModel}" is embedding-only, using llama3.2:1b for keyword expansion`
+    // Fall back to the default generation model for keyword expansion.
+    // User can override by setting a generation-capable `ollamaModel`.
+    logger.debug('getGenerationModel',
+      `Model "${configuredModel}" is embedding-only, using ${DEFAULT_GENERATION_MODEL} for keyword expansion`
     );
-    return 'llama3.2:1b'; // Small, fast, good for simple tasks
+    return DEFAULT_GENERATION_MODEL;
   }
 
   return configuredModel;
