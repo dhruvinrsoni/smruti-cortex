@@ -407,6 +407,150 @@ describe('OllamaService', () => {
     });
   });
 
+  // === Negative-result caching + INFO log dedupe ===
+  //
+  // Regression coverage for the "Model '…' not found" log flood: before the
+  // fix, every call to generateEmbedding re-hit /api/tags and re-emitted the
+  // same INFO line. Now a negative status is cached for CHECK_INTERVAL and
+  // the INFO line is only logged on actual status transitions.
+
+  describe('checkAvailability — negative caching & log dedupe', () => {
+    /**
+     * Import the service with a logger mock whose `forComponent` returns a
+     * stable set of spies the test can inspect. Each call resets modules so
+     * the OllamaService module-scope `logger` captures the returned spies.
+     */
+    async function importWithCapturedLogger(): Promise<{
+      OllamaService: typeof import('../ollama-service').OllamaService;
+      info: ReturnType<typeof vi.fn>;
+      trace: ReturnType<typeof vi.fn>;
+    }> {
+      vi.resetModules();
+      const info = vi.fn();
+      const trace = vi.fn();
+      vi.doMock('../../core/logger', () => ({
+        Logger: {
+          forComponent: () => ({ debug: vi.fn(), info, warn: vi.fn(), error: vi.fn(), trace }),
+          setLevel: vi.fn(),
+          setLevelInternal: vi.fn(),
+        },
+        errorMeta: (err: unknown) => err instanceof Error
+          ? { name: err.name, message: err.message }
+          : { name: 'non-Error', message: String(err) },
+      }));
+      const mod = await import('../ollama-service');
+      return { OllamaService: mod.OllamaService, info, trace };
+    }
+
+    it('caches a negative "model not found" status so a second call makes no extra fetch', async () => {
+      const { OllamaService } = await importWithCapturedLogger();
+      const service = new OllamaService({ model: 'missing-model' });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ models: [{ name: 'other-model:latest' }] }),
+      });
+
+      const first = await service.checkAvailability();
+      const second = await service.checkAvailability();
+
+      expect(first.available).toBe(false);
+      expect(second.available).toBe(false);
+      expect(second.error).toBe(first.error);
+      // Critical: only one /api/tags request despite two public calls.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('caches a negative "network error" status so a second call makes no extra fetch', async () => {
+      const { OllamaService } = await importWithCapturedLogger();
+      const service = new OllamaService({ model: 'test:latest' });
+
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+
+      const first = await service.checkAvailability();
+      const second = await service.checkAvailability();
+
+      expect(first.available).toBe(false);
+      expect(second.available).toBe(false);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('emits exactly one INFO line across two identical "model not found" checks', async () => {
+      const { OllamaService, info } = await importWithCapturedLogger();
+      const service = new OllamaService({ model: 'missing-model' });
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ models: [{ name: 'other-model:latest' }] }),
+      });
+
+      await service.checkAvailability();
+      await service.checkAvailability();
+
+      const notAvailableCalls = info.mock.calls.filter(
+        (args: unknown[]) =>
+          typeof args[1] === 'string' && (args[1] as string).includes('Ollama not available')
+      );
+      expect(notAvailableCalls).toHaveLength(1);
+    });
+
+    it('re-emits INFO when status transitions from unavailable to available', async () => {
+      const { OllamaService, info } = await importWithCapturedLogger();
+      const service = new OllamaService({ model: 'test:latest' });
+
+      // First check: network failure.
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+      await service.checkAvailability();
+
+      // Force the cache to expire so the next check re-hits /api/tags.
+      service.updateConfig({ timeout: 9999 });
+
+      // Second check: model is now loaded.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ models: [{ name: 'test:latest' }] }),
+      });
+      await service.checkAvailability();
+
+      const available = info.mock.calls.filter(
+        (args: unknown[]) =>
+          typeof args[1] === 'string' && (args[1] as string).includes('Ollama available')
+      );
+      const unavailable = info.mock.calls.filter(
+        (args: unknown[]) =>
+          typeof args[1] === 'string' && (args[1] as string).includes('Ollama not available')
+      );
+      expect(unavailable).toHaveLength(1);
+      expect(available).toHaveLength(1);
+    });
+
+    it('does NOT emit a duplicate INFO from generateEmbedding when Ollama is unavailable', async () => {
+      const { OllamaService, info } = await importWithCapturedLogger();
+      const service = new OllamaService({ model: 'test:latest' });
+
+      // checkAvailability path — emits exactly one INFO.
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+      await service.checkAvailability();
+
+      // generateEmbedding calls checkAvailability internally; because the
+      // negative status is cached, no new fetch happens and no new INFO
+      // should be emitted for the "Cannot generate embedding" branch.
+      const result = await service.generateEmbedding('hello world');
+      expect(result.success).toBe(false);
+
+      const unavailable = info.mock.calls.filter(
+        (args: unknown[]) =>
+          typeof args[1] === 'string' && (args[1] as string).includes('Ollama not available')
+      );
+      const cannotEmbed = info.mock.calls.filter(
+        (args: unknown[]) =>
+          typeof args[1] === 'string' && (args[1] as string).includes('Cannot generate embedding')
+      );
+      expect(unavailable).toHaveLength(1);
+      expect(cannotEmbed).toHaveLength(0);
+    });
+  });
+
   // === updateConfig ===
 
   describe('updateConfig', () => {

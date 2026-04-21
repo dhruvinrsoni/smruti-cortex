@@ -82,6 +82,17 @@ export class OllamaService {
   private config: OllamaConfig;
   private isAvailable: boolean = false;
   private lastCheckTime: number = 0;
+  // Cache of the last fully-formed OllamaStatus (positive AND negative) so
+  // back-to-back calls within CHECK_INTERVAL reuse it without re-hitting the
+  // network. Previously we only cached positive results, which caused
+  // `generateEmbedding` to spam the `/api/tags` endpoint — and the attendant
+  // "Model '...' not found" INFO log — on every single call when Ollama was
+  // down or the configured model was missing.
+  private lastStatus: OllamaStatus | null = null;
+  // Last availability status we logged at INFO level. Used to emit a single
+  // INFO line per *transition* instead of one per check, keeping the console
+  // readable when Ollama or the model stays in the same state for a while.
+  private lastLoggedStatusKey: string | null = null;
   private readonly CHECK_INTERVAL = 30000; // Re-check availability every 30s
 
   constructor(config?: Partial<OllamaConfig>) {
@@ -106,18 +117,17 @@ export class OllamaService {
    */
   async checkAvailability(): Promise<OllamaStatus> {
     const now = Date.now();
-    
-    // Use cached result if recent
-    if (now - this.lastCheckTime < this.CHECK_INTERVAL && this.isAvailable) {
+
+    // Cache both positive AND negative results for CHECK_INTERVAL. Returning
+    // the cached negative status avoids hammering `/api/tags` — and spamming
+    // logs — when Ollama is down or the configured model is missing.
+    if (this.lastStatus && now - this.lastCheckTime < this.CHECK_INTERVAL) {
       logger.trace('checkAvailability', 'Using cached availability (still valid)', {
         cacheAge: now - this.lastCheckTime,
-        cacheInterval: this.CHECK_INTERVAL
+        cacheInterval: this.CHECK_INTERVAL,
+        available: this.lastStatus.available
       });
-      return {
-        available: true,
-        model: this.config.model,
-        version: null
-      };
+      return this.lastStatus;
     }
 
     logger.debug('checkAvailability', '🔍 Checking Ollama availability...', {
@@ -125,6 +135,19 @@ export class OllamaService {
       targetUrl: `${this.config.endpoint}/api/tags`
     });
 
+    const status = await this.probeOllama();
+    this.isAvailable = status.available;
+    this.lastCheckTime = now;
+    this.lastStatus = status;
+    this.maybeLogStatusTransition(status);
+    return status;
+  }
+
+  /**
+   * Single-shot probe of `/api/tags`. Separated from `checkAvailability` so
+   * the caching and transition-logging logic in the caller stays readable.
+   */
+  private async probeOllama(): Promise<OllamaStatus> {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1000); // 1s timeout for health check
@@ -138,38 +161,28 @@ export class OllamaService {
       logger.trace('checkAvailability', `Response received: ${response.status} ${response.statusText}`);
 
       if (response.ok) {
-      const data = await readJsonWithLimit<{ models?: Array<{ name?: string }>; version?: string }>(response, MAX_RESPONSE_BYTES);
-      const models = Array.isArray(data.models) ? data.models : [];
-      const modelNames = models.map(m => m.name || 'unknown');
-      // Compare canonicalized ids so tag-less vs `:latest`, `library/` namespace,
-      // registry prefixes, casing, and whitespace all resolve to the same model.
-      const targetId = canonicalizeModelId(this.config.model);
-      const hasModel = targetId.length > 0 && models.some(m => canonicalizeModelId(m.name || '') === targetId);
+        const data = await readJsonWithLimit<{ models?: Array<{ name?: string }>; version?: string }>(response, MAX_RESPONSE_BYTES);
+        const models = Array.isArray(data.models) ? data.models : [];
+        const modelNames = models.map(m => m.name || 'unknown');
+        // Compare canonicalized ids so tag-less vs `:latest`, `library/` namespace,
+        // registry prefixes, casing, and whitespace all resolve to the same model.
+        const targetId = canonicalizeModelId(this.config.model);
+        const hasModel = targetId.length > 0 && models.some(m => canonicalizeModelId(m.name || '') === targetId);
 
-        this.isAvailable = hasModel;
-        this.lastCheckTime = now;
-
-        logger.trace('checkAvailability', '📋 Available models from Ollama', { 
+        logger.trace('checkAvailability', '📋 Available models from Ollama', {
           models: modelNames,
           targetModel: this.config.model,
           found: hasModel
         });
 
-        if (hasModel) {
-          logger.info('checkAvailability', `✅ Ollama available - model '${this.config.model}' loaded`);
-        } else {
-          logger.info('checkAvailability', `❌ Model '${this.config.model}' not found. Available: ${modelNames.join(', ')}`);
-        }
-
         return {
           available: hasModel,
           model: hasModel ? this.config.model : null,
           version: data.version || null,
-          error: hasModel ? undefined : `Model ${this.config.model} not found`
+          error: hasModel ? undefined : `Model '${this.config.model}' not found. Available: ${modelNames.join(', ') || '(none)'}`
         };
       }
 
-      this.isAvailable = false;
       logger.debug('checkAvailability', `❌ Ollama returned non-OK status: ${response.status}`);
       return {
         available: false,
@@ -177,21 +190,39 @@ export class OllamaService {
         version: null,
         error: `Ollama responded with status ${response.status}`
       };
-
     } catch (error) {
-      this.isAvailable = false;
-      this.lastCheckTime = now;
-      
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       logger.debug('checkAvailability', '❌ Ollama connection failed', { error: errorMsg });
-      logger.info('checkAvailability', `❌ Ollama not available: ${errorMsg}`);
-
       return {
         available: false,
         model: null,
         version: null,
         error: errorMsg
       };
+    }
+  }
+
+  /**
+   * Emit an INFO log line only when the availability status *transitions*
+   * (e.g. available -> unavailable, or a different error surfaces). Repeated
+   * identical statuses are logged at TRACE so the console stays readable
+   * when Ollama is down for an extended period.
+   */
+  private maybeLogStatusTransition(status: OllamaStatus): void {
+    const key = status.available
+      ? `ok:${this.config.model}`
+      : `err:${status.error || 'unknown'}`;
+
+    if (key === this.lastLoggedStatusKey) {
+      logger.trace('checkAvailability', 'Status unchanged since last check', { key });
+      return;
+    }
+    this.lastLoggedStatusKey = key;
+
+    if (status.available) {
+      logger.info('checkAvailability', `✅ Ollama available - model '${this.config.model}' loaded`);
+    } else {
+      logger.info('checkAvailability', `❌ Ollama not available: ${status.error || 'unknown error'}`);
     }
   }
 
@@ -267,11 +298,13 @@ export class OllamaService {
       model: this.config.model
     });
 
-    // Quick availability check
+    // Quick availability check. `checkAvailability` already emits a single
+    // INFO line per transition; logging again here would duplicate it on
+    // every embedding attempt while Ollama is down.
     const status = await this.checkAvailability();
     if (!status.available) {
       requestSemaphore.release();
-      logger.info('generateEmbedding', `❌ Cannot generate embedding: ${status.error || 'Ollama not available'}`);
+      logger.trace('generateEmbedding', `Cannot generate embedding: ${status.error || 'Ollama not available'}`);
       return {
         embedding: [],
         model: this.config.model,
@@ -511,6 +544,8 @@ export class OllamaService {
     const oldConfig = { ...this.config };
     this.config = { ...this.config, ...config };
     this.lastCheckTime = 0; // Force re-check
+    this.lastStatus = null; // Discard cached status — model/endpoint may have changed
+    this.lastLoggedStatusKey = null; // Next check logs the new state at INFO
     logger.info('updateConfig', '🔧 Config updated');
     logger.debug('updateConfig', 'Config change details', {
       before: oldConfig,
