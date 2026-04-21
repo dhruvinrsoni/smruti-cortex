@@ -25,6 +25,13 @@ export interface EmbeddingProgress {
 // Rolling window for speed calculation
 const SPEED_WINDOW_SIZE = 20;
 
+// Availability-gated backoff: when Ollama/model is unavailable, the loop
+// pauses for this many ms and then doubles up to the cap on each repeat.
+// Initial value matches `OllamaService.CHECK_INTERVAL` so we never probe the
+// network faster than the availability cache allows.
+const INITIAL_BACKOFF_MS = 30_000;
+const MAX_BACKOFF_MS = 2 * 60_000;
+
 class EmbeddingProcessorImpl {
     private state: ProcessorState = 'idle';
     private searchActive = false;
@@ -37,6 +44,14 @@ class EmbeddingProcessorImpl {
 
     // Speed tracking: timestamps of last N completions
     private completionTimestamps: number[] = [];
+
+    // Availability backoff state. `currentBackoffMs` grows from INITIAL_BACKOFF_MS
+    // up to MAX_BACKOFF_MS while Ollama is unreachable, then resets on recovery.
+    // `lastAvailabilityKey` encodes the previous availability outcome so we only
+    // emit INFO logs on transitions (available <-> unavailable) and downgrade
+    // repeats to DEBUG/TRACE.
+    private currentBackoffMs = INITIAL_BACKOFF_MS;
+    private lastAvailabilityKey: string | null = null;
 
     /**
      * Start background embedding generation.
@@ -74,6 +89,8 @@ class EmbeddingProcessorImpl {
         this.startedAt = Date.now();
         this.lastError = undefined;
         this.completionTimestamps = [];
+        this.currentBackoffMs = INITIAL_BACKOFF_MS;
+        this.lastAvailabilityKey = null;
 
         // Refresh counts
         await this.refreshCounts();
@@ -138,6 +155,11 @@ class EmbeddingProcessorImpl {
         this.processed = 0;
         this.completionTimestamps = [];
         this.lastError = undefined;
+        // `currentBackoffMs` and `lastAvailabilityKey` are intentionally NOT
+        // reset here — `start()` reinitialises them on the next run, and
+        // clobbering them mid-loop (e.g. from within an availability-check
+        // mock in tests) would erase the transition state that INFO/DEBUG
+        // logging depends on.
     }
 
     /**
@@ -213,6 +235,73 @@ class EmbeddingProcessorImpl {
     }
 
     /**
+     * Checks Ollama/model availability and, when unavailable, sleeps for the
+     * current backoff window then asks the caller to `continue` the outer loop.
+     *
+     * Returns `true` when the caller should `continue` (we slept / are waiting);
+     * `false` when the system is available and the loop should proceed.
+     *
+     * Log-level discipline:
+     * - INFO once on transition to unavailable ("Pausing — …") and once on
+     *   transition back to available ("Resuming — …").
+     * - DEBUG for repeat backoff extensions during sustained outages.
+     * - TRACE is reserved for `OllamaService`'s own "status unchanged" repeats.
+     */
+    private async handleAvailabilityGate(
+        getOllamaService: typeof import('./ollama-service').getOllamaService,
+        getOllamaConfigFromSettings: typeof import('./ollama-service').getOllamaConfigFromSettings,
+    ): Promise<boolean> {
+        let availability: { available: boolean; model: string | null; error?: string };
+        try {
+            const embConfig = await getOllamaConfigFromSettings(true);
+            const svc = getOllamaService(embConfig);
+            availability = await svc.checkAvailability();
+        } catch (error) {
+            // Defensive: treat any availability-check failure as unavailable so
+            // we back off rather than spin. Don't promote this to WARN — the
+            // underlying OllamaService already surfaces fetch errors at the
+            // appropriate level.
+            const errMsg = error instanceof Error ? error.message : String(error);
+            availability = { available: false, model: null, error: errMsg };
+        }
+
+        const availabilityKey = availability.available
+            ? `ok:${availability.model || 'unknown'}`
+            : `err:${availability.error || 'unknown'}`;
+
+        if (!availability.available) {
+            const sleepMs = this.currentBackoffMs;
+            const sleepSeconds = Math.round(sleepMs / 1000);
+            const reason = availability.error || 'unknown';
+            const transitioningIntoOutage =
+                this.lastAvailabilityKey === null || this.lastAvailabilityKey.startsWith('ok:');
+
+            if (transitioningIntoOutage) {
+                logger.info('runLoop',
+                    `Pausing — Ollama/model unavailable: ${reason}. Will retry in ${sleepSeconds}s`);
+            } else {
+                logger.debug('runLoop',
+                    `Still unavailable (${reason}), next retry in ${sleepSeconds}s`);
+            }
+
+            this.lastAvailabilityKey = availabilityKey;
+            await this.sleep(sleepMs);
+            this.currentBackoffMs = Math.min(this.currentBackoffMs * 2, MAX_BACKOFF_MS);
+            return true;
+        }
+
+        // Available path — log a single INFO on the unavailable→available
+        // transition and reset the backoff so the next outage starts fresh.
+        if (this.lastAvailabilityKey && this.lastAvailabilityKey.startsWith('err:')) {
+            logger.info('runLoop',
+                `Resuming — Ollama available with model '${availability.model || 'unknown'}'`);
+            this.currentBackoffMs = INITIAL_BACKOFF_MS;
+        }
+        this.lastAvailabilityKey = availabilityKey;
+        return false;
+    }
+
+    /**
      * Main processing loop. Runs asynchronously until paused, stopped, or all items are embedded.
      * Fetches items in batches to avoid retrying the same failed item endlessly.
      */
@@ -229,7 +318,12 @@ class EmbeddingProcessorImpl {
 
         try {
             // Import guards lazily to avoid circular deps
-            const { isCircuitBreakerOpen, checkMemoryPressure } = await import('./ollama-service');
+            const {
+                isCircuitBreakerOpen,
+                checkMemoryPressure,
+                getOllamaService,
+                getOllamaConfigFromSettings,
+            } = await import('./ollama-service');
 
             while (this.state === 'running') {
                 // --- Guard: Circuit breaker tripped → wait ---
@@ -253,6 +347,18 @@ class EmbeddingProcessorImpl {
                     await this.sleep(30_000);
                     continue;
                 }
+
+                // --- Guard: Ollama/model availability → back off exponentially ---
+                // The OllamaService cache (30s) keeps this essentially free on
+                // repeat hits. When unavailable we sleep and continue without
+                // touching the DB or generating embeddings — stops the
+                // laptop-fan scenario where the loop spun forever on failed
+                // items while Ollama was down or the model was missing.
+                const shouldContinueLoop = await this.handleAvailabilityGate(
+                    getOllamaService,
+                    getOllamaConfigFromSettings,
+                );
+                if (shouldContinueLoop) {continue;}
 
                 // --- Get batch of items without embeddings ---
                 const batch = await getItemsWithoutEmbeddingsBatch(BATCH_SIZE);

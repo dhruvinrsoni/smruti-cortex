@@ -5,6 +5,29 @@ import { mockLogger } from '../../__test-utils__';
 
 vi.mock('../../core/logger', () => mockLogger());
 
+// Default ollama-service mock factory — every test block that re-mocks
+// `../ollama-service` with `vi.doMock` should spread this to include the
+// availability-gate functions imported by `runLoop`. Tests that specifically
+// want to simulate outages override `checkAvailability` per-test.
+function makeOllamaServiceMock(overrides: {
+  checkAvailability?: () => Promise<{ available: boolean; model: string | null; version?: string | null; error?: string }>;
+  isCircuitBreakerOpen?: () => boolean;
+  checkMemoryPressure?: () => { ok: boolean; usedMB?: number; limitMB?: number; permanent: boolean };
+} = {}) {
+  return {
+    isCircuitBreakerOpen: vi.fn(overrides.isCircuitBreakerOpen ?? (() => false)),
+    checkMemoryPressure: vi.fn(overrides.checkMemoryPressure ?? (() => ({ ok: true, permanent: false }))),
+    getOllamaConfigFromSettings: vi.fn(async () => ({ model: 'test-model' })),
+    getOllamaService: vi.fn(() => ({
+      checkAvailability: vi.fn(overrides.checkAvailability ?? (async () => ({
+        available: true,
+        model: 'test-model',
+        version: '1.0',
+      }))),
+    })),
+  };
+}
+
 const settingsMock: Record<string, unknown> = { embeddingsEnabled: true };
 vi.mock('../../core/settings', () => ({
   SettingsManager: {
@@ -56,11 +79,7 @@ describe('embedding-processor', () => {
     }));
     vi.doMock('../database', () => dbMocks);
     vi.doMock('../indexing', () => indexingMocks);
-    // Mock ollama-service for the dynamic import inside runLoop
-    vi.doMock('../ollama-service', () => ({
-      isCircuitBreakerOpen: vi.fn(() => false),
-      checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
-    }));
+    vi.doMock('../ollama-service', () => makeOllamaServiceMock());
     return import('../embedding-processor');
   }
 
@@ -256,10 +275,7 @@ describe('embedding-processor', () => {
       }));
       vi.doMock('../database', () => dbMocks);
       vi.doMock('../indexing', () => indexingMocks);
-      vi.doMock('../ollama-service', () => ({
-        isCircuitBreakerOpen: vi.fn(() => false),
-        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
-      }));
+      vi.doMock('../ollama-service', () => makeOllamaServiceMock());
 
       // Make total large enough that withEmbeddings/total division works
       dbMocks.countItemsWithoutEmbeddings.mockResolvedValue({ total: 20, withoutEmbeddings: 10 });
@@ -315,10 +331,7 @@ describe('embedding-processor', () => {
       }));
       vi.doMock('../database', () => dbMocks);
       vi.doMock('../indexing', () => indexingMocks);
-      vi.doMock('../ollama-service', () => ({
-        isCircuitBreakerOpen: vi.fn(() => false),
-        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
-      }));
+      vi.doMock('../ollama-service', () => makeOllamaServiceMock());
       return import('../embedding-processor');
     }
 
@@ -404,10 +417,7 @@ describe('embedding-processor', () => {
         }),
       }));
       vi.doMock('../indexing', () => indexingMocks);
-      vi.doMock('../ollama-service', () => ({
-        isCircuitBreakerOpen: vi.fn(() => false),
-        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
-      }));
+      vi.doMock('../ollama-service', () => makeOllamaServiceMock());
 
       const { embeddingProcessor } = await import('../embedding-processor');
       await embeddingProcessor.start();
@@ -415,6 +425,220 @@ describe('embedding-processor', () => {
 
       expect(embeddingProcessor.getProgress().state).toBe('error');
       expect(embeddingProcessor.getProgress().lastError).toBe('fatal string error');
+    });
+  });
+
+  // ── Availability-gated backoff (processor pauses when Ollama is unreachable) ──
+
+  describe('availability backoff', () => {
+    /**
+     * Shared setup: spies on `global.setTimeout` so in-loop sleeps fire on the
+     * next microtask (making 30 s backoff windows collapse to µs while still
+     * recording the requested delay). Also captures the component logger spies
+     * so tests can assert exact INFO/DEBUG call counts.
+     *
+     * Returns:
+     *   - `sleepDurations`: array of every ms value passed to setTimeout
+     *   - `loggerSpies`: the {info, debug, warn, error, trace} spies
+     *   - `availabilityCalls`: incremented every time checkAvailability is hit
+     *   - `setTimeoutSpy`: so tests can restore / assert if needed
+     */
+    async function importWithAvailabilityMock(checkAvailabilityImpl: () => Promise<{
+      available: boolean;
+      model: string | null;
+      version?: string | null;
+      error?: string;
+    }>) {
+      vi.resetModules();
+
+      const loggerSpies = {
+        debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+      };
+      vi.doMock('../../core/logger', () => ({
+        Logger: { forComponent: () => loggerSpies },
+        errorMeta: (err: unknown) => err instanceof Error
+          ? { name: err.name, message: err.message }
+          : { name: 'non-Error', message: String(err) },
+      }));
+      vi.doMock('../../core/settings', () => ({
+        SettingsManager: {
+          init: vi.fn(),
+          getSetting: vi.fn((key: string) => settingsMock[key]),
+        },
+      }));
+      vi.doMock('../database', () => dbMocks);
+      vi.doMock('../indexing', () => indexingMocks);
+
+      const availabilityFn = vi.fn(checkAvailabilityImpl);
+      vi.doMock('../ollama-service', () => makeOllamaServiceMock({
+        checkAvailability: availabilityFn,
+      }));
+
+      const sleepDurations: number[] = [];
+      // Spy on setTimeout but fan out to `queueMicrotask` so in-loop sleeps
+      // collapse to µs (no recursion into the real scheduler) while we still
+      // record the requested delay for backoff-sequence assertions.
+      const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation(
+        ((fn: (...args: unknown[]) => void, ms?: number) => {
+          if (typeof ms === 'number') {sleepDurations.push(ms);}
+          queueMicrotask(() => fn());
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        }) as unknown as typeof global.setTimeout
+      );
+
+      const mod = await import('../embedding-processor');
+      return { ...mod, sleepDurations, loggerSpies, availabilityFn, setTimeoutSpy };
+    }
+
+    /** Drain N microtask turns so the processor's chained awaits settle. */
+    async function drain(turns = 40): Promise<void> {
+      for (let i = 0; i < turns; i++) {
+        await new Promise<void>(r => queueMicrotask(r));
+      }
+    }
+
+    /** Helper: filter sleep durations to only the availability-backoff windows (>= 30 s). */
+    function backoffSleeps(all: number[]): number[] {
+      return all.filter(ms => ms === 30_000 || ms === 60_000 || ms === 120_000);
+    }
+
+    it('pauses and does not process items when checkAvailability reports unavailable', async () => {
+      // Unavailable forever, but stop() the processor after 2 checks so the
+      // test doesn't loop forever.
+      let callCount = 0;
+      const { embeddingProcessor, loggerSpies, availabilityFn, setTimeoutSpy } =
+        await importWithAvailabilityMock(async () => {
+          callCount++;
+          if (callCount >= 2) {embeddingProcessor.stop();}
+          return { available: false, model: null, error: 'Connection refused' };
+        });
+
+      dbMocks.getItemsWithoutEmbeddingsBatch.mockResolvedValue([
+        { url: 'https://a.com', title: 'A', hostname: 'a.com', visitCount: 1, lastVisit: Date.now(), tokens: ['a'] },
+      ]);
+
+      await embeddingProcessor.start();
+      await drain();
+
+      expect(indexingMocks.generateItemEmbedding).not.toHaveBeenCalled();
+      expect(availabilityFn).toHaveBeenCalled();
+
+      const pauseInfo = loggerSpies.info.mock.calls.filter(
+        call => typeof call[1] === 'string' && (call[1] as string).startsWith('Pausing —')
+      );
+      expect(pauseInfo).toHaveLength(1);
+      expect(pauseInfo[0][1]).toContain('Connection refused');
+
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('logs a single Resuming INFO when availability transitions back to ok', async () => {
+      // Unavailable on first check, available on second. After the second
+      // availability check we stop() so the loop ends promptly.
+      let callCount = 0;
+      const { embeddingProcessor, loggerSpies, setTimeoutSpy } =
+        await importWithAvailabilityMock(async () => {
+          callCount++;
+          if (callCount === 1) {
+            return { available: false, model: null, error: 'Connection refused' };
+          }
+          queueMicrotask(() => embeddingProcessor.stop());
+          return { available: true, model: 'mxbai-embed-large', version: '0.1.0' };
+        });
+
+      dbMocks.getItemsWithoutEmbeddingsBatch.mockResolvedValue([]);
+      await embeddingProcessor.start();
+      await drain();
+
+      const pauseInfo = loggerSpies.info.mock.calls.filter(
+        call => typeof call[1] === 'string' && (call[1] as string).startsWith('Pausing —')
+      );
+      const resumeInfo = loggerSpies.info.mock.calls.filter(
+        call => typeof call[1] === 'string' && (call[1] as string).startsWith('Resuming —')
+      );
+      expect(pauseInfo).toHaveLength(1);
+      expect(resumeInfo).toHaveLength(1);
+      expect(resumeInfo[0][1]).toContain('mxbai-embed-large');
+
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('doubles backoff up to the 2-minute cap across consecutive outages', async () => {
+      let callCount = 0;
+      const { embeddingProcessor, sleepDurations, setTimeoutSpy } =
+        await importWithAvailabilityMock(async () => {
+          callCount++;
+          if (callCount > 4) {embeddingProcessor.stop();}
+          return { available: false, model: null, error: 'Connection refused' };
+        });
+
+      await embeddingProcessor.start();
+      await drain(60);
+
+      const observed = backoffSleeps(sleepDurations);
+      // 4 unavailable checks → sleeps 30_000, 60_000, 120_000, 120_000 (cap).
+      expect(observed.slice(0, 4)).toEqual([30_000, 60_000, 120_000, 120_000]);
+
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('resets backoff to 30s after the processor transitions back to available', async () => {
+      // Pattern across availability checks:
+      //   1: unavailable (sleep 30_000, backoff→60_000)
+      //   2: unavailable (sleep 60_000, backoff→120_000)
+      //   3: available   (reset backoff→30_000, proceed to batch)
+      //   4: unavailable (sleep should be 30_000 — proves the reset worked)
+      let callCount = 0;
+      const { embeddingProcessor, sleepDurations, setTimeoutSpy } =
+        await importWithAvailabilityMock(async () => {
+          callCount++;
+          if (callCount === 3) {
+            return { available: true, model: 'mxbai-embed-large', version: '0.1.0' };
+          }
+          if (callCount >= 5) {embeddingProcessor.stop();}
+          return { available: false, model: null, error: 'Connection refused' };
+        });
+
+      // After call 3 (available) the main loop will fetch a batch; give it one
+      // item to process so the loop iterates back round to call 4.
+      dbMocks.getItemsWithoutEmbeddingsBatch
+        .mockResolvedValueOnce([
+          { url: 'https://a.com', title: 'A', hostname: 'a.com', visitCount: 1, lastVisit: Date.now(), tokens: ['a'] },
+        ])
+        .mockResolvedValue([]);
+
+      await embeddingProcessor.start();
+      await drain(80);
+
+      const observed = backoffSleeps(sleepDurations);
+      expect(observed.slice(0, 3)).toEqual([30_000, 60_000, 30_000]);
+
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('emits exactly one INFO Pausing across 5 consecutive unavailable iterations', async () => {
+      let callCount = 0;
+      const { embeddingProcessor, loggerSpies, setTimeoutSpy } =
+        await importWithAvailabilityMock(async () => {
+          callCount++;
+          if (callCount > 5) {embeddingProcessor.stop();}
+          return { available: false, model: null, error: 'Connection refused' };
+        });
+
+      await embeddingProcessor.start();
+      await drain(80);
+
+      const pauseInfo = loggerSpies.info.mock.calls.filter(
+        call => typeof call[1] === 'string' && (call[1] as string).startsWith('Pausing —')
+      );
+      const stillUnavailableDebug = loggerSpies.debug.mock.calls.filter(
+        call => typeof call[1] === 'string' && (call[1] as string).startsWith('Still unavailable')
+      );
+      expect(pauseInfo).toHaveLength(1);
+      // Subsequent outage iterations should log at DEBUG, not INFO.
+      expect(stillUnavailableDebug.length).toBeGreaterThanOrEqual(1);
+
+      setTimeoutSpy.mockRestore();
     });
   });
 });

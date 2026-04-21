@@ -237,6 +237,10 @@ describe('embedding-processor — additional branch gaps', () => {
     vi.doMock('../ollama-service', () => ({
       isCircuitBreakerOpen: vi.fn(() => false),
       checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
+      getOllamaConfigFromSettings: vi.fn(async () => ({ model: 'test-model' })),
+      getOllamaService: vi.fn(() => ({
+        checkAvailability: vi.fn(async () => ({ available: true, model: 'test-model', version: '1.0' })),
+      })),
     }));
     return import('../embedding-processor');
   }
@@ -337,6 +341,10 @@ describe('embedding-processor — additional branch gaps', () => {
     vi.doMock('../ollama-service', () => ({
       isCircuitBreakerOpen: vi.fn(() => false),
       checkMemoryPressure: vi.fn(() => ({ ok: false, permanent: true, usedMB: 500 })),
+      getOllamaConfigFromSettings: vi.fn(async () => ({ model: 'test-model' })),
+      getOllamaService: vi.fn(() => ({
+        checkAvailability: vi.fn(async () => ({ available: true, model: 'test-model', version: '1.0' })),
+      })),
     }));
     dbMocks.getItemsWithoutEmbeddingsBatch.mockResolvedValue([
       { url: 'https://a.com', title: 'A', hostname: 'a.com', visitCount: 1, lastVisit: Date.now(), tokens: ['a'] },
