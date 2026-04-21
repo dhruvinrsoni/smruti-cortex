@@ -560,6 +560,16 @@ function initializePopup() {
     }
   }).catch(e => logger.warn('initializePopup', 'Settings init failed', errorMeta(e)));
 
+  // Freshness guard for loadRecentHistory(). Multiple callers (module init,
+  // window.load retry, clearing input, toggle chips, settings-modal toggles,
+  // remote settings broadcast, sort/maxResults changes) can fire in parallel.
+  // Each entry bumps the counter; every post-await checkpoint bails when
+  // superseded by a newer call, so only the newest run writes to the DOM.
+  // Same pattern as the `q !== currentQuery` stale-response guard in doSearch.
+  // Declared before the first loadRecentHistory() call below so the `let`
+  // binding is initialised (no TDZ) by the time the function body runs.
+  let recentHistoryGen = 0;
+
   // Load recent history on popup open (show default results)
   loadRecentHistory();
   
@@ -1571,11 +1581,16 @@ function initializePopup() {
     if (container) { container.innerHTML = ''; }
   }
 
+  // See `let recentHistoryGen` above — declared early so this function's
+  // freshness guard (`++recentHistoryGen`) is safe to call before this
+  // declaration has been evaluated (`loadRecentHistory()` runs at module
+  // init, line ~564).
   async function loadRecentHistory() {
-    // Ensure settings are fully loaded from storage before reading toggles
-    await SettingsManager.init();
+    const myGen = ++recentHistoryGen;
 
+    await SettingsManager.init();
     const isServiceWorkerReady = await checkServiceWorkerStatus();
+    if (myGen !== recentHistoryGen) { return; }
     if (!isServiceWorkerReady) {
       clearRecentSectionsContainer();
       resultsLocal = [];
@@ -1591,6 +1606,8 @@ function initializePopup() {
     try {
       const defaultResultCount = SettingsManager.getSetting('defaultResultCount') ?? 50;
       const resp = await sendMessage({ type: 'GET_RECENT_HISTORY', limit: defaultResultCount });
+      if (myGen !== recentHistoryGen) { return; }
+
       resultsLocal = (resp && resp.results) ? resp.results : [];
       const sortBy = SettingsManager.getSetting('sortBy') || 'most-recent';
       sortResults(resultsLocal, sortBy);
@@ -1606,6 +1623,7 @@ function initializePopup() {
       // "⚡ Recently Visited" section — gated by showRecentHistory toggle
       if (showRecentlyVisited) {
         const interactions = await getRecentInteractions();
+        if (myGen !== recentHistoryGen) { return; }
         if (interactions.length > 0) {
           const section = renderRecentInteractionsSection(interactions.slice(0, 5));
           recentContainer.appendChild(section);
@@ -1615,6 +1633,7 @@ function initializePopup() {
       // Show recent searches above results when enabled
       if (showSearches) {
         const recentEntries = await getRecentSearches();
+        if (myGen !== recentHistoryGen) { return; }
         if (recentEntries.length > 0) {
           const section = renderRecentSearches(recentEntries.slice(0, 5));
           recentContainer.insertBefore(section, recentContainer.firstChild);
@@ -1622,6 +1641,7 @@ function initializePopup() {
       }
 
     } catch {
+      if (myGen !== recentHistoryGen) { return; }
       clearRecentSectionsContainer();
       resultsLocal = [];
       activeIndex = -1;
