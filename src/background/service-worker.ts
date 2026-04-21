@@ -168,6 +168,53 @@ browserAPI.runtime.onStartup.addListener(async () => {
   }
 });
 
+/**
+ * Install a listener on `chrome.idle.onStateChanged` that calls `initFn()`
+ * when the OS transitions back to `active` and the SW is not initialized.
+ *
+ * Exported (and kept pure on its inputs) so it can be unit-tested with a
+ * stubbed idle API without bootstrapping the entire service-worker module.
+ */
+export function setupIdleWakeListener(
+  idleApi: typeof chrome.idle | undefined,
+  isInitialized: () => boolean,
+  initFn: () => Promise<void>,
+): boolean {
+  if (!idleApi?.onStateChanged?.addListener) {return false;}
+  try { idleApi.setDetectionInterval?.(60); } catch { /* Firefox MV3 compat */ }
+  idleApi.onStateChanged.addListener(async (state) => {
+    if (state !== 'active') {return;}
+    if (isInitialized()) {return;}
+    try {
+      logger.info('onIdleActive', '⏰ idle → active transition, ensuring SW is warm');
+      await initFn();
+    } catch (err) {
+      logger.error(
+        'onIdleActive',
+        'Wake-from-idle init failed',
+        undefined,
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
+  });
+  return true;
+}
+
+// Proactive re-init on system wake from idle / hibernate.
+//
+// Chrome evicts the service worker during laptop sleep / long idle periods.
+// When the user comes back and triggers quick-search, the first port message
+// races SW boot. Listening to `chrome.idle.onStateChanged` lets us kick off
+// `init()` the moment the OS reports "active" — well before the user
+// interacts — so the SW is typically warm by the time the first message
+// arrives. The `idle` permission is listed in manifest.json with no
+// user-visible prompt (standard MV3 permission).
+setupIdleWakeListener(
+  (browserAPI as typeof chrome).idle,
+  () => initialized,
+  init,
+);
+
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);

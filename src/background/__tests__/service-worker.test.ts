@@ -2122,3 +2122,99 @@ describe('METADATA_CAPTURE validation', () => {
     expect(res.status).toBe('ERROR');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// setupIdleWakeListener — proactive re-init on system wake
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('setupIdleWakeListener', () => {
+  it('registers a listener that fires init() when state→active and SW is not initialized', async () => {
+    const { setupIdleWakeListener } = await import('../service-worker');
+    let captured: ((state: chrome.idle.IdleState) => void | Promise<void>) | null = null;
+    const setInterval = vi.fn();
+    const idleApi = {
+      setDetectionInterval: setInterval,
+      onStateChanged: {
+        addListener: (cb: (s: chrome.idle.IdleState) => void | Promise<void>) => {
+          captured = cb;
+        },
+      },
+    } as unknown as typeof chrome.idle;
+    const init = vi.fn(async () => {});
+    const installed = setupIdleWakeListener(idleApi, () => false, init);
+    expect(installed).toBe(true);
+    expect(setInterval).toHaveBeenCalledWith(60);
+    expect(captured).toBeTruthy();
+    await captured!('active');
+    expect(init).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call init() when already initialized', async () => {
+    const { setupIdleWakeListener } = await import('../service-worker');
+    let captured: ((state: chrome.idle.IdleState) => void | Promise<void>) | null = null;
+    const idleApi = {
+      onStateChanged: {
+        addListener: (cb: (s: chrome.idle.IdleState) => void | Promise<void>) => {
+          captured = cb;
+        },
+      },
+    } as unknown as typeof chrome.idle;
+    const init = vi.fn(async () => {});
+    setupIdleWakeListener(idleApi, () => true, init);
+    await captured!('active');
+    expect(init).not.toHaveBeenCalled();
+  });
+
+  it('ignores idle/locked transitions', async () => {
+    const { setupIdleWakeListener } = await import('../service-worker');
+    let captured: ((state: chrome.idle.IdleState) => void | Promise<void>) | null = null;
+    const idleApi = {
+      onStateChanged: {
+        addListener: (cb: (s: chrome.idle.IdleState) => void | Promise<void>) => {
+          captured = cb;
+        },
+      },
+    } as unknown as typeof chrome.idle;
+    const init = vi.fn(async () => {});
+    setupIdleWakeListener(idleApi, () => false, init);
+    await captured!('idle');
+    await captured!('locked');
+    expect(init).not.toHaveBeenCalled();
+  });
+
+  it('returns false and registers nothing when idle API is absent', async () => {
+    const { setupIdleWakeListener } = await import('../service-worker');
+    const init = vi.fn(async () => {});
+    expect(setupIdleWakeListener(undefined, () => false, init)).toBe(false);
+    expect(setupIdleWakeListener(
+      { onStateChanged: undefined } as unknown as typeof chrome.idle,
+      () => false,
+      init,
+    )).toBe(false);
+    expect(init).not.toHaveBeenCalled();
+  });
+
+  it('swallows errors thrown by init() without crashing the listener', async () => {
+    const { setupIdleWakeListener } = await import('../service-worker');
+    let captured: ((state: chrome.idle.IdleState) => void | Promise<void>) | null = null;
+    const idleApi = {
+      onStateChanged: {
+        addListener: (cb: (s: chrome.idle.IdleState) => void | Promise<void>) => {
+          captured = cb;
+        },
+      },
+    } as unknown as typeof chrome.idle;
+    const init = vi.fn(async () => { throw new Error('init crashed'); });
+    setupIdleWakeListener(idleApi, () => false, init);
+    await expect(captured!('active')).resolves.toBeUndefined();
+    expect(init).toHaveBeenCalled();
+  });
+
+  it('tolerates missing setDetectionInterval (Firefox MV3 compat)', async () => {
+    const { setupIdleWakeListener } = await import('../service-worker');
+    const idleApi = {
+      onStateChanged: { addListener: vi.fn() },
+    } as unknown as typeof chrome.idle;
+    expect(() => setupIdleWakeListener(idleApi, () => false, vi.fn())).not.toThrow();
+  });
+});

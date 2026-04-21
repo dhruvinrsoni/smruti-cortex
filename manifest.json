@@ -13,7 +13,8 @@
     "scripting",
     "activeTab",
     "sessions",
-    "windows"
+    "windows",
+    "idle"
   ],
   "optional_permissions": [
     "tabGroups",
