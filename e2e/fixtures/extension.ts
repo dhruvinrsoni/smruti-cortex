@@ -86,12 +86,21 @@ export const test = base.extend<
 
     const ctx = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
+      // viewport: null lets the OS-level --start-maximized flag actually
+      // control the page's viewport. Without this, Playwright forces a
+      // 1280x720 viewport on every page, so the window would look
+      // maximized but tests would still see a small inner viewport.
+      viewport: null,
       // slowMo is NOT passed here — see withSlowMo() wrapper above.
       // Playwright's built-in slowMo blocks ctx.close() indefinitely
       // when the extension's service worker has active timers.
       args: [
         '--no-first-run',
         '--no-default-browser-check',
+        // Start maximized so SLOW_MO runs are easy to watch and so the
+        // popup + quick-search overlay render against a realistic viewport
+        // (not the default 800x600 initial window). Requires headless:false.
+        '--start-maximized',
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
       ],
