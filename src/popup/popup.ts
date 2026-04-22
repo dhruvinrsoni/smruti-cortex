@@ -36,6 +36,9 @@ import {
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
+import type { MaskingLevel } from '../shared/data-masker';
+import { STAGE_TIMINGS, waitRemaining } from '../shared/report-chooser-utils';
+import { buildReportChooser } from '../shared/report-chooser-modal';
 import {
   DEFAULT_GENERATION_MODEL,
   DEFAULT_EMBEDDING_MODEL,
@@ -153,6 +156,30 @@ function showToast(message: string, type: ToastType = 'success', durationMs = 50
   });
 
   startDismiss();
+}
+
+/**
+ * Show the masking-level chooser modal in the popup. Called when the
+ * Report button is clicked; `onPick` runs with the selected level if the
+ * user confirms, or is never called if the user cancels (Escape /
+ * backdrop click / Cancel button).
+ */
+function showReportChooser(opts: { onPick: (level: MaskingLevel) => void; onCancel?: () => void }) {
+  const handle = buildReportChooser(document, opts);
+  document.body.appendChild(handle.root);
+  handle.defaultFocusButton?.focus();
+}
+
+/**
+ * Inject the pulse keyframes used by the Report button's staged flow.
+ * Safe to call repeatedly — only inserts the style tag the first time.
+ */
+function ensureReportPulseStyle() {
+  if (document.getElementById('report-pulse-style')) { return; }
+  const style = document.createElement('style');
+  style.id = 'report-pulse-style';
+  style.textContent = '@keyframes report-pulse{0%,100%{opacity:1}50%{opacity:0.55}} .report-ranking-btn.pulsing{animation:report-pulse 1s ease-in-out infinite}';
+  document.head.appendChild(style);
 }
 
 function showReportConfirmation(issueUrl: string) {
@@ -430,42 +457,74 @@ function initializePopup() {
     btn.textContent = 'Report';
     btn.title = 'Report ranking issue to GitHub';
     btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
-    btn.addEventListener('click', async () => {
-      btn!.disabled = true;
-      btn!.textContent = 'Sending...';
-      try {
-        const resp = await sendMessage({
-          type: 'GENERATE_RANKING_REPORT',
-          maskingLevel: 'partial',
-          method: SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url',
-        });
-        if (resp?.status === 'OK') {
-          if (resp.method === 'api') {
-            btn!.textContent = 'Filed!';
-            btn!.style.color = '#10b981';
-            btn!.style.borderColor = '#10b981';
-          } else {
-            await navigator.clipboard.writeText(resp.reportBody || '');
-            btn!.textContent = 'Copied!';
-            btn!.style.color = '#10b981';
-            btn!.style.borderColor = '#10b981';
-            showReportConfirmation(resp.issueUrl);
+    ensureReportPulseStyle();
+
+    const RED = '#ef4444';
+    const GREEN = '#10b981';
+    const revert = () => {
+      if (!btn) { return; }
+      btn.textContent = 'Report';
+      btn.style.color = RED;
+      btn.style.borderColor = RED;
+      btn.classList.remove('pulsing');
+      btn.disabled = false;
+    };
+
+    btn.addEventListener('click', () => {
+      if (!btn || btn.disabled) { return; }
+      showReportChooser({
+        onPick: async (level) => {
+          const b = btn!;
+          b.disabled = true;
+          b.classList.add('pulsing');
+          b.style.color = RED;
+          b.style.borderColor = RED;
+          b.textContent = 'Generating…';
+
+          const method = SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url';
+          const tGen = performance.now();
+          interface RankingReportResponse {
+            status?: 'OK' | 'ERROR';
+            method?: 'api' | 'url';
+            issueUrl?: string;
+            reportBody?: string;
+            message?: string;
           }
-        } else {
-          btn!.textContent = resp?.message || 'Error';
-          btn!.style.color = '#ef4444';
-        }
-      } catch {
-        btn!.textContent = 'Error';
-      }
-      setTimeout(() => {
-        if (btn) {
-          btn.textContent = 'Report';
-          btn.style.color = '#ef4444';
-          btn.style.borderColor = '#ef4444';
-          btn.disabled = false;
-        }
-      }, 3000);
+          let resp: RankingReportResponse | null = null;
+          try {
+            resp = await sendMessage({
+              type: 'GENERATE_RANKING_REPORT',
+              maskingLevel: level,
+              method,
+            }) as RankingReportResponse | null;
+          } catch {
+            resp = null;
+          }
+          await waitRemaining(tGen, STAGE_TIMINGS.minGen);
+
+          b.textContent = 'Copying…';
+          const tCopy = performance.now();
+
+          if (resp?.status === 'OK') {
+            try { await navigator.clipboard.writeText(resp.reportBody || ''); } catch { /* clipboard may be blocked */ }
+            await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+            b.classList.remove('pulsing');
+            b.textContent = resp.method === 'api' ? 'Filed & Copied!' : 'Copied!';
+            b.style.color = GREEN;
+            b.style.borderColor = GREEN;
+            if (resp.method === 'url' && resp.issueUrl) {
+              showReportConfirmation(resp.issueUrl);
+            }
+            setTimeout(revert, STAGE_TIMINGS.successHold);
+          } else {
+            await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+            b.classList.remove('pulsing');
+            b.textContent = resp?.message || 'Error';
+            b.style.color = RED;
+            setTimeout(revert, STAGE_TIMINGS.errorHold);
+          }
+        },
+      });
     });
     footerEl.appendChild(btn);
   }
