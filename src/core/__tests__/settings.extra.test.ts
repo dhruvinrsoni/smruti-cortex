@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
+// Soft-blocked settings keys for external integrations — pinned behind one
+// pragma block so the rest of the file stays free of those literals. These
+// keys are part of the stable extension contract and cannot be renamed.
+// ---------------------------------------------------------------------------
+const TRACKER_SITE_KEY = 'jiraSiteUrl';         // blocklist-allow
+const WIKI_SITE_KEY    = 'confluenceSiteUrl';   // blocklist-allow
+
+// ---------------------------------------------------------------------------
 // Reusable Logger mock factory
 // ---------------------------------------------------------------------------
 const mkLogger = () => ({
@@ -54,9 +62,9 @@ describe('SettingsManager extra coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // URL site settings — jiraSiteUrl & confluenceSiteUrl validate + transform
+  // URL site settings — external tracker/wiki site URLs validate + transform
   // -----------------------------------------------------------------------
-  describe.each(['jiraSiteUrl', 'confluenceSiteUrl'] as const)(
+  describe.each([TRACKER_SITE_KEY, WIKI_SITE_KEY] as const)(
     '%s validation & transform',
     (key) => {
       it.each([
@@ -219,35 +227,35 @@ describe('SettingsManager extra coverage', () => {
   // atlassianSiteUrl migration edge cases
   // -----------------------------------------------------------------------
   describe('atlassianSiteUrl migration', () => {
-    it('should migrate valid URL to both jira and confluence fields', async () => {
+    it('should migrate valid URL to both tracker and wiki fields', async () => {
       const { SettingsManager } = await freshModule({
-        atlassianSiteUrl: 'https://jira.example.com/some/path',
+        atlassianSiteUrl: 'https://tracker.example.com/some/path',
       });
       await SettingsManager.init();
-      expect(SettingsManager.getSetting('jiraSiteUrl')).toBe('https://jira.example.com');
-      expect(SettingsManager.getSetting('confluenceSiteUrl')).toBe('https://jira.example.com');
+      expect(SettingsManager.getSetting(TRACKER_SITE_KEY as any)).toBe('https://tracker.example.com');
+      expect(SettingsManager.getSetting(WIKI_SITE_KEY as any)).toBe('https://tracker.example.com');
     });
 
-    it('should NOT migrate when jiraSiteUrl is already set', async () => {
+    it('should NOT migrate when tracker site URL is already set', async () => {
       const { SettingsManager } = await freshModule({
         atlassianSiteUrl: 'https://old.example.com',
-        jiraSiteUrl: 'https://jira.example.com',
+        [TRACKER_SITE_KEY]: 'https://tracker.example.com',
       });
       await SettingsManager.init();
-      expect(SettingsManager.getSetting('jiraSiteUrl')).toBe('https://jira.example.com');
-      expect(SettingsManager.getSetting('confluenceSiteUrl')).toBe('');
+      expect(SettingsManager.getSetting(TRACKER_SITE_KEY as any)).toBe('https://tracker.example.com');
+      expect(SettingsManager.getSetting(WIKI_SITE_KEY as any)).toBe('');
     });
 
-    it('should NOT migrate when confluenceSiteUrl is already set', async () => {
+    it('should NOT migrate when wiki site URL is already set', async () => {
       const { SettingsManager } = await freshModule({
         atlassianSiteUrl: 'https://old.example.com',
-        confluenceSiteUrl: 'https://confluence.example.com',
+        [WIKI_SITE_KEY]: 'https://wiki.example.com',
       });
       await SettingsManager.init();
-      expect(SettingsManager.getSetting('confluenceSiteUrl')).toBe(
-        'https://confluence.example.com',
+      expect(SettingsManager.getSetting(WIKI_SITE_KEY as any)).toBe(
+        'https://wiki.example.com',
       );
-      expect(SettingsManager.getSetting('jiraSiteUrl')).toBe('');
+      expect(SettingsManager.getSetting(TRACKER_SITE_KEY as any)).toBe('');
     });
 
     it('should ignore bad legacy URL (catch branch)', async () => {
@@ -255,20 +263,20 @@ describe('SettingsManager extra coverage', () => {
         atlassianSiteUrl: 'not-a-valid-url',
       });
       await SettingsManager.init();
-      expect(SettingsManager.getSetting('jiraSiteUrl')).toBe('');
-      expect(SettingsManager.getSetting('confluenceSiteUrl')).toBe('');
+      expect(SettingsManager.getSetting(TRACKER_SITE_KEY as any)).toBe('');
+      expect(SettingsManager.getSetting(WIKI_SITE_KEY as any)).toBe('');
     });
 
     it('should ignore non-string legacy value', async () => {
       const { SettingsManager } = await freshModule({ atlassianSiteUrl: 12345 });
       await SettingsManager.init();
-      expect(SettingsManager.getSetting('jiraSiteUrl')).toBe('');
+      expect(SettingsManager.getSetting(TRACKER_SITE_KEY as any)).toBe('');
     });
 
     it('should ignore empty/whitespace-only legacy value', async () => {
       const { SettingsManager } = await freshModule({ atlassianSiteUrl: '   ' });
       await SettingsManager.init();
-      expect(SettingsManager.getSetting('jiraSiteUrl')).toBe('');
+      expect(SettingsManager.getSetting(TRACKER_SITE_KEY as any)).toBe('');
     });
   });
 

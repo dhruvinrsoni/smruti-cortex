@@ -733,7 +733,7 @@ describe('search-engine', () => {
             score: (_item: IndexedItem) => {
               const h = (_item.title + ' ' + _item.url).toLowerCase();
               // Return score based on how many of the query tokens match
-              const tokens = ['confluence', 'cost'];
+              const tokens = ['wiki', 'cost'];
               const matched = tokens.filter(t => h.includes(t)).length;
               return matched > 0 ? 0.3 + matched * 0.1 : 0.0;
             },
@@ -742,8 +742,8 @@ describe('search-engine', () => {
       }));
       vi.doMock('../../database', () => ({
         getAllIndexedItems: vi.fn(async () => [
-          makeItem({ url: 'https://a.com', title: 'Confluence Dashboard', tokens: ['confluence', 'dashboard'] }),
-          makeItem({ url: 'https://b.com', title: 'Confluence Cost Report', tokens: ['confluence', 'cost', 'report'] }),
+          makeItem({ url: 'https://a.com', title: 'Wiki Dashboard', tokens: ['wiki', 'dashboard'] }),
+          makeItem({ url: 'https://b.com', title: 'Wiki Cost Report', tokens: ['wiki', 'cost', 'report'] }),
           makeItem({ url: 'https://c.com', title: 'Cost Analysis', tokens: ['cost', 'analysis'] }),
         ]),
         saveIndexedItem: vi.fn(),
@@ -774,11 +774,11 @@ describe('search-engine', () => {
       vi.doMock('../../../core/scorer-types', () => ({}));
 
       const { runSearch } = await import('../search-engine');
-      const results = await runSearch('confluence cost');
+      const results = await runSearch('wiki cost');
 
       // Item matching BOTH tokens should be first
       expect(results.length).toBeGreaterThanOrEqual(2);
-      expect(results[0].title).toBe('Confluence Cost Report');
+      expect(results[0].title).toBe('Wiki Cost Report');
     });
 
     it('should rank items matching SOME tokens above items matching NONE when showNonMatchingResults is true', async () => {
@@ -801,7 +801,7 @@ describe('search-engine', () => {
       vi.doMock('../../database', () => ({
         getAllIndexedItems: vi.fn(async () => [
           makeItem({ url: 'https://a.com', title: 'Recent Workflow Page', tokens: ['recent', 'workflow'] }),
-          makeItem({ url: 'https://b.com', title: 'Confluence Dashboard', tokens: ['confluence', 'dashboard'] }),
+          makeItem({ url: 'https://b.com', title: 'Wiki Dashboard', tokens: ['wiki', 'dashboard'] }),
         ]),
         saveIndexedItem: vi.fn(),
       }));
@@ -831,12 +831,12 @@ describe('search-engine', () => {
       vi.doMock('../../../core/scorer-types', () => ({}));
 
       const { runSearch } = await import('../search-engine');
-      const results = await runSearch('confluence');
+      const results = await runSearch('wiki');
 
       // Even though "Recent Workflow Page" has higher score (0.9 vs 0.3),
-      // "Confluence Dashboard" should rank first because it matches the query token
+      // "Wiki Dashboard" should rank first because it matches the query token
       expect(results.length).toBe(2);
-      expect(results[0].title).toBe('Confluence Dashboard');
+      expect(results[0].title).toBe('Wiki Dashboard');
       expect(results[1].title).toBe('Recent Workflow Page');
 
       // Reset setting
@@ -965,19 +965,19 @@ describe('search-engine', () => {
           lastVisit: Date.now(),
         }),
         makeItem({
-          url: 'https://confluence.com/cost-report',
-          title: 'Confluence Cost Report',
-          tokens: ['confluence', 'cost', 'report'],
+          url: 'https://wiki.example.com/cost-report',
+          title: 'Wiki Cost Report',
+          tokens: ['wiki', 'cost', 'report'],
           visitCount: 2,
           lastVisit: Date.now() - 86400000 * 30,
         }),
       ];
-      setupMocksForRanking(items, ['confluence', 'cost']);
+      setupMocksForRanking(items, ['wiki', 'cost']);
 
       const { runSearch } = await import('../search-engine');
-      const results = await runSearch('confluence cost');
+      const results = await runSearch('wiki cost');
 
-      expect(results[0].title).toBe('Confluence Cost Report');
+      expect(results[0].title).toBe('Wiki Cost Report');
     });
 
     it('should apply match-count dampener: partial matches get lower final scores', async () => {
@@ -1017,15 +1017,15 @@ describe('search-engine', () => {
       expect(results[0].title).toBe('Error Log Viewer');
     });
 
-    it('should rank "confluence pto" — items matching both tokens above single-token matches regardless of sortBy', async () => {
+    it('should rank "wiki leave" — items matching both tokens above single-token matches regardless of sortBy', async () => {
       settingsMap.sortBy = 'most-recent';
       const now = Date.now();
       const items = [
         makeItem({
-          url: 'https://confluence.zebra.com/pages/Dashboard',
-          title: 'Dashboard - Zebra Confluence',
-          hostname: 'confluence.zebra.com',
-          tokens: ['dashboard', 'confluence'],
+          url: 'https://wiki.example.com/pages/Dashboard',
+          title: 'Dashboard - Acme Wiki',
+          hostname: 'wiki.example.com',
+          tokens: ['dashboard', 'wiki'],
           visitCount: 200,
           lastVisit: now,
         }),
@@ -1038,22 +1038,22 @@ describe('search-engine', () => {
           lastVisit: now - 1000,
         }),
         makeItem({
-          url: 'https://confluence.zebra.com/PTO-Calendar',
-          title: 'PTO Calendar - Zebra Confluence',
-          hostname: 'confluence.zebra.com',
-          tokens: ['pto', 'calendar', 'confluence'],
+          url: 'https://wiki.example.com/Leave-Calendar',
+          title: 'Leave Calendar - Acme Wiki',
+          hostname: 'wiki.example.com',
+          tokens: ['leave', 'calendar', 'wiki'],
           visitCount: 5,
           lastVisit: now - 86400000 * 7,
         }),
       ];
-      setupMocksForRanking(items, ['confluence', 'pto']);
+      setupMocksForRanking(items, ['wiki', 'leave']);
 
       const { runSearch } = await import('../search-engine');
-      const results = await runSearch('confluence pto');
+      const results = await runSearch('wiki leave');
 
-      // PTO Calendar matches BOTH tokens → must be first regardless of sortBy=most-recent
+      // Leave Calendar matches BOTH tokens → must be first regardless of sortBy=most-recent
       expect(results.length).toBeGreaterThanOrEqual(1);
-      expect(results[0].title).toBe('PTO Calendar - Zebra Confluence');
+      expect(results[0].title).toBe('Leave Calendar - Acme Wiki');
 
       settingsMap.sortBy = 'best-match';
     });
@@ -1216,7 +1216,7 @@ describe('search-engine', () => {
       settingsMap.sortBy = 'alphabetical';
       setupCoverageMocks({
         items: [
-          makeItem({ url: 'https://b.com/test', title: 'Zebra Test', hostname: 'b.com' }),
+          makeItem({ url: 'https://b.com/test', title: 'Omega Test', hostname: 'b.com' }),
           makeItem({ url: 'https://a.com/test', title: 'Alpha Test', hostname: 'a.com' }),
         ],
       });
@@ -1224,7 +1224,7 @@ describe('search-engine', () => {
       const results = await runSearch('test');
       expect(results.length).toBe(2);
       expect(results[0].title).toBe('Alpha Test');
-      expect(results[1].title).toBe('Zebra Test');
+      expect(results[1].title).toBe('Omega Test');
       settingsMap.sortBy = 'best-match';
     });
   });

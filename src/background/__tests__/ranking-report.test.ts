@@ -34,8 +34,8 @@ import type { SearchDebugSnapshot } from '../diagnostics';
 function makeSnapshot(overrides?: Partial<SearchDebugSnapshot>): SearchDebugSnapshot {
   return buildSnapshot({
     timestamp: Date.now(),
-    query: 'confluence pto',
-    tokens: ['confluence', 'pto'],
+    query: 'wiki leave',
+    tokens: ['wiki', 'leave'],
     aiExpandedKeywords: [],
     duration: 115.3,
     sortBy: 'best-match',
@@ -48,9 +48,9 @@ function makeSnapshot(overrides?: Partial<SearchDebugSnapshot>): SearchDebugSnap
     results: [
       {
         rank: 1,
-        url: 'https://confluence.zebra.com/pages/PTO',
-        title: 'PTO Calendar - Confluence',
-        hostname: 'confluence.zebra.com',
+        url: 'https://wiki.example.com/pages/Leave',
+        title: 'Leave Calendar - Wiki',
+        hostname: 'wiki.example.com',
         finalScore: 0.92,
         originalMatchCount: 2,
         intentPriority: 3,
@@ -67,9 +67,9 @@ function makeSnapshot(overrides?: Partial<SearchDebugSnapshot>): SearchDebugSnap
       },
       {
         rank: 2,
-        url: 'https://confluence.zebra.com/pages/Dashboard',
-        title: 'Dashboard - Confluence',
-        hostname: 'confluence.zebra.com',
+        url: 'https://wiki.example.com/pages/Dashboard',
+        title: 'Dashboard - Wiki',
+        hostname: 'wiki.example.com',
         finalScore: 0.55,
         originalMatchCount: 1,
         intentPriority: 0,
@@ -123,15 +123,15 @@ describe('generateRankingReport', () => {
     const report = generateRankingReport({ maskingLevel: 'none' });
     expect(report).not.toBeNull();
     expect(report!.version).toBe('8.1.0');
-    expect(report!.query).toBe('confluence pto');
-    expect(report!.title).toContain('confluence pto');
+    expect(report!.query).toBe('wiki leave');
+    expect(report!.title).toContain('wiki leave');
     expect(report!.title).toContain('v8.1.0');
   });
 
   it('includes results table in body', () => {
     const report = generateRankingReport({ maskingLevel: 'none' });
     expect(report!.body).toContain('| # | Title | Domain |');
-    expect(report!.body).toContain('PTO Calendar');
+    expect(report!.body).toContain('Leave Calendar');
     expect(report!.body).toContain('0.920');
   });
 
@@ -149,15 +149,15 @@ describe('generateRankingReport', () => {
   });
 
   it('includes user note when provided', () => {
-    const report = generateRankingReport({ maskingLevel: 'none', userNote: 'PTO pages should be first' });
-    expect(report!.body).toContain('PTO pages should be first');
+    const report = generateRankingReport({ maskingLevel: 'none', userNote: 'Leave pages should be first' });
+    expect(report!.body).toContain('Leave pages should be first');
     expect(report!.body).toContain('### User Note');
   });
 
   it('applies partial masking to titles', () => {
     const report = generateRankingReport({ maskingLevel: 'partial' });
-    expect(report!.body).toContain('**PTO**');
-    expect(report!.body).toContain('**Confluence**');
+    expect(report!.body).toContain('**Leave**');
+    expect(report!.body).toContain('**Wiki**');
     expect(report!.body).toContain('•');
     expect(report!.body).not.toContain('[MASKED]');
   });
@@ -211,7 +211,7 @@ describe('buildGitHubIssueUrl', () => {
     const report = generateRankingReport({ maskingLevel: 'none' })!;
     const url = buildGitHubIssueUrl(report);
     const params = new URLSearchParams(url.split('?')[1]);
-    expect(params.get('body')).toContain('confluence pto');
+    expect(params.get('body')).toContain('wiki leave');
     expect(params.get('body')).toContain('8.1.0');
     expect(params.get('labels')).toBe('ranking-bug,auto-report');
   });
@@ -228,12 +228,12 @@ describe('generateRankingReport — edge cases', () => {
 
   it('includes AI expanded keywords row when present', () => {
     recordSearchSnapshot(makeSnapshot({
-      aiExpandedKeywords: ['leave', 'vacation', 'time-off'],
+      aiExpandedKeywords: ['vacation', 'holiday', 'absence'],
     }));
     const report = generateRankingReport({ maskingLevel: 'none' });
     expect(report!.body).toContain('AI Expanded Keywords');
-    expect(report!.body).toContain('`leave`');
     expect(report!.body).toContain('`vacation`');
+    expect(report!.body).toContain('`holiday`');
   });
 
   it('omits AI expanded keywords row when array is empty', () => {
@@ -299,70 +299,73 @@ describe('generateRankingReport — masking gradient', () => {
 
   it('level=none exposes query, first title, and first hostname raw', () => {
     recordSearchSnapshot(makeSnapshot({
-      aiExpandedKeywords: ['leave', 'vacation'],
+      aiExpandedKeywords: ['vacation', 'holiday'],
     }));
     const report = generateRankingReport({ maskingLevel: 'none' })!;
-    expect(report.title).toContain('confluence pto');
-    expect(report.query).toBe('confluence pto');
-    expect(report.body).toContain('| Query | `confluence pto` |');
-    expect(report.body).toContain('`confluence`');
-    expect(report.body).toContain('`pto`');
-    expect(report.body).toContain('PTO Calendar');
-    expect(report.body).toContain('confluence.zebra.com');
+    expect(report.title).toContain('wiki leave');
+    expect(report.query).toBe('wiki leave');
+    expect(report.body).toContain('| Query | `wiki leave` |');
+    expect(report.body).toContain('`wiki`');
     expect(report.body).toContain('`leave`');
+    expect(report.body).toContain('Leave Calendar');
+    expect(report.body).toContain('wiki.example.com');
     expect(report.body).toContain('`vacation`');
+    expect(report.body).toContain('`holiday`');
   });
 
   it('level=partial keeps query readable but redacts titles and AI keywords', () => {
     recordSearchSnapshot(makeSnapshot({
-      aiExpandedKeywords: ['leave', 'vacation'],
+      aiExpandedKeywords: ['vacation', 'holiday'],
     }));
     const report = generateRankingReport({ maskingLevel: 'partial' })!;
     // Query and tokens are the repro hook and stay raw at partial
-    expect(report.body).toContain('| Query | `confluence pto` |');
-    expect(report.body).toContain('`confluence`');
-    expect(report.body).toContain('`pto`');
+    expect(report.body).toContain('| Query | `wiki leave` |');
+    expect(report.body).toContain('`wiki`');
+    expect(report.body).toContain('`leave`');
     // Titles are partially redacted (non-matching words masked)
     expect(report.body).not.toContain('Calendar');
     expect(report.body).not.toContain('Dashboard');
     // Matched tokens are bolded
-    expect(report.body).toContain('**PTO**');
-    expect(report.body).toContain('**Confluence**');
-    // Domain middles redacted
-    expect(report.body).not.toContain('confluence.zebra.com');
+    expect(report.body).toContain('**Leave**');
+    expect(report.body).toContain('**Wiki**');
+    // Domain middles redacted: wiki.example.com should not appear verbatim.
+    // Note: 'wiki' by itself can still appear as a matched token in titles
+    // ("**Wiki**"); that is separate from the full hostname string.
+    expect(report.body).not.toContain('wiki.example.com');
     // AI keywords redacted per-word (not raw, not a count)
-    expect(report.body).not.toContain('`leave`');
     expect(report.body).not.toContain('`vacation`');
+    expect(report.body).not.toContain('`holiday`');
     expect(report.body).not.toMatch(/\d+ keywords/);
     expect(report.body).toMatch(/AI Expanded Keywords \| `[^`]*•[^`]*`/);
   });
 
   it('level=full hashes query, removes raw titles/hostnames, and collapses AI keywords to a count', () => {
     recordSearchSnapshot(makeSnapshot({
-      aiExpandedKeywords: ['leave', 'vacation', 'time-off'],
+      aiExpandedKeywords: ['vacation', 'holiday', 'absence'],
     }));
     const report = generateRankingReport({ maskingLevel: 'full' })!;
     // Issue title no longer leaks the raw query
-    expect(report.title).not.toContain('confluence pto');
+    expect(report.title).not.toContain('wiki leave');
     expect(report.title).toMatch(/\[Ranking\] "\[[a-z0-9]+\] \(2 tokens\)"/);
     // report.query is hashed so the URL-stub path cannot leak it either
-    expect(report.query).not.toContain('confluence pto');
+    expect(report.query).not.toContain('wiki leave');
     expect(report.query).toMatch(/^\[[a-z0-9]+\] \(2 tokens\)$/);
     // Body header
-    expect(report.body).not.toContain('| Query | `confluence pto` |');
+    expect(report.body).not.toContain('| Query | `wiki leave` |');
     expect(report.body).toMatch(/\| Query \| `\[[a-z0-9]+\] \(2 tokens\)` \|/);
     // Tokens list uses the first-char + dots + length shape
-    expect(report.body).not.toMatch(/\| Tokens \| `confluence`/);
-    expect(report.body).toMatch(/\| Tokens \| `c•••\(10\)`, `p••\(3\)` \|/);
+    // 'wiki' (len 4) → w•••(4)   'leave' (len 5) → l•••(5)
+    expect(report.body).not.toMatch(/\| Tokens \| `wiki`/);
+    expect(report.body).toMatch(/\| Tokens \| `w•••\(4\)`, `l•••\(5\)` \|/);
     // AI keywords collapsed to a count
     expect(report.body).toContain('| AI Expanded Keywords | 3 keywords |');
-    expect(report.body).not.toContain('`leave`');
     expect(report.body).not.toContain('`vacation`');
-    expect(report.body).not.toContain('`time-off`');
+    expect(report.body).not.toContain('`holiday`');
+    expect(report.body).not.toContain('`absence`');
     // Row titles and hostnames are hashed
     expect(report.body).not.toContain('Calendar');
     expect(report.body).not.toContain('Dashboard');
-    expect(report.body).not.toContain('confluence.zebra.com');
+    expect(report.body).not.toContain('wiki.example.com');
     // Token Hits column is collapsed ("-") at full to avoid duplicating Matches
     const dashHitsCount = (report.body.match(/\| - \|$/gm) ?? []).length;
     expect(dashHitsCount).toBeGreaterThanOrEqual(3);

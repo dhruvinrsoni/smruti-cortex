@@ -1,39 +1,44 @@
 // Tests for data-masker.ts — privacy masking for ranking reports
+//
+// All test data uses RFC-2606 placeholder domains (example.com, example.org,
+// etc.) and neutral fictional product names (Acme Wiki, Acme Tracker). No
+// company- or product-specific identifiers may appear here — the repo-wide
+// blocklist guard (scripts/check-blocklist.mjs) enforces this.
 
 import { describe, it, expect } from 'vitest';
 import { maskTitle, maskUrl, maskMetaDescription, maskQuery, maskToken, type MaskingLevel } from '../data-masker';
 
 describe('maskTitle', () => {
-  const tokens = ['confluence', 'pto'];
+  const tokens = ['wiki', 'calendar'];
 
   describe('level = none', () => {
     it('returns original title unchanged', () => {
-      expect(maskTitle('PI 1.26 PTO Calendar - Zebra Confluence', tokens, 'none'))
-        .toBe('PI 1.26 PTO Calendar - Zebra Confluence');
+      expect(maskTitle('Sprint 4.3 Team Calendar - Acme Wiki', tokens, 'none'))
+        .toBe('Sprint 4.3 Team Calendar - Acme Wiki');
     });
   });
 
   describe('level = partial', () => {
     it('masks non-matching words with partial reveal and keeps matched tokens bold', () => {
-      const result = maskTitle('PI 1.26 PTO Calendar - Zebra Confluence', tokens, 'partial');
-      expect(result).toContain('**PTO**');
-      expect(result).toContain('**Confluence**');
+      const result = maskTitle('Sprint 4.3 Team Calendar - Acme Wiki', tokens, 'partial');
+      expect(result).toContain('**Calendar**');
+      expect(result).toContain('**Wiki**');
       // Non-matching words should be redacted (not [MASKED])
       expect(result).not.toContain('[MASKED]');
-      expect(result).not.toContain('Zebra');
-      expect(result).not.toContain('Calendar');
+      expect(result).not.toContain('Sprint');
+      expect(result).not.toContain('Acme');
     });
 
     it('redacts short words (1-3 chars) entirely with dots', () => {
-      const result = maskTitle('Go PTO now', tokens, 'partial');
-      expect(result).toContain('**PTO**');
+      const result = maskTitle('Go wiki now', tokens, 'partial');
+      expect(result).toContain('**wiki**');
       expect(result).toContain('••');  // "Go" → "••"
       expect(result).toContain('•••'); // "now" → "•••"
     });
 
     it('redacts medium words keeping first/last chars', () => {
-      const result = maskTitle('Page pto Sprint', tokens, 'partial');
-      expect(result).toContain('**pto**');
+      const result = maskTitle('Page wiki Sprint', tokens, 'partial');
+      expect(result).toContain('**wiki**');
       // "Page" (4 chars) → "P••e"
       expect(result).toContain('P••e');
       // "Sprint" (6 chars) → "Sp••nt"
@@ -41,8 +46,8 @@ describe('maskTitle', () => {
     });
 
     it('redacts long words keeping first 3 and last 2 chars', () => {
-      const result = maskTitle('Dashboard pto', tokens, 'partial');
-      expect(result).toContain('**pto**');
+      const result = maskTitle('Dashboard wiki', tokens, 'partial');
+      expect(result).toContain('**wiki**');
       // "Dashboard" (9 chars) → "Das••••rd"
       expect(result).toContain('Das••••rd');
     });
@@ -55,16 +60,16 @@ describe('maskTitle', () => {
     });
 
     it('handles title with only matching tokens', () => {
-      const result = maskTitle('confluence pto', tokens, 'partial');
-      expect(result).toContain('**confluence**');
-      expect(result).toContain('**pto**');
+      const result = maskTitle('wiki calendar', tokens, 'partial');
+      expect(result).toContain('**wiki**');
+      expect(result).toContain('**calendar**');
     });
   });
 
   describe('level = full', () => {
     it('returns hash with matched tokens', () => {
-      const result = maskTitle('PI 1.26 PTO Calendar - Zebra Confluence', tokens, 'full');
-      expect(result).toMatch(/^\[.+\] \*\*confluence\*\* \*\*pto\*\*$/);
+      const result = maskTitle('Sprint 4.3 Team Calendar - Acme Wiki', tokens, 'full');
+      expect(result).toMatch(/^\[.+\] \*\*wiki\*\* \*\*calendar\*\*$/);
     });
 
     it('returns only hash when no tokens match', () => {
@@ -88,27 +93,27 @@ describe('maskTitle', () => {
 });
 
 describe('maskUrl', () => {
-  const tokens = ['confluence'];
+  const tokens = ['wiki'];
 
   describe('level = none', () => {
     it('returns unchanged', () => {
-      expect(maskUrl('https://confluence.zebra.com/spaces/RAR/pages/123', tokens, 'none'))
-        .toBe('https://confluence.zebra.com/spaces/RAR/pages/123');
+      expect(maskUrl('https://wiki.example.com/spaces/RAR/pages/123', tokens, 'none'))
+        .toBe('https://wiki.example.com/spaces/RAR/pages/123');
     });
   });
 
   describe('level = partial', () => {
     it('redacts company domain parts and path for full URLs', () => {
-      const result = maskUrl('https://confluence.zebra.com/spaces/RAR/pages/123', tokens, 'partial');
-      expect(result).toContain('confluence.');
-      expect(result).not.toContain('zebra');
+      const result = maskUrl('https://wiki.example.com/spaces/RAR/pages/123', tokens, 'partial');
+      expect(result).toContain('wiki.');
+      expect(result).not.toContain('example');
       expect(result).toContain('.com/•••');
     });
 
     it('redacts company parts in bare hostnames', () => {
-      const result = maskUrl('confluence.zebra.com', tokens, 'partial');
-      expect(result).toContain('confluence.');
-      expect(result).not.toContain('zebra');
+      const result = maskUrl('wiki.example.com', tokens, 'partial');
+      expect(result).toContain('wiki.');
+      expect(result).not.toContain('example');
       expect(result).toContain('.com');
     });
 
@@ -118,14 +123,14 @@ describe('maskUrl', () => {
     });
 
     it('keeps any 2-part domain unchanged even without whitelist', () => {
-      const result = maskUrl('https://zebra.com/about', ['test'], 'partial');
-      expect(result).toBe('zebra.com/•••');
+      const result = maskUrl('https://acme.com/about', ['test'], 'partial');
+      expect(result).toBe('acme.com/•••');
     });
 
     it('keeps query-matching domain parts visible', () => {
-      const result = maskUrl('jira.zebra.com', ['jira'], 'partial');
-      expect(result).toContain('jira.');
-      expect(result).not.toContain('zebra');
+      const result = maskUrl('tracker.example.com', ['tracker'], 'partial');
+      expect(result).toContain('tracker.');
+      expect(result).not.toContain('example');
     });
 
     it('handles compound TLDs like .co.uk', () => {
@@ -148,21 +153,21 @@ describe('maskUrl', () => {
     });
 
     it('keeps query-matching parts even with internal TLDs', () => {
-      const result = maskUrl('jira.acme.corp', ['jira'], 'partial');
-      expect(result).toContain('jira.');
-      expect(result).not.toContain('acme');
+      const result = maskUrl('tracker.sample.corp', ['tracker'], 'partial');
+      expect(result).toContain('tracker.');
+      expect(result).not.toContain('sample');
       expect(result).toContain('.corp');
     });
   });
 
   describe('level = full', () => {
     it('hashes hostname and shows TLD structure', () => {
-      const result = maskUrl('https://confluence.zebra.com/pages/123', tokens, 'full');
-      expect(result).toMatch(/^\[.+\]\.zebra\.com\/•••$/);
+      const result = maskUrl('https://wiki.example.com/pages/123', tokens, 'full');
+      expect(result).toMatch(/^\[.+\]\.example\.com\/•••$/);
     });
 
     it('hashes bare hostnames', () => {
-      const result = maskUrl('confluence.zebra.com', tokens, 'full');
+      const result = maskUrl('wiki.example.com', tokens, 'full');
       expect(result).toMatch(/^\[.+\]\.domain$/);
     });
   });

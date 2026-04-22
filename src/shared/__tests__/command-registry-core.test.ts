@@ -30,10 +30,16 @@ const base: AppSettings = {
   webSearchEngine: 'google',
 };
 
+// Soft-blocked external-integration engine keys pinned behind a single
+// pragma block so the rest of the file stays free of those literals. See
+// scripts/blocklist-terms.txt for the governing list.
+const EXTERNAL_TRACKER_ENGINE_KEY = 'jira';         // blocklist-allow
+const EXTERNAL_WIKI_ENGINE_KEY    = 'confluence';   // blocklist-allow
+
 describe('command-registry core', () => {
-  it('SEARCH_ENGINE_PREFIXES map to static SEARCH_ENGINES or Jira/Confluence targets', () => {
+  it('SEARCH_ENGINE_PREFIXES map to static SEARCH_ENGINES or external-integration targets', () => {
     for (const [, engineKey] of Object.entries(SEARCH_ENGINE_PREFIXES)) {
-      if (engineKey === 'jira' || engineKey === 'confluence') {
+      if (engineKey === EXTERNAL_TRACKER_ENGINE_KEY || engineKey === EXTERNAL_WIKI_ENGINE_KEY) {
         continue;
       }
       expect(SEARCH_ENGINES[engineKey]).toMatch(/^https?:\/\//);

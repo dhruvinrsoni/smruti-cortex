@@ -1,3 +1,15 @@
+// Tests for web-search.ts — command-palette web-search URL builders.
+//
+// Naming policy: all test DATA (URLs, hostnames, titles) uses RFC-2606
+// placeholder domains and neutral fictional products. The source module
+// exposes a small number of soft-blocked API identifiers (engine keys,
+// settings keys, and error codes tied to external integrations) that
+// cannot be renamed without breaking the stable extension contract.
+// Those literals are gated behind targeted blocklist-allow pragmas in
+// the constant block below and referenced via aliases throughout the
+// rest of the file — so the test body stays free of soft-blocked word
+// forms. See scripts/blocklist-terms.txt for the governing list.
+
 import { describe, it, expect } from 'vitest';
 import {
   SEARCH_ENGINES,
@@ -10,6 +22,22 @@ import {
   webSearchSiteUrlToastMessage,
   webSearchSiteUrlPreviewLabel,
 } from '../web-search';
+
+// ── Soft-blocked API identifier aliases (stable extension contract). ──────────
+// Each literal is pragma-allowed exactly once; everything below references
+// the aliases. Renaming these would be a breaking user-facing change.
+const TRACKER_KEY         = 'jira';                // blocklist-allow
+const WIKI_KEY            = 'confluence';          // blocklist-allow
+const TRACKER_SITE_OPT    = 'jiraSiteUrl';         // blocklist-allow
+const WIKI_SITE_OPT       = 'confluenceSiteUrl';   // blocklist-allow
+const NO_TRACKER_SITE_ERR = 'no-jira-site';        // blocklist-allow
+const NO_WIKI_SITE_ERR    = 'no-confluence-site';  // blocklist-allow
+const TRACKER_DISPLAY     = 'Jira';                // blocklist-allow
+const WIKI_DISPLAY        = 'Confluence';          // blocklist-allow
+
+// Neutral synthetic hosts used as test site URLs.
+const TRACKER_SITE_URL = 'https://tracker.example.com';
+const WIKI_SITE_URL    = 'https://wiki.example.com';
 
 describe('web-search parseWebSearchQuery', () => {
   it('uses default engine when no prefix matches', () => {
@@ -80,61 +108,61 @@ describe('web-search buildWebSearchUrl', () => {
     }
   });
 
-  it('requires Jira URL for jira', () => {
+  it('requires tracker site URL for tracker engine', () => {
     const p = parseWebSearchQuery('j PROJ-1', 'google');
-    expect(buildWebSearchUrl(p, {})).toEqual({ error: 'no-jira-site' });
-    const ok = buildWebSearchUrl(p, { jiraSiteUrl: 'https://jira.acme.com' });
+    expect(buildWebSearchUrl(p, {})).toEqual({ error: NO_TRACKER_SITE_ERR });
+    const ok = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
     expect('url' in ok).toBe(true);
     if ('url' in ok) {
       expect(ok.url).toBe(
-        'https://jira.acme.com/issues?jql=' + encodeURIComponent('text ~ "PROJ-1"'),
+        TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "PROJ-1"'),
       );
     }
   });
 
-  it('builds Jira issues URL with text ~ query (encoding)', () => {
+  it('builds tracker issues URL with text ~ query (encoding)', () => {
     const p = parseWebSearchQuery('j open source', 'google');
-    const r = buildWebSearchUrl(p, { jiraSiteUrl: 'https://jira.zebra.com' });
+    const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
     expect('url' in r).toBe(true);
     if ('url' in r) {
       expect(r.url).toBe(
-        'https://jira.zebra.com/issues?jql=' + encodeURIComponent('text ~ "open source"'),
+        TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "open source"'),
       );
     }
   });
 
-  it('does not use Jira URL for Confluence', () => {
+  it('does not use tracker site URL when the wiki engine is selected', () => {
     const p = parseWebSearchQuery('c runbook', 'google');
-    expect(buildWebSearchUrl(p, { jiraSiteUrl: 'https://jira.acme.com' })).toEqual({
-      error: 'no-confluence-site',
+    expect(buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL })).toEqual({
+      error: NO_WIKI_SITE_ERR,
     });
   });
 
-  it('builds Confluence search URL', () => {
+  it('builds wiki search URL', () => {
     const p = parseWebSearchQuery('c runbook', 'google');
-    const r = buildWebSearchUrl(p, { confluenceSiteUrl: 'https://confluence.acme.com' });
+    const r = buildWebSearchUrl(p, { [WIKI_SITE_OPT]: WIKI_SITE_URL });
     expect('url' in r).toBe(true);
     if ('url' in r) {
       expect(r.url).toBe(
-        'https://confluence.acme.com/dosearchsite.action?cql='
+        WIKI_SITE_URL + '/dosearchsite.action?cql='
           + encodeURIComponent('siteSearch ~ "runbook"'),
       );
     }
   });
 
-  it('builds Confluence dosearchsite URL matching siteSearch CQL pattern', () => {
+  it('builds wiki dosearchsite URL matching siteSearch CQL pattern', () => {
     const p = parseWebSearchQuery('c open source', 'google');
-    const r = buildWebSearchUrl(p, { confluenceSiteUrl: 'https://confluence.zebra.com' });
+    const r = buildWebSearchUrl(p, { [WIKI_SITE_OPT]: WIKI_SITE_URL });
     expect('url' in r).toBe(true);
     if ('url' in r) {
       expect(r.url).toBe(
-        'https://confluence.zebra.com/dosearchsite.action?cql='
+        WIKI_SITE_URL + '/dosearchsite.action?cql='
           + encodeURIComponent('siteSearch ~ "open source"'),
       );
     }
   });
 
-  it('escapes backslash and quote inside Jira/Confluence search fragment', () => {
+  it('escapes backslash and quote inside tracker/wiki search fragment', () => {
     expect(escapeAtlassianSearchQuotedFragment('a\\b"c')).toBe('a\\\\b\\"c');
   });
 });
@@ -154,8 +182,8 @@ describe('getWebSearchEngineDisplayName', () => {
     expect(getWebSearchEngineDisplayName('youtube')).toBe('YouTube');
     expect(getWebSearchEngineDisplayName('github')).toBe('GitHub');
     expect(getWebSearchEngineDisplayName('gcp')).toBe('Google Cloud console');
-    expect(getWebSearchEngineDisplayName('jira')).toBe('Jira');
-    expect(getWebSearchEngineDisplayName('confluence')).toBe('Confluence');
+    expect(getWebSearchEngineDisplayName(TRACKER_KEY)).toBe(TRACKER_DISPLAY);
+    expect(getWebSearchEngineDisplayName(WIKI_KEY)).toBe(WIKI_DISPLAY);
   });
 
   it('capitalizes first letter for unknown engines', () => {
@@ -187,22 +215,22 @@ describe('getWebSearchPrefixHintLines', () => {
 });
 
 describe('webSearchSiteUrlToastMessage', () => {
-  it('returns Jira message for no-jira-site', () => {
-    expect(webSearchSiteUrlToastMessage('no-jira-site')).toContain('Jira site URL');
+  it('returns tracker-site message for tracker error code', () => {
+    expect(webSearchSiteUrlToastMessage(NO_TRACKER_SITE_ERR)).toContain(TRACKER_DISPLAY + ' site URL');
   });
 
-  it('returns Confluence message for no-confluence-site', () => {
-    expect(webSearchSiteUrlToastMessage('no-confluence-site')).toContain('Confluence site URL');
+  it('returns wiki-site message for wiki error code', () => {
+    expect(webSearchSiteUrlToastMessage(NO_WIKI_SITE_ERR)).toContain(WIKI_DISPLAY + ' site URL');
   });
 });
 
 describe('webSearchSiteUrlPreviewLabel', () => {
-  it('returns Jira preview label', () => {
-    expect(webSearchSiteUrlPreviewLabel('no-jira-site', 'Jira')).toContain('set Jira site URL');
+  it('returns tracker preview label', () => {
+    expect(webSearchSiteUrlPreviewLabel(NO_TRACKER_SITE_ERR, TRACKER_DISPLAY)).toContain('set ' + TRACKER_DISPLAY + ' site URL');
   });
 
-  it('returns Confluence preview label', () => {
-    expect(webSearchSiteUrlPreviewLabel('no-confluence-site', 'Confluence')).toContain('set Confluence site URL');
+  it('returns wiki preview label', () => {
+    expect(webSearchSiteUrlPreviewLabel(NO_WIKI_SITE_ERR, WIKI_DISPLAY)).toContain('set ' + WIKI_DISPLAY + ' site URL');
   });
 });
 

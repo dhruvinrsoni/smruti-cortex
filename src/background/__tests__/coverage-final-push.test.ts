@@ -852,14 +852,14 @@ describe('search-engine — additional branch gaps', () => {
       settingsMap.sortBy = 'alphabetical';
       setupMocks({
         items: [
-          makeItem({ url: 'https://z.com/test', title: 'Zebra Test', hostname: 'z.com' }),
+          makeItem({ url: 'https://z.com/test', title: 'Omega Test', hostname: 'z.com' }),
           makeItem({ url: 'https://a.com/test', title: 'Alpha Test', hostname: 'a.com' }),
         ],
       });
       const { runSearch } = await import('../search/search-engine');
       const results = await runSearch('test');
       expect(results[0].title).toBe('Alpha Test');
-      expect(results[1].title).toBe('Zebra Test');
+      expect(results[1].title).toBe('Omega Test');
       settingsMap.sortBy = 'best-match';
     });
   });
