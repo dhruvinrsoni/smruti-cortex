@@ -45,6 +45,9 @@ import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shar
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
 import { getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
+import type { MaskingLevel } from '../shared/data-masker';
+import { STAGE_TIMINGS, waitRemaining } from '../shared/report-chooser-utils';
+import { buildReportChooser } from '../shared/report-chooser-modal';
 import {
   type PaletteCommand,
   ALL_COMMANDS,
@@ -3654,6 +3657,99 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  /**
+   * Render the masking-level chooser inside the overlay's shadowRoot.
+   * Mirrors the popup's `showReportChooser` via `buildReportChooser` so
+   * label / timing / option changes stay in sync with the popup.
+   */
+  function showOverlayReportChooser(opts: { onPick: (level: MaskingLevel) => void; onCancel?: () => void }): void {
+    if (!shadowRoot) { return; }
+    const handle = buildReportChooser(document, opts, {
+      overlayCss: 'position:absolute;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;border-radius:12px;',
+      dialogCss: 'background:var(--bg-container,#fff);color:var(--text-primary,#1a1a1a);border-radius:12px;padding:20px 24px;max-width:360px;width:92%;box-shadow:0 8px 30px rgba(0,0,0,0.3);font-family:inherit;',
+      descCss: 'font-size:11px;color:var(--text-secondary,#666);line-height:1.4;',
+      cancelBtnCss: 'padding:6px 16px;font-size:12px;font-weight:600;border:1px solid #d1d5db;color:var(--text-primary,#333);background:transparent;border-radius:6px;cursor:pointer;',
+    });
+    const container = shadowRoot.querySelector('.container');
+    if (container) {
+      (container as HTMLElement).style.position = 'relative';
+      container.appendChild(handle.root);
+      handle.defaultFocusButton?.focus();
+    } else {
+      handle.dispose();
+    }
+  }
+
+  function ensureReportPulseStyle(): void {
+    if (!shadowRoot) { return; }
+    if (shadowRoot.getElementById('qs-report-pulse-style')) { return; }
+    const style = document.createElement('style');
+    style.id = 'qs-report-pulse-style';
+    style.textContent = '@keyframes qs-report-pulse{0%,100%{opacity:1}50%{opacity:0.55}} .report-ranking-btn.pulsing{animation:qs-report-pulse 1s ease-in-out infinite}';
+    shadowRoot.appendChild(style);
+  }
+
+  interface OverlayReportResponse {
+    status?: 'OK' | 'ERROR';
+    method?: 'api' | 'url';
+    issueUrl?: string;
+    reportBody?: string;
+    message?: string;
+  }
+
+  function runOverlayReportFlow(btn: HTMLButtonElement, level: MaskingLevel): void {
+    const RED = '#ef4444';
+    const GREEN = '#10b981';
+    const revert = () => {
+      btn.textContent = 'Report';
+      btn.style.color = RED;
+      btn.style.borderColor = RED;
+      btn.classList.remove('pulsing');
+      btn.disabled = false;
+    };
+
+    btn.disabled = true;
+    btn.classList.add('pulsing');
+    btn.style.color = RED;
+    btn.style.borderColor = RED;
+    btn.textContent = 'Generating…';
+
+    const method = cachedSettings?.developerGithubPat ? 'api' : 'url';
+    const tGen = performance.now();
+
+    chrome.runtime.sendMessage({ type: 'GENERATE_RANKING_REPORT', maskingLevel: level, method }, (raw) => {
+      const resp: OverlayReportResponse | null = chrome.runtime.lastError ? null : (raw ?? null);
+      (async () => {
+        await waitRemaining(tGen, STAGE_TIMINGS.minGen);
+        btn.textContent = 'Copying…';
+        const tCopy = performance.now();
+
+        if (resp?.status === 'OK') {
+          try {
+            await navigator.clipboard.writeText(resp.reportBody || '');
+          } catch (e) {
+            log.debug('bugReport', 'Clipboard write failed', e);
+          }
+          await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+          btn.classList.remove('pulsing');
+          btn.textContent = resp.method === 'api' ? 'Filed & Copied!' : 'Copied!';
+          btn.style.color = GREEN;
+          btn.style.borderColor = GREEN;
+          if (resp.method === 'url' && resp.issueUrl) {
+            showReportConfirmation(resp.issueUrl);
+          }
+          setTimeout(revert, STAGE_TIMINGS.successHold);
+        } else {
+          await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+          btn.classList.remove('pulsing');
+          btn.textContent = resp?.message || 'Error';
+          btn.style.color = RED;
+          setTimeout(revert, STAGE_TIMINGS.errorHold);
+        }
+      })().catch((e) => log.debug('bugReport', 'Staged flow failed', e));
+    });
+  }
+
   function updateOverlayReportButton(hasResults: boolean): void {
     if (!footerEl) { return; }
     let btn = footerEl.querySelector('.report-ranking-btn') as HTMLButtonElement | null;
@@ -3667,40 +3763,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     btn.textContent = 'Report';
     btn.title = 'Report ranking issue to GitHub';
     btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
+    ensureReportPulseStyle();
+
     btn.addEventListener('click', () => {
-      btn!.disabled = true;
-      btn!.textContent = 'Sending...';
-      const method = cachedSettings?.developerGithubPat ? 'api' : 'url';
-      chrome.runtime.sendMessage({
-        type: 'GENERATE_RANKING_REPORT',
-        maskingLevel: 'partial',
-        method,
-      }, (resp) => {
-        if (chrome.runtime.lastError) { btn!.textContent = 'Error'; btn!.style.color = '#ef4444'; return; }
-        if (resp?.status === 'OK') {
-          if (resp.method === 'api') {
-            btn!.textContent = 'Filed!';
-            btn!.style.color = '#10b981';
-            btn!.style.borderColor = '#10b981';
-          } else {
-            navigator.clipboard.writeText(resp.reportBody || '').catch(e => log.debug('bugReport', 'Clipboard write failed', e));
-            btn!.textContent = 'Copied!';
-            btn!.style.color = '#10b981';
-            btn!.style.borderColor = '#10b981';
-            showReportConfirmation(resp.issueUrl);
-          }
-        } else {
-          btn!.textContent = resp?.message || 'Error';
-          btn!.style.color = '#ef4444';
-        }
-        setTimeout(() => {
-          if (btn) {
-            btn.textContent = 'Report';
-            btn.style.color = '#ef4444';
-            btn.style.borderColor = '#ef4444';
-            btn.disabled = false;
-          }
-        }, 3000);
+      if (!btn || btn.disabled) { return; }
+      const button = btn;
+      showOverlayReportChooser({
+        onPick: (level) => runOverlayReportFlow(button, level),
       });
     });
     footerEl.appendChild(btn);
