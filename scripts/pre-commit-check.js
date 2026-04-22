@@ -144,6 +144,27 @@ async function main() {
     console.log('🔒 FORCE_PRE_COMMIT set — running all checks regardless of file types');
   }
 
+  // Blocklist guard: fast scan of staged files for banned terms (company-specific
+  // identifiers, etc.). Runs on EVERY commit — even docs-only — because docs are
+  // exactly where accidental leaks tend to land. Terms live in
+  // scripts/blocklist-terms.txt; pragmas (`blocklist-allow`,
+  // `blocklist-allow-next`) allow line-level exceptions for legitimate needs.
+  console.log('\n🛡️  PHASE -1: Blocklist scan (staged files)');
+  try {
+    execSync('node scripts/check-blocklist.mjs', {
+      stdio: 'inherit',
+      shell: true,
+      timeout: 30000,
+    });
+    console.log('✅ Blocklist scan clean');
+  } catch (err) {
+    console.error('\n❌ Blocklist scan reported hits — commit blocked.');
+    console.error('   Fix the highlighted lines or, if the match is a genuine');
+    console.error('   false positive, add a `// blocklist-allow` pragma on the');
+    console.error('   same line (use sparingly — pragmas are reviewed).');
+    process.exit(1);
+  }
+
   // Auto-fix lint errors on staged .ts files before build.
   // Shift-left gate: code is corrected at commit time regardless of origin.
   const tsFiles = productFiles.filter(f => f.endsWith('.ts') || f.endsWith('.tsx'));
