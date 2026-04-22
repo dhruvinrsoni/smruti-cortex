@@ -13,7 +13,7 @@ import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
-import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
 import {
   type PaletteCommand,
   ALL_COMMANDS,
@@ -542,6 +542,18 @@ function initializePopup() {
       chip.type = 'button';
 
       chip.addEventListener('click', () => {
+        // Prerequisite gate: a chip declaring `requires` (e.g. Semantic needs
+        // Ollama) is a no-op while its prerequisite is off. We surface a
+        // toast so the user understands why their click did nothing.
+        if (def.requires) {
+          const prereq = SettingsManager.getSetting(def.requires);
+          if (!prereq) {
+            if (def.disabledToast) {
+              showToast(def.disabledToast, 'warning');
+            }
+            return;
+          }
+        }
         if (def.type === 'boolean') {
           const cur = SettingsManager.getSetting(def.key) as boolean;
           SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, errorMeta(e)));
@@ -575,16 +587,25 @@ function initializePopup() {
       if (!def) {return;}
 
       const val = SettingsManager.getSetting(key);
+      const isDisabled = def.requires
+        ? evaluateChipDisabled(def, { [def.requires]: SettingsManager.getSetting(def.requires) } as Partial<AppSettings>)
+        : false;
+      chip.classList.toggle('disabled', isDisabled);
+      chip.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
 
       if (def.type === 'boolean') {
         const isActive = Boolean(val);
-        chip.classList.toggle('active', isActive);
-        chip.title = isActive ? def.tooltipOn : def.tooltipOff;
+        chip.classList.toggle('active', isActive && !isDisabled);
+        chip.title = isDisabled
+          ? (def.disabledTooltip ?? def.tooltipOff)
+          : (isActive ? def.tooltipOn : def.tooltipOff);
         chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
       } else if (def.type === 'cycle') {
         const cs = getCycleState(def, val);
-        chip.classList.add('active');
-        chip.title = `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
+        chip.classList.toggle('active', !isDisabled);
+        chip.title = isDisabled
+          ? (def.disabledTooltip ?? def.tooltipOff)
+          : `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
         chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
       }
     });

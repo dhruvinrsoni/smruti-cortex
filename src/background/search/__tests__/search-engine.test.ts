@@ -1494,5 +1494,26 @@ describe('search-engine', () => {
       await runSearch('example', { skipAI: true });
       expect(getLastAIStatus()?.semantic).toBe('disabled');
     });
+
+    // Companion lock for the new Semantic toolbar chip. The chip renders
+    // disabled when `ollamaEnabled=false` (with a toast on click), but if a
+    // user persists `embeddingsEnabled=true` while `ollamaEnabled=false`
+    // through the Settings modal, search still attempts semantic scoring
+    // (skipEmbeddingThisPhase is false — `skipAI && keywordAIEnabled` are
+    // both false). This test locks that behavior so the chip UX (no-op +
+    // toast) isn't silently broken by a future refactor that ties the two
+    // settings together.
+    it('semantic stays active when ollamaEnabled=false but embeddingsEnabled=true (skipEmbeddingThisPhase is false)', async () => {
+      settingsMap.embeddingsEnabled = true;
+      settingsMap.ollamaEnabled = false;
+      setupCoverageMocks({
+        items: [makeItem({ url: 'https://example.com', title: 'Example Page', hostname: 'example.com' })],
+        isCircuitBreakerOpen: () => false,
+        generateEmbedding: async () => ({ success: true, embedding: [0.1, 0.2, 0.3] }),
+      });
+      const { runSearch, getLastAIStatus } = await import('../search-engine');
+      await runSearch('example');
+      expect(getLastAIStatus()?.semantic).toBe('active');
+    });
   });
 });

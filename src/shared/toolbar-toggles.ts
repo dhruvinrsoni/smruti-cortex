@@ -21,6 +21,18 @@ export interface ToolbarToggleDef {
     tooltipOn: string;
     tooltipOff: string;
     cycleValues?: CycleValue[];
+    /**
+     * Optional prerequisite: the chip is rendered in a disabled/greyed state
+     * when the referenced setting is falsy. A click on a disabled chip is a
+     * no-op that surfaces `disabledToast` instead of flipping `key`. Used to
+     * prevent "silent no-op toggles" (e.g. turning Semantic ON while AI /
+     * Ollama is OFF would persist a flag that can never produce embeddings).
+     */
+    requires?: keyof AppSettings;
+    /** Title shown on the chip when the prerequisite is not met. */
+    disabledTooltip?: string;
+    /** Toast copy surfaced when the user clicks a disabled chip. */
+    disabledToast?: string;
 }
 
 /**
@@ -35,6 +47,20 @@ export const TOOLBAR_TOGGLE_DEFS: readonly ToolbarToggleDef[] = [
         label: 'AI',
         tooltipOn: 'AI keyword expansion ON (Ollama)',
         tooltipOff: 'AI keyword expansion OFF',
+    },
+    {
+        key: 'embeddingsEnabled',
+        type: 'boolean',
+        icon: '🧠',
+        label: 'Semantic',
+        tooltipOn: 'Semantic search ON (embeddings boost ranking)',
+        tooltipOff: 'Semantic search OFF',
+        // Semantic scoring needs the embedding pipeline, which is Ollama-backed.
+        // If Ollama is off, toggling `embeddingsEnabled` on would persist a flag
+        // that cannot produce embeddings — so we gate the chip on `ollamaEnabled`.
+        requires: 'ollamaEnabled',
+        disabledTooltip: 'Turn on AI (Ollama) first to use Semantic search',
+        disabledToast: 'Enable AI first — Semantic needs Ollama for embeddings.',
     },
     {
         key: 'indexBookmarks',
@@ -151,4 +177,24 @@ export function getNextCycleValue(def: ToolbarToggleDef, currentValue: unknown):
     const idx = def.cycleValues.findIndex(cv => cv.value === currentValue);
     const nextIdx = (idx + 1) % def.cycleValues.length;
     return def.cycleValues[nextIdx].value;
+}
+
+/**
+ * Decide whether a chip should render in the disabled/greyed state for the
+ * given settings snapshot. Kept pure + framework-free so it can be shared
+ * verbatim by popup (SettingsManager-backed) and quick-search
+ * (cachedSettings-backed) and unit-tested without a DOM.
+ *
+ * Returns false when the chip has no `requires` prerequisite, or the
+ * prerequisite setting is truthy. Returns true when the prerequisite is
+ * present and falsy (including `undefined` — unset is treated as off, to
+ * match the boolean chip rendering convention).
+ */
+export function evaluateChipDisabled(
+    def: ToolbarToggleDef,
+    settings: Partial<AppSettings> | null | undefined,
+): boolean {
+    if (!def.requires) {return false;}
+    const value = settings?.[def.requires];
+    return !value;
 }

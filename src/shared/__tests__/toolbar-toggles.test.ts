@@ -8,6 +8,7 @@ import {
   getToggleDef,
   getCycleState,
   getNextCycleValue,
+  evaluateChipDisabled,
   type ToolbarToggleDef,
 } from '../toolbar-toggles';
 
@@ -85,5 +86,57 @@ describe('toolbar-toggles', () => {
       cycleValues: [],
     };
     expect(getNextCycleValue(fake, 'list')).toBe('list');
+  });
+
+  describe('Semantic chip registry entry', () => {
+    it('has expected shape with requires/disabledTooltip/disabledToast', () => {
+      const def = getToggleDef('embeddingsEnabled');
+      expect(def).toBeDefined();
+      expect(def?.icon).toBe('🧠');
+      expect(def?.label).toBe('Semantic');
+      expect(def?.type).toBe('boolean');
+      expect(def?.tooltipOn).toMatch(/semantic/i);
+      expect(def?.tooltipOff).toMatch(/semantic/i);
+      expect(def?.requires).toBe('ollamaEnabled');
+      expect(def?.disabledTooltip).toMatch(/ollama|AI/i);
+      expect(def?.disabledToast).toMatch(/enable.*ai/i);
+    });
+
+    it('is NOT included in DEFAULT_TOOLBAR_TOGGLES (opt-in)', () => {
+      expect(DEFAULT_TOOLBAR_TOGGLES).not.toContain('embeddingsEnabled');
+    });
+  });
+
+  describe('evaluateChipDisabled', () => {
+    const noPrereq: ToolbarToggleDef = {
+      key: 'ollamaEnabled',
+      type: 'boolean',
+      icon: '', label: '', tooltipOn: '', tooltipOff: '',
+    };
+    const withPrereq: ToolbarToggleDef = {
+      key: 'embeddingsEnabled',
+      type: 'boolean',
+      icon: '', label: '', tooltipOn: '', tooltipOff: '',
+      requires: 'ollamaEnabled',
+    };
+
+    it('returns false when no requires prerequisite is declared', () => {
+      expect(evaluateChipDisabled(noPrereq, { ollamaEnabled: false })).toBe(false);
+      expect(evaluateChipDisabled(noPrereq, {})).toBe(false);
+    });
+
+    it('returns true when prerequisite setting is false', () => {
+      expect(evaluateChipDisabled(withPrereq, { ollamaEnabled: false })).toBe(true);
+    });
+
+    it('returns true when prerequisite setting is undefined (unset => off)', () => {
+      expect(evaluateChipDisabled(withPrereq, {})).toBe(true);
+      expect(evaluateChipDisabled(withPrereq, null)).toBe(true);
+      expect(evaluateChipDisabled(withPrereq, undefined)).toBe(true);
+    });
+
+    it('returns false when prerequisite setting is true', () => {
+      expect(evaluateChipDisabled(withPrereq, { ollamaEnabled: true })).toBe(false);
+    });
   });
 });

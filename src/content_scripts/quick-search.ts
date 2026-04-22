@@ -44,7 +44,7 @@ import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
-import { getToggleDef, getCycleState, getNextCycleValue } from '../shared/toolbar-toggles';
+import { getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
 import {
   type PaletteCommand,
   ALL_COMMANDS,
@@ -830,6 +830,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       border-color: var(--accent-color);
       opacity: 1;
       box-shadow: 0 0 8px rgba(13, 110, 253, 0.4);
+    }
+    .toggle-chip.disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      box-shadow: none;
+      background: transparent;
+      color: var(--text-secondary);
+      border-color: var(--bg-hover);
+    }
+    .toggle-chip.disabled:hover {
+      opacity: 0.45;
     }
     .toggle-chip .chip-icon {
       font-size: 12px;
@@ -3816,6 +3827,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
         const s = cachedSettings as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        // Prerequisite gate: chips declaring `requires` (e.g. Semantic needs
+        // Ollama) are inert until the prerequisite is satisfied. Surface a
+        // toast so the user understands why nothing changed.
+        if (def.requires) {
+          const prereq = s?.[def.requires];
+          if (!prereq) {
+            if (def.disabledToast) {
+              showToast(def.disabledToast, 'warning');
+            }
+            return;
+          }
+        }
         if (def.type === 'boolean') {
           const cur = s?.[def.key] as boolean ?? false;
           const next = !cur;
@@ -3856,16 +3879,25 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (!def) {return;}
 
       const val = (cachedSettings as any)?.[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const isDisabled = def.requires
+        ? evaluateChipDisabled(def, cachedSettings as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        : false;
+      chip.classList.toggle('disabled', isDisabled);
+      chip.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
 
       if (def.type === 'boolean') {
         const isActive = Boolean(val);
-        chip.classList.toggle('active', isActive);
-        chip.title = isActive ? def.tooltipOn : def.tooltipOff;
+        chip.classList.toggle('active', isActive && !isDisabled);
+        chip.title = isDisabled
+          ? (def.disabledTooltip ?? def.tooltipOff)
+          : (isActive ? def.tooltipOn : def.tooltipOff);
         chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
       } else if (def.type === 'cycle') {
         const cs = getCycleState(def, val);
-        chip.classList.add('active');
-        chip.title = `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
+        chip.classList.toggle('active', !isDisabled);
+        chip.title = isDisabled
+          ? (def.disabledTooltip ?? def.tooltipOff)
+          : `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
         chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
       }
     });
