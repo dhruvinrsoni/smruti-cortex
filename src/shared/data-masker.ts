@@ -139,12 +139,12 @@ function effectiveTldLength(parts: string[]): number {
  * Strategy — position-based, no whitelist needed:
  *   TLD (.com, .co.uk)            → always visible
  *   2-part domains (github.com)   → keep as-is (SLD is the site identity)
- *   3+ parts (jira.zebra.com)     → SLD is the org name → redact
+ *   3+ parts (app.acme.com)       → SLD is the org name → redact
  *   Internal TLDs (.local, .corp) → redact all non-TLD parts
  *   Query-matching parts          → always preserved
  *
  * Examples:
- *   jira.zebra.com   + ["jira"]       → jira.z••ra.com
+ *   app.acme.com     + ["app"]        → app.a••e.com
  *   github.com       + ["test"]       → github.com         (2-part, kept)
  *   app.company.co.uk + ["app"]       → app.co••••y.co.uk  (compound TLD)
  *   wiki.acme.local  + []             → ••••.••••.local    (internal TLD)

@@ -51,9 +51,9 @@ export interface AppSettings {
     commandPaletteOnboarded?: boolean;   // True after user has seen the first-use hint
     /** Default ?? engine when no prefix: google | youtube | github | gcp */
     webSearchEngine?: string;
-    /** Jira site origin (e.g. https://jira.zebra.com) for ?? j */
+    /** Tracker site origin (e.g. https://tracker.example.com) for ?? j */
     jiraSiteUrl?: string;
-    /** Confluence site origin (e.g. https://confluence.zebra.com) for ?? c */
+    /** Wiki site origin (e.g. https://wiki.example.com) for ?? c */
     confluenceSiteUrl?: string;
     // Advanced browser commands — opt-in for tab power, tab groups, browsing data
     advancedBrowserCommands?: boolean;
