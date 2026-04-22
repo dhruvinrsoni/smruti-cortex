@@ -1,7 +1,7 @@
 // Tests for data-masker.ts — privacy masking for ranking reports
 
 import { describe, it, expect } from 'vitest';
-import { maskTitle, maskUrl, maskMetaDescription, type MaskingLevel } from '../data-masker';
+import { maskTitle, maskUrl, maskMetaDescription, maskQuery, maskToken, type MaskingLevel } from '../data-masker';
 
 describe('maskTitle', () => {
   const tokens = ['confluence', 'pto'];
@@ -176,18 +176,82 @@ describe('maskMetaDescription', () => {
       .toBe('A description about testing');
   });
 
-  it('truncates for partial', () => {
+  it('truncates for partial (10 chars + ellipsis)', () => {
     const result = maskMetaDescription('A very long description that goes on and on', tokens, 'partial');
-    expect(result).toHaveLength(23); // 20 chars + "..."
+    expect(result).toHaveLength(13); // 10 chars + "..."
     expect(result).toMatch(/\.\.\.$/);
+    expect(result.startsWith('A very lon')).toBe(true);
   });
 
   it('returns short strings unchanged for partial', () => {
     expect(maskMetaDescription('Short', tokens, 'partial')).toBe('Short');
   });
 
+  it('returns strings <= 10 chars unchanged for partial', () => {
+    expect(maskMetaDescription('Ten chars!', tokens, 'partial')).toBe('Ten chars!');
+  });
+
   it('returns dots for full', () => {
     expect(maskMetaDescription('Anything here', tokens, 'full')).toBe('•••');
+  });
+});
+
+describe('maskQuery', () => {
+  it('returns raw query at level=none', () => {
+    expect(maskQuery('project dashboard', ['project', 'dashboard'], 'none'))
+      .toBe('project dashboard');
+  });
+
+  it('returns raw query at level=partial (query is the repro hook)', () => {
+    expect(maskQuery('project dashboard', ['project', 'dashboard'], 'partial'))
+      .toBe('project dashboard');
+  });
+
+  it('hashes query and reports token count at level=full', () => {
+    const result = maskQuery('project dashboard', ['project', 'dashboard'], 'full');
+    expect(result).toMatch(/^\[[a-z0-9]{1,8}\] \(2 tokens\)$/);
+    expect(result).not.toContain('project');
+    expect(result).not.toContain('dashboard');
+  });
+
+  it('produces deterministic hashes at level=full', () => {
+    const a = maskQuery('identical', ['identical'], 'full');
+    const b = maskQuery('identical', ['identical'], 'full');
+    expect(a).toBe(b);
+  });
+
+  it('produces different hashes for different queries at level=full', () => {
+    const a = maskQuery('first query', [], 'full');
+    const b = maskQuery('second query', [], 'full');
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('maskToken', () => {
+  it('returns raw token at level=none', () => {
+    expect(maskToken('project', 'none')).toBe('project');
+  });
+
+  it('returns raw token at level=partial', () => {
+    expect(maskToken('project', 'partial')).toBe('project');
+  });
+
+  it('masks token at level=full with first char + dots + length', () => {
+    expect(maskToken('project', 'full')).toBe('p•••(7)');
+    expect(maskToken('go', 'full')).toBe('g•(2)');
+    expect(maskToken('hi', 'full')).toBe('h•(2)');
+  });
+
+  it('caps dots at 3 for long tokens', () => {
+    expect(maskToken('supercalifragilistic', 'full')).toBe('s•••(20)');
+  });
+
+  it('handles single-char tokens at level=full', () => {
+    expect(maskToken('a', 'full')).toBe('(1)');
+  });
+
+  it('handles empty string at level=full', () => {
+    expect(maskToken('', 'full')).toBe('(0)');
   });
 });
 
@@ -198,6 +262,8 @@ describe('masking level type safety', () => {
       expect(() => maskTitle('test', [], level)).not.toThrow();
       expect(() => maskUrl('test', [], level)).not.toThrow();
       expect(() => maskMetaDescription('test', [], level)).not.toThrow();
+      expect(() => maskQuery('test query', ['test'], level)).not.toThrow();
+      expect(() => maskToken('test', level)).not.toThrow();
     }
   });
 });

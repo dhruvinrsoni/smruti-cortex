@@ -292,6 +292,87 @@ describe('generateRankingReport — edge cases', () => {
   });
 });
 
+describe('generateRankingReport — masking gradient', () => {
+  // These tests lock the three-level gradient contract defined in
+  // data-masker.ts. They must fail if future edits silently drift the
+  // relative strength of partial vs full.
+
+  it('level=none exposes query, first title, and first hostname raw', () => {
+    recordSearchSnapshot(makeSnapshot({
+      aiExpandedKeywords: ['leave', 'vacation'],
+    }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.title).toContain('confluence pto');
+    expect(report.query).toBe('confluence pto');
+    expect(report.body).toContain('| Query | `confluence pto` |');
+    expect(report.body).toContain('`confluence`');
+    expect(report.body).toContain('`pto`');
+    expect(report.body).toContain('PTO Calendar');
+    expect(report.body).toContain('confluence.zebra.com');
+    expect(report.body).toContain('`leave`');
+    expect(report.body).toContain('`vacation`');
+  });
+
+  it('level=partial keeps query readable but redacts titles and AI keywords', () => {
+    recordSearchSnapshot(makeSnapshot({
+      aiExpandedKeywords: ['leave', 'vacation'],
+    }));
+    const report = generateRankingReport({ maskingLevel: 'partial' })!;
+    // Query and tokens are the repro hook and stay raw at partial
+    expect(report.body).toContain('| Query | `confluence pto` |');
+    expect(report.body).toContain('`confluence`');
+    expect(report.body).toContain('`pto`');
+    // Titles are partially redacted (non-matching words masked)
+    expect(report.body).not.toContain('Calendar');
+    expect(report.body).not.toContain('Dashboard');
+    // Matched tokens are bolded
+    expect(report.body).toContain('**PTO**');
+    expect(report.body).toContain('**Confluence**');
+    // Domain middles redacted
+    expect(report.body).not.toContain('confluence.zebra.com');
+    // AI keywords redacted per-word (not raw, not a count)
+    expect(report.body).not.toContain('`leave`');
+    expect(report.body).not.toContain('`vacation`');
+    expect(report.body).not.toMatch(/\d+ keywords/);
+    expect(report.body).toMatch(/AI Expanded Keywords \| `[^`]*•[^`]*`/);
+  });
+
+  it('level=full hashes query, removes raw titles/hostnames, and collapses AI keywords to a count', () => {
+    recordSearchSnapshot(makeSnapshot({
+      aiExpandedKeywords: ['leave', 'vacation', 'time-off'],
+    }));
+    const report = generateRankingReport({ maskingLevel: 'full' })!;
+    // Issue title no longer leaks the raw query
+    expect(report.title).not.toContain('confluence pto');
+    expect(report.title).toMatch(/\[Ranking\] "\[[a-z0-9]+\] \(2 tokens\)"/);
+    // report.query is hashed so the URL-stub path cannot leak it either
+    expect(report.query).not.toContain('confluence pto');
+    expect(report.query).toMatch(/^\[[a-z0-9]+\] \(2 tokens\)$/);
+    // Body header
+    expect(report.body).not.toContain('| Query | `confluence pto` |');
+    expect(report.body).toMatch(/\| Query \| `\[[a-z0-9]+\] \(2 tokens\)` \|/);
+    // Tokens list uses the first-char + dots + length shape
+    expect(report.body).not.toMatch(/\| Tokens \| `confluence`/);
+    expect(report.body).toMatch(/\| Tokens \| `c•••\(10\)`, `p••\(3\)` \|/);
+    // AI keywords collapsed to a count
+    expect(report.body).toContain('| AI Expanded Keywords | 3 keywords |');
+    expect(report.body).not.toContain('`leave`');
+    expect(report.body).not.toContain('`vacation`');
+    expect(report.body).not.toContain('`time-off`');
+    // Row titles and hostnames are hashed
+    expect(report.body).not.toContain('Calendar');
+    expect(report.body).not.toContain('Dashboard');
+    expect(report.body).not.toContain('confluence.zebra.com');
+    // Token Hits column is collapsed ("-") at full to avoid duplicating Matches
+    const dashHitsCount = (report.body.match(/\| - \|$/gm) ?? []).length;
+    expect(dashHitsCount).toBeGreaterThanOrEqual(3);
+    // Numeric/structural columns remain visible (the gradient keeps debugging useful)
+    expect(report.body).toContain('0.920');
+    expect(report.body).toContain('| sortBy | best-match |');
+    expect(report.body).toContain('Scorer Breakdown');
+  });
+});
+
 describe('createGitHubIssue', () => {
   const mockFetch = vi.fn();
   beforeEach(() => {

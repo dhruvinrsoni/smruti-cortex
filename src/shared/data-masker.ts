@@ -1,12 +1,28 @@
 // data-masker.ts — Privacy-first data anonymization for ranking reports
 // Keeps matched query tokens visible while redacting everything else
+//
+// Three-level gradient contract (locked by tests in ranking-report.test.ts and
+// data-masker.test.ts — do not soften without updating both):
+//
+//   Field                  | none | partial                    | full
+//   -----------------------|------|----------------------------|----------------------------
+//   Title (row)            | raw  | partial redact             | [hash] **matched**
+//   Domain (row)           | raw  | partial hostname mask      | [hash].tld/•••
+//   Query (report header)  | raw  | raw (repro hook)           | [hash] (N tokens)
+//   Token (report header)  | raw  | raw (already in Tokens)    | first-char + dots + (len)
+//   Meta description       | raw  | first 10 chars + …         | •••
+//
+// The goal is a visible redaction gradient when the report is pasted into a
+// GitHub issue, not just per-field correctness. `partial` keeps the query and
+// token list readable (they are the repro key); `full` hashes them too so the
+// GitHub issue never contains the literal search query.
 
 export type MaskingLevel = 'none' | 'partial' | 'full';
 
 /**
  * Simple deterministic hash for anonymization (not cryptographic).
  */
-function simpleHash(input: string): string {
+export function simpleHash(input: string): string {
     let hash = 0;
     for (let i = 0; i < input.length; i++) {
         const ch = input.charCodeAt(i);
@@ -24,7 +40,7 @@ function simpleHash(input: string): string {
  *   6-8 chars  → 2 + dots + 2      ("Sprint" → "Sp••nt")
  *   9+  chars  → 3 + dots + 2      ("Dashboard" → "Das•••rd")
  */
-function redactWord(word: string): string {
+export function redactWord(word: string): string {
     const len = word.length;
     if (len <= 3) {
         return '•'.repeat(len);
@@ -197,7 +213,7 @@ export function maskUrl(urlOrHostname: string, queryTokens: string[], level: Mas
  * Mask a meta description.
  *
  * - none:    returns unchanged
- * - partial: returns first 20 chars + "..."
+ * - partial: returns first 10 chars + "..." (tightened from 20 so partial truly looks partial)
  * - full:    returns placeholder
  */
 export function maskMetaDescription(meta: string, _queryTokens: string[], level: MaskingLevel): string {
@@ -205,7 +221,40 @@ export function maskMetaDescription(meta: string, _queryTokens: string[], level:
         return meta;
     }
     if (level === 'partial') {
-        return meta.length > 20 ? meta.slice(0, 20) + '...' : meta;
+        return meta.length > 10 ? meta.slice(0, 10) + '...' : meta;
     }
     return '•••';
+}
+
+/**
+ * Mask the search query itself for the ranking-report header.
+ *
+ * - none:    returns unchanged
+ * - partial: returns unchanged — the query is the repro hook; keep it readable
+ * - full:    returns `[hash] (N tokens)` — the GitHub issue must not contain
+ *            the literal query text when the user chose full masking
+ */
+export function maskQuery(query: string, queryTokens: string[], level: MaskingLevel): string {
+    if (level === 'none' || level === 'partial') {
+        return query;
+    }
+    return `[${simpleHash(query)}] (${queryTokens.length} tokens)`;
+}
+
+/**
+ * Mask a single query token for the ranking-report header Tokens list.
+ *
+ * - none:    returns unchanged
+ * - partial: returns unchanged (tokens are already in the Query cell)
+ * - full:    first char + bullet dots + `(len)` e.g. "project" → "p•••(7)"
+ */
+export function maskToken(token: string, level: MaskingLevel): string {
+    if (level === 'none' || level === 'partial') {
+        return token;
+    }
+    if (token.length <= 1) {
+        return `(${token.length})`;
+    }
+    const dotCount = Math.min(token.length - 1, 3);
+    return `${token[0]}${'•'.repeat(dotCount)}(${token.length})`;
 }
