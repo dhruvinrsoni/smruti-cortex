@@ -17,7 +17,7 @@
     { title: 'GitHub - Pull Requests', url: 'https://github.com/pulls', hostname: 'github.com', metaDescription: 'View and manage your pull requests across repositories', visitCount: 142, lastVisit: NOW - 1 * HOUR, isBookmark: true, bookmarkFolders: ['Dev'] },
     { title: 'GitHub Actions - Workflows', url: 'https://github.com/features/actions', hostname: 'github.com', metaDescription: 'Automate CI/CD pipelines with GitHub Actions workflows', visitCount: 46, lastVisit: NOW - 5 * HOUR, isBookmark: true, bookmarkFolders: ['Dev', 'CI/CD'] },
     { title: 'GitLab - Repository Dashboard', url: 'https://gitlab.com/dashboard/projects', hostname: 'gitlab.com', metaDescription: 'DevOps platform with Git repository management and CI/CD pipelines', visitCount: 33, lastVisit: NOW - 1 * DAY, isBookmark: false, bookmarkFolders: [] },
-    { title: 'Bitbucket - Source Code Hosting', url: 'https://bitbucket.org/dashboard', hostname: 'bitbucket.org', metaDescription: 'Git code hosting with built-in CI/CD for teams using Jira', visitCount: 18, lastVisit: NOW - 3 * DAY, isBookmark: false, bookmarkFolders: [] },
+    { title: 'Bitbucket - Source Code Hosting', url: 'https://bitbucket.org/dashboard', hostname: 'bitbucket.org', metaDescription: 'Git code hosting with built-in CI/CD pipelines for agile teams', visitCount: 18, lastVisit: NOW - 3 * DAY, isBookmark: false, bookmarkFolders: [] },
     { title: 'Stack Overflow - How to center a div', url: 'https://stackoverflow.com/questions/19461521', hostname: 'stackoverflow.com', metaDescription: 'CSS centering techniques including flexbox and grid solutions', visitCount: 23, lastVisit: NOW - 3 * DAY, isBookmark: false, bookmarkFolders: [] },
     { title: 'Stack Overflow - JavaScript async await', url: 'https://stackoverflow.com/questions/40400367', hostname: 'stackoverflow.com', metaDescription: 'Understanding async/await patterns and error handling in JavaScript', visitCount: 45, lastVisit: NOW - 1 * DAY, isBookmark: true, bookmarkFolders: ['Dev', 'JS'] },
     { title: 'MDN Web Docs - Array.prototype.map()', url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map', hostname: 'developer.mozilla.org', metaDescription: 'The map method creates a new array from calling a function on every element', visitCount: 56, lastVisit: NOW - 5 * HOUR, isBookmark: true, bookmarkFolders: ['Dev', 'Reference'] },
@@ -58,8 +58,8 @@
     { title: 'Google Drive - My Drive', url: 'https://drive.google.com/drive/my-drive', hostname: 'drive.google.com', metaDescription: 'Cloud storage for files, photos, and documents', visitCount: 55, lastVisit: NOW - 6 * HOUR, isBookmark: false, bookmarkFolders: [] },
     { title: 'Notion - Project Dashboard', url: 'https://www.notion.so/workspace/project-dashboard', hostname: 'notion.so', metaDescription: 'All-in-one workspace for notes, tasks, and project management', visitCount: 89, lastVisit: NOW - 2 * HOUR, isBookmark: true, bookmarkFolders: ['Work'] },
     { title: 'Slack - General Channel', url: 'https://app.slack.com/client/T01/C01general', hostname: 'app.slack.com', metaDescription: 'Team messaging and collaboration platform', visitCount: 156, lastVisit: NOW - 1 * HOUR, isBookmark: false, bookmarkFolders: [] },
-    { title: 'Jira - Sprint Board', url: 'https://mycompany.atlassian.net/jira/boards/1', hostname: 'mycompany.atlassian.net', metaDescription: 'Agile sprint board for tracking issues, tickets, and backlog items', visitCount: 134, lastVisit: NOW - 90 * 60000, isBookmark: true, bookmarkFolders: ['Work', 'Agile'] },
-    { title: 'Atlassian Confluence - Team Wiki', url: 'https://mycompany.atlassian.net/wiki', hostname: 'mycompany.atlassian.net', metaDescription: 'Team wiki for documentation, knowledge base, and project notes', visitCount: 68, lastVisit: NOW - 3 * HOUR, isBookmark: true, bookmarkFolders: ['Work'] },
+    { title: 'Linear - Sprint Board', url: 'https://linear.app/acme/boards/1', hostname: 'linear.app', metaDescription: 'Agile sprint board for tracking issues, tickets, and backlog items', visitCount: 134, lastVisit: NOW - 90 * 60000, isBookmark: true, bookmarkFolders: ['Work', 'Agile'] },
+    { title: 'Notion - Team Wiki', url: 'https://www.notion.so/acme/team-wiki', hostname: 'www.notion.so', metaDescription: 'Team wiki for documentation, knowledge base, and project notes', visitCount: 68, lastVisit: NOW - 3 * HOUR, isBookmark: true, bookmarkFolders: ['Work'] },
     { title: 'Trello - My Boards', url: 'https://trello.com/myboards', hostname: 'trello.com', metaDescription: 'Visual project management with boards, lists, and cards', visitCount: 58, lastVisit: NOW - 12 * HOUR, isBookmark: false, bookmarkFolders: [] },
     { title: 'Asana - My Tasks', url: 'https://app.asana.com/0/home', hostname: 'app.asana.com', metaDescription: 'Work management platform for teams to organize tasks and projects', visitCount: 42, lastVisit: NOW - 8 * HOUR, isBookmark: false, bookmarkFolders: [] },
     { title: 'Monday.com - Work OS', url: 'https://mycompany.monday.com', hostname: 'mycompany.monday.com', metaDescription: 'Team management and workflow automation platform', visitCount: 26, lastVisit: NOW - 2 * DAY, isBookmark: false, bookmarkFolders: [] },
@@ -146,8 +146,8 @@
   // ===== AI EXPANSION MAP =====
 
   const AI_EXPANSION_MAP = {
-    'jira':       ['sprint', 'board', 'ticket', 'issue', 'agile', 'backlog'],
-    'sprint':     ['jira', 'agile', 'board', 'scrum', 'backlog', 'ticket'],
+    'linear':     ['sprint', 'board', 'ticket', 'issue', 'agile', 'backlog'],
+    'sprint':     ['linear', 'agile', 'board', 'scrum', 'backlog', 'ticket'],
     'git':        ['repository', 'commit', 'branch', 'merge', 'pull', 'version'],
     'github':     ['repository', 'pull', 'commit', 'code', 'open-source'],
     'react':      ['component', 'hooks', 'jsx', 'frontend', 'virtual-dom', 'state'],
@@ -186,7 +186,7 @@
 
   const SEMANTIC_MATCHES = {
     'project management': [
-      { url: 'https://mycompany.atlassian.net/jira/boards/1', similarity: 0.89 },
+      { url: 'https://linear.app/acme/boards/1', similarity: 0.89 },
       { url: 'https://trello.com/myboards', similarity: 0.85 },
       { url: 'https://www.notion.so/workspace/project-dashboard', similarity: 0.82 },
       { url: 'https://mycompany.atlassian.net/wiki', similarity: 0.71 },
@@ -265,7 +265,7 @@
     ai: {
       label: 'Try AI:',
       items: [
-        { query: 'jira', hint: 'AI: sprint, board, ticket' },
+        { query: 'linear', hint: 'AI: sprint, board, ticket' },
         { query: 'database', hint: 'AI: mongodb, firebase, sql' },
         { query: 'meeting', hint: 'AI: zoom, teams, conference' },
         { query: 'cloud', hint: 'AI: aws, gcp, azure' },
@@ -275,7 +275,7 @@
     semantic: {
       label: 'Try semantic:',
       items: [
-        { query: 'project management', hint: 'Finds Jira, Trello, Notion' },
+        { query: 'project management', hint: 'Finds Linear, Trello, Notion' },
         { query: 'machine learning', hint: 'Finds Coursera, AI tools' },
         { query: 'web development', hint: 'Finds React, CSS, tutorials' },
         { query: 'team collaboration', hint: 'Finds Slack, Zoom, Teams' },

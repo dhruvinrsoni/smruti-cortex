@@ -26,7 +26,7 @@ body:
     attributes:
       label: Search Query
       description: The exact query you searched for.
-      placeholder: "confluence pto"
+      placeholder: "wiki leave"
     validations:
       required: true
 
@@ -36,8 +36,8 @@ body:
       label: What's Wrong with the Ranking?
       description: Describe which results are misranked and where you expected them.
       placeholder: |
-        Result #8 "Confluence PTO Policy" matches both tokens but appeared below
-        Result #2 "Confluence Login" which only matches one token.
+        Result #8 "Wiki Leave Policy" matches both tokens but appeared below
+        Result #2 "Wiki Login" which only matches one token.
     validations:
       required: true
 

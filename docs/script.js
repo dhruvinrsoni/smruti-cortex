@@ -120,7 +120,7 @@ const SAMPLE_HISTORY = [
     { title: 'Google Drive - My Drive', url: 'drive.google.com/drive/my-drive' },
     { title: 'Notion - Project Dashboard', url: 'notion.so/workspace/project-dashboard' },
     { title: 'Slack - General Channel', url: 'app.slack.com/client/T01/C01general' },
-    { title: 'Jira - Sprint Board', url: 'mycompany.atlassian.net/jira/boards/1' },
+    { title: 'Linear - Sprint Board', url: 'linear.app/acme/boards/1' },
     { title: 'Wikipedia - History of the Internet', url: 'en.wikipedia.org/wiki/History_of_the_Internet' },
     { title: 'Wikipedia - Artificial Intelligence', url: 'en.wikipedia.org/wiki/Artificial_intelligence' },
     { title: 'BBC News - Technology', url: 'bbc.com/news/technology' },

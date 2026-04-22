@@ -45,10 +45,10 @@ Reliability, observability, and release-infrastructure release. **No new permiss
 ### Features
 - **Command palette** — Prefix-based modes transform the search overlay into a universal browser control surface (`/` commands, `>` power, `@` tabs, `#` bookmarks, `??` web search, `?` help)
 - **Advanced browser commands** — ~45 opt-in commands for tab/window management, tab groups, browsing-data cleanup, and Top Sites; gated behind optional permissions (`tabGroups`, `browsingData`, `topSites`)
-- **Web search mode (`??`)** — Search Google, YouTube, GitHub, GCP console, Jira, and Confluence directly from the palette with per-engine prefix shortcuts
+- **Web search mode (`??`)** — Search Google, YouTube, GitHub, GCP console, and a configurable tracker / wiki origin directly from the palette with per-engine prefix shortcuts
 - **Palette discovery (`?`)** — Help mode listing all available prefix modes with descriptions
 - **Palette in popup** — Optional setting to enable prefix modes in the popup (useful on restricted `chrome://` pages)
-- **Jira & Confluence integration** — Configurable site URLs for `?? j` and `?? c` quick search
+- **Tracker & wiki integration** — Configurable site URLs for `?? j` (tracker) and `?? c` (wiki) quick search
 - **Palette diagnostic toasts** — Formatted toast messages for palette command execution feedback
 - **Popup & quick-search resizing** — User-resizable popup and quick-search overlay with drag handles, persisted size, and double-click reset
 - **Unified scroll toggle** — New `unifiedScroll` setting to switch between split and unified scrolling in the popup
@@ -104,7 +104,7 @@ Reliability, observability, and release-infrastructure release. **No new permiss
 
 ### Other
 - New shared modules: `command-registry.ts`, `web-search.ts`, `palette-messages.ts`, `hide-img-on-error.ts`
-- New settings: `commandPaletteEnabled`, `commandPaletteModes`, `commandPaletteInPopup`, `webSearchEngine`, `jiraSiteUrl`, `confluenceSiteUrl`, `advancedBrowserCommands`, `unifiedScroll`
+- New settings: `commandPaletteEnabled`, `commandPaletteModes`, `commandPaletteInPopup`, `webSearchEngine`, tracker/wiki site-URL keys (visible in the settings UI as the `?? j` / `?? c` origin fields), `advancedBrowserCommands`, `unifiedScroll`
 - New manifest permissions: `sessions`, `windows` (required); `tabGroups`, `browsingData`, `topSites` (optional)
 - Settings tab for Command Palette configuration with per-mode toggles
 - Documentation synced across CLAUDE.md, maintenance SKILL.md, and CHANGELOG

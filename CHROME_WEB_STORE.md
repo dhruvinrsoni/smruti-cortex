@@ -67,7 +67,7 @@ Chrome's built-in history (Ctrl+H) reloads a whole page, only searches by title/
 🎨 **Clean UI** — Minimal, distraction-free interface
 🎛️ **Command Palette** — Prefix-based modes: / commands, > power, @ tabs, # bookmarks, ?? web search
 🔧 **Advanced Browser Commands** — ~45 opt-in tab, window, tab group, and browsing data commands
-🌐 **Web Search** — Search Google, YouTube, GitHub, GCP, Jira, Confluence from the overlay
+🌐 **Web Search** — Search Google, YouTube, GitHub, GCP, plus any configured tracker/wiki origin from the overlay
 🤖 **AI Search** — Local keyword expansion via Ollama. 100% private, zero cloud
 🔄 **Dual-Phase Search** — Keyword results appear instantly; AI expansion runs in parallel
 🏷️ **Search Telemetry** — Every result shows how it was found: Keyword Match, AI Recalled, or AI Expanded
@@ -148,7 +148,7 @@ View code, report issues, contribute: github.com/dhruvinrsoni/smruti-cortex
 **Recommended size:** 1280x800px or 640x400px
 
 **Available screenshots** (in `docs/screenshots/`):
-1. **AI Search — 'jira'** — `SmrutiCortex latest quick-search 'jira'...015040.png` — AI cache badge + yellow keyword + green AI-cache highlights (most impressive, use first)
+1. **AI Search — 'github'** — `SmrutiCortex quick-search 'github' keyword AI matches ranked high with 'repository' keyword match with green highlight Screenshot 2026-03-10 002321.png` — AI cache badge + yellow keyword + green AI-cache highlights (most impressive, use first)
 2. **Popup search — 'git smruti'** — `SmrutiCortex popup 'git smruti'...124029.png` — yellow keyword highlights, Best Match results
 3. **Quick-search overlay — 'git smruti'** — `SmrutiCortex latest quick-serach 'git smruti'...123923.png` — inline overlay with LEXICAL/NEURAL badges
 4. **Settings — AI Tab** — `SmrutiCortex Settings AI Tab enable ai search...204945.png` — Ollama config, semantic search, embeddings, AI cache

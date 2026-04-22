@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">97.05% </span>
+                <span class="strong">97.04% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>198/204</span>
+                <span class='fraction'>197/203</span>
             </div>
         
             
@@ -537,14 +537,8 @@
 <a name='L472'></a><a href='#L472'>472</a>
 <a name='L473'></a><a href='#L473'>473</a>
 <a name='L474'></a><a href='#L474'>474</a>
-<a name='L475'></a><a href='#L475'>475</a>
-<a name='L476'></a><a href='#L476'>476</a>
-<a name='L477'></a><a href='#L477'>477</a>
-<a name='L478'></a><a href='#L478'>478</a>
-<a name='L479'></a><a href='#L479'>479</a>
-<a name='L480'></a><a href='#L480'>480</a>
-<a name='L481'></a><a href='#L481'>481</a>
-<a name='L482'></a><a href='#L482'>482</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L475'></a><a href='#L475'>475</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -769,17 +763,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">22x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">22x</span>
-<span class="cline-any cline-yes">107x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">128x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1048,6 +1034,7 @@ import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess } from './ollama-service';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
+import { DEFAULT_GENERATION_MODEL, EMBEDDING_ONLY_NAME_PATTERNS } from '../shared/ollama-models';
 &nbsp;
 const COMPONENT = 'AIKeywordExpander';
 &nbsp;
@@ -1196,7 +1183,7 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
 &nbsp;
   // AI is enabled - call LLM for each uncached keyword individually
   const endpoint = SettingsManager.getSetting('ollamaEndpoint') || <span class="branch-1 cbranch-no" title="branch not covered" >'http://localhost:11434';</span>
-  const model = SettingsManager.getSetting('ollamaModel') || <span class="branch-1 cbranch-no" title="branch not covered" >'llama3.2:1b';</span>
+  const model = SettingsManager.getSetting('ollamaModel') || <span class="branch-1 cbranch-no" title="branch not covered" >DEFAULT_GENERATION_MODEL;</span>
   const timeout = SettingsManager.getSetting('ollamaTimeout') ?? <span class="branch-1 cbranch-no" title="branch not covered" >30000;</span>
   const generationModel = getGenerationModel(model);
 &nbsp;
@@ -1249,26 +1236,18 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
  * Embedding-only models (like embeddinggemma) can't do text generation
  */
 function getGenerationModel(configuredModel: string): string {
-  // Embedding-only models that can't generate text
-  const embeddingOnlyModels = [
-    'embeddinggemma',
-    'nomic-embed',
-    'all-minilm',
-    'mxbai-embed',
-    'bge-'
-  ];
-&nbsp;
-  const isEmbeddingOnly = embeddingOnlyModels.some(m =&gt; 
-    configuredModel.toLowerCase().includes(m)
-  );
+  // Embedding-only patterns live in the shared registry so new embedding
+  // families are picked up here automatically. See src/shared/ollama-models.ts.
+  const lower = configuredModel.toLowerCase();
+  const isEmbeddingOnly = EMBEDDING_ONLY_NAME_PATTERNS.some(p =&gt; lower.includes(p));
 &nbsp;
   if (isEmbeddingOnly) {
-    // Use a small, fast generation model for keyword expansion
-    // User can override by setting a generation-capable model
-    logger.debug('getGenerationModel', 
-      `Model "${configuredModel}" is embedding-only, using llama3.2:1b for keyword expansion`
+    // Fall back to the default generation model for keyword expansion.
+    // User can override by setting a generation-capable `ollamaModel`.
+    logger.debug('getGenerationModel',
+      `Model "${configuredModel}" is embedding-only, using ${DEFAULT_GENERATION_MODEL} for keyword expansion`
     );
-    return 'llama3.2:1b'; // Small, fast, good for simple tasks
+    return DEFAULT_GENERATION_MODEL;
   }
 &nbsp;
   return configuredModel;
@@ -1513,7 +1492,7 @@ function parseKeywordResponse(responseText: string, originalTokens: string[]): s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-20T19:32:41.434Z
+                at 2026-04-22T21:20:27.983Z
             </div>
         <script src="../prettify.js"></script>
         <script>

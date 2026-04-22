@@ -70,7 +70,7 @@ Browser history search is slow. SmrutiCortex indexes everything locally and retr
 | 🏷️ **Search Telemetry** | Live status badges: `Keyword Match [LEXICAL]`, `AI Recalled [ENGRAM]`, `AI Expanded [NEURAL]` |
 | 🧠 **Semantic Search** | Find by meaning with AI embeddings — local only |
 | 🎛️ **Command Palette** | Prefix-based modes: `/` commands, `>` power, `@` tabs, `#` bookmarks, `??` web search, `?` help |
-| 🌐 **Web Search (`??`)** | Search Google, YouTube, GitHub, GCP, Jira, Confluence from the overlay |
+| 🌐 **Web Search (`??`)** | Search Google, YouTube, GitHub, GCP, and configured tracker/wiki origins (e.g. `?? j`, `?? c`) from the overlay |
 | 🔧 **Advanced Browser Commands** | ~45 opt-in tab/window/group/data commands (requires optional permissions) |
 | 🛡️ **Self-Healing** | Auto-recovery from errors, health monitoring |
 | 📊 **Performance Monitor** | Real-time search timing and cache stats |
@@ -130,7 +130,7 @@ npm run build
 | `>` | Power | Admin: rebuild index, clear data, diagnostics, factory reset |
 | `@` | Tabs | Switch between open tabs and recently closed |
 | `#` | Bookmarks | Search and open bookmarks with folder paths |
-| `??` | Web Search | Google, YouTube, GitHub, GCP, Jira (`?? j`), Confluence (`?? c`) |
+| `??` | Web Search | Google, YouTube, GitHub, GCP, tracker site (`?? j`), wiki site (`?? c`) |
 | `?` | Help | Shows all available prefix modes |
 
 Enable/disable modes in Settings → Command Palette. Advanced Browser Commands (~45 tab/window/group commands) available via Settings → General after accepting optional permissions.

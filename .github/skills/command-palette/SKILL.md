@@ -33,7 +33,7 @@ The command palette transforms the quick-search overlay (and optionally popup) i
 | `>` | Power | power | Admin: rebuild index, clear data, diagnostics, factory reset |
 | `@` | Tabs | -- | Switch between open tabs and recently closed |
 | `#` | Bookmarks | -- | Search and open bookmarks with folder paths |
-| `??` | Web Search | -- | Google, YouTube, GitHub, GCP, Jira, Confluence |
+| `??` | Web Search | -- | Google, YouTube, GitHub, GCP, plus configurable tracker/wiki origins |
 | `?` | Help | -- | Shows all available prefix modes |
 
 ## Command Registry (`src/shared/command-registry.ts`)
@@ -87,8 +87,8 @@ interface PaletteCommand {
 | `y` | YouTube | `youtube.com/results?search_query=` |
 | `gh` | GitHub | `github.com/search?q=` |
 | `gc` | GCP Console | `console.cloud.google.com/search?q=` |
-| `j` | Jira | `{jiraSiteUrl}/secure/QuickSearch.jspa?searchString=` |
-| `c` | Confluence | `{confluenceSiteUrl}/dosearchsite.action?queryString=` |
+| `j` | Tracker (`Jira`) | `{jiraSiteUrl}/secure/QuickSearch.jspa?searchString=` | <!-- blocklist-allow -->
+| `c` | Wiki (`Confluence`) | `{confluenceSiteUrl}/dosearchsite.action?queryString=` | <!-- blocklist-allow -->
 
 ### Key Functions
 
@@ -105,8 +105,8 @@ interface PaletteCommand {
 | `commandPaletteInPopup` | boolean | `false` |
 | `commandPaletteOnboarded` | boolean | `false` |
 | `webSearchEngine` | string | `'google'` |
-| `jiraSiteUrl` | string | `''` |
-| `confluenceSiteUrl` | string | `''` |
+| `jiraSiteUrl` | string | `''` | <!-- blocklist-allow -->
+| `confluenceSiteUrl` | string | `''` | <!-- blocklist-allow -->
 | `advancedBrowserCommands` | boolean | `false` |
 
 ## Advanced Browser Commands
