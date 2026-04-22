@@ -236,6 +236,8 @@ ollama pull mxbai-embed-large
 # 3. Enable in Settings → Semantic Search
 ```
 
+**Quick toggle (opt-in chip):** Settings → Toolbar lets you pin a `🧠 Semantic` chip next to the AI chip. It renders greyed out while AI (Ollama) is off — clicking it then surfaces a toast explaining that Ollama is required for embeddings. Flip AI on and the chip lights up, letting you toggle semantic scoring per search without opening Settings.
+
 **How it works:**
 - Background processor generates embeddings for all indexed pages automatically
 - Pause/resume controls in Settings → AI → Embedding Management

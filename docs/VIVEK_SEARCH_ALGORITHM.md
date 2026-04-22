@@ -174,6 +174,11 @@ similarity = (A·B) / (||A|| × ||B||)
 
 Score range: 0.0 to 1.0. Weight is 0.40 when enabled, 0.0 when disabled.
 This allows finding "machine learning tutorials" when searching "ML guides" — meaning-based, not keyword-based.
+
+**Toggling semantic weight.** Two paths change `embeddingsEnabled`:
+
+1. **Settings → Semantic Search** — the canonical toggle.
+2. **`🧠 Semantic` toolbar chip (opt-in)** — pinnable from Settings → Toolbar. The chip is prerequisite-gated on `ollamaEnabled` via the `requires` field in `ToolbarToggleDef`: when AI is off, the chip renders greyed out and clicks surface a toast instead of flipping the setting, so users can't persist a "semantic on, Ollama off" configuration that would silently produce zero embeddings.
 </details>
 
 ---

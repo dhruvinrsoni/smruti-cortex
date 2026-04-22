@@ -82,3 +82,17 @@ interface SettingSchema<T> {
 - Settings persist in `chrome.storage.local` (survives extension updates)
 - IndexedDB stores the pages index (separate from settings)
 - `database.ts` provides `getSetting<T>(key, default)` and `setSetting<T>(key, value)` for raw access
+
+## Prerequisite-gated toolbar chips (`requires`)
+
+Some settings are only meaningful when another setting is on. The toolbar chip registry (`src/shared/toolbar-toggles.ts`) supports this via an optional `requires: keyof AppSettings` field on `ToolbarToggleDef`.
+
+When `requires` is declared:
+
+- The chip renders with the `disabled` class when the required setting is falsy (including `undefined`).
+- A click on a disabled chip is a no-op that surfaces `disabledToast` via `showToast(msg, 'warning')` — it never flips the chip's own setting.
+- The chip re-enables automatically when the prerequisite flips, because `applyPopupSettingSideEffects` / `applySettingSideEffects` always call `sync*ToggleBar()` after any setting write.
+
+Current example: `embeddingsEnabled` chip declares `requires: 'ollamaEnabled'`. This prevents a "semantic on, Ollama off" configuration that would silently produce zero embeddings. The chip is opt-in (not in `DEFAULT_TOOLBAR_TOGGLES`); users pin it via Settings → Toolbar.
+
+The helper `evaluateChipDisabled(def, settings)` (pure, DOM-free) encapsulates the truthy check and is used by both the popup and quick-search renderers; it is unit-tested in `src/shared/__tests__/toolbar-toggles.test.ts`.

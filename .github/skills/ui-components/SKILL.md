@@ -87,3 +87,40 @@ const shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
 - **Keyboard navigation:** Arrow keys move selection, Enter opens, Escape closes
 - **Context recovery:** Auto-reconnect when extension context invalidates (e.g., extension update)
 - **Pre-warming:** Service worker is pinged on visibility change to avoid cold starts
+
+## Toolbar Chips (registry-driven)
+
+Both UIs iterate `TOOLBAR_TOGGLE_DEFS` from `src/shared/toolbar-toggles.ts` to build the chip row above the input:
+
+- **Popup:** `renderToggleBar()` / `syncToggleBar()` in `popup.ts` bind clicks to `SettingsManager.setSetting()`.
+- **Quick-search:** `renderQSToggleBar()` / `syncQSToggleBar()` in `quick-search.ts` bind clicks to `SETTINGS_CHANGED` messages.
+
+### Disabled chip pattern — `requires`
+
+Some settings only make sense when another setting is on. Example: `embeddingsEnabled` (Semantic search) needs `ollamaEnabled` (AI / Ollama) because semantic scoring is backed by Ollama embeddings.
+
+To express that, add a `requires` field to the chip definition:
+
+```ts
+{
+  key: 'embeddingsEnabled',
+  type: 'boolean',
+  icon: '🧠',
+  label: 'Semantic',
+  tooltipOn: 'Semantic search ON (embeddings boost ranking)',
+  tooltipOff: 'Semantic search OFF',
+  requires: 'ollamaEnabled',
+  disabledTooltip: 'Turn on AI (Ollama) first to use Semantic search',
+  disabledToast: 'Enable AI first — Semantic needs Ollama for embeddings.',
+}
+```
+
+Behavior the renderers implement (mirror in both `popup.ts` and `quick-search.ts`):
+
+1. **Sync:** `evaluateChipDisabled(def, settings)` returns true when `requires` is set and falsy. Apply `.toggle-chip.disabled` + `aria-disabled="true"` and use `disabledTooltip` as the title. Do not apply `.active` while disabled.
+2. **Click:** if disabled, call `showToast(def.disabledToast, 'warning')` and return early — do NOT flip `def.key`.
+3. **Recovery:** when the prerequisite flips, `applyPopupSettingSideEffects` / `applySettingSideEffects` call `sync*ToggleBar()`, so the chip re-enables automatically.
+
+### Opt-in chips
+
+Don't add a new chip to `DEFAULT_TOOLBAR_TOGGLES` unless it's useful to every user. Opt-in chips (like Semantic) show up in Settings → Toolbar so power users can pin them. Tests: `src/shared/__tests__/toolbar-toggles.test.ts` locks both the registry shape and the opt-in invariant; `e2e/semantic-chip.spec.ts` exercises the full disabled-click-toast-enable flow.
