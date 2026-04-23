@@ -1,3 +1,24 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  SMRUTICORTEX SEARCH CORE — HIGH-IMPACT FILE                             ║
+ * ║                                                                           ║
+ * ║  This file implements the end-to-end ranking pipeline. Before modifying  ║
+ * ║  inclusion gates or sort tiers, you MUST:                                 ║
+ * ║    1. Read docs/adr/0001-search-matching-contract.md                      ║
+ * ║    2. Ensure tokenizer-golden.test.ts + search-engine.test.ts stay green ║
+ * ║    3. Get approval from the search-core CODEOWNER                         ║
+ * ║                                                                           ║
+ * ║  Contract tag: search-core-boundary-flex-v1                               ║
+ * ║                                                                           ║
+ * ║  Gating rule (non-negotiable):                                            ║
+ * ║    Token-vs-haystack inclusion uses `matchesToken(token, haystack)`      ║
+ * ║    which delegates to `classifyMatch(...) !== MatchType.NONE`.           ║
+ * ║    Do NOT reintroduce raw `haystack.includes(token)` for token inclusion ║
+ * ║    — it silently bypasses the boundary-flex contract. The one legitimate ║
+ * ║    raw `.includes(q)` is the full-query literal check — it compares the  ║
+ * ║    RAW query string (not a token) and has different semantics.           ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 // search-engine.ts — SmrutiCortex Vivek Search Engine
 
 import { getAllIndexedItems, loadEmbeddingsInto } from '../database';
@@ -5,6 +26,7 @@ import { getAllScorers } from './scorer-manager';
 import { IndexedItem } from '../schema';
 import {
     tokenize,
+    classifyMatch,
     classifyTokenMatches,
     graduatedMatchScore,
     countConsecutiveMatches,
@@ -25,6 +47,20 @@ import type { SearchDebugResultEntry, SearchDebugSnapshot } from '../diagnostics
 import { getSearchCache } from './search-cache';
 import { embeddingProcessor } from '../embedding-processor';
 import { buildEmbeddingText } from '../embedding-text';
+
+/**
+ * Single source of truth for "does this query token match this haystack".
+ * Delegates to classifyMatch so every inclusion gate in this file honours
+ * the same contract — including boundary-flex for letter↔digit tokens
+ * (e.g. `module42` matching `Module 42`). See the file-header banner and
+ * the ADR for why this exists.
+ *
+ * Named `matchesToken` (not `hasAnyMatch`) to avoid a TDZ collision with
+ * the local `hasAnyMatch` boolean inside `runSearchInner`.
+ */
+function matchesToken(token: string, haystack: string): boolean {
+    return classifyMatch(token, haystack) !== MatchType.NONE;
+}
 
 // === AI SEARCH STATUS ===
 // Tracks what happened during the last search for user feedback
@@ -316,14 +352,15 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         const searchTitle = item.bookmarkTitle || item.title;
         const haystack = (searchTitle + ' ' + item.url + ' ' + item.hostname + ' ' + (item.metaDescription || '') + ' ' + bookmarkFolders).toLowerCase();
 
-        // Gate inclusion on ORIGINAL tokens only — synonym/AI expansions boost score but don't gate inclusion
-        const originalTokenMatch = originalTokens.some(token => haystack.includes(token));
-        const matchedTokens = searchTokens.filter(token => haystack.includes(token));
+        // Gate inclusion on ORIGINAL tokens only — synonym/AI expansions boost score but don't gate inclusion.
+        // matchesToken() honours the boundary-flex contract (see file banner + ADR).
+        const originalTokenMatch = originalTokens.some(token => matchesToken(token, haystack));
+        const matchedTokens = searchTokens.filter(token => matchesToken(token, haystack));
         const hasTokenMatch = originalTokenMatch;
 
         // Count how many ORIGINAL tokens match anywhere in the item (not expanded tokens)
         // Used as the primary sort criterion so items matching more query terms always rank higher
-        const originalMatchedInHaystack = originalTokens.filter(token => haystack.includes(token)).length;
+        const originalMatchedInHaystack = originalTokens.filter(token => matchesToken(token, haystack)).length;
 
         const titleText = ((item.bookmarkTitle || item.title) || '').toLowerCase();
         const urlText = (item.url || '').toLowerCase();
@@ -370,7 +407,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         
         // Track if match came from AI-expanded keywords
         const aiOnlyTokens = searchTokens.filter(t => !originalTokens.includes(t));
-        const hasAiMatch = aiExpanded && aiOnlyTokens.some(t => haystack.includes(t));
+        const hasAiMatch = aiExpanded && aiOnlyTokens.some(t => matchesToken(t, haystack));
 
         // BOOKMARK STRICT MATCHING: Only show bookmarks when there's a strong match
         // This prevents bookmark flooding when typing partial words like "github"
@@ -382,7 +419,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             // 1. Full word match (word boundary) for original query terms
             // 2. Literal substring match for the full query (3+ chars)
             // 3. All original tokens must match (not just some)
-            const allOriginalTokensMatch = originalTokens.every(token => haystack.includes(token));
+            const allOriginalTokensMatch = originalTokens.every(token => matchesToken(token, haystack));
             const hasWordBoundaryMatch = originalTokens.some(token => {
                 // Check for word boundary match (token surrounded by non-alphanumeric or start/end)
                 const wordBoundaryRegex = new RegExp(`(^|[^a-z0-9])${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');

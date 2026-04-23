@@ -787,7 +787,7 @@ describe('search-engine — additional branch gaps', () => {
       classifyTokenMatches: vi.fn((tokens: string[], text: string) => tokens.map((t: string) => (text.includes(t) ? 1 : 0))),
       graduatedMatchScore: vi.fn(() => 0.5),
       countConsecutiveMatches: vi.fn(() => 0),
-      MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+      classifyMatch: vi.fn((tok: string, text: string) => (text.includes(tok) ? 1 : 0)), MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
       MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
     }));
     vi.doMock('../../core/helpers', () => ({
@@ -1024,7 +1024,7 @@ describe('search-engine — additional branch gaps', () => {
         classifyTokenMatches: vi.fn((tokens: string[], text: string) => tokens.map((t: string) => (text.includes(t) ? 1 : 0))),
         graduatedMatchScore: vi.fn(() => 0.5),
         countConsecutiveMatches: vi.fn(() => 0),
-        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        classifyMatch: vi.fn((tok: string, text: string) => (text.includes(tok) ? 1 : 0)), MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
         MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
       }));
       vi.doMock('../../core/helpers', () => ({
