@@ -1,7 +1,13 @@
 // Tests for report-chooser-utils.ts — shared report-button chooser constants.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { MASKING_OPTIONS, STAGE_TIMINGS, waitRemaining } from '../report-chooser-utils';
+import {
+    MASKING_OPTIONS,
+    STAGE_TIMINGS,
+    waitRemaining,
+    ensureReportButton,
+    REPORT_BUTTON_CLASS,
+} from '../report-chooser-utils';
 
 describe('MASKING_OPTIONS', () => {
     it('has exactly three entries', () => {
@@ -79,5 +85,117 @@ describe('waitRemaining', () => {
         await waitRemaining(performance.now(), 0);
         const after = performance.now();
         expect(after - before).toBeLessThan(50);
+    });
+});
+
+describe('ensureReportButton — stable DOM node invariant', () => {
+    function makeFactory() {
+        const factory = vi.fn(() => {
+            const btn = document.createElement('button');
+            btn.className = REPORT_BUTTON_CLASS;
+            btn.textContent = 'Report';
+            return btn;
+        });
+        return factory;
+    }
+
+    it('exposes the shared class name', () => {
+        expect(REPORT_BUTTON_CLASS).toBe('report-ranking-btn');
+    });
+
+    it('returns null and does NOT call factory when container is null', () => {
+        const factory = makeFactory();
+        const result = ensureReportButton(null, true, factory);
+        expect(result).toBeNull();
+        expect(factory).not.toHaveBeenCalled();
+    });
+
+    it('returns null and does NOT call factory when no button exists and hasResults is false', () => {
+        const container = document.createElement('div');
+        const factory = makeFactory();
+        const result = ensureReportButton(container, false, factory);
+        expect(result).toBeNull();
+        expect(factory).not.toHaveBeenCalled();
+        expect(container.querySelector(`.${REPORT_BUTTON_CLASS}`)).toBeNull();
+    });
+
+    it('creates the button once on first call with hasResults=true', () => {
+        const container = document.createElement('div');
+        const factory = makeFactory();
+        const btn = ensureReportButton(container, true, factory);
+        expect(btn).not.toBeNull();
+        expect(factory).toHaveBeenCalledTimes(1);
+        expect(container.querySelector(`.${REPORT_BUTTON_CLASS}`)).toBe(btn);
+        expect(btn!.hidden).toBe(false);
+    });
+
+    // ── the core regression firewall ───────────────────────────────────────
+    it('returns the SAME DOM node across show → hide → show cycles (identity preserved)', () => {
+        const container = document.createElement('div');
+        const factory = makeFactory();
+
+        const first = ensureReportButton(container, true, factory);
+        const hidden = ensureReportButton(container, false, factory);
+        const reshown = ensureReportButton(container, true, factory);
+
+        expect(first).not.toBeNull();
+        expect(hidden).toBe(first);
+        expect(reshown).toBe(first);
+        expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it('toggles the hidden attribute on every call without detaching the node', () => {
+        const container = document.createElement('div');
+        const factory = makeFactory();
+
+        const btn = ensureReportButton(container, true, factory)!;
+        expect(btn.hidden).toBe(false);
+        expect(btn.parentElement).toBe(container);
+
+        ensureReportButton(container, false, factory);
+        expect(btn.hidden).toBe(true);
+        expect(btn.parentElement).toBe(container);
+
+        ensureReportButton(container, true, factory);
+        expect(btn.hidden).toBe(false);
+        expect(btn.parentElement).toBe(container);
+    });
+
+    it('factory is only ever called once no matter how many cycles happen', () => {
+        const container = document.createElement('div');
+        const factory = makeFactory();
+
+        ensureReportButton(container, true, factory);
+        for (let i = 0; i < 10; i++) {
+            ensureReportButton(container, i % 2 === 0, factory);
+        }
+        expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves textContent writes across a hide/show cycle (proves writes land on the live node)', () => {
+        // This is the specific invariant that makes the Playwright poll reliable:
+        // text written during onPick while hidden is still observable after re-show.
+        const container = document.createElement('div');
+        const factory = makeFactory();
+        const btn = ensureReportButton(container, true, factory)!;
+
+        ensureReportButton(container, false, factory);
+        btn.textContent = 'Generating…';
+
+        ensureReportButton(container, true, factory);
+        expect(btn.textContent).toBe('Generating…');
+        expect(container.querySelector(`.${REPORT_BUTTON_CLASS}`)!.textContent).toBe('Generating…');
+    });
+
+    it('does not create a second button when the container already has one', () => {
+        const container = document.createElement('div');
+        const factory = makeFactory();
+
+        ensureReportButton(container, true, factory);
+        ensureReportButton(container, true, factory);
+        ensureReportButton(container, true, factory);
+
+        expect(container.querySelectorAll(`.${REPORT_BUTTON_CLASS}`)).toHaveLength(1);
+        expect(factory).toHaveBeenCalledTimes(1);
     });
 });

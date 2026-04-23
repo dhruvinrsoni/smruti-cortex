@@ -37,7 +37,7 @@ import {
 } from '../shared/palette-messages';
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import type { MaskingLevel } from '../shared/data-masker';
-import { STAGE_TIMINGS, waitRemaining } from '../shared/report-chooser-utils';
+import { STAGE_TIMINGS, waitRemaining, ensureReportButton } from '../shared/report-chooser-utils';
 import { buildReportChooser } from '../shared/report-chooser-modal';
 import {
   DEFAULT_GENERATION_MODEL,
@@ -445,88 +445,87 @@ function initializePopup() {
   }
 
   function updateReportButton(hasResults: boolean): void {
-    if (!footerEl) { return; }
-    let btn = footerEl.querySelector('.report-ranking-btn') as HTMLButtonElement | null;
-    if (!hasResults) {
-      if (btn) { btn.remove(); }
-      return;
-    }
-    if (btn) { return; }
-    btn = document.createElement('button');
-    btn.className = 'report-ranking-btn';
-    btn.textContent = 'Report';
-    btn.title = 'Report ranking issue to GitHub';
-    btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
-    ensureReportPulseStyle();
-
-    const RED = '#ef4444';
-    const GREEN = '#10b981';
-    const revert = () => {
-      if (!btn) { return; }
+    // Delegate to the shared stable-node helper: created once, then
+    // `hidden` is toggled on every subsequent render. Keeping the same
+    // HTMLButtonElement alive is what makes the Report chooser's `onPick`
+    // closure safe against concurrent renderResults() churn that would
+    // otherwise detach the button mid-staged-flow. See
+    // `src/shared/report-chooser-utils.ts` for the contract.
+    ensureReportButton(footerEl, hasResults, () => {
+      const btn = document.createElement('button');
+      btn.className = 'report-ranking-btn';
       btn.textContent = 'Report';
-      btn.style.color = RED;
-      btn.style.borderColor = RED;
-      btn.classList.remove('pulsing');
-      btn.disabled = false;
-    };
+      btn.title = 'Report ranking issue to GitHub';
+      btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
+      ensureReportPulseStyle();
 
-    btn.addEventListener('click', () => {
-      if (!btn || btn.disabled) { return; }
-      showReportChooser({
-        onPick: async (level) => {
-          const b = btn!;
-          b.disabled = true;
-          b.classList.add('pulsing');
-          b.style.color = RED;
-          b.style.borderColor = RED;
-          b.textContent = 'Generating…';
+      const RED = '#ef4444';
+      const GREEN = '#10b981';
+      const revert = () => {
+        btn.textContent = 'Report';
+        btn.style.color = RED;
+        btn.style.borderColor = RED;
+        btn.classList.remove('pulsing');
+        btn.disabled = false;
+      };
 
-          const method = SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url';
-          const tGen = performance.now();
-          interface RankingReportResponse {
-            status?: 'OK' | 'ERROR';
-            method?: 'api' | 'url';
-            issueUrl?: string;
-            reportBody?: string;
-            message?: string;
-          }
-          let resp: RankingReportResponse | null = null;
-          try {
-            resp = await sendMessage({
-              type: 'GENERATE_RANKING_REPORT',
-              maskingLevel: level,
-              method,
-            }) as RankingReportResponse | null;
-          } catch {
-            resp = null;
-          }
-          await waitRemaining(tGen, STAGE_TIMINGS.minGen);
+      btn.addEventListener('click', () => {
+        if (btn.disabled) { return; }
+        showReportChooser({
+          onPick: async (level) => {
+            btn.disabled = true;
+            btn.classList.add('pulsing');
+            btn.style.color = RED;
+            btn.style.borderColor = RED;
+            btn.textContent = 'Generating…';
 
-          b.textContent = 'Copying…';
-          const tCopy = performance.now();
-
-          if (resp?.status === 'OK') {
-            try { await navigator.clipboard.writeText(resp.reportBody || ''); } catch { /* clipboard may be blocked */ }
-            await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
-            b.classList.remove('pulsing');
-            b.textContent = resp.method === 'api' ? 'Filed & Copied!' : 'Copied!';
-            b.style.color = GREEN;
-            b.style.borderColor = GREEN;
-            if (resp.method === 'url' && resp.issueUrl) {
-              showReportConfirmation(resp.issueUrl);
+            const method = SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url';
+            const tGen = performance.now();
+            interface RankingReportResponse {
+              status?: 'OK' | 'ERROR';
+              method?: 'api' | 'url';
+              issueUrl?: string;
+              reportBody?: string;
+              message?: string;
             }
-            setTimeout(revert, STAGE_TIMINGS.successHold);
-          } else {
-            await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
-            b.classList.remove('pulsing');
-            b.textContent = resp?.message || 'Error';
-            b.style.color = RED;
-            setTimeout(revert, STAGE_TIMINGS.errorHold);
-          }
-        },
+            let resp: RankingReportResponse | null = null;
+            try {
+              resp = await sendMessage({
+                type: 'GENERATE_RANKING_REPORT',
+                maskingLevel: level,
+                method,
+              }) as RankingReportResponse | null;
+            } catch {
+              resp = null;
+            }
+            await waitRemaining(tGen, STAGE_TIMINGS.minGen);
+
+            btn.textContent = 'Copying…';
+            const tCopy = performance.now();
+
+            if (resp?.status === 'OK') {
+              try { await navigator.clipboard.writeText(resp.reportBody || ''); } catch { /* clipboard may be blocked */ }
+              await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+              btn.classList.remove('pulsing');
+              btn.textContent = resp.method === 'api' ? 'Filed & Copied!' : 'Copied!';
+              btn.style.color = GREEN;
+              btn.style.borderColor = GREEN;
+              if (resp.method === 'url' && resp.issueUrl) {
+                showReportConfirmation(resp.issueUrl);
+              }
+              setTimeout(revert, STAGE_TIMINGS.successHold);
+            } else {
+              await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+              btn.classList.remove('pulsing');
+              btn.textContent = resp?.message || 'Error';
+              btn.style.color = RED;
+              setTimeout(revert, STAGE_TIMINGS.errorHold);
+            }
+          },
+        });
       });
+      return btn;
     });
-    footerEl.appendChild(btn);
   }
 
   /**

@@ -46,7 +46,7 @@ import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } 
 import { runTour, type TourStep } from '../shared/tour';
 import { getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
 import type { MaskingLevel } from '../shared/data-masker';
-import { STAGE_TIMINGS, waitRemaining } from '../shared/report-chooser-utils';
+import { STAGE_TIMINGS, waitRemaining, ensureReportButton } from '../shared/report-chooser-utils';
 import { buildReportChooser } from '../shared/report-chooser-modal';
 import {
   type PaletteCommand,
@@ -3751,28 +3751,26 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   function updateOverlayReportButton(hasResults: boolean): void {
-    if (!footerEl) { return; }
-    let btn = footerEl.querySelector('.report-ranking-btn') as HTMLButtonElement | null;
-    if (!hasResults) {
-      if (btn) { btn.remove(); }
-      return;
-    }
-    if (btn) { return; }
-    btn = document.createElement('button');
-    btn.className = 'report-ranking-btn';
-    btn.textContent = 'Report';
-    btn.title = 'Report ranking issue to GitHub';
-    btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
-    ensureReportPulseStyle();
+    // Parity with popup.updateReportButton: the helper keeps the button as
+    // a single stable DOM node and only toggles `hidden`. This protects the
+    // `button` captured by runOverlayReportFlow from being detached mid-flow
+    // by a concurrent overlay re-render.
+    ensureReportButton(footerEl, hasResults, () => {
+      const btn = document.createElement('button');
+      btn.className = 'report-ranking-btn';
+      btn.textContent = 'Report';
+      btn.title = 'Report ranking issue to GitHub';
+      btn.style.cssText = 'padding:2px 8px;font-size:10px;font-weight:600;border:1px solid #ef4444;color:#ef4444;background:transparent;border-radius:4px;cursor:pointer;margin-left:auto;';
+      ensureReportPulseStyle();
 
-    btn.addEventListener('click', () => {
-      if (!btn || btn.disabled) { return; }
-      const button = btn;
-      showOverlayReportChooser({
-        onPick: (level) => runOverlayReportFlow(button, level),
+      btn.addEventListener('click', () => {
+        if (btn.disabled) { return; }
+        showOverlayReportChooser({
+          onPick: (level) => runOverlayReportFlow(btn, level),
+        });
       });
+      return btn;
     });
-    footerEl.appendChild(btn);
   }
 
   function buildRecentSearchesSection(entries: Array<{ query: string; timestamp: number; selectedUrl?: string }>): HTMLElement {

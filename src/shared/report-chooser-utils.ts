@@ -74,3 +74,54 @@ export function waitRemaining(startMs: number, minMs: number): Promise<void> {
     }
     return new Promise((resolve) => setTimeout(resolve, remaining));
 }
+
+/**
+ * Class name used by both popup and quick-search to locate the Report button.
+ * Kept here so tests and production both agree on the selector.
+ */
+export const REPORT_BUTTON_CLASS = 'report-ranking-btn';
+
+/**
+ * Ensure the Report button inside `container` is a stable DOM node across
+ * renders: create it once on first need via `factory`, then toggle its
+ * `hidden` attribute instead of removing/recreating it.
+ *
+ * Why this matters — the Report chooser's `onPick` closure captures the
+ * button reference at click time to drive the staged flow
+ * (`Generating… → Copying… → Copied!`). If a concurrent `renderResults()`
+ * call removed that button and appended a fresh one, the closure would
+ * write to a detached node while Playwright (or the user) polled the live
+ * replacement. Keeping the same node alive makes the flow deterministic.
+ *
+ * Contract:
+ * - Returns the same `HTMLButtonElement` for every call where `container`
+ *   already has a `.${REPORT_BUTTON_CLASS}` child (identity preserved).
+ * - Toggles `btn.hidden = !hasResults` on every call.
+ * - When no button exists yet and `hasResults === false`, returns `null`
+ *   and does NOT call `factory` — no DOM churn for empty-state renders.
+ * - When no button exists yet and `hasResults === true`, calls `factory()`
+ *   (caller must fully configure the returned button — class, listeners,
+ *   styles), appends it, and returns it.
+ *
+ * @param container The footer element that hosts the button.
+ * @param hasResults Whether the result list currently has entries.
+ * @param factory Called once, only on first creation, to build the button.
+ * @returns The stable button, or `null` if none was created yet.
+ */
+export function ensureReportButton(
+    container: HTMLElement | null,
+    hasResults: boolean,
+    factory: () => HTMLButtonElement,
+): HTMLButtonElement | null {
+    if (!container) { return null; }
+    let btn = container.querySelector(`.${REPORT_BUTTON_CLASS}`) as HTMLButtonElement | null;
+    if (btn) {
+        btn.hidden = !hasResults;
+        return btn;
+    }
+    if (!hasResults) { return null; }
+    btn = factory();
+    btn.hidden = false;
+    container.appendChild(btn);
+    return btn;
+}
