@@ -352,7 +352,7 @@ export async function clearExpiredFavicons(): Promise<number> {
             };
 
             cursorRequest.onerror = () => {
-                logger.error('clearExpiredFavicons', 'Failed to clear expired favicons:', cursorRequest.error);
+                logger.error('clearExpiredFavicons', 'Failed to clear expired favicons', errorMeta(cursorRequest.error));
                 reject(cursorRequest.error);
             };
         });

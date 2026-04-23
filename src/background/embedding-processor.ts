@@ -421,7 +421,7 @@ class EmbeddingProcessorImpl {
 
                         // Network/CORS errors are fatal — stop the processor
                         if (errMsg.includes('CORS') || errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
-                            logger.info('runLoop', 'Network/CORS error detected, stopping processor');
+                            logger.warn('runLoop', 'Network/CORS error detected, stopping processor', { error: errMsg });
                             this.state = 'error';
                             this.lastError = errMsg;
                             break;
@@ -433,7 +433,7 @@ class EmbeddingProcessorImpl {
             }
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
-            logger.error('runLoop', 'Fatal error in processing loop:', errMsg);
+            logger.error('runLoop', 'Fatal error in processing loop', errorMeta(error));
             this.state = 'error';
             this.lastError = errMsg;
         } finally {

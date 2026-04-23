@@ -25,7 +25,7 @@ import { SettingsManager } from '../../../core/settings';
 import { getOllamaService, getOllamaConfigFromSettings, isCircuitBreakerOpen, checkMemoryPressure } from '../../ollama-service';
 import { buildEmbeddingText } from '../../embedding-text';
 
-const COMPONENT = 'EmbeddingScorer';
+const log = Logger.forComponent('EmbeddingScorer');
 
 /**
  * Calculate cosine similarity between two vectors
@@ -81,7 +81,7 @@ const embeddingScorer: Scorer = {
     
     // Log high-confidence matches only (reduce log spam)
     if (similarity > 0.7) {
-      Logger.info(COMPONENT, 'score', `🤖 SEMANTIC MATCH: similarity=${similarity.toFixed(2)} | item="${item.title.substring(0, 50)}..."`);
+      log.debug('score', `🤖 SEMANTIC MATCH: similarity=${similarity.toFixed(2)} | item="${item.title.substring(0, 50)}..."`);
     }
     
     return similarity;
@@ -112,7 +112,7 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
     }
     return [];
   } catch (error) {
-    Logger.debug(COMPONENT, 'generateItemEmbedding', 'Failed to generate embedding:', errorMeta(error));
+    log.debug('generateItemEmbedding', 'Failed to generate embedding', errorMeta(error));
     return [];
   }
 }

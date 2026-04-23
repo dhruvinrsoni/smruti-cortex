@@ -423,14 +423,16 @@ describe('OllamaService', () => {
     async function importWithCapturedLogger(): Promise<{
       OllamaService: typeof import('../ollama-service').OllamaService;
       info: ReturnType<typeof vi.fn>;
+      warn: ReturnType<typeof vi.fn>;
       trace: ReturnType<typeof vi.fn>;
     }> {
       vi.resetModules();
       const info = vi.fn();
+      const warn = vi.fn();
       const trace = vi.fn();
       vi.doMock('../../core/logger', () => ({
         Logger: {
-          forComponent: () => ({ debug: vi.fn(), info, warn: vi.fn(), error: vi.fn(), trace }),
+          forComponent: () => ({ debug: vi.fn(), info, warn, error: vi.fn(), trace }),
           setLevel: vi.fn(),
           setLevelInternal: vi.fn(),
         },
@@ -439,7 +441,7 @@ describe('OllamaService', () => {
           : { name: 'non-Error', message: String(err) },
       }));
       const mod = await import('../ollama-service');
-      return { OllamaService: mod.OllamaService, info, trace };
+      return { OllamaService: mod.OllamaService, info, warn, trace };
     }
 
     it('caches a negative "model not found" status so a second call makes no extra fetch', async () => {
@@ -475,8 +477,8 @@ describe('OllamaService', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('emits exactly one INFO line across two identical "model not found" checks', async () => {
-      const { OllamaService, info } = await importWithCapturedLogger();
+    it('emits exactly one WARN line across two identical "model not found" checks', async () => {
+      const { OllamaService, warn } = await importWithCapturedLogger();
       const service = new OllamaService({ model: 'missing-model' });
 
       mockFetch.mockResolvedValue({
@@ -487,15 +489,15 @@ describe('OllamaService', () => {
       await service.checkAvailability();
       await service.checkAvailability();
 
-      const notAvailableCalls = info.mock.calls.filter(
+      const notAvailableCalls = warn.mock.calls.filter(
         (args: unknown[]) =>
           typeof args[1] === 'string' && (args[1] as string).includes('Ollama not available')
       );
       expect(notAvailableCalls).toHaveLength(1);
     });
 
-    it('re-emits INFO when status transitions from unavailable to available', async () => {
-      const { OllamaService, info } = await importWithCapturedLogger();
+    it('re-emits status log when status transitions from unavailable to available', async () => {
+      const { OllamaService, info, warn } = await importWithCapturedLogger();
       const service = new OllamaService({ model: 'test:latest' });
 
       // First check: network failure.
@@ -516,7 +518,7 @@ describe('OllamaService', () => {
         (args: unknown[]) =>
           typeof args[1] === 'string' && (args[1] as string).includes('Ollama available')
       );
-      const unavailable = info.mock.calls.filter(
+      const unavailable = warn.mock.calls.filter(
         (args: unknown[]) =>
           typeof args[1] === 'string' && (args[1] as string).includes('Ollama not available')
       );
@@ -524,21 +526,21 @@ describe('OllamaService', () => {
       expect(available).toHaveLength(1);
     });
 
-    it('does NOT emit a duplicate INFO from generateEmbedding when Ollama is unavailable', async () => {
-      const { OllamaService, info } = await importWithCapturedLogger();
+    it('does NOT emit a duplicate status log from generateEmbedding when Ollama is unavailable', async () => {
+      const { OllamaService, info, warn } = await importWithCapturedLogger();
       const service = new OllamaService({ model: 'test:latest' });
 
-      // checkAvailability path — emits exactly one INFO.
+      // checkAvailability path — emits exactly one WARN.
       mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
       await service.checkAvailability();
 
       // generateEmbedding calls checkAvailability internally; because the
-      // negative status is cached, no new fetch happens and no new INFO
+      // negative status is cached, no new fetch happens and no new WARN
       // should be emitted for the "Cannot generate embedding" branch.
       const result = await service.generateEmbedding('hello world');
       expect(result.success).toBe(false);
 
-      const unavailable = info.mock.calls.filter(
+      const unavailable = warn.mock.calls.filter(
         (args: unknown[]) =>
           typeof args[1] === 'string' && (args[1] as string).includes('Ollama not available')
       );

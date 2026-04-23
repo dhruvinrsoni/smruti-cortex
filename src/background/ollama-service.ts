@@ -222,7 +222,7 @@ export class OllamaService {
     if (status.available) {
       logger.info('checkAvailability', `✅ Ollama available - model '${this.config.model}' loaded`);
     } else {
-      logger.info('checkAvailability', `❌ Ollama not available: ${status.error || 'unknown error'}`);
+      logger.warn('checkAvailability', `❌ Ollama not available: ${status.error || 'unknown error'}`);
     }
   }
 
@@ -491,7 +491,7 @@ export class OllamaService {
           configuredTimeout: this.config.timeout
         });
       }
-      logger.info('generateEmbedding', `❌ Embedding failed after ${duration}ms: ${errorMsg}`);
+      logger.warn('generateEmbedding', `❌ Embedding failed after ${duration}ms: ${errorMsg}`);
 
       return {
         embedding: [],
