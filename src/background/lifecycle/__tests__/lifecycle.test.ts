@@ -750,12 +750,12 @@ describe('port-messaging', () => {
     );
   });
 
-  it('should rate-limit after 30 queries in 1 second', async () => {
+  it('should rate-limit after 60 queries in 1 second', async () => {
     const { onConnectHandler } = setupPortMessaging();
     const port = createTestPort('quick-search');
     onConnectHandler(port);
 
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 65; i++) {
       await port.send({ type: 'SEARCH_QUERY', query: `q${i}` });
     }
     await flushMicrotasks();
@@ -763,12 +763,12 @@ describe('port-messaging', () => {
     const calls = port.postMessage.mock.calls.map((c) => c[0] as Record<string, unknown>);
     const rateLimited = calls.filter((c) => c.error === 'Rate limited');
     const successful = calls.filter((c) => !c.error);
-    expect(successful.length).toBe(30);
+    expect(successful.length).toBe(60);
     expect(rateLimited.length).toBe(5);
-    expect(state.mockRunSearch).toHaveBeenCalledTimes(30);
+    expect(state.mockRunSearch).toHaveBeenCalledTimes(60);
   });
 
-  it('aggregates rate-limit drops into a single log on window close', async () => {
+  it('aggregates rate-limit drops into a single log when the streak ends', async () => {
     let now = 2_000_000;
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
 
@@ -776,30 +776,32 @@ describe('port-messaging', () => {
     const port = createTestPort('quick-search');
     onConnectHandler(port);
 
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 65; i++) {
       await port.send({ type: 'SEARCH_QUERY', query: `q${i}` });
     }
     await flushMicrotasks();
 
-    const rateLimitLogs = loggerSpies.debug.mock.calls.filter(
+    const duringSaturation = loggerSpies.debug.mock.calls.filter(
       (c) => typeof c[1] === 'string' && (c[1] as string).startsWith('Rate limit'),
     );
-    expect(rateLimitLogs).toHaveLength(0);
+    expect(duringSaturation).toHaveLength(0);
 
     now += 1_500;
     await port.send({ type: 'SEARCH_QUERY', query: 'after' });
     await flushMicrotasks();
 
     const summaryLogs = loggerSpies.debug.mock.calls.filter(
-      (c) => typeof c[1] === 'string' && (c[1] as string).startsWith('Rate limit window closed'),
+      (c) => typeof c[1] === 'string' && (c[1] as string).startsWith('Rate limit streak ended'),
     );
     expect(summaryLogs).toHaveLength(1);
-    expect(summaryLogs[0][1]).toBe('Rate limit window closed: dropped 5 of 35 requests');
+    expect(summaryLogs[0][1]).toMatch(
+      /^Rate limit streak ended: dropped 5 requests over \d+ms$/,
+    );
 
     nowSpy.mockRestore();
   });
 
-  it('should reset rate limit after window expires', async () => {
+  it('sliding window: rejects the 61st request within the last 1000ms, regardless of boundary', async () => {
     let now = 1_000_000;
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
 
@@ -807,23 +809,74 @@ describe('port-messaging', () => {
     const port = createTestPort('quick-search');
     onConnectHandler(port);
 
-    for (let i = 0; i < 30; i++) {
+    // Send 60 requests over the first 900ms (t=0, 15, 30, ..., 885) — all pass.
+    for (let i = 0; i < 60; i++) {
       await port.send({ type: 'SEARCH_QUERY', query: `q${i}` });
+      now += 15;
     }
-    // 31st → rate-limited
-    await port.send({ type: 'SEARCH_QUERY', query: 'rl' });
+    // Still within 1000ms of the first — the 61st must be rejected.
+    // At this point `now = 1_000_000 + 900`, first timestamp is 1_000_000, all 60 inside the window.
+    await port.send({ type: 'SEARCH_QUERY', query: 'burst' });
     await flushMicrotasks();
 
-    const midCalls = port.postMessage.mock.calls.slice();
-    expect(midCalls.filter((c) => (c[0] as Record<string, unknown>).error).length).toBe(1);
+    const calls = port.postMessage.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    expect(calls.filter((c) => c.error === 'Rate limited')).toHaveLength(1);
+    expect(calls.filter((c) => !c.error)).toHaveLength(60);
 
-    now += 1_500;
-    await port.send({ type: 'SEARCH_QUERY', query: 'after-reset' });
+    nowSpy.mockRestore();
+  });
+
+  it('sliding window: does not get fooled by fixed-boundary reset (120 across 2s all pass)', async () => {
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+
+    const { onConnectHandler } = setupPortMessaging();
+    const port = createTestPort('quick-search');
+    onConnectHandler(port);
+
+    // 60 requests at t=0..945ms (spaced 16ms apart -> 945ms).
+    for (let i = 0; i < 60; i++) {
+      await port.send({ type: 'SEARCH_QUERY', query: `a${i}` });
+      now += 16;
+    }
+    // Skip ahead past the 1s window so all prior timestamps drop out.
+    now += 1_100;
+    // Another 60 in the next second — all must pass since the sliding
+    // window no longer contains any stale entries.
+    for (let i = 0; i < 60; i++) {
+      await port.send({ type: 'SEARCH_QUERY', query: `b${i}` });
+      now += 16;
+    }
+    await flushMicrotasks();
+
+    const calls = port.postMessage.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    expect(calls.filter((c) => c.error === 'Rate limited')).toHaveLength(0);
+    expect(calls.filter((c) => !c.error)).toHaveLength(120);
+
+    nowSpy.mockRestore();
+  });
+
+  it('sliding window: prunes stale timestamps after a long idle gap', async () => {
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+
+    const { onConnectHandler } = setupPortMessaging();
+    const port = createTestPort('quick-search');
+    onConnectHandler(port);
+
+    // Saturate: 60 passes then 5 drops.
+    for (let i = 0; i < 65; i++) {
+      await port.send({ type: 'SEARCH_QUERY', query: `q${i}` });
+    }
+    // Long idle gap — 30 seconds (e.g. SW hibernate then wake).
+    now += 30_000;
+    // A single request after the gap must pass (pruning cleared the ring).
+    await port.send({ type: 'SEARCH_QUERY', query: 'after-gap' });
     await flushMicrotasks();
 
     const lastCall = port.postMessage.mock.calls.at(-1)![0] as Record<string, unknown>;
     expect(lastCall.error).toBeUndefined();
-    expect(lastCall.query).toBe('after-reset');
+    expect(lastCall.query).toBe('after-gap');
 
     nowSpy.mockRestore();
   });
@@ -1028,7 +1081,7 @@ describe('port-messaging', () => {
       if (msg.error === 'Rate limited') {throw new Error('closed');}
     });
     onConnectHandler(port);
-    for (let i = 0; i < 31; i++) {
+    for (let i = 0; i < 61; i++) {
       await port.send({ type: 'SEARCH_QUERY', query: `q${i}` });
     }
     await flushMicrotasks();

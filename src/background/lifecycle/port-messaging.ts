@@ -22,15 +22,26 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
     if (port.name === 'quick-search') {
       logger.debug('onConnect', 'Quick-search port connected');
       let portDisconnected = false;
-      const PORT_RATE_LIMIT = 30;
+      // Sliding-window rate limit. A fixed window with a hard boundary can be
+      // exploited to submit 2 * PORT_RATE_LIMIT in a tiny slice straddling the
+      // boundary (e.g. 60 at t=900ms then 60 at t=1100ms). A ring of recent
+      // send timestamps gives true per-N-ms semantics and makes the safety
+      // wall honest.
+      //
+      // Cap was raised from 30 to 60 to match observed worst-case legitimate
+      // bursts (fast paste + IME composition commit + Phase 1 / Phase 2
+      // double-dispatch). The client-side dispatch guard in
+      // quick-search-utils.ts already collapses same-intent duplicates, so
+      // this cap should never fire for well-behaved clients.
+      const PORT_RATE_LIMIT = 60;
       const PORT_RATE_WINDOW_MS = 1000;
-      let portSearchCount = 0;
-      // Tracks requests rejected in the current window so we can emit one
-      // aggregate summary at window close instead of a log line per drop.
-      // Per-drop logging caused console spam under any upstream dispatch loop
-      // (password managers, duplicated listeners, etc.).
-      let portRateWindowDropped = 0;
-      let portRateWindowStart = Date.now();
+      const portRecentTimestamps: number[] = [];
+      // Dropped-streak tracking so we can aggregate over a saturation burst
+      // into a single debug log on recovery, instead of one log per dropped
+      // request. Saturated streaks longer than the window will still only
+      // log once (on exit), preventing console spam.
+      let portRateStreakDropped = 0;
+      let portRateStreakStart: number | null = null;
 
       port.onMessage.addListener(async (msg) => {
         // Liveness probe: short-circuit before the init gate so the content
@@ -43,22 +54,27 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
 
         if (msg.type === 'SEARCH_QUERY') {
           const now = Date.now();
-          if (now - portRateWindowStart > PORT_RATE_WINDOW_MS) {
-            if (portRateWindowDropped > 0) {
-              logger.debug(
-                'portMessage',
-                `Rate limit window closed: dropped ${portRateWindowDropped} of ${portSearchCount} requests`,
-              );
-            }
-            portSearchCount = 0;
-            portRateWindowDropped = 0;
-            portRateWindowStart = now;
+          const cutoff = now - PORT_RATE_WINDOW_MS;
+          while (portRecentTimestamps.length > 0 && portRecentTimestamps[0] <= cutoff) {
+            portRecentTimestamps.shift();
           }
-          if (++portSearchCount > PORT_RATE_LIMIT) {
-            portRateWindowDropped++;
+          if (portRecentTimestamps.length >= PORT_RATE_LIMIT) {
+            if (portRateStreakStart === null) {
+              portRateStreakStart = now;
+            }
+            portRateStreakDropped++;
             try { port.postMessage({ error: 'Rate limited', query: msg.query }); } catch { /* port closed */ }
             return;
           }
+          if (portRateStreakStart !== null) {
+            logger.debug(
+              'portMessage',
+              `Rate limit streak ended: dropped ${portRateStreakDropped} requests over ${now - portRateStreakStart}ms`,
+            );
+            portRateStreakDropped = 0;
+            portRateStreakStart = null;
+          }
+          portRecentTimestamps.push(now);
           const t0 = performance.now();
           const portQuery = typeof msg.query === 'string' ? msg.query.slice(0, 500) : '';
           logger.debug('portMessage', `Quick-search query: "${portQuery}"`);
