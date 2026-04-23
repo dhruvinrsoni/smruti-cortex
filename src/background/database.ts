@@ -495,7 +495,7 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
 // Force rebuild index flag
 export async function setForceRebuildFlag(value: boolean): Promise<void> {
     await setSetting('forceRebuildIndex', value);
-    Logger.info('setForceRebuildFlag', value ? '🔄 Force rebuild flag set' : '✅ Force rebuild flag cleared');
+    Logger.info('Database', 'setForceRebuildFlag', value ? '🔄 Force rebuild flag set' : '✅ Force rebuild flag cleared');
 }
 
 export async function getForceRebuildFlag(): Promise<boolean> {
