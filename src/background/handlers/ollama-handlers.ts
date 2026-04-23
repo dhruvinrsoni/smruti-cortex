@@ -7,7 +7,7 @@ const log = Logger.forComponent('OllamaHandlers');
 
 export function registerOllamaHandlers(registry: MessageHandlerRegistry): void {
   registry.register('GET_EMBEDDING_STATS', async (_msg, _sender, sendResponse) => {
-    log.debug('handle', 'GET_EMBEDDING_STATS requested');
+    log.debug('GET_EMBEDDING_STATS', 'GET_EMBEDDING_STATS requested');
     try {
       const { getAllIndexedItems } = await import('../database');
       const items = await getAllIndexedItems();
@@ -24,13 +24,13 @@ export function registerOllamaHandlers(registry: MessageHandlerRegistry): void {
         embeddingModel,
       });
     } catch (error) {
-      log.error('handle', 'GET_EMBEDDING_STATS failed:', errorMeta(error));
+      log.error('GET_EMBEDDING_STATS', 'GET_EMBEDDING_STATS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('CLEAR_ALL_EMBEDDINGS', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '🧠 CLEAR_ALL_EMBEDDINGS requested');
+    log.info('CLEAR_ALL_EMBEDDINGS', '🧠 CLEAR_ALL_EMBEDDINGS requested');
     try {
       const { embeddingProcessor } = await import('../embedding-processor');
       embeddingProcessor.stop();
@@ -45,46 +45,46 @@ export function registerOllamaHandlers(registry: MessageHandlerRegistry): void {
           cleared++;
         }
       }
-      log.info('handle', `✅ Cleared embeddings from ${cleared} items`);
+      log.info('CLEAR_ALL_EMBEDDINGS', `✅ Cleared embeddings from ${cleared} items`);
       sendResponse({ status: 'OK', cleared });
     } catch (error) {
-      log.error('handle', 'CLEAR_ALL_EMBEDDINGS failed:', errorMeta(error));
+      log.error('CLEAR_ALL_EMBEDDINGS', 'CLEAR_ALL_EMBEDDINGS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('START_EMBEDDING_PROCESSOR', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '🧠 START_EMBEDDING_PROCESSOR requested');
+    log.info('START_EMBEDDING_PROCESSOR', '🧠 START_EMBEDDING_PROCESSOR requested');
     try {
       const { embeddingProcessor } = await import('../embedding-processor');
       await embeddingProcessor.start();
       sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
     } catch (error) {
-      log.error('handle', 'START_EMBEDDING_PROCESSOR failed:', errorMeta(error));
+      log.error('START_EMBEDDING_PROCESSOR', 'START_EMBEDDING_PROCESSOR failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('PAUSE_EMBEDDING_PROCESSOR', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '⏸ PAUSE_EMBEDDING_PROCESSOR requested');
+    log.info('PAUSE_EMBEDDING_PROCESSOR', '⏸ PAUSE_EMBEDDING_PROCESSOR requested');
     try {
       const { embeddingProcessor } = await import('../embedding-processor');
       embeddingProcessor.pause();
       sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
     } catch (error) {
-      log.error('handle', 'PAUSE_EMBEDDING_PROCESSOR failed:', errorMeta(error));
+      log.error('PAUSE_EMBEDDING_PROCESSOR', 'PAUSE_EMBEDDING_PROCESSOR failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('RESUME_EMBEDDING_PROCESSOR', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '▶ RESUME_EMBEDDING_PROCESSOR requested');
+    log.info('RESUME_EMBEDDING_PROCESSOR', '▶ RESUME_EMBEDDING_PROCESSOR requested');
     try {
       const { embeddingProcessor } = await import('../embedding-processor');
       embeddingProcessor.resume();
       sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
     } catch (error) {
-      log.error('handle', 'RESUME_EMBEDDING_PROCESSOR failed:', errorMeta(error));
+      log.error('RESUME_EMBEDDING_PROCESSOR', 'RESUME_EMBEDDING_PROCESSOR failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -94,31 +94,32 @@ export function registerOllamaHandlers(registry: MessageHandlerRegistry): void {
       const { embeddingProcessor } = await import('../embedding-processor');
       sendResponse({ status: 'OK', progress: embeddingProcessor.getProgress() });
     } catch (error) {
+      log.error('GET_EMBEDDING_PROGRESS', 'GET_EMBEDDING_PROGRESS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('GET_AI_CACHE_STATS', async (_msg, _sender, sendResponse) => {
-    log.debug('handle', 'GET_AI_CACHE_STATS requested');
+    log.debug('GET_AI_CACHE_STATS', 'GET_AI_CACHE_STATS requested');
     try {
       const { loadCache, getCacheStats } = await import('../ai-keyword-cache');
       await loadCache();
       const stats = getCacheStats();
       sendResponse({ status: 'OK', ...stats });
     } catch (error) {
-      log.error('handle', 'GET_AI_CACHE_STATS failed:', errorMeta(error));
+      log.error('GET_AI_CACHE_STATS', 'GET_AI_CACHE_STATS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('CLEAR_AI_CACHE', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '📝 CLEAR_AI_CACHE requested');
+    log.info('CLEAR_AI_CACHE', '📝 CLEAR_AI_CACHE requested');
     try {
       const { clearAIKeywordCache } = await import('../ai-keyword-cache');
       const result = await clearAIKeywordCache();
       sendResponse({ status: 'OK', ...result });
     } catch (error) {
-      log.error('handle', 'CLEAR_AI_CACHE failed:', errorMeta(error));
+      log.error('CLEAR_AI_CACHE', 'CLEAR_AI_CACHE failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });

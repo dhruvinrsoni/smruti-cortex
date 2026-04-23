@@ -730,39 +730,39 @@ export function registerCommandHandlers(registry: MessageHandlerRegistry): void 
   // ===== Favicon handlers =====
 
   registry.register('CLEAR_FAVICON_CACHE', async (_msg, _sender, sendResponse) => {
-    log.info('handle', 'CLEAR_FAVICON_CACHE requested');
+    log.info('CLEAR_FAVICON_CACHE', 'CLEAR_FAVICON_CACHE requested');
     try {
       const { clearFaviconCache } = await import('../favicon-cache');
       const result = await clearFaviconCache();
-      log.info('handle', 'CLEAR_FAVICON_CACHE completed', result);
+      log.info('CLEAR_FAVICON_CACHE', 'CLEAR_FAVICON_CACHE completed', result);
       sendResponse({ status: 'OK', ...result });
     } catch (error) {
-      log.error('handle', 'CLEAR_FAVICON_CACHE failed:', errorMeta(error));
+      log.error('CLEAR_FAVICON_CACHE', 'CLEAR_FAVICON_CACHE failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('GET_FAVICON_CACHE_STATS', async (_msg, _sender, sendResponse) => {
-    log.debug('handle', 'GET_FAVICON_CACHE_STATS requested');
+    log.debug('GET_FAVICON_CACHE_STATS', 'GET_FAVICON_CACHE_STATS requested');
     try {
       const { getFaviconCacheStats } = await import('../favicon-cache');
       const stats = await getFaviconCacheStats();
       sendResponse({ status: 'OK', ...stats });
     } catch (error) {
-      log.error('handle', 'GET_FAVICON_CACHE_STATS failed:', errorMeta(error));
+      log.error('GET_FAVICON_CACHE_STATS', 'GET_FAVICON_CACHE_STATS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('GET_FAVICON', async (msg, _sender, sendResponse) => {
     const hostname = msg.hostname as string;
-    log.trace('handle', 'GET_FAVICON requested:', hostname);
+    log.trace('GET_FAVICON', 'GET_FAVICON requested', { hostname });
     try {
       const { getFaviconWithCache } = await import('../favicon-cache');
       const dataUrl = await getFaviconWithCache(hostname);
       sendResponse({ dataUrl });
     } catch (error) {
-      log.warn('handle', 'GET_FAVICON failed:', errorMeta(error));
+      log.warn('GET_FAVICON', 'GET_FAVICON failed', { hostname, ...errorMeta(error) });
       sendResponse({ dataUrl: null });
     }
   });

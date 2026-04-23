@@ -7,7 +7,7 @@ const log = Logger.forComponent('DiagnosticsHandlers');
 
 export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegistry): void {
   registry.register('GET_PERFORMANCE_METRICS', async (_msg, _sender, sendResponse) => {
-    log.debug('handle', 'GET_PERFORMANCE_METRICS requested');
+    log.debug('GET_PERFORMANCE_METRICS', 'GET_PERFORMANCE_METRICS requested');
     try {
       const { getPerformanceMetrics, formatMetricsForDisplay } = await import('../performance-monitor');
       const { getStorageQuotaInfo } = await import('../database');
@@ -21,32 +21,32 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       const formatted = formatMetricsForDisplay(metrics, storage);
       sendResponse({ status: 'OK', metrics, formatted });
     } catch (error) {
-      log.error('handle', 'GET_PERFORMANCE_METRICS failed:', errorMeta(error));
+      log.error('GET_PERFORMANCE_METRICS', 'GET_PERFORMANCE_METRICS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('RESET_PERFORMANCE_METRICS', async (_msg, _sender, sendResponse) => {
-    log.info('handle', 'RESET_PERFORMANCE_METRICS requested');
+    log.info('RESET_PERFORMANCE_METRICS', 'RESET_PERFORMANCE_METRICS requested');
     try {
       const { performanceTracker } = await import('../performance-monitor');
       await performanceTracker.reset();
       sendResponse({ status: 'OK' });
     } catch (error) {
-      log.error('handle', 'RESET_PERFORMANCE_METRICS failed:', errorMeta(error));
+      log.error('RESET_PERFORMANCE_METRICS', 'RESET_PERFORMANCE_METRICS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('EXPORT_DIAGNOSTICS', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '📋 EXPORT_DIAGNOSTICS requested');
+    log.info('EXPORT_DIAGNOSTICS', '📋 EXPORT_DIAGNOSTICS requested');
     try {
       const { exportDiagnosticsAsJson } = await import('../diagnostics');
       const diagnosticsJson = await exportDiagnosticsAsJson();
-      log.info('handle', '✅ EXPORT_DIAGNOSTICS completed');
+      log.info('EXPORT_DIAGNOSTICS', '✅ EXPORT_DIAGNOSTICS completed');
       sendResponse({ status: 'OK', data: diagnosticsJson });
     } catch (error) {
-      log.error('handle', 'EXPORT_DIAGNOSTICS failed:', errorMeta(error));
+      log.error('EXPORT_DIAGNOSTICS', 'EXPORT_DIAGNOSTICS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -57,6 +57,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       const analytics = getSearchAnalytics();
       sendResponse({ status: 'OK', analytics });
     } catch (error) {
+      log.error('GET_SEARCH_ANALYTICS', 'GET_SEARCH_ANALYTICS failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -68,6 +69,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       const data = JSON.stringify({ history, exportTimestamp: Date.now() }, null, 2);
       sendResponse({ status: 'OK', data });
     } catch (error) {
+      log.error('EXPORT_SEARCH_DEBUG', 'EXPORT_SEARCH_DEBUG failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -78,6 +80,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       const enabled = isSearchDebugEnabled();
       sendResponse({ status: 'OK', enabled });
     } catch (error) {
+      log.error('GET_SEARCH_DEBUG_ENABLED', 'GET_SEARCH_DEBUG_ENABLED failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -88,6 +91,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       await setSearchDebugEnabled(msg.enabled ?? false);
       sendResponse({ status: 'OK' });
     } catch (error) {
+      log.error('SET_SEARCH_DEBUG_ENABLED', 'SET_SEARCH_DEBUG_ENABLED failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -98,6 +102,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       searchDebugService.clearHistory();
       sendResponse({ status: 'OK' });
     } catch (error) {
+      log.error('CLEAR_SEARCH_DEBUG', 'CLEAR_SEARCH_DEBUG failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -107,12 +112,13 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
       await chrome.storage.local.remove('recentSearches');
       sendResponse({ status: 'OK' });
     } catch (error) {
+      log.error('CLEAR_RECENT_SEARCHES', 'CLEAR_RECENT_SEARCHES failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
 
   registry.register('GENERATE_RANKING_REPORT', async (msg, _sender, sendResponse) => {
-    log.info('handle', '📋 GENERATE_RANKING_REPORT requested');
+    log.info('GENERATE_RANKING_REPORT', '📋 GENERATE_RANKING_REPORT requested');
     try {
       const { generateRankingReport, createGitHubIssue, buildGitHubIssueUrl } = await import('../ranking-report');
       const report = generateRankingReport({
@@ -136,7 +142,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
         sendResponse({ status: 'OK', method: 'url', issueUrl, reportBody: report.body });
       }
     } catch (error) {
-      log.error('handle', 'GENERATE_RANKING_REPORT failed:', errorMeta(error));
+      log.error('GENERATE_RANKING_REPORT', 'GENERATE_RANKING_REPORT failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
@@ -144,7 +150,7 @@ export function registerDiagnosticsPreInitHandlers(registry: MessageHandlerRegis
 
 export function registerDiagnosticsPostInitHandlers(registry: MessageHandlerRegistry): void {
   registry.register('RUN_TROUBLESHOOTER', async (_msg, _sender, sendResponse) => {
-    log.info('handle', '🩺 RUN_TROUBLESHOOTER requested');
+    log.info('RUN_TROUBLESHOOTER', '🩺 RUN_TROUBLESHOOTER requested');
     try {
       const overallStart = performance.now();
       const steps: Array<{ id: string; label: string; status: string; detail: string; durationMs: number }> = [];
@@ -257,7 +263,7 @@ export function registerDiagnosticsPostInitHandlers(registry: MessageHandlerRegi
         },
       });
     } catch (error) {
-      log.error('handle', 'RUN_TROUBLESHOOTER failed:', errorMeta(error));
+      log.error('RUN_TROUBLESHOOTER', 'RUN_TROUBLESHOOTER failed', errorMeta(error));
       sendResponse({ status: 'ERROR', message: (error as Error).message });
     }
   });
