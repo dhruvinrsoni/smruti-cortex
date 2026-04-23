@@ -33,15 +33,19 @@ const state = vi.hoisted(() => ({
   mockGetLastAIStatus: vi.fn(() => 'ok'),
 }));
 
+// Stable logger spy so tests can assert on aggregated debug output
+// (e.g. the per-window rate-limit summary in port-messaging.ts).
+const loggerSpies = vi.hoisted(() => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  trace: vi.fn(),
+}));
+
 vi.mock('../../../core/logger', () => ({
   Logger: {
-    forComponent: () => ({
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      trace: vi.fn(),
-    }),
+    forComponent: () => loggerSpies,
   },
   errorMeta: (e: unknown) => ({ name: 'e', message: String(e) }),
 }));
@@ -105,6 +109,11 @@ function resetState() {
   state.commandsApi = true;
   state.mockRunSearch = vi.fn().mockResolvedValue([{ id: 'r1' }]);
   state.mockGetLastAIStatus = vi.fn(() => 'ok');
+  loggerSpies.debug.mockReset();
+  loggerSpies.info.mockReset();
+  loggerSpies.warn.mockReset();
+  loggerSpies.error.mockReset();
+  loggerSpies.trace.mockReset();
 }
 
 async function importFreshCommands(): Promise<typeof import('../commands-listener')> {
@@ -757,6 +766,37 @@ describe('port-messaging', () => {
     expect(successful.length).toBe(30);
     expect(rateLimited.length).toBe(5);
     expect(state.mockRunSearch).toHaveBeenCalledTimes(30);
+  });
+
+  it('aggregates rate-limit drops into a single log on window close', async () => {
+    let now = 2_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+
+    const { onConnectHandler } = setupPortMessaging();
+    const port = createTestPort('quick-search');
+    onConnectHandler(port);
+
+    for (let i = 0; i < 35; i++) {
+      await port.send({ type: 'SEARCH_QUERY', query: `q${i}` });
+    }
+    await flushMicrotasks();
+
+    const rateLimitLogs = loggerSpies.debug.mock.calls.filter(
+      (c) => typeof c[1] === 'string' && (c[1] as string).startsWith('Rate limit'),
+    );
+    expect(rateLimitLogs).toHaveLength(0);
+
+    now += 1_500;
+    await port.send({ type: 'SEARCH_QUERY', query: 'after' });
+    await flushMicrotasks();
+
+    const summaryLogs = loggerSpies.debug.mock.calls.filter(
+      (c) => typeof c[1] === 'string' && (c[1] as string).startsWith('Rate limit window closed'),
+    );
+    expect(summaryLogs).toHaveLength(1);
+    expect(summaryLogs[0][1]).toBe('Rate limit window closed: dropped 5 of 35 requests');
+
+    nowSpy.mockRestore();
   });
 
   it('should reset rate limit after window expires', async () => {

@@ -25,6 +25,11 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
       const PORT_RATE_LIMIT = 30;
       const PORT_RATE_WINDOW_MS = 1000;
       let portSearchCount = 0;
+      // Tracks requests rejected in the current window so we can emit one
+      // aggregate summary at window close instead of a log line per drop.
+      // Per-drop logging caused console spam under any upstream dispatch loop
+      // (password managers, duplicated listeners, etc.).
+      let portRateWindowDropped = 0;
       let portRateWindowStart = Date.now();
 
       port.onMessage.addListener(async (msg) => {
@@ -39,11 +44,18 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
         if (msg.type === 'SEARCH_QUERY') {
           const now = Date.now();
           if (now - portRateWindowStart > PORT_RATE_WINDOW_MS) {
+            if (portRateWindowDropped > 0) {
+              logger.debug(
+                'portMessage',
+                `Rate limit window closed: dropped ${portRateWindowDropped} of ${portSearchCount} requests`,
+              );
+            }
             portSearchCount = 0;
+            portRateWindowDropped = 0;
             portRateWindowStart = now;
           }
           if (++portSearchCount > PORT_RATE_LIMIT) {
-            logger.debug('portMessage', `Rate limited: ${portSearchCount} searches in window`);
+            portRateWindowDropped++;
             try { port.postMessage({ error: 'Rate limited', query: msg.query }); } catch { /* port closed */ }
             return;
           }
