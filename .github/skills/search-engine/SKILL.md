@@ -56,10 +56,38 @@ Graduated system replaces binary `includes()`:
 
 - **EXACT** (1.0) -- word-boundary match: "app" in "App-My-Hub"
 - **PREFIX** (0.75) -- start of word: "iss" in "Issue"
-- **SUBSTRING** (0.4) -- inside word: "aviga" in "Navigator"
+- **SUBSTRING** (0.4) -- inside word: "aviga" in "Navigator" **or** boundary-flex hit at a letter↔digit transition (e.g., `module42` vs `module 42`, `id1234` vs `ID-1234`)
 - **NONE** (0.0) -- no match
 
 Regex is cached per token to avoid recompilation across 3000+ items.
+
+## Boundary-Flex Matching Contract (locked: `search-core-boundary-flex-v1`)
+
+> **This is a change-control zone. Modifications require CODEOWNER review and may require a new ADR.**
+
+`classifyMatch` accepts, at letter↔digit transitions inside the query token only, **one** non-alphanumeric separator character. Classified as `SUBSTRING` (0.4), never `EXACT`/`PREFIX`. Applies only when plain `text.includes(token)` already failed (strictly additive).
+
+**Wiring.** `search-engine.ts` routes all five token-inclusion gates (`originalMatchCount`, `hasAiMatch`, `originalMatchedInHaystack`, `allOriginalTokensMatch`) through `matchesToken(token, haystack)` → `classifyMatch(token, haystack) !== NONE`. The **sixth** `haystack.includes(q)` site (full raw query literal) is deliberately untouched.
+
+**Forbidden future relaxations** (see `docs/adr/0001-search-matching-contract.md`):
+
+- No letter↔letter boundary relaxation (`foobar` must NOT flex to `foo bar`).
+- No digit↔digit boundary relaxation.
+- No multi-character separator chains (`module -- 42` stays unmatched).
+- No alphanumeric middle separator (`moduleXX42` stays unmatched).
+- No stemming / plural folding inside `classifyMatch`.
+- No promotion of flex hits above `SUBSTRING`.
+
+**Before touching `tokenizer.ts` or `search-engine.ts`:**
+
+1. Read `docs/adr/0001-search-matching-contract.md`.
+2. Keep `src/background/search/__tests__/tokenizer-golden.test.ts` green — every row flip requires explicit justification in the PR description.
+3. Run `npm test && npm run build:prod && npx playwright test e2e/ranking-boundary-flex.spec.ts`.
+4. Get sign-off from the `@dhruvinrsoni` search-core CODEOWNER.
+
+**Diagnostic surface.** `src/background/ranking-report.ts` emits a per-token **Field Hits** column (`tracker[t,u,h] module42[t]`) and a top-of-report **partial-match banner** whenever no result covers all query tokens. Both respect `maskingLevel`. Use these to confirm boundary-flex decisions from a user-generated bug report without needing to reproduce the index.
+
+**Revert:** `git revert` commits tagged `search-core-boundary-flex-v1`. Full procedure in the ADR.
 
 ## Performance
 

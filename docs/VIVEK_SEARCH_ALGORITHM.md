@@ -61,6 +61,67 @@ This replaces the old binary `includes()` matching used by every scorer.
 
 ---
 
+## Boundary-Flex Matching (contract: `search-core-boundary-flex-v1`)
+
+Graduated match classification still starts with a plain substring check — but plain substring alone misses the single most common real-world history shape: **alphanumeric identifiers that travel without a separator in the query but carry one in the indexed content.**
+
+**Synthetic worked example.**
+
+- Indexed item title: `[ID-1234] Module 42 Review — Acme Tracker`
+- Indexed item URL:   `https://tracker.example.com/ticket/ID-1234`
+- User query:          `tracker module42`
+
+Without boundary-flex, the haystack contains `module 42` (space between letters and digits). A plain `includes('module42')` returns `false`. The target scores 1/2, falls into the same bucket as visit-hot siblings on the same domain, and gets buried below the per-domain cap. The item the user is indexing for silently disappears.
+
+### Contract (locked)
+
+The tokenizer's `classifyMatch` tries, **only after** plain substring fails, to match the query token with **a single non-alphanumeric separator permitted at each letter↔digit transition inside the token**. Matches surfaced this way are always classified `SUBSTRING` (0.4), never `EXACT` or `PREFIX`.
+
+| Query token  | Content                            | Result               |
+|--------------|------------------------------------|----------------------|
+| `module42`   | `module42 review`                  | EXACT (1.0)          |
+| `module42`   | `module 42`                        | **SUBSTRING (0.4)**  |
+| `module42`   | `Module-42` / `module_42` / `module.42` / `module/42` | **SUBSTRING (0.4)** |
+| `id1234`     | `ID-1234`                          | **SUBSTRING (0.4)**  |
+| `v2rc1`      | `v2 rc1`                           | **SUBSTRING (0.4)**  |
+| `module42`   | `module -- 42` (multi-char sep)    | NONE                 |
+| `module42`   | `moduleXX42` (alphanumeric sep)    | NONE                 |
+| `foobar`     | `foo bar` (no letter↔digit)        | NONE                 |
+
+### Why this shape and no other
+
+The flex regex inserts `[^a-z0-9]?` at every letter↔digit transition inside the token — `module42` compiles to `/module[^a-z0-9]?42/`. This is a **precisely bounded** relaxation:
+
+- **Only at letter↔digit transitions.** `foobar` has no transition, so the flex regex is never built (cached `null`). Pure-prose queries are completely unaffected.
+- **At most one character of separation.** `module -- 42` is not a match. The false-positive surface area is bounded at O(1) per token per item.
+- **Always classified `SUBSTRING` (0.4).** Clean word-boundary matches remain `EXACT` (1.0) and always outrank flex matches in the tiered sort.
+
+### Blast radius
+
+Boundary-flex lives inside `classifyMatch`, so every scorer inherits it automatically. Inside `search-engine.ts` the same contract gates token inclusion into `originalMatchCount` — the field that drives **tier 0** of the final sort. With the contract in place, a 2/2 boundary-flex match on the target reliably beats 1/2 visit-hot matches on its domain siblings.
+
+### Forbidden future relaxations
+
+Enforced by ADR + golden regression suite + CODEOWNERS review:
+
+- No letter↔letter boundary relaxation.
+- No digit↔digit boundary relaxation.
+- No multi-character separator chains.
+- No stemming / plural folding / transliteration inside `classifyMatch`.
+- No promotion of boundary-flex hits above `SUBSTRING`.
+
+### Traceability
+
+- **Contract tag:** `search-core-boundary-flex-v1`
+- **ADR:**   `docs/adr/0001-search-matching-contract.md`
+- **Golden:** `src/background/search/__tests__/tokenizer-golden.test.ts`
+- **E2E:**   `e2e/ranking-boundary-flex.spec.ts`
+- **Report:** `src/background/ranking-report.ts` now emits a **Field Hits** column (per-token `[t,u,h,m]` map) and a top-of-report **partial-match banner** so the matcher's decision is directly auditable from a user-generated bug report.
+
+To revert the contract: `git revert <sha>` on commits A1 + A2. See the ADR for the full revert procedure.
+
+---
+
 ## The 9-Scorer Pipeline
 
 Each indexed item is scored by 9 independent scorers. Scores are weighted and summed.
