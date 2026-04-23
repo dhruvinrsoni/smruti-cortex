@@ -277,7 +277,7 @@ describe('generateRankingReport — edge cases', () => {
     expect(report!.body).toContain('| keyword |');
   });
 
-  it('shows dash for token hits when no tokens match title+url', () => {
+  it('shows dash for field hits when no tokens match title+url', () => {
     const snap = makeSnapshot({
       tokens: ['nonexistent'],
       results: [{
@@ -289,6 +289,87 @@ describe('generateRankingReport — edge cases', () => {
     recordSearchSnapshot(snap);
     const report = generateRankingReport({ maskingLevel: 'none' });
     expect(report!.body).toContain('| - |');
+  });
+});
+
+describe('generateRankingReport — field-hit map (boundary-flex-aware)', () => {
+  it('renders compact per-field hit encoding `token[t,u,h]` at level=none', () => {
+    recordSearchSnapshot(makeSnapshot());
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    // Row 1: wiki matches title ("Wiki"), URL (hostname portion is in URL
+    // string), and hostname. Leave matches title ("Leave") and URL path.
+    expect(report!.body).toContain('wiki[t,u,h]');
+    expect(report!.body).toMatch(/leave\[t(,u)?\]/);
+  });
+
+  it('surfaces boundary-flex hits (module42 → "Module 42") in the field-hit map', () => {
+    const snap = makeSnapshot({
+      query: 'tracker module42',
+      tokens: ['tracker', 'module42'],
+      results: [{
+        rank: 1,
+        url: 'https://tracker.example.com/ticket/ID-1234',
+        title: '[ID-1234] Module 42 Review - Acme Tracker',
+        hostname: 'tracker.example.com',
+        finalScore: 0.88,
+        originalMatchCount: 2,
+        intentPriority: 3,
+        titleUrlCoverage: 1,
+        titleUrlQuality: 0.9,
+        splitFieldCoverage: 1,
+        keywordMatch: true,
+        aiMatch: false,
+        scorerBreakdown: [
+          { name: 'multiTokenMatch', score: 0.3, weight: 0.35 },
+        ],
+      }],
+      resultCount: 1,
+    });
+    recordSearchSnapshot(snap);
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    // `module42` has no literal substring in any field. It only shows up
+    // via classifyMatch's boundary-flex branch matching "Module 42".
+    // If the field-hit map ever silently drops flex hits, this test fails.
+    expect(report!.body).toMatch(/module42\[t\]/);
+    expect(report!.body).toMatch(/tracker\[t(,u)?(,h)?\]/);
+  });
+
+  it('renames the header from "Token Hits" to "Field Hits"', () => {
+    recordSearchSnapshot(makeSnapshot());
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toContain('Field Hits');
+    expect(report!.body).not.toContain('Token Hits');
+  });
+});
+
+describe('generateRankingReport — partial-match banner', () => {
+  it('adds banner when no result covers all query tokens', () => {
+    const snap = makeSnapshot({
+      tokens: ['alpha', 'beta', 'gamma'],
+      results: [{
+        ...makeSnapshot().results[0],
+        originalMatchCount: 1,
+      }, {
+        ...makeSnapshot().results[1],
+        originalMatchCount: 2,
+      }],
+    });
+    recordSearchSnapshot(snap);
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).toMatch(/Partial matches only/);
+    expect(report!.body).toMatch(/best: 2\/3/);
+  });
+
+  it('omits banner when at least one result covers every token', () => {
+    recordSearchSnapshot(makeSnapshot()); // top result has originalMatchCount=2, tokens=['wiki','leave']
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).not.toContain('Partial matches only');
+  });
+
+  it('omits banner on empty result set', () => {
+    recordSearchSnapshot(makeSnapshot({ results: [], resultCount: 0 }));
+    const report = generateRankingReport({ maskingLevel: 'none' });
+    expect(report!.body).not.toContain('Partial matches only');
   });
 });
 

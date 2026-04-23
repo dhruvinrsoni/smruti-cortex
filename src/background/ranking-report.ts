@@ -4,6 +4,7 @@ import { Logger } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { getLastSearchSnapshot, type SearchDebugSnapshot, type SearchDebugResultEntry } from './diagnostics';
 import { maskTitle, maskUrl, maskQuery, maskToken, redactWord, type MaskingLevel } from '../shared/data-masker';
+import { classifyMatch, MatchType } from './search/tokenizer';
 
 const logger = Logger.forComponent('RankingReport');
 
@@ -79,6 +80,23 @@ function formatReportBody(
     lines.push('## Ranking Bug Report (Auto-generated)');
     lines.push('');
 
+    // Partial-match banner — surfaces the single biggest ranking failure mode
+    // (no indexed item covers every query token) as a top-of-report callout.
+    // The banner respects maskingLevel implicitly: we only leak counts, not
+    // token literals.
+    const tokensInQuery = snapshot.tokens.length;
+    const topResults = snapshot.results.slice(0, MAX_RESULTS_IN_REPORT);
+    const bestMatchCount = topResults.length > 0
+        ? Math.max(...topResults.map(r => r.originalMatchCount))
+        : 0;
+    if (tokensInQuery > 0 && topResults.length > 0 && bestMatchCount < tokensInQuery) {
+        lines.push(
+            `> ⚠️ **Partial matches only.** No indexed item contains all ${tokensInQuery} query tokens. ` +
+            `Showing best partial matches (best: ${bestMatchCount}/${tokensInQuery}).`
+        );
+        lines.push('');
+    }
+
     // Search context
     lines.push('### Search Context');
     lines.push('');
@@ -124,23 +142,36 @@ function formatReportBody(
     const resultsToShow = snapshot.results.slice(0, MAX_RESULTS_IN_REPORT);
     lines.push(`### Results (Top ${resultsToShow.length})`);
     lines.push('');
-    lines.push('| # | Title | Domain | Matches | Intent | Coverage | Quality | Score | Source | Token Hits |');
+    lines.push('| # | Title | Domain | Matches | Intent | Coverage | Quality | Score | Source | Field Hits |');
     lines.push('|---|-------|--------|---------|--------|----------|---------|-------|--------|------------|');
 
     for (const r of resultsToShow) {
         const maskedTitle = maskTitle(r.title, snapshot.tokens, maskingLevel);
         const maskedDomain = maskUrl(r.hostname || '', snapshot.tokens, maskingLevel);
-        // At level=full the Token Hits list duplicates information that the
-        // Matches column already reports as a count, so we collapse it to "-"
-        // to avoid handing the reader the literal token set twice.
-        const tokenHits = maskingLevel === 'full'
+        // Field-hit map: for each query token, list which fields (t=title,
+        // u=url, h=hostname) it hits. Uses classifyMatch so boundary-flex
+        // matches surface here too — the ranking report must not lie about
+        // where a match came from.
+        //
+        // At level=full we collapse to "-" to avoid duplicating the
+        // information the Matches column already reports as a count.
+        const fieldHits = maskingLevel === 'full'
             ? ''
-            : snapshot.tokens.filter(t =>
-                (r.title + ' ' + r.url).toLowerCase().includes(t)
-              ).join(', ');
+            : snapshot.tokens
+                .map(t => {
+                    const hits: string[] = [];
+                    if (classifyMatch(t, r.title) !== MatchType.NONE) { hits.push('t'); }
+                    if (classifyMatch(t, r.url) !== MatchType.NONE) { hits.push('u'); }
+                    if (classifyMatch(t, r.hostname || '') !== MatchType.NONE) { hits.push('h'); }
+                    if (hits.length === 0) { return ''; }
+                    const name = maskingLevel === 'none' ? t : maskToken(t, maskingLevel);
+                    return `${name}[${hits.join(',')}]`;
+                })
+                .filter(Boolean)
+                .join(' ');
         const source = r.aiMatch ? (r.keywordMatch ? 'hybrid' : 'AI') : 'keyword';
         lines.push(
-            `| ${r.rank} | ${maskedTitle} | ${maskedDomain} | ${r.originalMatchCount}/${snapshot.tokens.length} | ${r.intentPriority} | ${r.titleUrlCoverage.toFixed(2)} | ${r.titleUrlQuality.toFixed(2)} | ${r.finalScore.toFixed(3)} | ${source} | ${tokenHits || '-'} |`
+            `| ${r.rank} | ${maskedTitle} | ${maskedDomain} | ${r.originalMatchCount}/${snapshot.tokens.length} | ${r.intentPriority} | ${r.titleUrlCoverage.toFixed(2)} | ${r.titleUrlQuality.toFixed(2)} | ${r.finalScore.toFixed(3)} | ${source} | ${fieldHits || '-'} |`
         );
     }
     lines.push('');
