@@ -8,3 +8,25 @@ docs/privacy.html @dhruvinrsoni
 
 # Test configuration
 vitest.config.ts @dhruvinrsoni
+
+# -----------------------------------------------------------------------------
+# Search core — change-control zone
+# Contract tag: search-core-boundary-flex-v1
+# ADR:          docs/adr/0001-search-matching-contract.md
+# Any change here must keep tokenizer-golden.test.ts green (or amend the ADR).
+# -----------------------------------------------------------------------------
+src/background/search/tokenizer.ts                        @dhruvinrsoni
+src/background/search/search-engine.ts                    @dhruvinrsoni
+src/background/search/scorer-manager.ts                   @dhruvinrsoni
+src/background/search/scorers/                            @dhruvinrsoni
+src/background/search/__tests__/tokenizer-golden.test.ts  @dhruvinrsoni
+src/background/ranking-report.ts                          @dhruvinrsoni
+e2e/ranking-boundary-flex.spec.ts                         @dhruvinrsoni
+docs/adr/                                                 @dhruvinrsoni
+
+# -----------------------------------------------------------------------------
+# Legal / privacy blocklist — change-control zone
+# -----------------------------------------------------------------------------
+scripts/blocklist-terms.txt                               @dhruvinrsoni
+scripts/check-blocklist.mjs                               @dhruvinrsoni
+scripts/hash-blocklist-term.mjs                           @dhruvinrsoni

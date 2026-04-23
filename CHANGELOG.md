@@ -2,6 +2,38 @@
 
 All notable changes to SmrutiCortex are documented here.
 
+---
+
+## Core Changes (High-Impact)
+
+Entries in this section describe changes to the **search matching contract** — the primitive that every scorer and every ranking decision ultimately depends on. They are listed separately so reverts, audits, and incident responses can find them in one place.
+
+### [v9.2.0] Boundary-flex keyword matching — `search-core-boundary-flex-v1`
+
+Query tokens containing letter↔digit transitions (e.g., `module42`, `id1234`, `v2rc1`, `ios15`, `python3`) now match content with a single non-alphanumeric separator at the transition (`module 42`, `Module-42`, `module_42`, `module.42`, `module/42`). Matches surfaced this way are classified `SUBSTRING` (0.4) — clean `EXACT` (1.0) matches always outrank flex matches in the tiered sort.
+
+**Why:** multi-token queries like `tracker module42` against a title `[ID-1234] Module 42 Review — Acme Tracker` previously scored 1/2 (the `module42` token was invisible to the matcher because of the space between `Module` and `42`). The target got buried under visit-hot siblings on the same domain. With boundary-flex the target scores 2/2 and tier-0 sort promotes it to rank 1. This was the motivating failure case for the contract.
+
+- **Commit:** `<sha-placeholder — backfilled post-tag>`
+- **Tag:** `search-core-boundary-flex-v1` (annotated, points at commit A1 `tokenizer.ts`)
+- **ADR:** [`docs/adr/0001-search-matching-contract.md`](docs/adr/0001-search-matching-contract.md)
+- **Golden regression firewall:** [`src/background/search/__tests__/tokenizer-golden.test.ts`](src/background/search/__tests__/tokenizer-golden.test.ts)
+- **E2E lock:** [`e2e/ranking-boundary-flex.spec.ts`](e2e/ranking-boundary-flex.spec.ts)
+- **Governance:** [`.github/CODEOWNERS`](.github/CODEOWNERS) § Search core
+- **Algorithm overview:** [`docs/VIVEK_SEARCH_ALGORITHM.md`](docs/VIVEK_SEARCH_ALGORITHM.md) § Boundary-Flex Matching
+
+**Revert:** `git revert <sha-of-A1> <sha-of-A2>` → `npm test && npm run build:prod && npx playwright test e2e/ranking-boundary-flex.spec.ts`.
+
+**Symptoms that would warrant a revert:**
+- Over-matching on numerical prose (ranking reports showing unexpected `SUBSTRING` hits on titles like `42 items`, `page 42`).
+- Clean `EXACT` queries losing their top slot unexpectedly.
+
+**Mitigation already in place:** boundary-flex hits are classified `SUBSTRING` (0.4) and can never beat clean `EXACT` (1.0) in the tiered sort. The `ranking-report.ts` Field Hits column + partial-match banner surface the matcher's decision directly in user-generated bug reports.
+
+**Forbidden future relaxations** (see ADR): no letter↔letter flex, no digit↔digit flex, no multi-char separators, no alphanumeric middle separator, no stemming inside `classifyMatch`, no promotion of flex hits above `SUBSTRING`.
+
+---
+
 ## [9.1.0] — 2026-04-16
 
 Reliability, observability, and release-infrastructure release. **No new permissions, no new user-facing features that require reviewer attention.** Chrome Web Store submission record: [`docs/store-submissions/v9.1.0-chrome-web-store.md`](docs/store-submissions/v9.1.0-chrome-web-store.md).
