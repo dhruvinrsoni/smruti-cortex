@@ -458,16 +458,17 @@ export class SettingsManager {
      * Set specific setting value
      */
     static async setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> {
-        this.logger.info('setSetting', `Setting '${String(key)}' to:`, value);
+        // DEBUG — called on every setting write, would otherwise flood INFO
+        this.logger.debug('setSetting', `Setting '${String(key)}' to:`, value);
         await this.updateSettings({ [key]: value });
-        this.logger.info('setSetting', `✅ '${String(key)}' saved. Current value:`, this.settings[key]);
+        this.logger.debug('setSetting', `✅ '${String(key)}' saved. Current value:`, this.settings[key]);
     }
 
     /**
      * Reset settings to defaults
      */
     static async resetToDefaults(): Promise<void> {
-        Logger.info('[Settings] Resetting to default settings');
+        this.logger.info('resetToDefaults', 'Resetting to default settings');
         this.settings = this.getDefaults();
         await this.saveToStorage();
         await this.applySettings();
@@ -542,13 +543,13 @@ export class SettingsManager {
             const currentLogLevel = Logger.getLevel();
             if (currentLogLevel !== this.settings.logLevel) {
                 Logger.setLevelInternal(this.settings.logLevel);
-                Logger.debug('[Settings] Applied log level:', this.settings.logLevel);
+                this.logger.debug('applySettings', 'Applied log level', { logLevel: this.settings.logLevel });
             }
 
             // Notify other parts of the application about settings changes
             await this.notifySettingsChanged();
         } catch (error) {
-            Logger.error('[Settings] Failed to apply settings:', errorMeta(error));
+            this.logger.error('applySettings', 'Failed to apply settings', errorMeta(error));
         }
     }
 
@@ -567,13 +568,13 @@ export class SettingsManager {
             await new Promise<void>((resolve) => {
                 browserAPI.runtime.sendMessage(message, () => {
                     if (browserAPI.runtime.lastError) {
-                        Logger.trace('[Settings] No popup to notify:', browserAPI.runtime.lastError.message);
+                        this.logger.trace('notifySettingsChanged', 'No popup to notify', { error: browserAPI.runtime.lastError.message });
                     }
                     resolve();
                 });
             });
         } catch (error) {
-            Logger.trace('[Settings] Could not notify popup:', errorMeta(error));
+            this.logger.trace('notifySettingsChanged', 'Could not notify popup', errorMeta(error));
         }
     }
 
@@ -644,12 +645,12 @@ export class SettingsManager {
             const validated = this.validateSettings(imported);
             if (validated) {
                 await this.updateSettings(validated);
-                Logger.info('[Settings] Settings imported successfully');
+                this.logger.info('importSettings', 'Settings imported successfully');
             } else {
                 throw new Error('Invalid settings format');
             }
         } catch (error) {
-            Logger.error('[Settings] Failed to import settings:', errorMeta(error));
+            this.logger.error('importSettings', 'Failed to import settings', errorMeta(error));
             throw error;
         }
     }
