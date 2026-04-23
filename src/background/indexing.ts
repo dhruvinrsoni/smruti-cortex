@@ -271,7 +271,7 @@ async function performFullHistoryIndex(): Promise<void> {
                 await saveIndexedItem(indexed);
                 processedItems++;
             } catch (error) {
-                logger.warn('performFullHistoryIndex', '[Indexing] Failed to index item', { url: item.url, error: error.message });
+                logger.debug('performFullHistoryIndex', '[Indexing] Failed to index item', { url: item.url, error: error.message });
             }
         }
 
@@ -283,10 +283,18 @@ async function performFullHistoryIndex(): Promise<void> {
 
     const totalDuration = Date.now() - startTime;
     const processingDuration = Date.now() - batchStartTime;
+    const failedItems = allHistoryItems.length - processedItems;
+    if (failedItems > 0) {
+        logger.warn('performFullHistoryIndex', `[Indexing] ${failedItems} item(s) failed to index during full rebuild`, {
+            totalItems: allHistoryItems.length,
+            failedItems,
+            failureRate: `${Math.round((failedItems / allHistoryItems.length) * 100)}%`,
+        });
+    }
     logger.info('performFullHistoryIndex', '[Indexing] Full history indexing completed', {
         totalItems: allHistoryItems.length,
         processedItems,
-        failedItems: allHistoryItems.length - processedItems,
+        failedItems,
         totalDurationMs: totalDuration,
         processingDurationMs: processingDuration,
         itemsPerSecond: Math.round((processedItems / processingDuration) * 1000)
@@ -309,6 +317,7 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
 
     let updated = 0;
     let added = 0;
+    let failed = 0;
 
     // Process in batches to avoid blocking for large incremental updates
     const batchSize = 1000;
@@ -352,10 +361,9 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
                     await saveIndexedItem(indexed);
                     added++;
                 }
-                // processedItems tracked but not used for logging
             } catch (error) {
-                logger.warn('performIncrementalHistoryIndex', '[Indexing] Failed to index item', { url: item.url, error: error.message });
-                // failed tracked but not used for logging
+                logger.debug('performIncrementalHistoryIndex', '[Indexing] Failed to index item', { url: item.url, error: error.message });
+                failed++;
             }
         }
 
@@ -366,6 +374,15 @@ async function performIncrementalHistoryIndex(sinceTimestamp: number): Promise<v
     }
 
     const totalDuration = Date.now() - startTime;
+
+    if (failed > 0) {
+        logger.warn('performIncrementalHistoryIndex', `[Indexing] ${failed} item(s) failed during incremental index`, {
+            totalItems: newHistoryItems.length,
+            failed,
+            added,
+            updated,
+        });
+    }
 
     // Only log if there were actual changes
     if (added > 0 || updated > 0) {
@@ -395,6 +412,7 @@ export async function performIncrementalHistoryIndexManual(sinceTimestamp: numbe
 
     let updated = 0;
     let added = 0;
+    let failed = 0;
 
     // Process in batches to avoid blocking for large incremental updates
     const batchSize = 1000;
@@ -436,7 +454,8 @@ export async function performIncrementalHistoryIndexManual(sinceTimestamp: numbe
                     added++;
                 }
             } catch (error) {
-                logger.warn('performIncrementalHistoryIndexManual', '[Manual Index] Failed to index item', { url: item.url, error: error.message });
+                logger.debug('performIncrementalHistoryIndexManual', '[Manual Index] Failed to index item', { url: item.url, error: error.message });
+                failed++;
             }
         }
 
@@ -449,10 +468,20 @@ export async function performIncrementalHistoryIndexManual(sinceTimestamp: numbe
     const totalDuration = Date.now() - startTime;
     const total = added + updated;
 
+    if (failed > 0) {
+        logger.warn('performIncrementalHistoryIndexManual', `[Manual Index] ${failed} item(s) failed to index`, {
+            totalItems: newHistoryItems.length,
+            failed,
+            added,
+            updated,
+        });
+    }
+
     logger.info('performIncrementalHistoryIndexManual', '[Manual Index] Completed', {
         added,
         updated,
         total,
+        failed,
         durationMs: totalDuration
     });
 
@@ -638,6 +667,7 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
 
     let indexed = 0;
     let updated = 0;
+    let failed = 0;
 
     try {
         // Get all bookmarks
@@ -703,14 +733,23 @@ export async function performBookmarksIndex(indexBookmarks: boolean = true): Pro
                     indexed++;
                 }
             } catch (error) {
-                logger.warn('performBookmarksIndex', 'Failed to index bookmark', { 
+                logger.debug('performBookmarksIndex', 'Failed to index bookmark', { 
                     url: bookmark.url, 
                     error: (error as Error).message 
                 });
+                failed++;
             }
         }
 
         const duration = Date.now() - startTime;
+        if (failed > 0) {
+            logger.warn('performBookmarksIndex', `📚 ${failed} bookmark(s) failed to index`, {
+                totalBookmarks: allBookmarks.length,
+                failed,
+                indexed,
+                updated,
+            });
+        }
         logger.info('performBookmarksIndex', `📚 Bookmarks indexing completed in ${duration}ms`, {
             indexed,
             updated,

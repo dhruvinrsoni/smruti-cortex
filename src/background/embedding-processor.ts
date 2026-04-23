@@ -372,6 +372,11 @@ class EmbeddingProcessorImpl {
 
                 logger.debug('runLoop', `Fetched batch of ${batch.length} items to embed`);
 
+                // Track per-batch failures so we can emit a single summary log
+                // instead of one WARN per failed item in hot-path loops.
+                let batchFailed = 0;
+                let lastBatchError: string | undefined;
+
                 // Process each item in the batch
                 for (const item of batch) {
                     if (this.state !== 'running') {break;}
@@ -416,8 +421,10 @@ class EmbeddingProcessorImpl {
                         }
                     } catch (error) {
                         const errMsg = error instanceof Error ? error.message : String(error);
-                        logger.warn('runLoop', `Error embedding item: ${errMsg}`);
+                        logger.debug('runLoop', `Error embedding item: ${errMsg}`, { url: item.url });
                         this.lastError = errMsg;
+                        batchFailed++;
+                        lastBatchError = errMsg;
 
                         // Network/CORS errors are fatal — stop the processor
                         if (errMsg.includes('CORS') || errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
@@ -429,6 +436,14 @@ class EmbeddingProcessorImpl {
 
                         await this.sleep(500);
                     }
+                }
+
+                // Emit a single summary WARN per batch rather than one per item.
+                if (batchFailed > 0) {
+                    logger.warn('runLoop',
+                        `Batch completed with ${batchFailed}/${batch.length} item failure(s)`,
+                        { batchFailed, batchSize: batch.length, lastError: lastBatchError },
+                    );
                 }
             }
         } catch (error) {
