@@ -14,7 +14,7 @@ Query tokens containing letter↔digit transitions (e.g., `module42`, `id1234`, 
 
 **Why:** multi-token queries like `tracker module42` against a title `[ID-1234] Module 42 Review — Acme Tracker` previously scored 1/2 (the `module42` token was invisible to the matcher because of the space between `Module` and `42`). The target got buried under visit-hot siblings on the same domain. With boundary-flex the target scores 2/2 and tier-0 sort promotes it to rank 1. This was the motivating failure case for the contract.
 
-- **Commit:** `<sha-placeholder — backfilled post-tag>`
+- **Commit:** `332bdd6e3a9af917a994c21b647c40ecdc12d2bb` (commit A1 — `feat(search-core)!: boundary-flex matching at letter-digit transitions`)
 - **Tag:** `search-core-boundary-flex-v1` (annotated, points at commit A1 `tokenizer.ts`)
 - **ADR:** [`docs/adr/0001-search-matching-contract.md`](docs/adr/0001-search-matching-contract.md)
 - **Golden regression firewall:** [`src/background/search/__tests__/tokenizer-golden.test.ts`](src/background/search/__tests__/tokenizer-golden.test.ts)
