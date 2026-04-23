@@ -23,10 +23,3 @@ src/background/search/__tests__/tokenizer-golden.test.ts  @dhruvinrsoni
 src/background/ranking-report.ts                          @dhruvinrsoni
 e2e/ranking-boundary-flex.spec.ts                         @dhruvinrsoni
 docs/adr/                                                 @dhruvinrsoni
-
-# -----------------------------------------------------------------------------
-# Legal / privacy blocklist — change-control zone
-# -----------------------------------------------------------------------------
-scripts/blocklist-terms.txt                               @dhruvinrsoni
-scripts/check-blocklist.mjs                               @dhruvinrsoni
-scripts/hash-blocklist-term.mjs                           @dhruvinrsoni

@@ -26,14 +26,14 @@ import {
 // ── Soft-blocked API identifier aliases (stable extension contract). ──────────
 // Each literal is pragma-allowed exactly once; everything below references
 // the aliases. Renaming these would be a breaking user-facing change.
-const TRACKER_KEY         = 'jira';                // blocklist-allow
-const WIKI_KEY            = 'confluence';          // blocklist-allow
-const TRACKER_SITE_OPT    = 'jiraSiteUrl';         // blocklist-allow
-const WIKI_SITE_OPT       = 'confluenceSiteUrl';   // blocklist-allow
-const NO_TRACKER_SITE_ERR = 'no-jira-site';        // blocklist-allow
-const NO_WIKI_SITE_ERR    = 'no-confluence-site';  // blocklist-allow
-const TRACKER_DISPLAY     = 'Jira';                // blocklist-allow
-const WIKI_DISPLAY        = 'Confluence';          // blocklist-allow
+const TRACKER_KEY         = 'jira';
+const WIKI_KEY            = 'confluence';
+const TRACKER_SITE_OPT    = 'jiraSiteUrl';
+const WIKI_SITE_OPT       = 'confluenceSiteUrl';
+const NO_TRACKER_SITE_ERR = 'no-jira-site';
+const NO_WIKI_SITE_ERR    = 'no-confluence-site';
+const TRACKER_DISPLAY     = 'Jira';
+const WIKI_DISPLAY        = 'Confluence';
 
 // Neutral synthetic hosts used as test site URLs.
 const TRACKER_SITE_URL = 'https://tracker.example.com';

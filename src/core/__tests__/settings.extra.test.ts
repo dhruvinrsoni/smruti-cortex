@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // pragma block so the rest of the file stays free of those literals. These
 // keys are part of the stable extension contract and cannot be renamed.
 // ---------------------------------------------------------------------------
-const TRACKER_SITE_KEY = 'jiraSiteUrl';         // blocklist-allow
-const WIKI_SITE_KEY    = 'confluenceSiteUrl';   // blocklist-allow
+const TRACKER_SITE_KEY = 'jiraSiteUrl';
+const WIKI_SITE_KEY    = 'confluenceSiteUrl';
 
 // ---------------------------------------------------------------------------
 // Reusable Logger mock factory

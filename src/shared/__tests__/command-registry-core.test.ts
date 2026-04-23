@@ -33,8 +33,8 @@ const base: AppSettings = {
 // Soft-blocked external-integration engine keys pinned behind a single
 // pragma block so the rest of the file stays free of those literals. See
 // scripts/blocklist-terms.txt for the governing list.
-const EXTERNAL_TRACKER_ENGINE_KEY = 'jira';         // blocklist-allow
-const EXTERNAL_WIKI_ENGINE_KEY    = 'confluence';   // blocklist-allow
+const EXTERNAL_TRACKER_ENGINE_KEY = 'jira';
+const EXTERNAL_WIKI_ENGINE_KEY    = 'confluence';
 
 describe('command-registry core', () => {
   it('SEARCH_ENGINE_PREFIXES map to static SEARCH_ENGINES or external-integration targets', () => {

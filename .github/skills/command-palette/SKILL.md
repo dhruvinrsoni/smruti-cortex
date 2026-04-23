@@ -87,8 +87,8 @@ interface PaletteCommand {
 | `y` | YouTube | `youtube.com/results?search_query=` |
 | `gh` | GitHub | `github.com/search?q=` |
 | `gc` | GCP Console | `console.cloud.google.com/search?q=` |
-| `j` | Tracker (`Jira`) | `{jiraSiteUrl}/secure/QuickSearch.jspa?searchString=` | <!-- blocklist-allow -->
-| `c` | Wiki (`Confluence`) | `{confluenceSiteUrl}/dosearchsite.action?queryString=` | <!-- blocklist-allow -->
+| `j` | Tracker (`Jira`) | `{jiraSiteUrl}/secure/QuickSearch.jspa?searchString=` |
+| `c` | Wiki (`Confluence`) | `{confluenceSiteUrl}/dosearchsite.action?queryString=` |
 
 ### Key Functions
 
@@ -105,8 +105,8 @@ interface PaletteCommand {
 | `commandPaletteInPopup` | boolean | `false` |
 | `commandPaletteOnboarded` | boolean | `false` |
 | `webSearchEngine` | string | `'google'` |
-| `jiraSiteUrl` | string | `''` | <!-- blocklist-allow -->
-| `confluenceSiteUrl` | string | `''` | <!-- blocklist-allow -->
+| `jiraSiteUrl` | string | `''` |
+| `confluenceSiteUrl` | string | `''` |
 | `advancedBrowserCommands` | boolean | `false` |
 
 ## Advanced Browser Commands

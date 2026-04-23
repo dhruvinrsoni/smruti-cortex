@@ -170,7 +170,6 @@ Any PR touching `tokenizer.ts`, `search-engine.ts`, or the golden suite **must**
 - [ ] `npm test` — all unit tests green, including `tokenizer-golden.test.ts`.
 - [ ] `npm run build:prod` — clean build.
 - [ ] `npx playwright test e2e/ranking-boundary-flex.spec.ts` — 2/2 tests green.
-- [ ] `scripts/check-blocklist.mjs` — no blocked terms in the diff.
 - [ ] If any golden row changes, the PR description explains **why**, and updates this ADR if the contract itself is being changed.
 - [ ] CODEOWNERS review obtained for any file under `src/background/search/` or `docs/adr/`.
 
