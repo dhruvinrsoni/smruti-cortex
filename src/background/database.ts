@@ -6,6 +6,8 @@ import { DB_NAME } from '../core/constants';
 import { Logger, errorMeta } from '../core/logger';
 import { traced } from '../core/traced';
 
+const log = Logger.forComponent('Database');
+
 const DB_VERSION = 1;
 const STORE_NAME = 'pages';
 
@@ -31,11 +33,11 @@ export function resetDbInstance(): void {
 // ------------------------------
 function openDatabaseImpl(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-        Logger.debug('Opening database...');
+        log.debug('openDatabase', 'Opening database...');
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = () => {
-            Logger.error('Open error:', errorMeta(request.error));
+            log.error('openDatabase', 'Open error', errorMeta(request.error));
             reject(request.error);
         };
         request.onsuccess = () => {
@@ -44,26 +46,26 @@ function openDatabaseImpl(): Promise<IDBDatabase> {
             // Auto-clear the cached instance when the browser closes the
             // connection unexpectedly (hibernation, Chrome GC, etc.)
             db.onclose = () => {
-                Logger.warn('Database connection closed unexpectedly');
+                log.warn('openDatabase', 'Database connection closed unexpectedly');
                 dbInstance = null;
                 cachedItems = null;
             };
 
             // Handle concurrent version-change events (another tab upgrading)
             db.onversionchange = () => {
-                Logger.warn('Database version change detected, closing connection');
+                log.warn('openDatabase', 'Database version change detected, closing connection');
                 db.close();
                 dbInstance = null;
                 cachedItems = null;
             };
 
             dbInstance = db;
-            Logger.debug('Database opened successfully');
+            log.debug('openDatabase', 'Database opened successfully');
             resolve(dbInstance);
         };
 
         request.onupgradeneeded = () => {
-            Logger.trace('Database upgrade needed, creating object store');
+            log.trace('openDatabase', 'Database upgrade needed, creating object store');
             const db = request.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
@@ -71,7 +73,7 @@ function openDatabaseImpl(): Promise<IDBDatabase> {
                 store.createIndex('hostname', 'hostname', { unique: false });
                 store.createIndex('lastVisit', 'lastVisit', { unique: false });
                 store.createIndex('visitCount', 'visitCount', { unique: false });
-                Logger.trace('Object store and indexes created');
+                log.trace('openDatabase', 'Object store and indexes created');
             }
         };
     });
@@ -431,8 +433,7 @@ function formatBytes(bytes: number): string {
 }
 
 export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
-    const logger = Logger.forComponent('Database');
-    logger.debug('getStorageQuotaInfo', 'Retrieving storage quota information');
+    log.debug('getStorageQuotaInfo', 'Retrieving storage quota information');
     
     try {
         // Use store.count() instead of getAllIndexedItems() to avoid
@@ -454,16 +455,16 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
                 const estimate = await navigator.storage.estimate();
                 used = estimate.usage || 0;
                 total = estimate.quota || 0;
-                logger.trace('getStorageQuotaInfo', 'Storage estimate retrieved', { used, total });
+                log.trace('getStorageQuotaInfo', 'Storage estimate retrieved', { used, total });
             } catch {
-                logger.debug('getStorageQuotaInfo', 'Storage estimate not available, using fallback');
+                log.debug('getStorageQuotaInfo', 'Storage estimate not available, using fallback');
             }
         }
         
         // Fallback: estimate based on item count (rough estimate: ~1KB per item average)
         if (used === 0 && itemCount > 0) {
             used = itemCount * 1024; // Rough estimate
-            logger.trace('getStorageQuotaInfo', 'Using item-based estimate', { itemCount, estimatedBytes: used });
+            log.trace('getStorageQuotaInfo', 'Using item-based estimate', { itemCount, estimatedBytes: used });
         }
         
         const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
@@ -477,10 +478,10 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
             itemCount,
         };
         
-        logger.info('getStorageQuotaInfo', 'Storage quota info', info);
+        log.info('getStorageQuotaInfo', 'Storage quota info', info);
         return info;
     } catch (error) {
-        logger.error('getStorageQuotaInfo', 'Failed to get storage quota', errorMeta(error));
+        log.error('getStorageQuotaInfo', 'Failed to get storage quota', errorMeta(error));
         return {
             used: 0,
             total: 0,
@@ -495,7 +496,7 @@ export async function getStorageQuotaInfo(): Promise<StorageQuotaInfo> {
 // Force rebuild index flag
 export async function setForceRebuildFlag(value: boolean): Promise<void> {
     await setSetting('forceRebuildIndex', value);
-    Logger.info('Database', 'setForceRebuildFlag', value ? '🔄 Force rebuild flag set' : '✅ Force rebuild flag cleared');
+    log.info('setForceRebuildFlag', value ? '🔄 Force rebuild flag set' : '✅ Force rebuild flag cleared');
 }
 
 export async function getForceRebuildFlag(): Promise<boolean> {
