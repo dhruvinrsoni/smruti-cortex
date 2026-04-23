@@ -1,4 +1,4 @@
-### [9.2.0] — 2026-04-23
+## [9.2.0] — 2026-04-23
 
 ### Features
 - client-side dispatch guard collapses duplicate SEARCH_QUERY sends
@@ -34,7 +34,7 @@
 
 ---
 
- Changelog
+# Changelog
 
 All notable changes to SmrutiCortex are documented here.
 
