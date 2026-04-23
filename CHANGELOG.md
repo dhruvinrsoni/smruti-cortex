@@ -1,4 +1,40 @@
-# Changelog
+### [9.2.0] — 2026-04-23
+
+### Features
+- client-side dispatch guard collapses duplicate SEARCH_QUERY sends
+- field-hit map + partial-match banner
+- wire boundary-flex into haystack inclusion gates
+
+### Bug Fixes
+- correct setForceRebuildFlag Logger call shape
+- sliding-window port rate limiter with 60/s cap
+- aggregate port rate-limit log into one entry per window
+- keep Report button as stable DOM node (toggle hidden instead of remove/recreate)
+
+### Refactoring
+- replace silent catches with DEBUG/WARN breadcrumbs
+- aggregate hot-path loop failures with per-batch summaries
+- apply MIXED-policy levels and finish errorMeta rollout
+- correlate handler logs with message type + add missing error paths
+- route direct console.* through structured log + preserve full Error objects
+- route all direct console.* calls through component Logger
+- migrate legacy Logger.* calls + downgrade setSetting to DEBUG
+- migrate to module-level component Logger
+
+### Tests
+- end-to-end lock for boundary-flex ranking (A4)
+
+### Other
+- update latest quality report [skip ci]
+- backfill SHA for search-core-boundary-flex-v1
+- boundary-flex contract ADR + VIVEK + skill update (A5)
+- remove repository blocklist scanner and all related artifacts
+- graduate coverage ratchet (soft ±1%, hard beyond, strict opt-in)
+- CODEOWNERS for search-core + CHANGELOG high-impact entry (A6)
+
+---
+
+ Changelog
 
 All notable changes to SmrutiCortex are documented here.
 

@@ -3,7 +3,7 @@
   "name": "SmrutiCortex: Instant Browser History Search",
   "short_name": "SmrutiCortex",
   "description": "Instant browser history search. Local AI via Ollama: live synonym expansion, per-keyword cache. 100% private. Zero cloud.",
-  "version": "9.1.0",
+  "version": "9.2.0",
   "permissions": [
     "history",
     "bookmarks",
