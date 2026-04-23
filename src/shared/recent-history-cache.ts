@@ -31,6 +31,10 @@
  *   practice the 30-min keep-alive cadence overwrites it far more often.
  */
 
+import { Logger, errorMeta } from '../core/logger';
+
+const log = Logger.forComponent('RecentHistoryCache');
+
 const CACHE_KEY = 'recentHistoryCache';
 
 // Bump when the shape of `RecentHistoryCacheEntry.items` changes in a way
@@ -112,7 +116,8 @@ export async function getRecentHistoryCache<T = unknown>(): Promise<RecentHistor
     if (typeof entry.writtenAt !== 'number') {return null;}
     if (Date.now() - entry.writtenAt > CACHE_MAX_AGE_MS) {return null;}
     return entry;
-  } catch {
+  } catch (err) {
+    log.debug('getRecentHistoryCache', 'Session storage read failed — treating as cache miss', errorMeta(err));
     return null;
   }
 }
@@ -133,9 +138,11 @@ export async function setRecentHistoryCache<T>(items: T[], limit: number): Promi
       limit,
     };
     await session.set({ [CACHE_KEY]: entry });
-  } catch {
+  } catch (err) {
     // Storage quota, context invalidated, etc. — cache is a hint, not
-    // a source of truth; swallowing is safe.
+    // a source of truth; swallowing is safe. Still emit a DEBUG so the
+    // breadcrumb is in the buffer for post-mortems.
+    log.debug('setRecentHistoryCache', 'Session storage write failed — cache is a hint, not a source of truth', errorMeta(err));
   }
 }
 
@@ -149,8 +156,9 @@ export async function clearRecentHistoryCache(): Promise<void> {
   if (!session) {return;}
   try {
     await session.remove(CACHE_KEY);
-  } catch {
+  } catch (err) {
     // Same rationale as setRecentHistoryCache.
+    log.debug('clearRecentHistoryCache', 'Session storage remove failed — next open may paint stale rows once', errorMeta(err));
   }
 }
 

@@ -1,5 +1,5 @@
 import { browserAPI } from '../../core/helpers';
-import { Logger } from '../../core/logger';
+import { Logger, errorMeta } from '../../core/logger';
 
 const logger = Logger.forComponent('CommandsListener');
 
@@ -26,7 +26,8 @@ export async function reinjectContentScript(tabId: number): Promise<boolean> {
       files: ['content_scripts/quick-search.js'],
     });
     return true;
-  } catch {
+  } catch (err) {
+    logger.debug('reinjectContentScript', 'executeScript failed (restricted tab, permission denied, etc.)', { tabId, ...errorMeta(err) });
     return false;
   }
 }
@@ -49,7 +50,9 @@ export function registerCommandsListenerEarly(): void {
                 logger.debug('onCommand', `✅ Quick-search opened in ${(performance.now() - t0).toFixed(1)}ms`);
                 return;
               }
-            } catch { /* Tier 2 */ }
+            } catch (tier2Err) {
+              logger.debug('onCommand', 'Tier 2 (direct sendMessage) failed, trying re-injection', errorMeta(tier2Err));
+            }
             try {
               const injected = await reinjectContentScript(tab.id);
               if (injected) {
@@ -60,7 +63,9 @@ export function registerCommandsListenerEarly(): void {
                   return;
                 }
               }
-            } catch { /* Tier 3 */ }
+            } catch (tier3Err) {
+              logger.debug('onCommand', 'Tier 3 (re-inject + sendMessage) failed, falling back to popup', errorMeta(tier3Err));
+            }
             logger.info('onCommand', 'Quick-search unavailable, opening popup');
             await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
             logger.info('onCommand', `✅ Popup opened (fallback) in ${(performance.now() - t0).toFixed(1)}ms`);
@@ -70,11 +75,12 @@ export function registerCommandsListenerEarly(): void {
             logger.info('onCommand', `✅ Popup opened in ${(performance.now() - t0).toFixed(1)}ms`);
           }
         } catch (e) {
-          const errorMsg = (e as Error).message || 'Unknown error';
-          logger.info('onCommand', `All tiers failed (${errorMsg}), last-resort popup`);
+          logger.warn('onCommand', 'All tiers failed, attempting last-resort popup', errorMeta(e));
           try {
             await (browserAPI.action as any).openPopup(); // eslint-disable-line @typescript-eslint/no-explicit-any
-          } catch { /* best effort */ }
+          } catch (popupErr) {
+            logger.error('onCommand', 'Last-resort popup also failed — keyboard shortcut dead', errorMeta(popupErr));
+          }
         }
       }
     });

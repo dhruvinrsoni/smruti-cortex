@@ -145,7 +145,9 @@ async function init() {
             logger.debug('init', '⚠️ Embedding processor auto-start failed:', errorMeta(error));
           }
         }
-      }).catch(() => {/* ignore */});
+      }).catch((err) => {
+        logger.warn('init', 'SettingsManager.init() chain failed — Ollama warmup/embedding auto-start skipped', errorMeta(err));
+      });
       registerCommandsListenerEarly();
       const initDuration = (performance.now() - initStartTime).toFixed(1);
       logger.info('init', `✅ Service worker ready in ${initDuration}ms`);
