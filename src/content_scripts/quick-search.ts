@@ -81,6 +81,11 @@ import {
   isOverlayKey as isOverlayKeyPure,
   prevWordBoundary,
   nextWordBoundary,
+  createDispatchGuardState,
+  makeDispatchKey,
+  shouldSuppressDispatch,
+  markDispatched,
+  clearInflight,
 } from './quick-search-utils';
 
 // Extend window interface for our extension
@@ -182,6 +187,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // intent comes in through performSearch / loadRecentHistory.
   let portNotReadyRetryCount = 0;
   const PORT_NOT_READY_RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000];
+  // Client-side dispatch guard: collapses duplicate (query, skipAI) sends so
+  // upstream dispatch loops (duplicate listeners, password-manager replays,
+  // IME composition bursts) cannot push 30+ SEARCH_QUERY messages per second
+  // onto the port — which would then be rejected by the SW rate limiter.
+  const dispatchGuard = createDispatchGuardState();
   let prewarmed = false;
   let cachedSettings: AppSettings | null = null;
   let searchDebounceMs = DEBOUNCE_MS;
@@ -1335,6 +1345,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
         // Handle error responses from service worker
         if (response?.error) {
+          // Any terminal response (including errors) clears the inflight
+          // marker so subsequent retries / typing can dispatch. Pass null so
+          // we don't have to reconstruct the exact key.
+          clearInflight(dispatchGuard, null);
           if (response.error === 'Service worker not ready') {
             // Exponential-ish backoff ladder mirrors loadRecentHistory — cold
             // SW init after hibernate can take ~1-2s, and bursts of 500ms
@@ -1378,6 +1392,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
 
         if (response?.results) {
+          // Clear the inflight marker for this specific dispatch so the next
+          // keystroke / phase can submit.
+          if (typeof response.query === 'string' && typeof response.skipAI === 'boolean') {
+            clearInflight(dispatchGuard, makeDispatchKey(response.query, response.skipAI));
+          } else {
+            clearInflight(dispatchGuard, null);
+          }
           // Mode guard: ignore port responses when in a palette mode
           if (currentMode !== 'history') {
             log.debug('port', `Ignoring port response — currently in palette mode: ${currentMode}`);
@@ -1437,6 +1458,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           aiSearchPending = false;
           hideSpinner();
         }
+        // Reset the dispatch guard so the next reconnect can submit queries
+        // even if the previous inflight response never arrived.
+        clearInflight(dispatchGuard, null);
 
         clearHeartbeatTimers();
         searchPort = null;
@@ -4139,35 +4163,54 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return;
     }
 
+    // Client-side idempotency check — prevents duplicate (query, skipAI)
+    // dispatches from flooding the port while one is still in flight. See
+    // createDispatchGuardState docs for the full rationale.
+    const dispatchKey = makeDispatchKey(sanitizedQuery, skipAI);
+    const dispatchDecision = shouldSuppressDispatch(dispatchGuard, dispatchKey, Date.now());
+    if (dispatchDecision.suppress) {
+      log.debug(
+        'performSearch',
+        `Suppressed duplicate dispatch: reason=${dispatchDecision.reason} key="${dispatchKey}"`,
+      );
+      return;
+    }
+
     // Use port if available (faster), otherwise fallback to sendMessage
     if (searchPort) {
       try {
         searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
+        markDispatched(dispatchGuard, dispatchKey, Date.now());
         log.debug('performSearch', `Query sent via port: "${sanitizedQuery}" (skipAI=${skipAI})`);
         // Check for runtime errors after async operation
         if (chrome.runtime.lastError) {
           log.warn('performSearch', 'Port message error (likely bfcache):', chrome.runtime.lastError.message);
+          clearInflight(dispatchGuard, dispatchKey);
           searchPort = null;
           openSearchPort();
           return;
         }
       } catch (err) {
         log.warn('performSearch', 'Failed to send via port, reconnecting:', (err as Error).message);
+        clearInflight(dispatchGuard, dispatchKey);
         searchPort = null;
         openSearchPort();
         // Try once more with new port
         if (searchPort) {
           try {
             searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
+            markDispatched(dispatchGuard, dispatchKey, Date.now());
             log.debug('performSearch', 'Query sent via reconnected port');
             // Check for runtime errors after async operation
             if (chrome.runtime.lastError) {
               log.warn('performSearch', 'Reconnected port error:', chrome.runtime.lastError.message);
+              clearInflight(dispatchGuard, dispatchKey);
               searchPort = null;
             }
             return;
           } catch (e) {
             log.warn('performSearch', 'Reconnected port also failed:', (e as Error).message);
+            clearInflight(dispatchGuard, dispatchKey);
           }
         }
         // Fall through to sendMessage fallback

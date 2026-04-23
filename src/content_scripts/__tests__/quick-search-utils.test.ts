@@ -8,7 +8,15 @@ import {
   isOverlayKey,
   prevWordBoundary,
   nextWordBoundary,
+  makeDispatchKey,
+  shouldSuppressDispatch,
+  markDispatched,
+  clearInflight,
+  createDispatchGuardState,
+  DEFAULT_INFLIGHT_MAX_MS,
+  RAPID_REPEAT_WINDOW_MS,
   type DetectModeSettings,
+  type DispatchGuardState,
 } from '../quick-search-utils';
 
 const allModes: DetectModeSettings = {
@@ -289,5 +297,115 @@ describe('nextWordBoundary', () => {
 
   it('handles multiple words', () => {
     expect(nextWordBoundary('one two three', 0)).toBe(4);
+  });
+});
+
+describe('dispatch guard', () => {
+  let state: DispatchGuardState;
+
+  beforeEach(() => {
+    state = createDispatchGuardState();
+  });
+
+  it('makeDispatchKey distinguishes skipAI true vs false for same query', () => {
+    expect(makeDispatchKey('foo', true)).not.toBe(makeDispatchKey('foo', false));
+  });
+
+  it('makeDispatchKey distinguishes different queries for same skipAI', () => {
+    expect(makeDispatchKey('foo', true)).not.toBe(makeDispatchKey('bar', true));
+  });
+
+  it('allows first dispatch on a fresh guard', () => {
+    const key = makeDispatchKey('hello', true);
+    const decision = shouldSuppressDispatch(state, key, 1000);
+    expect(decision.suppress).toBe(false);
+    expect(decision.reason).toBeNull();
+  });
+
+  it('suppresses a duplicate (query, skipAI) while still in-flight', () => {
+    const key = makeDispatchKey('hello', true);
+    markDispatched(state, key, 1000);
+    const decision = shouldSuppressDispatch(state, key, 1050);
+    expect(decision.suppress).toBe(true);
+    expect(decision.reason).toBe('duplicate-inflight');
+  });
+
+  it('allows Phase 1 (skipAI=true) and Phase 2 (skipAI=false) for the same query', () => {
+    const phase1 = makeDispatchKey('hello', true);
+    const phase2 = makeDispatchKey('hello', false);
+    markDispatched(state, phase1, 1000);
+    const decision = shouldSuppressDispatch(state, phase2, 1100);
+    expect(decision.suppress).toBe(false);
+    expect(decision.reason).toBeNull();
+  });
+
+  it('allows resubmit after inflightMaxMs has elapsed', () => {
+    const key = makeDispatchKey('hello', true);
+    markDispatched(state, key, 1000);
+    const decision = shouldSuppressDispatch(
+      state,
+      key,
+      1000 + DEFAULT_INFLIGHT_MAX_MS + 1,
+    );
+    expect(decision.suppress).toBe(false);
+  });
+
+  it('allows resubmit immediately after a different query intervened and cleared the inflight', () => {
+    const keyA = makeDispatchKey('foo', true);
+    const keyB = makeDispatchKey('bar', true);
+    markDispatched(state, keyA, 1000);
+    clearInflight(state, keyA);
+    markDispatched(state, keyB, 1010);
+    clearInflight(state, keyB);
+    // After both finished, re-sending A is allowed (no inflight, no rapid repeat on same key).
+    const decision = shouldSuppressDispatch(state, keyA, 1200);
+    expect(decision.suppress).toBe(false);
+  });
+
+  it('rapid-repeat: suppresses same key dispatched within RAPID_REPEAT_WINDOW_MS even if inflight was cleared', () => {
+    const key = makeDispatchKey('hello', true);
+    markDispatched(state, key, 1000);
+    clearInflight(state, key);
+    const decision = shouldSuppressDispatch(
+      state,
+      key,
+      1000 + RAPID_REPEAT_WINDOW_MS - 1,
+    );
+    expect(decision.suppress).toBe(true);
+    expect(decision.reason).toBe('rapid-repeat');
+  });
+
+  it('rapid-repeat: allows same key after RAPID_REPEAT_WINDOW_MS has elapsed', () => {
+    const key = makeDispatchKey('hello', true);
+    markDispatched(state, key, 1000);
+    clearInflight(state, key);
+    const decision = shouldSuppressDispatch(
+      state,
+      key,
+      1000 + RAPID_REPEAT_WINDOW_MS + 1,
+    );
+    expect(decision.suppress).toBe(false);
+  });
+
+  it('clearInflight with null clears unconditionally (terminal error path)', () => {
+    const key = makeDispatchKey('hello', true);
+    markDispatched(state, key, 1000);
+    clearInflight(state, null);
+    expect(state.inflightKey).toBeNull();
+  });
+
+  it('clearInflight is a no-op when the key does not match (stale response)', () => {
+    const live = makeDispatchKey('live', true);
+    const stale = makeDispatchKey('stale', true);
+    markDispatched(state, live, 1000);
+    clearInflight(state, stale);
+    expect(state.inflightKey).toBe(live);
+  });
+
+  it('shouldSuppressDispatch accepts a custom inflightMaxMs override', () => {
+    const key = makeDispatchKey('hello', true);
+    markDispatched(state, key, 1000);
+    expect(shouldSuppressDispatch(state, key, 1300, 200).suppress).toBe(false);
+    expect(shouldSuppressDispatch(state, key, 1150, 200).suppress).toBe(true);
   });
 });

@@ -134,3 +134,89 @@ export function nextWordBoundary(text: string, pos: number): number {
   while (i < text.length && /\s/.test(text[i])) { i++; }
   return i;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispatch guard — client-side idempotency for SEARCH_QUERY port messages.
+//
+// Without this, any upstream dispatch loop (duplicate listeners, password
+// managers replaying input, IME composition bursts) can push 30+ SEARCH_QUERY
+// messages per second onto a single port, which the service-worker rate
+// limiter then drops as `{ error: 'Rate limited' }` — leaving stale results
+// on screen. The guard collapses same-intent dispatches so only unique
+// `(query, skipAI)` tuples travel down the port.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DispatchGuardState {
+  /** Last key that was actually dispatched (cleared never; used for rapid-repeat window). */
+  lastKey: string | null;
+  /** Key of a dispatch that has not yet received a response; null when nothing in flight. */
+  inflightKey: string | null;
+  /** Monotonic timestamp (ms, Date.now basis) when the inflight dispatch started. */
+  inflightSince: number;
+}
+
+export function createDispatchGuardState(): DispatchGuardState {
+  return { lastKey: null, inflightKey: null, inflightSince: 0 };
+}
+
+/** Stable key for a SEARCH_QUERY dispatch. */
+export function makeDispatchKey(query: string, skipAI: boolean): string {
+  return `${skipAI ? '1' : '0'}|${query}`;
+}
+
+export type DispatchSuppressReason = 'duplicate-inflight' | 'rapid-repeat';
+
+export interface DispatchDecision {
+  suppress: boolean;
+  reason: DispatchSuppressReason | null;
+}
+
+/** Default max time a dispatch is considered "in flight" before we allow a resubmit. */
+export const DEFAULT_INFLIGHT_MAX_MS = 2000;
+/** Minimum gap before the SAME key can be sent again after a recent dispatch. */
+export const RAPID_REPEAT_WINDOW_MS = 100;
+
+/**
+ * Decide whether a prospective dispatch should be suppressed.
+ * Pure function: callers pass `now` for deterministic tests.
+ */
+export function shouldSuppressDispatch(
+  state: DispatchGuardState,
+  key: string,
+  now: number,
+  inflightMaxMs: number = DEFAULT_INFLIGHT_MAX_MS,
+): DispatchDecision {
+  if (
+    state.inflightKey !== null &&
+    state.inflightKey === key &&
+    now - state.inflightSince < inflightMaxMs
+  ) {
+    return { suppress: true, reason: 'duplicate-inflight' };
+  }
+  if (
+    state.lastKey !== null &&
+    state.lastKey === key &&
+    now - state.inflightSince < RAPID_REPEAT_WINDOW_MS
+  ) {
+    return { suppress: true, reason: 'rapid-repeat' };
+  }
+  return { suppress: false, reason: null };
+}
+
+/** Mark a dispatch as sent; call immediately before postMessage. */
+export function markDispatched(state: DispatchGuardState, key: string, now: number): void {
+  state.lastKey = key;
+  state.inflightKey = key;
+  state.inflightSince = now;
+}
+
+/**
+ * Clear the in-flight marker when a response (or terminal error) arrives for it.
+ * Called on normal results, rate-limit responses, and SW-not-ready responses so
+ * a subsequent retry/typing can dispatch again.
+ */
+export function clearInflight(state: DispatchGuardState, key: string | null): void {
+  if (key === null || state.inflightKey === key) {
+    state.inflightKey = null;
+  }
+}
