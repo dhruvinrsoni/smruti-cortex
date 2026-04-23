@@ -2,18 +2,19 @@
 // Golden baseline for `classifyMatch`
 // ─────────────────────────────────────────────────────────────────────────────
 // This file is the REGRESSION FIREWALL for the search-core matching contract.
-// Every row below asserts a (token, content) → MatchType expectation that
-// reflects the CURRENT on-main behaviour of `classifyMatch`. When the
-// boundary-flex upgrade ships in the follow-up commit, ONLY the rows tagged
-// `flips: 'NONE->SUBSTRING'` may change; everything else must stay green.
+// Every row below asserts a (token, content) → MatchType expectation.
 //
 // Rules for editing this file:
 //   1. Never weaken an existing assertion silently. If behaviour changes, flip
-//      the row and update its `flips` comment in the same commit.
+//      the row and document why in the commit message + ADR in the SAME commit.
 //   2. All fixtures use synthetic / RFC-2606 placeholders — no company
 //      literals. This is enforced by the blocklist scanner too.
 //   3. If you add a row, add it to the right category and keep the category
 //      balanced (we aim for ~80 rows covering real-world match shapes).
+//   4. The `flex:` flag documents rows that are covered by the boundary-flex
+//      contract (letter↔digit transition in the token with ≤1 separator in
+//      the content). Flipping a `flex: true` row to NONE means we're
+//      breaking the contract — don't.
 //
 // Read `docs/adr/0001-search-matching-contract.md` before changing the file.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,11 +36,12 @@ interface GoldenRow {
   content: string;
   expected: Expected;
   /**
-   * Forward-looking marker for the boundary-flex upgrade commit. Rows that
-   * will legitimately flip from NONE to SUBSTRING there are tagged so the
-   * diff is reviewable at a glance.
+   * True when the row exercises the boundary-flex contract: the token has a
+   * letter↔digit transition and the content has the same runs separated by
+   * at most one non-alphanumeric char. These rows are the reason flex
+   * exists — do not weaken them.
    */
-  flips?: 'NONE->SUBSTRING';
+  flex?: boolean;
 }
 
 // ─── Category 1: pure-letter EXACT (word-boundary match) ─────────────────────
@@ -103,24 +105,25 @@ const CAT_LD_SAMEWORD: GoldenRow[] = [
 ];
 
 // ─── Category 6: letter↔digit tokens, SEPARATOR-BROKEN content ───────────────
-// These are the rows that will flip from NONE → SUBSTRING in the boundary-flex
-// upgrade commit. Today they MUST all be NONE.
+// These rows exercise the boundary-flex contract: a letter↔digit token
+// matching content where the runs are split by ≤1 non-alphanumeric char.
+// Classified SUBSTRING (not EXACT) so clean same-word hits always outrank.
 const CAT_LD_FLEX_CANDIDATES: GoldenRow[] = [
-  { token: 'module42', content: 'module 42',              expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'module42', content: 'Module 42 Review',       expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'module42', content: 'module-42',              expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'module42', content: 'module_42',              expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'module42', content: 'module.42',              expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'module42', content: 'module/42',              expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'id1234',   content: 'ID-1234',                expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'id1234',   content: 'id 1234',                expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'id1234',   content: 'ticket id_1234 status',  expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'v2rc1',    content: 'v2 rc1',                 expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'ios15',    content: 'ios 15',                 expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'ios15',    content: 'iOS-15',                 expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'python3',  content: 'python 3',               expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'build7',   content: 'build 7',                expected: NONE, flips: 'NONE->SUBSTRING' },
-  { token: 'v2',       content: 'v-2 tag',                expected: NONE, flips: 'NONE->SUBSTRING' },
+  { token: 'module42', content: 'module 42',              expected: SUBSTRING, flex: true },
+  { token: 'module42', content: 'Module 42 Review',       expected: SUBSTRING, flex: true },
+  { token: 'module42', content: 'module-42',              expected: SUBSTRING, flex: true },
+  { token: 'module42', content: 'module_42',              expected: SUBSTRING, flex: true },
+  { token: 'module42', content: 'module.42',              expected: SUBSTRING, flex: true },
+  { token: 'module42', content: 'module/42',              expected: SUBSTRING, flex: true },
+  { token: 'id1234',   content: 'ID-1234',                expected: SUBSTRING, flex: true },
+  { token: 'id1234',   content: 'id 1234',                expected: SUBSTRING, flex: true },
+  { token: 'id1234',   content: 'ticket id_1234 status',  expected: SUBSTRING, flex: true },
+  { token: 'v2rc1',    content: 'v2 rc1',                 expected: SUBSTRING, flex: true },
+  { token: 'ios15',    content: 'ios 15',                 expected: SUBSTRING, flex: true },
+  { token: 'ios15',    content: 'iOS-15',                 expected: SUBSTRING, flex: true },
+  { token: 'python3',  content: 'python 3',               expected: SUBSTRING, flex: true },
+  { token: 'build7',   content: 'build 7',                expected: SUBSTRING, flex: true },
+  { token: 'v2',       content: 'v-2 tag',                expected: SUBSTRING, flex: true },
 ];
 
 // ─── Category 7: letter↔digit tokens that must STAY NONE after the flex fix ──
@@ -144,7 +147,7 @@ const CAT_URL: GoldenRow[] = [
   { token: 'path',     content: 'https://example.com/path/to/resource', expected: EXACT },
   { token: 'sub',      content: 'sub.example.com', expected: EXACT },
   { token: 'ticket',   content: 'https://tracker.example.com/ticket/ID-1234', expected: EXACT },
-  { token: 'id1234',   content: 'https://tracker.example.com/ticket/ID-1234', expected: NONE, flips: 'NONE->SUBSTRING' },
+  { token: 'id1234',   content: 'https://tracker.example.com/ticket/ID-1234', expected: SUBSTRING, flex: true },
 ];
 
 // ─── Category 9: edge cases ──────────────────────────────────────────────────
@@ -217,10 +220,12 @@ describe('tokenizer-golden: classifyMatch regression firewall', () => {
     });
   });
 
-  describe('category: letter↔digit tokens, separator-broken (flex candidates)', () => {
-    // Today these are NONE; the boundary-flex commit flips them to SUBSTRING.
+  describe('category: letter↔digit tokens, separator-broken (boundary-flex contract)', () => {
+    // Contract: letter↔digit-transition tokens match content with ≤1
+    // non-alphanumeric separator between each pair of runs, classified as
+    // SUBSTRING. These rows are the reason the contract exists.
     it.each(CAT_LD_FLEX_CANDIDATES)(
-      '[$token] in "$content" → CURRENT=NONE (flips: NONE→SUBSTRING)',
+      '[$token] in "$content" → SUBSTRING (flex)',
       ({ token, content, expected }) => {
         expect(classifyMatch(token, content)).toBe(expected);
       },

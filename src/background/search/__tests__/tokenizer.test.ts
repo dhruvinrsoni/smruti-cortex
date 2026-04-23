@@ -99,6 +99,47 @@ describe('classifyMatch', () => {
     });
   });
 
+  // Boundary-flex: letter↔digit-transition tokens match content that splits
+  // the runs with up to one non-alphanumeric char. Contract locked by
+  // tokenizer-golden.test.ts and docs/adr/0001-search-matching-contract.md.
+  describe('boundary-flex matches (letter↔digit transitions)', () => {
+    it('matches "module42" against "module 42"', () => {
+      expect(classifyMatch('module42', 'module 42')).toBe(MATCH_SUBSTRING);
+    });
+
+    it('matches "module42" against mixed-case tracker title', () => {
+      expect(
+        classifyMatch('module42', '[id-1] Module-42 - Acme Tracker'.toLowerCase()),
+      ).toBe(MATCH_SUBSTRING);
+    });
+
+    it('matches "module42" against underscore/dot/slash separators', () => {
+      expect(classifyMatch('module42', 'module_42')).toBe(MATCH_SUBSTRING);
+      expect(classifyMatch('module42', 'module.42')).toBe(MATCH_SUBSTRING);
+      expect(classifyMatch('module42', 'module/42')).toBe(MATCH_SUBSTRING);
+    });
+
+    it('matches "id1234" against "ID-1234"', () => {
+      expect(classifyMatch('id1234', 'ID-1234')).toBe(MATCH_SUBSTRING);
+    });
+
+    it('matches "v2rc1" across multiple letter↔digit transitions', () => {
+      expect(classifyMatch('v2rc1', 'v2 rc1')).toBe(MATCH_SUBSTRING);
+    });
+
+    it('still classifies clean same-word hit as EXACT, not SUBSTRING', () => {
+      expect(classifyMatch('module42', 'module42 review')).toBe(MATCH_EXACT);
+    });
+
+    it('does NOT flex pure-letter tokens ("foobar" stays NONE in "foo bar")', () => {
+      expect(classifyMatch('foobar', 'foo bar')).toBe(MATCH_NONE);
+    });
+
+    it('does NOT accept multi-char separators ("module -- 42" stays NONE)', () => {
+      expect(classifyMatch('module42', 'module -- 42')).toBe(MATCH_NONE);
+    });
+  });
+
   describe('NONE matches', () => {
     it('should return NONE when token is not in text', () => {
       expect(classifyMatch('xyz', 'hello world')).toBe(MATCH_NONE);
