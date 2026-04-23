@@ -274,13 +274,13 @@ function fastInit() {
         <p style="color:#94a3b8;font-size:11px;margin-top:12px">${err}</p>
       </div>`;
     }
-    console.error('[PopupCrash]', err);
+    logger.error('fastInit', 'Popup initialization failed', errorMeta(err));
   }
 
   // Initialize settings in background (non-blocking)
   // Settings will use defaults until loaded
   SettingsManager.init().catch(err => {
-    console.warn('Settings init failed:', err);
+    logger.warn('fastInit', 'Settings init failed', errorMeta(err));
   });
 }
 
@@ -440,7 +440,7 @@ function initializePopup() {
     try {
       renderAIStatusShared(aiStatusBarEl, aiStatus);
     } catch (err) {
-      console.error('[SmrutiCortex] renderAIStatus error:', err);
+      logger.error('renderAIStatus', 'Failed to render AI status bar', errorMeta(err));
     }
   }
 
@@ -2007,7 +2007,7 @@ function initializePopup() {
     }
     } catch (err) {
       resultsNode.innerHTML = '<div style="padding:12px;color:#ef4444;">Render error — try a new search</div>';
-      console.error('[SmrutiCortex] renderResults error:', err);
+      logger.error('renderResults', 'Failed to render search results', errorMeta(err));
     }
   }
 
@@ -3349,7 +3349,7 @@ function initializePopup() {
         const target = e.target as HTMLInputElement;
         SettingsManager.setSetting('ollamaEnabled', target.checked).catch(e => logger.debug('settings', 'Failed to save ollamaEnabled', errorMeta(e)));
         syncToggleBar();
-        console.info(`[Settings] AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
+        logger.info('settingsModal', `AI search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('AI search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
       });
     }
@@ -3419,7 +3419,7 @@ function initializePopup() {
             ? 'Timed out after 5s. Is Ollama running?'
             : 'Failed to fetch models. Is Ollama running?';
           showToast(msg, 'error');
-          console.error('Fetch models error:', error);
+          logger.error('settingsModal', 'Fetch Ollama models failed', errorMeta(error));
         } finally {
           refreshModelsBtn.disabled = false;
           refreshModelsBtn.textContent = '🔄';
@@ -3454,7 +3454,7 @@ function initializePopup() {
       embeddingsEnabledInput.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         SettingsManager.setSetting('embeddingsEnabled', target.checked).catch(e => logger.debug('settings', 'Failed to save embeddingsEnabled', errorMeta(e)));
-        console.info(`[Settings] Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
+        logger.info('settingsModal', `Semantic search ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
         showToast('Semantic search ' + (target.checked ? 'enabled' : 'disabled'), 'info');
         if (target.checked) {
           showToast('⚠️ Rebuild index to generate embeddings for existing pages', 'warning');
@@ -3902,7 +3902,7 @@ function initializePopup() {
           }
         } catch (error) {
           showToast('❌ Rebuild failed', 'error');
-          console.error('Rebuild error:', error);
+          logger.error('settingsModal', 'Index rebuild failed', errorMeta(error));
         } finally {
           rebuildBtn.disabled = false;
           rebuildBtn.textContent = '🔄 Rebuild Index';
@@ -3947,7 +3947,7 @@ function initializePopup() {
           manualIndexFeedback.textContent = '✗ Indexing failed';
           manualIndexFeedback.className = 'index-feedback error';
           showToast('❌ Indexing failed', 'error');
-          console.error('Manual index error:', error);
+          logger.error('settingsModal', 'Manual index failed', errorMeta(error));
         } finally {
           manualIndexBtn.disabled = false;
           manualIndexBtn.textContent = '⚡ Index Now';
@@ -3995,7 +3995,7 @@ function initializePopup() {
             showToast('❌ Export failed', 'error');
           }
         } catch (error) {
-          console.error('Export error:', error);
+          logger.error('settingsModal', 'Export index failed', errorMeta(error));
           if (exportImportFeedback) {
             exportImportFeedback.textContent = '✗ Export failed';
             exportImportFeedback.className = 'index-feedback error';
@@ -4055,7 +4055,7 @@ function initializePopup() {
             showToast('❌ Import failed', 'error');
           }
         } catch (error) {
-          console.error('Import error:', error);
+          logger.error('settingsModal', 'Import index failed', errorMeta(error));
           showToast('Import failed: invalid JSON file', 'error');
         } finally {
           importBtn.disabled = false;
@@ -4098,7 +4098,7 @@ function initializePopup() {
           }
         } catch (error) {
           showToast('❌ Failed to clear data', 'error');
-          console.error('Clear data error:', error);
+          logger.error('settingsModal', 'Clear all data failed', errorMeta(error));
         } finally {
           clearBtn.disabled = false;
           clearBtn.textContent = '🗑️ Clear & Rebuild';
@@ -4142,7 +4142,7 @@ function initializePopup() {
           }
         } catch (error) {
           showToast('❌ Factory reset failed', 'error');
-          console.error('Factory reset error:', error);
+          logger.error('settingsModal', 'Factory reset failed', errorMeta(error));
         } finally {
           factoryResetBtn.disabled = false;
           factoryResetBtn.textContent = '⚠️ Factory Reset';
@@ -4335,7 +4335,7 @@ function initializePopup() {
           }
         } catch (err) {
           showToast('❌ Error exporting diagnostics', 'error');
-          console.error('Diagnostics export error:', err);
+          logger.error('settingsModal', 'Diagnostics export failed', errorMeta(err));
         }
         diagBtn.disabled = false;
         diagBtn.textContent = '📋 Export Diagnostics';
@@ -4394,7 +4394,7 @@ function initializePopup() {
           }
         } catch (err) {
           showToast('❌ Error exporting debug data', 'error');
-          console.error('Debug export error:', err);
+          logger.error('settingsModal', 'Search debug export failed', errorMeta(err));
         }
         exportDebugBtn.disabled = false;
         exportDebugBtn.textContent = '💾 Export Debug Data';
@@ -4450,7 +4450,7 @@ function initializePopup() {
     } catch (err) {
       setPerfValues('--');
       showToast('Error loading performance metrics', 'error');
-      console.error('Failed to load performance metrics:', err);
+      logger.error('settingsModal', 'Failed to load performance metrics', errorMeta(err));
     }
   }
 
@@ -4668,7 +4668,7 @@ function initializePopup() {
         if (el) { el.textContent = '--'; }
       }
       showToast('Error loading search analytics', 'error');
-      console.error('Failed to load analytics:', err);
+      logger.error('settingsModal', 'Failed to load search analytics', errorMeta(err));
     }
 
     const closeBtn = modal.querySelector('#analytics-close') as HTMLElement;
