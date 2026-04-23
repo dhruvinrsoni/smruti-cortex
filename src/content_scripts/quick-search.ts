@@ -1485,7 +1485,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
       });
     } catch (e) {
-      log.error('port', 'Failed to open search port:', (e as Error).message);
+      log.error('port', 'Failed to open search port', e);
       searchPort = null;
       clearHeartbeatTimers();
     }
@@ -3677,7 +3677,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       } : 'cleared');
       renderAIStatusShared(aiStatusBarEl, aiStatus);
     } catch (err) {
-      console.error('[SmrutiCortex] renderAIStatus error:', err);
+      log.error('renderAIStatus', 'Failed to render AI status bar', err);
     }
   }
 
@@ -4209,7 +4209,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             }
             return;
           } catch (e) {
-            log.warn('performSearch', 'Reconnected port also failed:', (e as Error).message);
+            log.warn('performSearch', 'Reconnected port also failed', e);
             clearInflight(dispatchGuard, dispatchKey);
           }
         }
@@ -4287,7 +4287,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       } catch (e) {
         aiSearchPending = false;
         hideSpinner();
-        log.error('performSearch', 'sendMessage threw:', (e as Error).message);
+        log.error('performSearch', 'sendMessage threw', e);
         currentResults = [];
         const errorMsg = e instanceof Error ? e.message : 'Unknown error';
         renderErrorResults(
@@ -4452,7 +4452,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (resultsEl) {
         resultsEl.innerHTML = '<div style="padding:12px;color:#ef4444;">Render error — try a new search</div>';
       }
-      console.error('[SmrutiCortex] renderResults error:', err);
+      log.error('renderResults', 'Failed to render search results', err);
     }
   }
 

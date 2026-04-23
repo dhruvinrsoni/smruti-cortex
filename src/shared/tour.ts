@@ -4,6 +4,10 @@
  * Works in both popup (normal DOM) and quick-search (Shadow DOM).
  */
 
+import { Logger, errorMeta } from '../core/logger';
+
+const log = Logger.forComponent('Tour');
+
 export interface TourStep {
   target: string;
   title: string;
@@ -199,7 +203,7 @@ export function runTour(
       tooltip.remove();
       highlight.remove();
       document.removeEventListener('keydown', onKeydown, true);
-      markTourCompleted().catch(e => console.debug('[SmrutiCortex:tour] Failed to mark tour completed', e));
+      markTourCompleted().catch(e => log.debug('cleanup', 'Failed to mark tour completed', errorMeta(e)));
       resolve();
     }
 
