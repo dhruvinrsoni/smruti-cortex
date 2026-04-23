@@ -57,7 +57,7 @@
     "@vitest/coverage-v8": "^4.0.16",
     "archiver": "^7.0.1",
     "esbuild": "^0.27.0",
-    "eslint": "^8.57.0",
+    "eslint": "^10.2.1",
     "husky": "^9.1.7",
     "jsdom": "^24.1.0",
     "rimraf": "^5.0.0",
