@@ -213,8 +213,61 @@ function initSubmissionDoc(newVersion) {
     .replace(/> Package: `release\/(zips\/)?smruti-cortex-v[\d.]+\.zip`/, `> Package: \`release/zips/smruti-cortex-v${newVersion}.zip\``)
     .replace(/> Previous version: v[\d.]+/, `> Previous version: v${prev}`);
 
+  // Compute permission delta vs the previous tagged version so the scaffolded
+  // doc carries an explicit fill-in-the-blank banner. Without this, an operator
+  // can blindly run --init, paste the result into CWS, and ship a manifest with
+  // an undocumented permission (the v9.2.0 `idle` regression).
+  const permBannerLines = [];
+  try {
+    const currentManifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+    const prevManifestRaw = runSilent(`git show v${prev}:manifest.json`);
+    const prevManifest = JSON.parse(prevManifestRaw);
+    const delta = computePermissionDelta(prevManifest, currentManifest);
+    const totalChanges =
+      delta.requiredAdded.length + delta.requiredRemoved.length +
+      delta.optionalAdded.length + delta.optionalRemoved.length;
+
+    if (totalChanges === 0) {
+      permBannerLines.push('');
+      permBannerLines.push(`  PERMISSION DELTA vs v${prev}: NONE.`);
+      permBannerLines.push(`  Section 4 entries should be byte-identical to v${prev}.`);
+    } else {
+      permBannerLines.push('');
+      permBannerLines.push(`  PERMISSION DELTA vs v${prev} — ${totalChanges} change(s):`);
+      if (delta.requiredAdded.length) {
+        permBannerLines.push('    REQUIRED ADDED — append a #### block to Section 4 > Required Permissions:');
+        delta.requiredAdded.forEach(p =>
+          permBannerLines.push(`      + \`${p}\` *(new in v${newVersion})* — TODO: write justification.`),
+        );
+      }
+      if (delta.requiredRemoved.length) {
+        permBannerLines.push('    REQUIRED REMOVED — delete the matching #### block from Section 4 > Required Permissions:');
+        delta.requiredRemoved.forEach(p =>
+          permBannerLines.push(`      - \`${p}\` — TODO: delete justification block.`),
+        );
+      }
+      if (delta.optionalAdded.length) {
+        permBannerLines.push('    OPTIONAL ADDED — append a #### block to Section 4 > Optional Permissions:');
+        delta.optionalAdded.forEach(p =>
+          permBannerLines.push(`      + \`${p}\` *(new in v${newVersion})* — TODO: write justification.`),
+        );
+      }
+      if (delta.optionalRemoved.length) {
+        permBannerLines.push('    OPTIONAL REMOVED — delete the matching #### block from Section 4 > Optional Permissions:');
+        delta.optionalRemoved.forEach(p =>
+          permBannerLines.push(`      - \`${p}\` — TODO: delete justification block.`),
+        );
+      }
+      permBannerLines.push('    Run `npm run store:check` after editing — it will FAIL until parity is restored.');
+    }
+  } catch (err) {
+    permBannerLines.push('');
+    permBannerLines.push(`  PERMISSION DELTA: could not compute (${err.message}).`);
+    permBannerLines.push(`  Manually diff manifest.json against v${prev} and update Section 4 accordingly.`);
+  }
+
   // Append a scaffolding hint at the top so the operator knows what still needs editing.
-  const preamble = `<!--\n  SCAFFOLDED by scripts/store-check.mjs --init on ${today}.\n  TODO before submission:\n    1. Fill in Submitted date once uploaded.\n    2. Review Section 7 (Changes from Previous Submission) — the git log\n       below is a raw dump; rewrite into categorised prose.\n    3. If any permission was added/removed, update Section 4.\n    4. Delete this comment block.\n\n  Raw git log v${prev}..v${newVersion}:\n${gitLog.split('\n').map(l => '    ' + l).join('\n')}\n-->\n\n`;
+  const preamble = `<!--\n  SCAFFOLDED by scripts/store-check.mjs --init on ${today}.\n  TODO before submission:\n    1. Fill in Submitted date once uploaded.\n    2. Review Section 7 (Changes from Previous Submission) — the git log\n       below is a raw dump; rewrite into categorised prose.\n    3. If any permission was added/removed, follow the PERMISSION DELTA\n       banner below to update Section 4 (the store:check audit will fail\n       until you do).\n    4. Delete this comment block.\n${permBannerLines.join('\n')}\n\n  Raw git log v${prev}..v${newVersion}:\n${gitLog.split('\n').map(l => '    ' + l).join('\n')}\n-->\n\n`;
 
   scaffolded = preamble + scaffolded;
 
@@ -291,6 +344,30 @@ export function parseDocPermissions(docText) {
  * @param {{required: string[], optional: string[]}} docPerms
  * @returns {Array<{kind: string, perm: string}>}
  */
+/**
+ * Compute the permission delta between two parsed manifest.json objects.
+ *
+ * Used by the `--init` scaffolder to inject a fill-in-the-blank "PERMISSION
+ * DELTA" banner into the preamble of a freshly scaffolded submission doc, so
+ * the operator can never miss adding (or removing) a Section 4 entry — the
+ * exact slip behind the v9.2.0 `idle` regression.
+ *
+ * @param {object} prevManifestJson    Parsed prior-version manifest.json.
+ * @param {object} currentManifestJson Parsed current manifest.json.
+ * @returns {{requiredAdded: string[], requiredRemoved: string[],
+ *            optionalAdded: string[], optionalRemoved: string[]}}
+ */
+export function computePermissionDelta(prevManifestJson, currentManifestJson) {
+  const prev = parseManifestPermissions(prevManifestJson || {});
+  const cur = parseManifestPermissions(currentManifestJson || {});
+  return {
+    requiredAdded:   cur.required.filter(p => !prev.required.includes(p)),
+    requiredRemoved: prev.required.filter(p => !cur.required.includes(p)),
+    optionalAdded:   cur.optional.filter(p => !prev.optional.includes(p)),
+    optionalRemoved: prev.optional.filter(p => !cur.optional.includes(p)),
+  };
+}
+
 export function auditPermissions(manifestPerms, docPerms) {
   const issues = [];
   for (const p of manifestPerms.required) {

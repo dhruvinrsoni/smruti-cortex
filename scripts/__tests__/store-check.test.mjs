@@ -16,6 +16,7 @@ import {
   parseManifestPermissions,
   parseDocPermissions,
   auditPermissions,
+  computePermissionDelta,
 } from '../store-check.mjs';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -166,4 +167,57 @@ test('auditPermissions: missing issues come before stale issues', () => {
   const issues = auditPermissions(manifest, doc);
   assert.equal(issues[0].kind, 'missing-required-justification');
   assert.equal(issues[1].kind, 'stale-required-justification');
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// computePermissionDelta — drives the --init scaffolder banner
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('computePermissionDelta: empty delta when manifests match', () => {
+  const prev = { permissions: ['history', 'storage'], optional_permissions: ['tabGroups'] };
+  const cur  = { permissions: ['history', 'storage'], optional_permissions: ['tabGroups'] };
+  assert.deepEqual(computePermissionDelta(prev, cur), {
+    requiredAdded: [], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
+  });
+});
+
+test('computePermissionDelta: detects v9.1.0 -> v9.2.0 idle addition', () => {
+  // Reproduces the exact diff that should have triggered a banner during the
+  // v9.2.0 scaffold — and didn't, because the helper didn't exist yet.
+  const prev = {
+    permissions: ['history', 'bookmarks', 'storage', 'tabs', 'alarms', 'scripting', 'activeTab', 'sessions', 'windows'],
+    optional_permissions: ['tabGroups', 'browsingData', 'topSites'],
+  };
+  const cur = {
+    permissions: ['history', 'bookmarks', 'storage', 'tabs', 'alarms', 'scripting', 'activeTab', 'sessions', 'windows', 'idle'],
+    optional_permissions: ['tabGroups', 'browsingData', 'topSites'],
+  };
+  const delta = computePermissionDelta(prev, cur);
+  assert.deepEqual(delta.requiredAdded, ['idle']);
+  assert.deepEqual(delta.requiredRemoved, []);
+  assert.deepEqual(delta.optionalAdded, []);
+  assert.deepEqual(delta.optionalRemoved, []);
+});
+
+test('computePermissionDelta: detects removals and optional-side changes simultaneously', () => {
+  const prev = { permissions: ['history', 'tabs'],    optional_permissions: ['topSites'] };
+  const cur  = { permissions: ['history'],            optional_permissions: ['tabGroups', 'browsingData'] };
+  assert.deepEqual(computePermissionDelta(prev, cur), {
+    requiredAdded: [],
+    requiredRemoved: ['tabs'],
+    optionalAdded: ['tabGroups', 'browsingData'],
+    optionalRemoved: ['topSites'],
+  });
+});
+
+test('computePermissionDelta: handles null/undefined manifests gracefully', () => {
+  // Defensive: prev manifest read can fail (corrupt git, deleted tag, etc.).
+  // The scaffolder catches the throw, but the helper itself shouldn't crash
+  // on an empty argument either.
+  assert.deepEqual(computePermissionDelta(null, { permissions: ['idle'] }), {
+    requiredAdded: ['idle'], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
+  });
+  assert.deepEqual(computePermissionDelta({}, {}), {
+    requiredAdded: [], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
+  });
 });
