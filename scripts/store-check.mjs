@@ -199,7 +199,7 @@ function initSubmissionDoc(newVersion) {
     .replace(/> Released \(tagged\): [\d-]+/, `> Released (tagged): ${today}`)
     .replace(/> Drafted: [\d-]+/, `> Drafted: ${today}`)
     .replace(/> Submitted: [^\n]+/, `> Submitted: _TBD — fill in after upload_`)
-    .replace(/> Package: `release\/smruti-cortex-v[\d.]+\.zip`/, `> Package: \`release/smruti-cortex-v${newVersion}.zip\``)
+    .replace(/> Package: `release\/(zips\/)?smruti-cortex-v[\d.]+\.zip`/, `> Package: \`release/zips/smruti-cortex-v${newVersion}.zip\``)
     .replace(/> Previous version: v[\d.]+/, `> Previous version: v${prev}`);
 
   // Append a scaffolding hint at the top so the operator knows what still needs editing.
@@ -247,13 +247,23 @@ async function runChecks() {
   }
 
   // 3. Release zip exists.
-  const zipPath = resolve(RELEASE_DIR, `smruti-cortex-v${version}.zip`);
-  const hasZip = existsSync(zipPath);
-  record(
-    'release zip exists',
-    hasZip ? 'pass' : 'warn',
-    hasZip ? `release/smruti-cortex-v${version}.zip` : `missing: release/smruti-cortex-v${version}.zip (re-run npm run package if needed)`,
-  );
+  // Canonical home is `release/zips/` (v9.1.0+). Legacy zips for v9.0.0 and
+  // earlier still live at `release/` root — accept either to keep historical
+  // checks (`npm run store:check 9.0.0`) green.
+  const zipName = `smruti-cortex-v${version}.zip`;
+  const zipCanonical = resolve(RELEASE_DIR, 'zips', zipName);
+  const zipLegacy = resolve(RELEASE_DIR, zipName);
+  const zipPath = existsSync(zipCanonical) ? zipCanonical : existsSync(zipLegacy) ? zipLegacy : null;
+  if (zipPath) {
+    const rel = zipPath.replace(ROOT, '.').replace(/\\/g, '/').replace(/^\.\//, '');
+    record('release zip exists', 'pass', rel);
+  } else {
+    record(
+      'release zip exists',
+      'warn',
+      `missing: release/zips/${zipName} (or legacy release/${zipName}) — re-run npm run package if needed`,
+    );
+  }
 
   // 4. CHANGELOG has a matching entry.
   const changelog = readFileSync(CHANGELOG_PATH, 'utf-8');
