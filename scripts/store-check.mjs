@@ -37,20 +37,17 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { pathToFileURL } from 'url';
 import { execSync } from 'child_process';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const SUBMISSIONS_DIR = resolve(ROOT, 'docs', 'store-submissions');
 const RELEASE_DIR = resolve(ROOT, 'release');
 const CHANGELOG_PATH = resolve(ROOT, 'CHANGELOG.md');
+const MANIFEST_PATH = resolve(ROOT, 'manifest.json');
 
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
 const STORE_URL = pkg.chromeStoreUrl;
-
-if (!STORE_URL) {
-  console.error('[fatal] package.json is missing "chromeStoreUrl".');
-  process.exit(2);
-}
 
 // ---------- argv ----------
 
@@ -74,12 +71,26 @@ function latestGitTag() {
   }
 }
 
-const version = explicitVersion || latestGitTag() || pkg.version;
-if (!/^\d+\.\d+\.\d+$/.test(version)) {
-  console.error(`[fatal] Could not determine version to check. Got: ${version}`);
-  process.exit(2);
+const invokedAsMain =
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+// Defer fatal exits / version resolution until we know we're the CLI entry
+// (so unit tests can import the pure helpers without triggering process.exit).
+let version = null;
+let vTag = null;
+if (invokedAsMain) {
+  if (!STORE_URL) {
+    console.error('[fatal] package.json is missing "chromeStoreUrl".');
+    process.exit(2);
+  }
+  version = explicitVersion || latestGitTag() || pkg.version;
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    console.error(`[fatal] Could not determine version to check. Got: ${version}`);
+    process.exit(2);
+  }
+  vTag = `v${version}`;
 }
-const vTag = `v${version}`;
 
 // ---------- helpers ----------
 
@@ -213,6 +224,90 @@ function initSubmissionDoc(newVersion) {
   console.log(`[info] Inserted a TODO preamble with the raw git log. Rewrite Section 7 before submitting.`);
 }
 
+// ---------- permission audit (pure helpers, exported for unit tests) ----------
+
+/**
+ * Extract the declared permission lists from a parsed manifest.json.
+ *
+ * Returns an object with `required` and `optional` string arrays in their
+ * original manifest declaration order. Missing arrays are normalised to `[]`
+ * so callers never have to null-check.
+ *
+ * @param {object} manifestJson  The parsed contents of manifest.json.
+ * @returns {{required: string[], optional: string[]}}
+ */
+export function parseManifestPermissions(manifestJson) {
+  const required = Array.isArray(manifestJson?.permissions) ? [...manifestJson.permissions] : [];
+  const optional = Array.isArray(manifestJson?.optional_permissions) ? [...manifestJson.optional_permissions] : [];
+  return { required, optional };
+}
+
+/**
+ * Extract the permission names that have a `#### \`<perm>\`` heading inside
+ * the "### Required Permissions" / "### Optional Permissions" subsections of
+ * the submission doc's Section 4.
+ *
+ * Recognises:
+ *   #### `idle`
+ *   #### `idle` *(new in v9.2.0)*
+ *
+ * Stops scanning a subsection at the next `### `, `## `, or `---` boundary.
+ * "### Optional Host Permissions" is intentionally NOT walked — host
+ * permissions are audited separately (and the manifest field name differs).
+ *
+ * @param {string} docText  Full markdown text of vX.Y.Z-chrome-web-store.md.
+ * @returns {{required: string[], optional: string[]}}
+ */
+export function parseDocPermissions(docText) {
+  const required = [];
+  const optional = [];
+  let mode = null;
+  for (const line of docText.split(/\r?\n/)) {
+    if (/^###\s+Required Permissions\b/.test(line))         { mode = 'required'; continue; }
+    if (/^###\s+Optional Permissions\b/.test(line))         { mode = 'optional'; continue; }
+    if (/^###\s+Optional Host Permissions\b/.test(line))    { mode = null;       continue; }
+    if (/^##\s+/.test(line) || /^###\s+/.test(line) || /^---\s*$/.test(line)) { mode = null; continue; }
+    if (!mode) continue;
+    const m = line.match(/^####\s+`([^`]+)`/);
+    if (m) (mode === 'required' ? required : optional).push(m[1]);
+  }
+  return { required, optional };
+}
+
+/**
+ * Compare manifest permissions against documented justifications and return
+ * a list of structured issues. An empty array means the doc and manifest are
+ * in sync.
+ *
+ * Issue shape: { kind, perm } where `kind` is one of:
+ *   - 'missing-required-justification' → declared in manifest, no #### in doc
+ *   - 'missing-optional-justification'
+ *   - 'stale-required-justification'   → has #### in doc, not in manifest
+ *   - 'stale-optional-justification'
+ *
+ * Order: missing-first (most actionable), then stale.
+ *
+ * @param {{required: string[], optional: string[]}} manifestPerms
+ * @param {{required: string[], optional: string[]}} docPerms
+ * @returns {Array<{kind: string, perm: string}>}
+ */
+export function auditPermissions(manifestPerms, docPerms) {
+  const issues = [];
+  for (const p of manifestPerms.required) {
+    if (!docPerms.required.includes(p)) issues.push({ kind: 'missing-required-justification', perm: p });
+  }
+  for (const p of manifestPerms.optional) {
+    if (!docPerms.optional.includes(p)) issues.push({ kind: 'missing-optional-justification', perm: p });
+  }
+  for (const p of docPerms.required) {
+    if (!manifestPerms.required.includes(p)) issues.push({ kind: 'stale-required-justification', perm: p });
+  }
+  for (const p of docPerms.optional) {
+    if (!manifestPerms.optional.includes(p)) issues.push({ kind: 'stale-optional-justification', perm: p });
+  }
+  return issues;
+}
+
 // ---------- check mode ----------
 
 async function runChecks() {
@@ -273,6 +368,42 @@ async function runChecks() {
     hasChangelogEntry ? 'pass' : 'fail',
     hasChangelogEntry ? `[${version}] found` : `no [${version}] section in CHANGELOG.md`,
   );
+
+  // 4b. Manifest <-> submission doc permission parity.
+  // Catches the v9.2.0 `idle` regression class: a permission silently added
+  // (or removed) in manifest.json without a corresponding update to the
+  // submission doc's Section 4. Reviewers reject when permissions appear
+  // unexplained, so this is treated as a hard fail.
+  if (hasDoc) {
+    try {
+      const manifestJson = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+      const docText = readFileSync(submissionPath, 'utf-8');
+      const issues = auditPermissions(parseManifestPermissions(manifestJson), parseDocPermissions(docText));
+      if (issues.length === 0) {
+        record('manifest <-> doc permission parity', 'pass', 'all manifest permissions have justifications');
+      } else {
+        const lines = issues.map(i => {
+          switch (i.kind) {
+            case 'missing-required-justification':
+              return `MISSING required justification for \`${i.perm}\` (declared in manifest.permissions but no Section 4 entry)`;
+            case 'missing-optional-justification':
+              return `MISSING optional justification for \`${i.perm}\` (declared in manifest.optional_permissions but no Section 4 entry)`;
+            case 'stale-required-justification':
+              return `STALE required justification for \`${i.perm}\` (has Section 4 entry but not in manifest.permissions)`;
+            case 'stale-optional-justification':
+              return `STALE optional justification for \`${i.perm}\` (has Section 4 entry but not in manifest.optional_permissions)`;
+            default:
+              return `UNKNOWN issue: ${JSON.stringify(i)}`;
+          }
+        });
+        record('manifest <-> doc permission parity', 'fail', `${issues.length} issue(s):\n      - ${lines.join('\n      - ')}`);
+      }
+    } catch (err) {
+      record('manifest <-> doc permission parity', 'warn', `audit skipped: ${err.message}`);
+    }
+  } else {
+    record('manifest <-> doc permission parity', 'fail', '(submission doc missing — cannot audit)');
+  }
 
   // 5 + 6. Public CWS fetch.
   let store = null;
@@ -354,12 +485,14 @@ async function runChecks() {
 
 // ---------- entry ----------
 
-if (INIT_MODE) {
-  if (!explicitVersion) {
-    console.error('[fatal] --init requires an explicit version (e.g. `node scripts/store-check.mjs 9.2.0 --init`).');
-    process.exit(2);
+if (invokedAsMain) {
+  if (INIT_MODE) {
+    if (!explicitVersion) {
+      console.error('[fatal] --init requires an explicit version (e.g. `node scripts/store-check.mjs 9.2.0 --init`).');
+      process.exit(2);
+    }
+    initSubmissionDoc(explicitVersion);
+  } else {
+    await runChecks();
   }
-  initSubmissionDoc(explicitVersion);
-} else {
-  await runChecks();
 }
