@@ -34,6 +34,68 @@ function getStagedFiles() {
   }
 }
 
+// === Manifest permission discipline ===
+// Detect when manifest.json's permission arrays change without a corresponding
+// docs/store-submissions/*.md edit staged in the same commit. Reproduces the
+// invariant that the Chrome Web Store reviewer expects: every declared
+// permission has a Section 4 justification, and that justification must travel
+// with the manifest change (otherwise it gets forgotten — that's the
+// v9.2.0 `idle` regression).
+//
+// Returns:
+//   { changed: false }                              -- manifest unchanged or perms unchanged
+//   { changed: true, docStaged, reqDelta, optDelta, totalChanges }
+//
+// `reqDelta` / `optDelta` shape: { added: [], removed: [] }
+// `docStaged` is `true` iff at least one docs/store-submissions/*.md file is
+// also staged. The hook treats `changed && !docStaged` as a hard fail.
+function checkPermissionDocParity(stagedFiles) {
+  if (!stagedFiles || !stagedFiles.includes('manifest.json')) {
+    return { changed: false };
+  }
+
+  let stagedManifest;
+  try {
+    const raw = execSync('git show :manifest.json', {
+      encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    stagedManifest = JSON.parse(raw);
+  } catch {
+    return { changed: false, reason: 'could not read staged manifest.json' };
+  }
+
+  let headManifest;
+  try {
+    const raw = execSync('git show HEAD:manifest.json', {
+      encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    headManifest = JSON.parse(raw);
+  } catch {
+    // No HEAD manifest yet (initial commit) — treat all current perms as added.
+    headManifest = {};
+  }
+
+  const diff = (prev, cur) => {
+    const a = Array.isArray(prev) ? prev : [];
+    const b = Array.isArray(cur) ? cur : [];
+    return {
+      added: b.filter(x => !a.includes(x)),
+      removed: a.filter(x => !b.includes(x)),
+    };
+  };
+  const reqDelta = diff(headManifest.permissions, stagedManifest.permissions);
+  const optDelta = diff(headManifest.optional_permissions, stagedManifest.optional_permissions);
+  const totalChanges = reqDelta.added.length + reqDelta.removed.length
+    + optDelta.added.length + optDelta.removed.length;
+
+  if (totalChanges === 0) return { changed: false };
+
+  const docStaged = stagedFiles.some(
+    f => f.startsWith('docs/store-submissions/') && f.endsWith('.md'),
+  );
+  return { changed: true, docStaged, reqDelta, optDelta, totalChanges };
+}
+
 // Use local node_modules/.bin binaries directly — no npm needed in PATH.
 // This works in any environment (Husky, CI, broken global npm) because the
 // binaries are always present after `npm install`.
@@ -125,8 +187,55 @@ async function main() {
   console.log(`🤖 CI Environment: ${process.env.CI ? 'YES' : 'NO'}`);
   console.log('='.repeat(50));
 
-  // === Smart skip: only run builds if product files are staged ===
   const stagedFiles = getStagedFiles();
+
+  // === Manifest permission discipline gate (runs BEFORE smart-skip) ===
+  // Hard-fail when manifest.json's permission arrays change without a matching
+  // docs/store-submissions/*.md edit staged in the same commit. This is the
+  // last-line defense behind the v9.2.0 `idle` regression: even if the
+  // operator forgot to run `--init`, even if they ignored the scaffolder's
+  // PERMISSION DELTA banner, this gate refuses the commit.
+  if (!process.env.FORCE_PRE_COMMIT) {
+    const parity = checkPermissionDocParity(stagedFiles);
+    if (parity.changed && !parity.docStaged) {
+      console.log('\n🚫 PERMISSION DISCIPLINE FAIL');
+      console.log('='.repeat(50));
+      console.log('manifest.json permission array(s) changed but NO');
+      console.log('docs/store-submissions/*.md is staged in this commit.');
+      console.log('');
+      console.log('Permission delta vs HEAD:');
+      console.log(`  Required added:   ${JSON.stringify(parity.reqDelta.added)}`);
+      console.log(`  Required removed: ${JSON.stringify(parity.reqDelta.removed)}`);
+      console.log(`  Optional added:   ${JSON.stringify(parity.optDelta.added)}`);
+      console.log(`  Optional removed: ${JSON.stringify(parity.optDelta.removed)}`);
+      console.log('');
+      console.log('Required action:');
+      console.log('  1. Open docs/store-submissions/v<latest>-chrome-web-store.md');
+      console.log('  2. Update Section 4 (Permission Justifications) for every added/removed perm');
+      console.log('  3. git add docs/store-submissions/v<latest>-chrome-web-store.md');
+      console.log('  4. git commit again');
+      console.log('');
+      console.log('Or, if scaffolding for a new release:');
+      console.log('  node scripts/store-check.mjs <new-version> --init');
+      console.log('  (the scaffolder injects a PERMISSION DELTA banner showing exactly what to add)');
+      console.log('');
+      console.log('Escape hatch (NOT recommended — Chrome Web Store will reject):');
+      console.log('  FORCE_PRE_COMMIT=1 git commit ...');
+      console.log('='.repeat(50));
+      process.exit(1);
+    }
+    if (parity.changed && parity.docStaged) {
+      console.log(`\n✅ Manifest permission discipline: ${parity.totalChanges} perm change(s) staged with submission doc edit. Audit will run in store:check.`);
+    }
+  } else if (process.env.FORCE_PRE_COMMIT) {
+    // Surface the bypass loud — operator should know they're skipping the gate.
+    const parity = checkPermissionDocParity(stagedFiles);
+    if (parity.changed) {
+      console.log(`\n⚠️  FORCE_PRE_COMMIT bypass — ${parity.totalChanges} manifest perm change(s) NOT verified against submission doc.`);
+    }
+  }
+
+  // === Smart skip: only run builds if product files are staged ===
   let productFiles = [];
   if (stagedFiles !== null && stagedFiles.length > 0 && !process.env.FORCE_PRE_COMMIT) {
     productFiles = stagedFiles.filter(f => !SKIP_PATTERNS.some(p => p.test(f)));
