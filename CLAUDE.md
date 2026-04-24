@@ -190,6 +190,37 @@ Run in parallel when independent:
 - **Test location** — `src/<area>/__tests__/<filename>.test.ts` (co-located)
 - **No hardcoded versions** — `scripts/sync-version.mjs` syncs `package.json` → `manifest.json`
 - **Commit convention** — `fix:`, `feat:`, `docs:`, `chore:`, `refactor:`, `test:` prefixes (used by release script for changelog)
+- **Manifest permission discipline** — see the next section. Every change to `manifest.json`'s `permissions` or `optional_permissions` MUST travel with a Section 4 update in the latest `docs/store-submissions/vX.Y.Z-chrome-web-store.md` in the **same commit**.
+
+---
+
+## Manifest Permission Discipline
+
+Why this exists: in v9.2.0 we added the `idle` permission to `manifest.json` and shipped the package without adding its Section 4 justification to the submission doc. Chrome Web Store reviewers reject unexplained permissions. This discipline is the formal rule that prevents that class of slip from recurring.
+
+### The Rule
+
+Any commit that modifies `manifest.json`'s `permissions` array or `optional_permissions` array MUST also stage at least one file under `docs/store-submissions/*.md` in the same commit. The `#### \`<perm>\`` block(s) under Section 4 of the latest submission doc must be added (for new perms) or removed (for retired perms) to match the manifest.
+
+### Enforcement (defense in depth)
+
+| Layer | Where | What it does |
+|-------|-------|--------------|
+| Scaffolder | `npm run store:init` (or `node scripts/store-check.mjs <new> --init`) | Computes the perm delta vs the previous version's manifest via `git show v<prev>:manifest.json` and injects a `PERMISSION DELTA` banner with fill-in-the-blank `+ \`<perm>\` *(new in vX.Y.Z)* — TODO: write justification.` lines into the new doc's preamble. |
+| Pre-commit hook | `scripts/pre-commit-check.js` | Hard-fails the commit (exit 1, no build runs) when `manifest.json` perm arrays change vs HEAD and no `docs/store-submissions/*.md` file is staged in the same commit. |
+| Store check | `npm run store:check` | Audits manifest ↔ Section 4 parity. Reports `[fail]` with a per-perm breakdown of `MISSING` and `STALE` justifications. Used in CI and before every CWS upload. |
+
+### Escape Hatch (NOT recommended)
+
+`FORCE_PRE_COMMIT=1 git commit ...` bypasses the pre-commit gate. The hook prints a loud warning when bypassed AND a perm change is detected. Use only for emergency fixes — `npm run store:check` will still fail until parity is restored, and Chrome Web Store will reject the upload.
+
+### What "matching submission doc" means
+
+For a release that has already shipped: edit that release's `docs/store-submissions/vX.Y.Z-chrome-web-store.md`.
+
+For an in-flight release before tagging: edit the most recently created submission doc (whatever version `--init` last scaffolded).
+
+When in doubt: edit the file with the highest version number under `docs/store-submissions/`. The `store:check` audit always reads the file matching the current version reported by git tags.
 
 ---
 
@@ -212,6 +243,7 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 2. Load the relevant **domain skill** from `.github/skills/`
 3. Plan the implementation (use Plan agent for non-trivial changes)
 4. Implement following existing patterns (Logger, SettingsManager, isolated scorers)
+4b. **If `manifest.json` permission changed:** stage the matching `docs/store-submissions/vX.Y.Z-chrome-web-store.md` Section 4 update in the SAME commit (see *Manifest Permission Discipline* above). The pre-commit hook will hard-fail the commit otherwise.
 5. Write tests if touching core logic — target 90%+ coverage for new code
 6. Run `npm test` and `npm run build:prod`
 7. Commit: `git commit -m "feat: <concise description>"`

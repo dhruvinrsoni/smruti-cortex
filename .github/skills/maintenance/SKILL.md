@@ -106,7 +106,43 @@ If a version was released without a submission doc:
 | `alarms` | Schedules periodic background re-indexing when browser is idle |
 | `scripting` | Re-injects our own content script (`content_scripts/quick-search.js`) into already-open tabs after an extension update so the keyboard shortcut keeps working without a page reload. NEVER runs arbitrary code, NEVER reads page content. |
 | `activeTab` | Grants temporary host permission for the current tab ONLY when the user presses the keyboard shortcut. Required by `chrome.scripting` to re-inject the content script. No background access — strictly user-initiated. |
+| `idle` | Wakes the MV3 service worker when the user returns to the browser after being away (uses `chrome.idle.onStateChanged` `idle → active` transition). Eliminates cold-start delay on the first interaction after a long idle. Receives ONLY session state (active/idle/locked); never reads page content or input. |
 | `<all_urls>` | Optional: fetches favicons from Google API for display (no user data sent) |
+
+> The table above is a quick reference for human Q&A. Authoritative wording lives in the latest `docs/store-submissions/vX.Y.Z-chrome-web-store.md` Section 4. Always quote the doc, not this table, when responding to a CWS reviewer.
+
+### Manifest Permission Discipline (machine-enforced)
+
+Every change to `manifest.json`'s `permissions` or `optional_permissions` arrays MUST land in the same commit as a `docs/store-submissions/vX.Y.Z-chrome-web-store.md` Section 4 update. The v9.2.0 `idle` regression existed because we had no automated link between manifest mutation and submission-doc mutation. Now we have three:
+
+1. **Scaffolder banner** — `npm run store:init` reads `git show v<prev>:manifest.json`, computes added/removed perms, and inserts a `PERMISSION DELTA` block in the new doc's TODO preamble showing exactly which `#### \`<perm>\`` blocks to add/remove.
+
+2. **Pre-commit hard-fail** — `scripts/pre-commit-check.js` aborts (`exit 1`, no build runs) when `manifest.json` perm arrays differ from HEAD and no `docs/store-submissions/*.md` is staged. Bypass with `FORCE_PRE_COMMIT=1` (NOT recommended; the audit will still fail and CWS will reject).
+
+3. **store:check audit** — `npm run store:check` runs `auditPermissions(manifest, doc)` and prints a `manifest <-> doc permission parity` line listing every `MISSING` or `STALE` justification. Treat any failure as a release blocker.
+
+Operator workflow when a perm change is needed:
+
+```bash
+# 1. Edit manifest.json
+$EDITOR manifest.json
+
+# 2. Open the latest submission doc
+$EDITOR docs/store-submissions/v$(node -p "require('./package.json').version")-chrome-web-store.md
+# Add/remove #### `<perm>` blocks under Section 4 to match the manifest.
+
+# 3. Stage and commit both at once
+git add manifest.json docs/store-submissions/v*-chrome-web-store.md
+git commit -m "feat: <description>"
+# Pre-commit hook will print: "Manifest permission discipline: N perm
+# change(s) staged with submission doc edit. Audit will run in store:check."
+# and proceed normally.
+
+# 4. (optional, recommended) Run the audit explicitly
+npm run store:check
+```
+
+When scaffolding for a new release (the typical case for a fresh perm), use `npm run store:init` instead of editing the previous version's doc — the scaffolder injects the PERMISSION DELTA banner that lists what to do.
 
 ### Common Rejection Reasons
 - **Missing privacy policy** — Ensure https://dhruvinrsoni.github.io/smruti-cortex/privacy.html is live
