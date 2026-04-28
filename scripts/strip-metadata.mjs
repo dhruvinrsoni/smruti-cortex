@@ -8,7 +8,7 @@
  *
  * Usage:
  *   node scripts/strip-metadata.mjs <folder-path>
- *   npm run unpack:cws -- <folder-path>
+ *   npm run store unpack -- <folder-path>
  *
  * The folder is modified in-place — any _* entries at the top level are removed.
  */

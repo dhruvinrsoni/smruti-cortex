@@ -258,7 +258,7 @@ function initSubmissionDoc(newVersion) {
           permBannerLines.push(`      - \`${p}\` — TODO: delete justification block.`),
         );
       }
-      permBannerLines.push('    Run `npm run store:check` after editing — it will FAIL until parity is restored.');
+      permBannerLines.push('    Run `npm run store check` after editing — it will FAIL until parity is restored.');
     }
   } catch (err) {
     permBannerLines.push('');
@@ -267,7 +267,7 @@ function initSubmissionDoc(newVersion) {
   }
 
   // Append a scaffolding hint at the top so the operator knows what still needs editing.
-  const preamble = `<!--\n  SCAFFOLDED by scripts/store-check.mjs --init on ${today}.\n  TODO before submission:\n    1. Fill in Submitted date once uploaded.\n    2. Review Section 7 (Changes from Previous Submission) — the git log\n       below is a raw dump; rewrite into categorised prose.\n    3. If any permission was added/removed, follow the PERMISSION DELTA\n       banner below to update Section 4 (the store:check audit will fail\n       until you do).\n    4. Delete this comment block.\n${permBannerLines.join('\n')}\n\n  Raw git log v${prev}..v${newVersion}:\n${gitLog.split('\n').map(l => '    ' + l).join('\n')}\n-->\n\n`;
+  const preamble = `<!--\n  SCAFFOLDED by scripts/store-check.mjs --init on ${today}.\n  TODO before submission:\n    1. Fill in Submitted date once uploaded.\n    2. Review Section 7 (Changes from Previous Submission) — the git log\n       below is a raw dump; rewrite into categorised prose.\n    3. If any permission was added/removed, follow the PERMISSION DELTA\n       banner below to update Section 4 (the \`npm run store check\` audit\n       will fail until you do).\n    4. Delete this comment block.\n${permBannerLines.join('\n')}\n\n  Raw git log v${prev}..v${newVersion}:\n${gitLog.split('\n').map(l => '    ' + l).join('\n')}\n-->\n\n`;
 
   scaffolded = preamble + scaffolded;
 
@@ -421,7 +421,7 @@ async function runChecks() {
   // 3. Release zip exists.
   // Canonical home is `release/zips/` (v9.1.0+). Legacy zips for v9.0.0 and
   // earlier still live at `release/` root — accept either to keep historical
-  // checks (`npm run store:check 9.0.0`) green.
+  // checks (`npm run store check 9.0.0`) green.
   const zipName = `smruti-cortex-v${version}.zip`;
   const zipCanonical = resolve(RELEASE_DIR, 'zips', zipName);
   const zipLegacy = resolve(RELEASE_DIR, zipName);

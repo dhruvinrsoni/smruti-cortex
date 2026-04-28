@@ -225,7 +225,7 @@ async function main() {
       process.exit(1);
     }
     if (parity.changed && parity.docStaged) {
-      console.log(`\n✅ Manifest permission discipline: ${parity.totalChanges} perm change(s) staged with submission doc edit. Audit will run in store:check.`);
+      console.log(`\n✅ Manifest permission discipline: ${parity.totalChanges} perm change(s) staged with submission doc edit. Audit will run in 'npm run store check'.`);
     }
   } else if (process.env.FORCE_PRE_COMMIT) {
     // Surface the bypass loud — operator should know they're skipping the gate.

@@ -293,4 +293,4 @@ console.log(`     https://chrome.google.com/webstore/devconsole`);
 console.log(`  2. Edit docs/store-submissions/v${newVersion}-chrome-web-store.md`);
 console.log(`     — Fill in Section 7 (Changes) and Section 9 (Checklist)`);
 console.log(`     — Delete the TODO preamble`);
-console.log(`  3. After CWS upload: npm run store:check`);
+console.log(`  3. After CWS upload: npm run store check`);

@@ -9,7 +9,6 @@
  *   - manifest.json / package.json version sync
  *   - manifest_version === 3
  *   - No forbidden underscore dirs in dist/
- *   - store-prep output preview
  *   - Git working tree cleanliness
  *
  * Exit 0 = ready for release.  Exit 1 = issues found.
@@ -196,17 +195,10 @@ try {
   warn('Could not determine current branch');
 }
 
-// ─────────────────────────────────────────────────
-// Phase 6: Store Prep Preview
-// ─────────────────────────────────────────────────
-header('PHASE 6 — Store Prep Preview');
-try {
-  const storeOutput = run('node ./scripts/store-prep.mjs');
-  console.log(storeOutput);
-  pass('store-prep output generated');
-} catch {
-  warn('store-prep script not available or failed');
-}
+// Phase 6 (store-prep preview) was removed in the v9.2.0 scripts refactor.
+// The submission doc at docs/store-submissions/vX.Y.Z-chrome-web-store.md is
+// the canonical source of truth. Run `npm run store check` for the audit.
+// (preflight.mjs itself is being folded into verify.mjs --release in B1.)
 
 // ─────────────────────────────────────────────────
 // Summary
