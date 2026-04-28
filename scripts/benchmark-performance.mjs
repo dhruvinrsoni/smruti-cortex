@@ -6,8 +6,8 @@
  * compares sizes against thresholds. Exits non-zero if any threshold is
  * exceeded or required files are missing — suitable as a release gate.
  *
- * Called automatically by preflight.mjs (Phase 2). Can also be run standalone
- * after a production build.
+ * Called automatically by verify.mjs --release (Bundle Size Benchmark gate).
+ * Can also be run standalone after a production build.
  *
  * Usage:
  *   node scripts/benchmark-performance.mjs        # run checks

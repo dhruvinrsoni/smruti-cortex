@@ -32,7 +32,6 @@
     "coverage": "vitest run --coverage",
     "e2e": "npm run build && npx playwright test",
     "verify": "node ./scripts/verify.mjs",
-    "preflight": "node ./scripts/preflight.mjs",
     "dev": "node ./scripts/esbuild-dev.mjs --watch",
     "prepare": "husky"
   },

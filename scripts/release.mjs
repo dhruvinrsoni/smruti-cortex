@@ -13,7 +13,7 @@
  *
  * Release flow (verify-first — zero disk writes until everything is green):
  *   1. Validate prerequisites (main branch, clean tree, gh CLI)
- *   2. Preflight gate (delegates to npm run preflight → verify + benchmarks + integrity)
+ *   2. Ship check gate (delegates to verify.mjs --release → verify + benchmarks + integrity + manifest/dist/git checks)
  *   3. Compute new version from explicit bump arg
  *   4. Write: bump package.json, sync manifest, generate CHANGELOG, scaffold submission doc
  *   5. Re-build with new version baked in + package zip
@@ -89,8 +89,8 @@ try {
 
 console.log(`${GREEN}✅ On main, clean tree, gh available${RESET}\n`);
 
-// ===== Step 2: Preflight gate (BEFORE any disk changes) =====
-console.log(`${BOLD}═══ STEP 2: Preflight Gate (zero disk changes) ═══${RESET}\n`);
+// ===== Step 2: Ship check gate (BEFORE any disk changes) =====
+console.log(`${BOLD}═══ STEP 2: Ship Check Gate (zero disk changes) ═══${RESET}\n`);
 
 if (SKIP_E2E) {
   console.log(`${YELLOW}${BOLD}┌─────────────────────────────────────────────────┐${RESET}`);
@@ -101,12 +101,14 @@ if (SKIP_E2E) {
   console.log(`${YELLOW}${BOLD}└─────────────────────────────────────────────────┘${RESET}\n`);
 }
 
-const preflightCmd = SKIP_E2E ? 'npm run preflight -- --no-e2e' : 'npm run preflight';
+const shipCheckCmd = SKIP_E2E
+  ? 'node ./scripts/verify.mjs --release --no-e2e'
+  : 'node ./scripts/verify.mjs --release';
 try {
-  run(preflightCmd);
-  console.log(`\n${GREEN}✅ Preflight passed${RESET}\n`);
+  run(shipCheckCmd);
+  console.log(`\n${GREEN}✅ Ship check passed${RESET}\n`);
 } catch {
-  console.error(`\n${RED}❌ Preflight FAILED. Fix the errors above and retry.${RESET}`);
+  console.error(`\n${RED}❌ Ship check FAILED. Fix the errors above and retry.${RESET}`);
   console.error(`${RED}   No disk changes were made — your tree is still clean.${RESET}`);
   process.exit(1);
 }
