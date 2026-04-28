@@ -34,9 +34,6 @@
     "verify": "node ./scripts/verify.mjs",
     "preflight": "node ./scripts/preflight.mjs",
     "dev": "node ./scripts/esbuild-dev.mjs --watch",
-    "preversion": "node -e \"const{execSync:e}=require('child_process');if(e('git status --porcelain',{encoding:'utf-8'}).trim()){console.error('Working tree not clean. Commit or stash first.');process.exit(1)}\"",
-    "version": "node scripts/sync-version.mjs && git add manifest.json",
-    "postversion": "node -e \"console.log('Version bumped and synced. Run npm run release:* for full release pipeline.')\"",
     "prepare": "husky"
   },
   "devDependencies": {
