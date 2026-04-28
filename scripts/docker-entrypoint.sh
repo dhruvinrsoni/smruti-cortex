@@ -2,6 +2,10 @@
 # Docker entrypoint: ensures dependencies are available for Linux
 # The Dockerfile pre-installs packages in the builder image.
 # When mounted with .:/app:cached, we need to ensure node_modules are for Linux (not Windows).
+#
+# kept because: referenced by docker-compose.yml as the entrypoint for all four
+# services (build/dev/test/lint). Removing this would break `docker compose up`
+# for cross-platform contributors who use the Linux container.
 
 set -e
 
