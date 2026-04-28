@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * SmrutiCortex Release Script
+ * SmrutiCortex Release Script — also serves as the dispatcher for `npm run ship`.
  *
- * Usage: node scripts/release.mjs <patch|minor|major> [--skip-e2e] [--dry-run]
+ * Usage:
+ *   npm run ship patch | minor | major   — full release flow (bump → tag → push → GH Release)
+ *   npm run ship check                   — pre-release health gate only (no disk writes)
+ *   npm run ship                         — prints help + exits 0
  *
- * Flow (verify-first — zero disk writes until everything is green):
+ * Direct invocation (equivalent):
+ *   node scripts/release.mjs <patch|minor|major|check> [--skip-e2e] [--dry-run]
+ *
+ * Release flow (verify-first — zero disk writes until everything is green):
  *   1. Validate prerequisites (main branch, clean tree, gh CLI)
  *   2. Preflight gate (delegates to npm run preflight → verify + benchmarks + integrity)
  *   3. Compute new version from explicit bump arg
@@ -15,6 +21,10 @@
  *   7. Single commit with all release files
  *   8. Tag, push, create GitHub Release
  *   9. Print next steps
+ *
+ * `check` mode skips steps 3-9 entirely and only runs the preflight gate (step 2).
+ * That gate is the same one a real release would face — so a green `ship check`
+ * means the next `ship patch/minor/major` won't fail at the gate.
  */
 
 import { execSync } from 'child_process';
@@ -24,7 +34,9 @@ import { resolve } from 'path';
 const ROOT = resolve(import.meta.dirname, '..');
 const DRY_RUN = process.argv.includes('--dry-run');
 const SKIP_E2E = process.argv.includes('--skip-e2e');
-const BUMP_TYPE = process.argv.find(a => ['patch', 'minor', 'major'].includes(a));
+const SUBCOMMAND = process.argv.find(a => ['patch', 'minor', 'major', 'check'].includes(a));
+const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
+const CHECK_ONLY = SUBCOMMAND === 'check';
 
 const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';
@@ -32,13 +44,14 @@ const YELLOW = '\x1b[33m';
 const BOLD = '\x1b[1m';
 const RESET = '\x1b[0m';
 
-if (!BUMP_TYPE) {
-  console.error('Usage: node scripts/release.mjs <patch|minor|major> [--skip-e2e] [--dry-run]');
-  console.error('  patch  — bug fixes (8.0.0 → 8.0.1)');
-  console.error('  minor  — new features (8.0.0 → 8.1.0)');
-  console.error('  major  — breaking changes (8.0.0 → 9.0.0)');
+if (!SUBCOMMAND) {
+  console.error('Usage: npm run ship <patch|minor|major|check> [--skip-e2e] [--dry-run]');
+  console.error('  patch   — bug fixes (8.0.0 → 8.0.1)');
+  console.error('  minor   — new features (8.0.0 → 8.1.0)');
+  console.error('  major   — breaking changes (8.0.0 → 9.0.0)');
+  console.error('  check   — pre-release health gate only (no disk writes, no tag, no push)');
   console.error('  --skip-e2e  — skip E2E tests (emergency only)');
-  console.error('  --dry-run   — preview without pushing or tagging');
+  console.error('  --dry-run   — preview without pushing or tagging (release modes only)');
   process.exit(1);
 }
 
@@ -96,6 +109,13 @@ try {
   console.error(`\n${RED}❌ Preflight FAILED. Fix the errors above and retry.${RESET}`);
   console.error(`${RED}   No disk changes were made — your tree is still clean.${RESET}`);
   process.exit(1);
+}
+
+// ===== `ship check` mode: stop here, the gate IS the whole goal. =====
+if (CHECK_ONLY) {
+  console.log(`${BOLD}${GREEN}🟢 Ship check passed.${RESET}`);
+  console.log(`   The next \`npm run ship <patch|minor|major>\` will not fail at the gate.`);
+  process.exit(0);
 }
 
 // ===== Step 3: Compute new version =====
