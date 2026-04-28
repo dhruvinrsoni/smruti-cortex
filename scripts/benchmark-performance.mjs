@@ -33,7 +33,7 @@ What it does:
   4. Writes performance-results.json when $CI is set
 
 Prerequisite:
-  dist/ must exist — run \`npm run build:prod\` first.
+  dist/ must exist — run \`npm run build\` first.
 `.trim());
   process.exit(0);
 }

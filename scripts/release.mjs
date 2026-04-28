@@ -211,7 +211,7 @@ try {
 console.log(`\n${BOLD}═══ STEP 5: Re-build + Package ═══${RESET}\n`);
 
 try {
-  run('npm run build:prod');
+  run('npm run build');
   console.log(`${GREEN}✅ Production build with v${newVersion}${RESET}`);
   run('node scripts/package.mjs');
   console.log(`${GREEN}✅ Package zip created${RESET}`);

@@ -7,7 +7,7 @@
  * The fixture in e2e/fixtures/extension.ts reads SLOW_MO and patches
  * Locator.prototype to add a delay before each action (click, fill, etc.).
  *
- * Requires dist/ to exist (run `npm run build:prod` first if stale).
+ * Requires dist/ to exist (run `npm run build` first if stale).
  * See docs/E2E_TESTING.md for the full slow-mo architecture.
  *
  * Usage:
@@ -42,7 +42,7 @@ Environment:
   SLOW_MO   Overrides the default delay if no positional ms argument given
 
 Prerequisite:
-  dist/ must exist — run \`npm run build:prod\` if stale.
+  dist/ must exist — run \`npm run build\` if stale.
 `.trim());
   process.exit(0);
 }

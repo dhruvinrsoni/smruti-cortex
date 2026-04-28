@@ -19,7 +19,7 @@ services:
     image: smruti-cortex:${SMRUTI_CORTEX_VERSION:-local}
     user: root
     entrypoint: ["/bin/sh", "./scripts/docker-entrypoint.sh"]
-    command: npm run start:watch
+    command: npm run dev
     volumes:
       - .:/app:cached
       - /app/node_modules

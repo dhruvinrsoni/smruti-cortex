@@ -181,7 +181,7 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          npm run build:prod > nfr-reports/build-perf.log 2>&1
+          npm run build > nfr-reports/build-perf.log 2>&1
           BUILD_EXIT=$?
           SW_SIZE=$(ls -l dist/background/service-worker.js 2>/dev/null | awk '{print $5}')
           POPUP_SIZE=$(ls -l dist/popup/popup.js 2>/dev/null | awk '{print $5}')

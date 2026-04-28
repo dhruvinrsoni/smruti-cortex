@@ -43,7 +43,7 @@ jobs:
             fs.writeFileSync('manifest.json', JSON.stringify(m, null, 2));
           "
 
-      - run: npm run build:prod
+      - run: npm run build
 
       - uses: actions/upload-artifact@v4
         with:

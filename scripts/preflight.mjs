@@ -3,7 +3,7 @@
 /**
  * preflight.mjs — Full pre-release verification pipeline.
  *
- * Runs `npm run verify` (lint + build:prod + coverage + E2E)
+ * Runs `npm run verify` (lint + build + coverage + E2E)
  * then performs additional prod-release checks:
  *   - Bundle size benchmark (thresholds + dist integrity)
  *   - manifest.json / package.json version sync

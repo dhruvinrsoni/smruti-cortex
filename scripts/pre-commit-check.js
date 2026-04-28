@@ -103,8 +103,8 @@ const cwd = process.cwd();
 const isWin = process.platform === 'win32';
 const bin = (name) => path.join(cwd, 'node_modules', '.bin', name + (isWin ? '.cmd' : ''));
 
-// Mirror the build:prod chain from package.json without calling npm.
-// Update here if package.json "build:prod" script changes.
+// Mirror the prod build chain from package.json without calling npm.
+// Update here if package.json "build" script changes.
 const buildProdCmd = [
   'node ./scripts/sync-version.mjs',
   `"${bin('rimraf')}" dist`,

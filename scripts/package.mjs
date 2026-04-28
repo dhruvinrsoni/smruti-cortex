@@ -24,7 +24,7 @@ async function createZip() {
   console.log('─'.repeat(50));
 
   if (!existsSync(distDir)) {
-    console.error('❌ dist/ folder not found. Run `npm run build:prod` first.');
+    console.error('❌ dist/ folder not found. Run `npm run build` first.');
     process.exit(1);
   }
 

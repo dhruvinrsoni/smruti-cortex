@@ -1,7 +1,7 @@
 name: E2E Tests (Playwright)
 
 # Purpose: Run Playwright E2E tests against a real Chrome browser with the extension loaded.
-# Requires: Production build (npm run build:prod) before tests.
+# Requires: Production build (npm run build) before tests.
 # Note: Uses xvfb because Chrome extensions cannot run in headless mode.
 
 on:
@@ -43,7 +43,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Build extension (production)
-        run: npm run build:prod
+        run: npm run build
 
       - name: Run E2E tests
         run: xvfb-run --auto-servernum npx playwright test
