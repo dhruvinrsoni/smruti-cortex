@@ -45,73 +45,92 @@ Navigate here first — don't broad-search when the location is known:
 
 ## Common Commands
 
+11 top-level npm verbs route 17 documented invocations. Naming policy: single-word verbs first (`build`, `dev`, `verify`, `coverage`, `e2e`); space-separated subcommands when a verb has sub-modes (`test watch`, `lint strict`, `ship patch`, `store check`); zero colons.
+
 **Develop:**
 
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm run build` | Dev build (source maps) | ~10s |
-| `npm run build:prod` | Production build (minified) | ~30s |
-| `npm run start:watch` | Watch mode (rebuild on file save) | continuous |
+| `npm run build` | Production build (minified, the canonical build) | ~30s |
+| `npm run dev` | Watch mode (esbuild, rebuild on file save) | continuous |
+| `npm run package` | Build + zip into `release/zips/` | ~35s |
 
 **Test:**
 
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm test` | Unit tests (1,233+ tests, 46 files) | ~60s |
-| `npm run test:watch` | Unit tests in watch mode | continuous |
+| `npm test` | Unit tests one-shot (1,252+ tests, 47 files) | ~60s |
+| `npm run test watch` | Unit tests in watch mode | continuous |
 | `npm run coverage` | Unit tests + v8 coverage report | ~30s |
-| `npm run test:e2e` | Build + E2E tests (45 tests, 7 specs) | ~90s |
+| `npm run e2e` | Build + Playwright E2E tests (45 tests, 7 specs) | ~90s |
 | `npm run lint` | ESLint check (errors block, warnings inform) | ~5s |
-| `npm run lint:strict` | ESLint zero-warning check (manual cleanup use) | ~5s |
+| `npm run lint strict` | ESLint zero-warning check (manual cleanup use) | ~5s |
 
 **Ship:**
 
 | Command | Purpose | Speed |
 |---------|---------|-------|
-| `npm run verify` | Full verification (lint + builds + tests, reports at end) | ~4min |
-| `npm run preflight` | Verify + prod release validations | ~6min |
-| `npm run release:patch` | Full release pipeline (patch bump) | ~60s |
-| `npm run release:minor` | Full release pipeline (minor bump) | ~60s |
-| `npm run release:major` | Full release pipeline (major bump) | ~60s |
-| `npm run store-prep` | Print Chrome Web Store submission text | instant |
-| `npm run store:check` | Verify store submission doc exists for current version | instant |
+| `npm run verify` | Full verification (lint + build + tests + coverage + E2E) | ~4min |
+| `npm run ship check` | Verify + release-only audit phases (npm audit, store check, LICENSE, privacy URL, prev tag) | ~6min |
+| `npm run ship patch` | Full release pipeline (patch bump) | ~60s |
+| `npm run ship minor` | Full release pipeline (minor bump) | ~60s |
+| `npm run ship major` | Full release pipeline (major bump) | ~60s |
+| `npm run store check` | Verify CWS submission readiness (manifest ↔ Section 4 perm parity, zip, CHANGELOG) | instant |
+| `npm run store init` | Scaffold a new `docs/store-submissions/vX.Y.Z-chrome-web-store.md` | instant |
+| `npm run store unpack` | Strip `_metadata/` from a CWS-downloaded extension folder for "Load Unpacked" | instant |
 
 **Tips:**
-- Append `-- --dry-run` to any release command to preview without pushing.
-- Append `-- --no-e2e` to verify to skip E2E tests, or `-- --e2e-slowmo` for visual debugging.
-- Run `npm run publish:coverage` after `npm run coverage` to publish the report to GitHub Pages.
+- Append `-- --dry-run` to any `ship patch|minor|major` command to preview without pushing.
+- Append `-- --no-e2e` to `verify` to skip E2E tests, or `-- --e2e-slowmo` for visual debugging.
+- Append `-- --no-network` to `ship check` to skip network-dependent phases (privacy URL).
 - Pre-commit hook runs build+test+coverage automatically. Override with `FORCE_PRE_COMMIT=1`.
 
 ---
 
-## Scripts Quick Reference
+## Script Briefs
 
-Quick-reference for when you come back after 6 months.
+One-paragraph description of every script in `scripts/`. Quick-reference for when you come back after 6 months.
 
-### Verification & Release Pipeline
+**`scripts/release.mjs`** — invoked by `npm run ship <patch|minor|major|check>`. Validates prerequisites (clean tree, on main, gh CLI authenticated). Runs `ship check` as the gate. Bumps `package.json`, syncs manifest, regenerates CHANGELOG, scaffolds submission doc via `store init`. Re-builds with new version baked in, packages zip into `release/zips/`. Single git commit + tag + push, creates the GitHub Release with the zip attached. Prints next-steps (CWS dashboard URL, submission doc path). When called with `check`, skips the bump/build/tag/push pipeline and just runs the `verify.mjs --release` gate.
 
-| Script | What it does |
-|--------|-------------|
-| `npm run verify` | Runs lint, dev build, prod build, unit tests (with coverage), E2E tests. Runs ALL steps even if one fails, reports at end. Flags: `--no-e2e`, `--e2e-slowmo`. |
-| `npm run preflight` | Runs verify, then checks version sync, manifest MV3 validation, dist/ integrity, package zip, git status. "Cleared for takeoff?" check. |
-| `npm run release:patch\|minor\|major` | Full release: preflight, bump, changelog, commit, tag, push, GitHub Release, zip. Append `-- --dry-run` to preview. |
-| `npm run store-prep` | Prints "What's New", permission justifications, privacy summary for Chrome Web Store submission form. |
-| `npm run store:check` | Verifies `docs/store-submissions/vX.Y.Z-chrome-web-store.md` exists for the current version. Use `--init` to scaffold it. |
+**`scripts/verify.mjs`** — invoked by `npm run verify` or `npm run ship check` (via release.mjs). Default mode: lint + build + unit tests + coverage + coverage ratchet + E2E. `--release` mode adds: bundle benchmark, version sync, MV3 manifest_version, dist integrity (no underscore dirs, critical files present), git tree clean + on main/master branch, plus the release-only phases — `npm audit --audit-level=high`, inline `npm run store check`, LICENSE present, privacy URL HTTP 200, previous-version git tag exists. Continues on individual failures so one run reports the full picture. Flags: `--no-e2e`, `--e2e-slowmo`, `--no-network`, `--release`.
+
+**`scripts/store-check.mjs`** — invoked by `npm run store check` and `npm run store init`. Check mode: verifies a release is CWS-ready (submission doc exists with real Submitted date, zip exists in `release/zips/`, CHANGELOG entry present, public CWS listing version matches, public "What's New" not stale, **manifest permissions ↔ Section 4 justification parity** — the perm-gap audit). Init mode: scaffolds `docs/store-submissions/vX.Y.Z-chrome-web-store.md` from previous version's doc, computes permission delta vs `git show v<prev>:manifest.json`, injects a `PERMISSION DELTA` banner with fill-in-the-blank `#### perm` template lines.
+
+**`scripts/pre-commit-check.js`** — git hook (not in npm scripts surface). Smart-skips for non-product file commits. Runs lint auto-fix on staged TS files, then prod build, then full test suite. Hard-fails the commit when `manifest.json` permission arrays change but no `docs/store-submissions/*.md` is staged in the same commit — the perm-parity gate. `FORCE_PRE_COMMIT=1` bypasses (with a loud warning when a perm change is detected).
+
+**`scripts/test.mjs`** — tiny dispatcher for `npm run test [watch]`. Default (no arg) invokes `vitest run` (one-shot, CI-safe). `watch` invokes `vitest` (watch mode). Flags after `--` are forwarded. Coverage and E2E are top-level verbs (`npm run coverage`, `npm run e2e`), not subcommands of `test`.
+
+**`scripts/lint.mjs`** — dispatcher for `npm run lint [strict]`. Default invokes eslint with `--report-unused-disable-directives`. `strict` adds `--max-warnings 0`. Flags after `--` are forwarded.
+
+**`scripts/store.mjs`** — dispatcher for `npm run store [check|init|unpack]`. Routes to existing handlers (`store-check.mjs`, `store-check.mjs --init`, `strip-metadata.mjs`).
+
+**`scripts/sync-version.mjs`** — copies `package.json` version into `manifest.json`. Called at the start of every `build` chain by release.mjs.
+
+**`scripts/copy-static.mjs`** — copies non-bundled assets (manifest.json, popup.html/css, icons, error-guard.js) from source tree into `dist/`. Called by build chain. Also strips any underscore-prefixed dirs that would break Chrome MV3 "Load Unpacked".
+
+**`scripts/esbuild-dev.mjs`** / **`scripts/esbuild-prod.mjs`** — esbuild bundling configs. Dev = source maps + watch (used by `npm run dev`); prod = minified (used by `npm run build`).
+
+**`scripts/package.mjs`** — zips `dist/` into `release/zips/smruti-cortex-vX.Y.Z.zip`. Called after `build` by `npm run package`.
+
+**`scripts/coverage-ratchet.mjs`** — graduated coverage drift policy. Compares current coverage against checked-in baseline; tiny drift is advisory, big drops fail. Called inside verify.mjs.
+
+**`scripts/benchmark-performance.mjs`** — bundle size threshold checker. Called inside `verify.mjs --release`.
+
+**`scripts/strip-metadata.mjs`** — strips `_metadata/` and other underscore entries from a CWS-downloaded extension folder. Recovery tool, called via `npm run store unpack`.
+
+**`scripts/e2e-slowmo.mjs`** — runs Playwright with SLOW_MO env var for visual debugging. Called via `npm run verify -- --e2e-slowmo`.
 
 ### Version Syncing
 
-`package.json` is the single source of truth for version numbers. Two mechanisms keep `manifest.json` in sync:
-- **Tier 3 (npm lifecycle):** `npm version patch/minor/major` triggers the `version` hook which calls `sync-version.mjs` and stages `manifest.json`.
-- **Tier 2 (build-time fallback):** `sync-version.mjs` runs at the start of every `build` and `build:prod`, catching any drift.
-
-Quick bump (no full release): `npm version patch` — bumps both files, commits, tags. Does NOT push or create a GitHub Release.
+`package.json` is the single source of truth for version numbers. `scripts/sync-version.mjs` runs at the start of every `npm run build`, catching any drift in `manifest.json`. Releases drive version bumps through `npm run ship <patch|minor|major>`, which also updates `manifest.json` via the same sync script — there is no `npm version` lifecycle hook.
 
 ### Pre-commit hook (`scripts/pre-commit-check.js`)
 
 Runs automatically on every `git commit`:
 1. Detects staged files — skips if only docs/config changed
-2. ESLint auto-fix on staged `.ts` files
-3. Build (dev) — blocking
+2. Hard-fails if `manifest.json` permissions changed without a matching `docs/store-submissions/*.md` staged
+3. ESLint auto-fix on staged `.ts` files
 4. Build (prod) — blocking
 5. Unit tests with coverage — non-blocking (warns but doesn't block)
 
@@ -164,13 +183,13 @@ Prefer in this order:
 - **Settings schema is truth:** Never hardcode a setting key. Always reference `SETTINGS_SCHEMA` in `src/core/settings.ts`.
 - **Logger everywhere:** Use `Logger.forComponent('Name')` — never raw `console.log`.
 - **Tests run fast:** `npm test` finishes in ~28s. Always run after code changes before committing.
-- **Build is slow:** `npm run build:prod` takes ~30s + pre-commit hook adds another run on commit. Verify logic via `npm test` first.
+- **Build is slow:** `npm run build` takes ~30s + pre-commit hook adds another run on commit. Verify logic via `npm test` first.
 - **Chrome APIs require mocking:** jsdom has no `chrome.*`. Every test that touches Chrome APIs must mock them. See `.github/skills/testing/SKILL.md` patterns.
 - **90%+ line coverage:** 1,233+ unit tests across 46 test files + 45 Playwright E2E tests across 7 spec files. See `.github/copilot/test-generation-instructions.md` for mock patterns.
 - **Shared test utilities:** `src/__test-utils__/` provides composable Chrome API mocks, Logger/Settings mocks, data factories, and lifecycle helpers — use these instead of inline mocks.
-- **E2E tests need a build:** Playwright loads the built extension from `dist/`. Run `npm run build:prod` before `npx playwright test`. See `docs/E2E_TESTING.md` for fixture architecture and troubleshooting.
+- **E2E tests need a build:** Playwright loads the built extension from `dist/`. Use `npm run e2e` (which builds first) instead of bare `npx playwright test`. See `docs/E2E_TESTING.md` for fixture architecture and troubleshooting.
 - **Underscore-dir guardrail:** Chrome MV3 forbids directories starting with `_` in extensions. `tsconfig.json` excludes `src/**/__test-utils__/**` and `scripts/copy-static.mjs` post-build sweep removes any that leak through.
-- **Lint policy:** `npm run lint` — errors block, warnings are advisory (exit 0). Test files have `no-explicit-any` and `no-non-null-assertion` turned off via `.eslintrc.cjs` overrides. `npm run lint:strict` (`--max-warnings 0`) exists for manual cleanup sprints but is **not** wired into verify/preflight/release — no obligation to maintain zero warnings.
+- **Lint policy:** `npm run lint` — errors block, warnings are advisory (exit 0). Test files have `no-explicit-any` and `no-non-null-assertion` turned off via `.eslintrc.cjs` overrides. `npm run lint strict` (`--max-warnings 0`) exists for manual cleanup sprints but is **not** wired into verify / ship check / release — no obligation to maintain zero warnings.
 
 ### Parallelization
 
@@ -206,13 +225,13 @@ Any commit that modifies `manifest.json`'s `permissions` array or `optional_perm
 
 | Layer | Where | What it does |
 |-------|-------|--------------|
-| Scaffolder | `npm run store:init` (or `node scripts/store-check.mjs <new> --init`) | Computes the perm delta vs the previous version's manifest via `git show v<prev>:manifest.json` and injects a `PERMISSION DELTA` banner with fill-in-the-blank `+ \`<perm>\` *(new in vX.Y.Z)* — TODO: write justification.` lines into the new doc's preamble. |
+| Scaffolder | `npm run store init` | Computes the perm delta vs the previous version's manifest via `git show v<prev>:manifest.json` and injects a `PERMISSION DELTA` banner with fill-in-the-blank `+ \`<perm>\` *(new in vX.Y.Z)* — TODO: write justification.` lines into the new doc's preamble. |
 | Pre-commit hook | `scripts/pre-commit-check.js` | Hard-fails the commit (exit 1, no build runs) when `manifest.json` perm arrays change vs HEAD and no `docs/store-submissions/*.md` file is staged in the same commit. |
-| Store check | `npm run store:check` | Audits manifest ↔ Section 4 parity. Reports `[fail]` with a per-perm breakdown of `MISSING` and `STALE` justifications. Used in CI and before every CWS upload. |
+| Store check | `npm run store check` | Audits manifest ↔ Section 4 parity. Reports `[fail]` with a per-perm breakdown of `MISSING` and `STALE` justifications. Used in CI and before every CWS upload. Also runs inline as part of `npm run ship check`. |
 
 ### Escape Hatch (NOT recommended)
 
-`FORCE_PRE_COMMIT=1 git commit ...` bypasses the pre-commit gate. The hook prints a loud warning when bypassed AND a perm change is detected. Use only for emergency fixes — `npm run store:check` will still fail until parity is restored, and Chrome Web Store will reject the upload.
+`FORCE_PRE_COMMIT=1 git commit ...` bypasses the pre-commit gate. The hook prints a loud warning when bypassed AND a perm change is detected. Use only for emergency fixes — `npm run store check` will still fail until parity is restored, and Chrome Web Store will reject the upload.
 
 ### What "matching submission doc" means
 
@@ -220,7 +239,7 @@ For a release that has already shipped: edit that release's `docs/store-submissi
 
 For an in-flight release before tagging: edit the most recently created submission doc (whatever version `--init` last scaffolded).
 
-When in doubt: edit the file with the highest version number under `docs/store-submissions/`. The `store:check` audit always reads the file matching the current version reported by git tags.
+When in doubt: edit the file with the highest version number under `docs/store-submissions/`. The `store check` audit always reads the file matching the current version reported by git tags.
 
 ---
 
@@ -233,10 +252,10 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 2. Use the **Critical File Map** above to locate the relevant source file
 3. Load the appropriate **domain skill** if the bug is in a complex area (search, AI, settings)
 4. Make the **minimal fix** in `src/` — no refactoring, no unrelated changes
-5. Run `npm test` — all 1,233+ unit tests must pass
-6. Run `npm run build:prod` — must succeed with zero errors
+5. Run `npm test` — all 1,252+ unit tests must pass
+6. Run `npm run build` — must succeed with zero errors
 7. Commit: `git commit -m "fix: <concise description>"`
-8. If shipping immediately: `npm run release:patch`
+8. If shipping immediately: `npm run ship patch`
 
 ### New Feature
 1. Understand the request — check if existing code can be extended
@@ -245,14 +264,15 @@ This section is the primary workflow reference for Claude Code sessions. Load `.
 4. Implement following existing patterns (Logger, SettingsManager, isolated scorers)
 4b. **If `manifest.json` permission changed:** stage the matching `docs/store-submissions/vX.Y.Z-chrome-web-store.md` Section 4 update in the SAME commit (see *Manifest Permission Discipline* above). The pre-commit hook will hard-fail the commit otherwise.
 5. Write tests if touching core logic — target 90%+ coverage for new code
-6. Run `npm test` and `npm run build:prod`
+6. Run `npm test` and `npm run build`
 7. Commit: `git commit -m "feat: <concise description>"`
-8. If shipping: `npm run release:minor`
+8. If shipping: `npm run ship minor`
 
 ### Release + Chrome Web Store
 ```bash
-npm run release:patch   # or release:minor / release:major
-npm run store-prep      # prints: What's New, permissions, privacy summary
+npm run ship check                   # release readiness gate (audit + parity + LICENSE + privacy URL + prev tag)
+npm run ship patch                   # or ship minor / ship major: bump, changelog, tag, push, GitHub Release, zip
+npm run store check                  # final parity audit before CWS upload
 ```
 Then:
 1. Create/update `docs/store-submissions/vX.Y.Z-chrome-web-store.md` with full submission fields
@@ -266,9 +286,9 @@ Then:
 ### Security / Dependency Fix
 1. Check `npm audit` output — identify the vulnerability
 2. Update the dependency in `package.json`
-3. Run `npm install` → `npm test` → `npm run build:prod`
+3. Run `npm install` → `npm test` → `npm run build`
 4. Commit: `git commit -m "fix: update <pkg> to address <CVE/issue>"`
-5. If shipping: `npm run release:patch`
+5. If shipping: `npm run ship patch`
 
 ### Quick Patch (no deep context)
 1. Grep for the error message or keyword in `src/`

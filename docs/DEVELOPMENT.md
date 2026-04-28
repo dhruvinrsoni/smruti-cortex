@@ -68,7 +68,7 @@ Before any release, all of these must pass:
 ```bash
 npm test              # all test suites green
 npm run lint          # 0 issues
-npm run build:prod    # no TypeScript errors
+npm run build         # no TypeScript errors
 ```
 
 **Smoke test checklist:**

@@ -473,7 +473,7 @@ Improve coverage of already-tested files:
 | Command | Purpose |
 |---------|---------|
 | `npm test` | Run all tests once |
-| `npm run test:watch` | Watch mode (re-runs on file change) |
+| `npm run test watch` | Watch mode (re-runs on file change) |
 | `npx vitest run <path>` | Run specific test file |
 | `npx vitest run --coverage` | Run with v8 coverage report |
 | `npx vitest run src/background/__tests__/` | Run all tests in a folder |

@@ -143,11 +143,11 @@ git revert <sha-of-commit-A2>
 
 # Verify:
 npm test
-npm run build:prod
+npm run build
 npx playwright test e2e/ranking-boundary-flex.spec.ts
 
 # Ship:
-node scripts/release.mjs patch
+npm run ship patch
 ```
 
 **Symptoms that would warrant a revert:**
@@ -168,7 +168,7 @@ node scripts/release.mjs patch
 Any PR touching `tokenizer.ts`, `search-engine.ts`, or the golden suite **must** confirm:
 
 - [ ] `npm test` — all unit tests green, including `tokenizer-golden.test.ts`.
-- [ ] `npm run build:prod` — clean build.
+- [ ] `npm run build` — clean build.
 - [ ] `npx playwright test e2e/ranking-boundary-flex.spec.ts` — 2/2 tests green.
 - [ ] If any golden row changes, the PR description explains **why**, and updates this ADR if the contract itself is being changed.
 - [ ] CODEOWNERS review obtained for any file under `src/background/search/` or `docs/adr/`.

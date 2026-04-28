@@ -9,8 +9,8 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
 1. **Understand** — Read the bug report. Reproduce if possible.
 2. **Locate** — Use CLAUDE.md Critical File Map to find the relevant file.
 3. **Fix** — Make the minimal change. Don't refactor surrounding code.
-4. **Test** — `npm test` (all tests must pass — 1,233+ tests across 46 files).
-5. **Build** — `npm run build:prod` (must compile with zero errors).
+4. **Test** — `npm test` (all tests must pass — 1,252+ tests across 47 files).
+5. **Build** — `npm run build` (must compile with zero errors).
 6. **Manual test** — Tell the user:
    - Open `chrome://extensions` → reload unpacked → test the specific fix
    - For popup: click extension icon → search → verify behavior
@@ -27,7 +27,7 @@ Load this skill when handling bug reports, feature requests, releases, or Chrome
 2. **Load domain skill** — From `.github/skills/`: search-engine, ai-ollama, ui-components, settings, etc.
 3. **Implement** — Follow existing patterns (Logger, SettingsManager, scorers are isolated, etc.)
 4. **Test** — Write tests if touching core logic. `npm test` must pass.
-5. **Build** — `npm run build:prod` must succeed.
+5. **Build** — `npm run build` must succeed.
 6. **Manual test** — Same as bug fix above, focused on the new feature.
 7. **Commit** — `feat: <concise description of the new capability>`
 8. **Release** — If user wants to ship: `npm run ship minor`
@@ -44,10 +44,10 @@ npm run ship <patch|minor|major>
 
 This runs, in strict order:
 1. Validate prerequisites (main branch, clean tree, gh CLI)
-2. Full verify gate: lint + build:prod + unit tests + E2E — **before any disk writes**
+2. Full ship-check gate: `verify.mjs --release` (lint + build + unit tests + coverage + E2E + bundle bench + version sync + MV3 manifest + dist integrity + npm audit + store check + LICENSE + privacy URL + previous tag) — **before any disk writes**
 3. Bump package.json, sync manifest.json
 4. Re-build with new version, package zip
-5. Generate CHANGELOG, scaffold submission doc via `store:init`
+5. Generate CHANGELOG, scaffold submission doc via `npm run store init`
 6. Single commit, tag, push, create GitHub Release
 7. Print next-steps (zip path, CWS dashboard URL)
 
@@ -55,12 +55,12 @@ After it finishes: drag-drop the zip into the CWS dashboard, paste the "What's N
 
 **Emergency override:** `npm run ship patch -- --skip-e2e` skips only E2E tests. Prints a warning and records `[ship-override: skip-e2e]` in the commit body. Lint, build, and unit tests always run.
 
-**Post-release:** `npm run store:check` verifies the submission doc, CHANGELOG entry, zip, and public CWS listing are all in sync. Treat failures as blockers.
+**Post-release:** `npm run store check` verifies the submission doc, CHANGELOG entry, zip, and public CWS listing are all in sync. Treat failures as blockers.
 
 **Release-doc invariant:** every released version MUST have a matching
 `docs/store-submissions/vX.Y.Z-chrome-web-store.md` file. The ship command
 auto-scaffolds this. Edit Sections 7 (Changes) and 9 (Checklist), then
-delete the TODO preamble. `npm run store:check` is the machine-enforced gate.
+delete the TODO preamble. `npm run store check` is the machine-enforced gate.
 
 ### Semver Decision Tree
 
@@ -86,14 +86,14 @@ Use `--dry-run` to preview the version bump without making changes.
 6. Paste "What's new" text from Section 7 of the doc
 7. Submit for review (typically 1-3 business days)
 8. After submission: fill in the "Submitted" date and commit
-9. `npm run store:check` — verify everything is in sync
+9. `npm run store check` — verify everything is in sync
 
 ### Backfilling a missed submission doc
 
 If a version was released without a submission doc:
-- `npm run store:init -- <missed-version>` — scaffolds from the previous doc
+- `npm run store init -- <missed-version>` — scaffolds from the previous doc
 - `git diff v<prev>..v<current> manifest.json` — confirm permission deltas
-- File the doc even if already submitted — it unblocks `npm run store:check`
+- File the doc even if already submitted — it unblocks `npm run store check`
 
 ### Permission Justifications (if reviewer asks)
 
@@ -115,11 +115,11 @@ If a version was released without a submission doc:
 
 Every change to `manifest.json`'s `permissions` or `optional_permissions` arrays MUST land in the same commit as a `docs/store-submissions/vX.Y.Z-chrome-web-store.md` Section 4 update. The v9.2.0 `idle` regression existed because we had no automated link between manifest mutation and submission-doc mutation. Now we have three:
 
-1. **Scaffolder banner** — `npm run store:init` reads `git show v<prev>:manifest.json`, computes added/removed perms, and inserts a `PERMISSION DELTA` block in the new doc's TODO preamble showing exactly which `#### \`<perm>\`` blocks to add/remove.
+1. **Scaffolder banner** — `npm run store init` reads `git show v<prev>:manifest.json`, computes added/removed perms, and inserts a `PERMISSION DELTA` block in the new doc's TODO preamble showing exactly which `#### \`<perm>\`` blocks to add/remove.
 
 2. **Pre-commit hard-fail** — `scripts/pre-commit-check.js` aborts (`exit 1`, no build runs) when `manifest.json` perm arrays differ from HEAD and no `docs/store-submissions/*.md` is staged. Bypass with `FORCE_PRE_COMMIT=1` (NOT recommended; the audit will still fail and CWS will reject).
 
-3. **store:check audit** — `npm run store:check` runs `auditPermissions(manifest, doc)` and prints a `manifest <-> doc permission parity` line listing every `MISSING` or `STALE` justification. Treat any failure as a release blocker.
+3. **store check audit** — `npm run store check` runs `auditPermissions(manifest, doc)` and prints a `manifest <-> doc permission parity` line listing every `MISSING` or `STALE` justification. Treat any failure as a release blocker. The same audit is invoked inline by `npm run ship check`.
 
 Operator workflow when a perm change is needed:
 
@@ -135,14 +135,14 @@ $EDITOR docs/store-submissions/v$(node -p "require('./package.json').version")-c
 git add manifest.json docs/store-submissions/v*-chrome-web-store.md
 git commit -m "feat: <description>"
 # Pre-commit hook will print: "Manifest permission discipline: N perm
-# change(s) staged with submission doc edit. Audit will run in store:check."
+# change(s) staged with submission doc edit. Audit will run in store check."
 # and proceed normally.
 
 # 4. (optional, recommended) Run the audit explicitly
-npm run store:check
+npm run store check
 ```
 
-When scaffolding for a new release (the typical case for a fresh perm), use `npm run store:init` instead of editing the previous version's doc — the scaffolder injects the PERMISSION DELTA banner that lists what to do.
+When scaffolding for a new release (the typical case for a fresh perm), use `npm run store init` instead of editing the previous version's doc — the scaffolder injects the PERMISSION DELTA banner that lists what to do.
 
 ### Common Rejection Reasons
 - **Missing privacy policy** — Ensure https://dhruvinrsoni.github.io/smruti-cortex/privacy.html is live
@@ -190,12 +190,12 @@ After loading unpacked from `dist/`:
 Run after ANY code change:
 
 ```bash
-npm run verify              # lint + build:prod + unit tests + E2E — one command
+npm run verify              # lint + build + unit tests + coverage + E2E — one command
 ```
 
-Or individually: `npm test`, `npm run build:prod`, `npm run lint`, `npx playwright test`.
+Or individually: `npm test`, `npm run build`, `npm run lint`, `npm run e2e`.
 
-Pre-commit hook runs build:prod + unit tests (~20s) on every commit automatically.
+Pre-commit hook runs build + unit tests (~20s) on every commit automatically.
 
 Critical paths to manually verify:
 1. Popup opens and shows results
@@ -229,15 +229,15 @@ npm run ship patch
 ### Release Pipeline Hierarchy
 
 ```
-verify       Codebase is sound           (no writes)
-  └─ preflight  Ready to release         (no writes, includes verify)
-       └─ ship  Do the release           (writes, includes preflight)
+verify           Codebase is sound       (no writes)
+  └─ ship check  Ready to release        (no writes, = verify --release)
+       └─ ship   Do the release          (writes, includes ship check)
 ```
 
 Each layer adds exactly one concern. Lower layers never depend on upper layers.
-`--skip-e2e` (ship) translates to `--no-e2e` (verify/preflight) at the boundary.
+`--skip-e2e` (ship) translates to `--no-e2e` (verify) at the boundary.
 
-- **Pre-commit hook** (~20s): build:prod + unit tests. Smart-skips for docs-only changes.
+- **Pre-commit hook** (~20s): build + unit tests. Smart-skips for docs-only changes.
 - **Archived workflows**: `.github/workflows/archived/` — intentionally disabled. See `archived/README.md` for revive instructions.
 - **Dependabot**: weekly grouped npm PRs (minor+patch), monthly GitHub Actions bumps. Existing CI gates enforce safety on every PR.
 - **CWS upload**: always manual (drag-drop). No API automation — minimal security surface for LTS.
@@ -246,8 +246,8 @@ Each layer adds exactly one concern. Lower layers never depend on upper layers.
 
 ## Troubleshooting
 
-- **`_metadata` error on Load Unpacked**: CWS adds `_metadata/` to published packages for integrity verification. Chrome rejects it during "Load Unpacked". Fix: unzip, then run `npm run unpack:cws -- <folder>` to strip reserved entries.
-- **Canonical local testing**: Use `npm run build:prod` then "Load Unpacked" on `dist/` — this is identical to shipped code and has no `_metadata/`.
+- **`_metadata` error on Load Unpacked**: CWS adds `_metadata/` to published packages for integrity verification. Chrome rejects it during "Load Unpacked". Fix: unzip, then run `npm run store unpack -- <folder>` to strip reserved entries.
+- **Canonical local testing**: Use `npm run build` then "Load Unpacked" on `dist/` — this is identical to shipped code and has no `_metadata/`.
 
 ---
 

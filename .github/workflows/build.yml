@@ -90,7 +90,9 @@ jobs:
         run: npm test
 
       - name: Build extension (${{ inputs.build_type || 'production' }})
-        run: npm run build${{ inputs.build_type == 'development' && ':dev' || ':prod' }}
+        # Note: post-A1 refactor, `npm run build` is the canonical (production) build.
+        # The development one-shot was dropped; for dev-watch use `npm run dev` locally.
+        run: npm run build
 
       - name: Type check
         run: npx tsc --project tsconfig.json
@@ -144,7 +146,7 @@ jobs:
           echo "### 💡 Usage" >> $GITHUB_STEP_SUMMARY
           echo "Download \`${{ env.ARTIFACT_NAME }}\` from artifacts and load unpacked." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**To create a release:** Run \`node scripts/release.mjs <patch|minor|major>\` locally." >> $GITHUB_STEP_SUMMARY
+          echo "**To create a release:** Run \`npm run ship <patch|minor|major>\` locally." >> $GITHUB_STEP_SUMMARY
 
   release:
     name: Create Release

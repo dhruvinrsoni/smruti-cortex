@@ -26,7 +26,7 @@
 <!-- How was this tested? -->
 - [ ] `npm test` passes locally
 - [ ] `npm run lint` passes locally
-- [ ] `npm run build:prod` succeeds locally
+- [ ] `npm run build` succeeds locally
 - [ ] New/updated tests cover the changes
 - [ ] Manual testing performed in Chrome
 
@@ -34,7 +34,7 @@
 ```
 npm test
 npm run lint
-npm run build:prod
+npm run build
 ```
 
 ## Coverage Impact

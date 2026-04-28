@@ -58,7 +58,7 @@ Ask these in order for every file you consider removing:
 
 **Situation:** Originally not in `package.json`, then added as a standalone `npm run benchmark` script.
 **Analysis:** Reads dist/ bundle sizes, checks against KB thresholds, CI-aware output.
-**Decision:** INTEGRATE into `preflight.mjs` (Phase 2) as a release gate instead of a standalone npm script. The standalone entry was removed to reduce `npm run` surface noise, but the script itself is preserved and called automatically during preflight.
+**Decision:** INTEGRATE into `verify.mjs --release` (i.e. `npm run ship check`) as a release gate instead of a standalone npm script. The standalone entry was removed to reduce `npm run` surface noise, but the script itself is preserved and called automatically during ship check.
 **Lesson:** Useful scripts don't always need their own npm entry — they can be wired into existing pipelines where they add the most value.
 
 ### ARCHIVED: `src/assets/v1-*/v2-*/v3-*/v4-*/v5-*/v11-*` (17 icon files)
@@ -97,7 +97,7 @@ git ls-files | sort
 grep -r "title-scorers" src/ --include="*.ts"
 
 # 3. Check if a script is in package.json
-grep "benchmark" scripts/preflight.mjs
+grep "benchmark" scripts/verify.mjs
 
 # 4. Check if an asset is referenced in manifest
 grep "v1-icon" manifest.json

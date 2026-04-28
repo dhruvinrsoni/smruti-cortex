@@ -159,7 +159,7 @@ Enable/disable modes in Settings → Command Palette. Advanced Browser Commands 
 | `npm test` | Iterate on unit tests (fast, ~5s focused run with `-- <pattern>` args). |
 | `npm run verify` | Paranoid "did I break anything?" check before opening a PR. |
 | `npm run ship <patch\|minor\|major>` | Full release: verify gate, bump, changelog, commit, tag, push, GitHub Release, zip. Drag-drop the printed zip into the CWS dashboard. |
-| `npm run store:check` | Post-release: confirm CWS listing reflects the new version. |
+| `npm run store check` | Post-release: confirm CWS listing reflects the new version. |
 
 Emergency release override: `npm run ship patch -- --skip-e2e` — skips only E2E; prints a warning and records `[ship-override]` in the commit.
 
@@ -168,19 +168,21 @@ Emergency release override: `npm run ship patch -- --skip-e2e` — skips only E2
 
 | Command | Purpose |
 |---------|---------|
-| `npm run lint` | ESLint check |
-| `npm run build:prod` | Production build (minified) |
-| `npm run build` | Dev build (source maps) |
+| `npm run lint` | ESLint check (errors block, warnings inform) |
+| `npm run lint strict` | ESLint zero-warning check (manual cleanup) |
+| `npm run build` | Production build (minified, the canonical build) |
+| `npm run dev` | esbuild watch mode |
 | `npm run coverage` | Unit tests + v8 coverage report |
-| `npm run preflight` | Full pre-release verification pipeline |
-| `npm run store:init -- <version>` | Scaffold store submission doc from previous |
-| `npm run store-prep` | Print Chrome Web Store submission text |
+| `npm run ship check` | Full pre-release verification (verify + npm audit + store check + LICENSE + privacy URL + previous tag) |
+| `npm run store init -- <version>` | Scaffold store submission doc from previous |
+| `npm run store unpack -- <folder>` | Strip `_metadata/` from CWS-downloaded extension folder |
 | `npm run package` | Create store-ready zip |
-| `npm run test:e2e` | Build + run Playwright E2E tests |
+| `npm run test watch` | Vitest in watch mode |
+| `npm run e2e` | Build + run Playwright E2E tests |
 
 The daily commands above call these internally; these are the escape hatches.
 
-`verify` → `preflight` → `ship` is a strict hierarchy: each layer includes the one below it. `verify` and `preflight` are read-only; only `ship` writes.
+`verify` → `ship check` → `ship` is a strict hierarchy: each layer includes the one below it. `verify` and `ship check` are read-only; only `ship` writes.
 </details>
 
 **Project Structure:**
@@ -338,9 +340,9 @@ Production-grade safety layers protect your browser — every AI feature degrade
 
 ```bash
 npm test                                    # Unit tests (~60s)
-npm run test:e2e                            # E2E tests (build + Playwright, ~50s)
-npx vitest run --coverage --pool=forks      # Unit tests with coverage report
-node scripts/e2e-slowmo.mjs                 # E2E in slow-motion (see docs/E2E_TESTING.md)
+npm run e2e                                 # E2E tests (build + Playwright, ~50s)
+npm run coverage                            # Unit tests with coverage report
+npm run verify -- --e2e-slowmo              # E2E in slow-motion (see docs/E2E_TESTING.md)
 ```
 
 > Full E2E guide: [docs/E2E_TESTING.md](docs/E2E_TESTING.md) — architecture, patterns, fixtures, content script isolated world, troubleshooting.
@@ -364,7 +366,7 @@ node scripts/e2e-slowmo.mjs                 # E2E in slow-motion (see docs/E2E_T
 1. Fork repo
 2. Create feature branch
 3. Make changes
-4. **Pre-commit hook automatically runs build:prod + tests (~20s)**
+4. **Pre-commit hook automatically runs build + tests (~20s)**
    - If checks pass: commit proceeds
    - If checks fail: you'll be prompted to continue or abort
 5. Submit PR

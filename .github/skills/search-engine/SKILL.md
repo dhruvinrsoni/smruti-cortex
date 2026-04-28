@@ -82,7 +82,7 @@ Regex is cached per token to avoid recompilation across 3000+ items.
 
 1. Read `docs/adr/0001-search-matching-contract.md`.
 2. Keep `src/background/search/__tests__/tokenizer-golden.test.ts` green — every row flip requires explicit justification in the PR description.
-3. Run `npm test && npm run build:prod && npx playwright test e2e/ranking-boundary-flex.spec.ts`.
+3. Run `npm test && npm run build && npx playwright test e2e/ranking-boundary-flex.spec.ts`.
 4. Get sign-off from the `@dhruvinrsoni` search-core CODEOWNER.
 
 **Diagnostic surface.** `src/background/ranking-report.ts` emits a per-token **Field Hits** column (`tracker[t,u,h] module42[t]`) and a top-of-report **partial-match banner** whenever no result covers all query tokens. Both respect `maskingLevel`. Use these to confirm boundary-flex decisions from a user-generated bug report without needing to reproduce the index.

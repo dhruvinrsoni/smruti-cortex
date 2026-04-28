@@ -31,5 +31,5 @@ Agent definitions: `.github/copilot/agents/`
 - TypeScript everywhere; no new JS files
 - Settings: single source of truth in `SETTINGS_SCHEMA` (`src/core/settings.ts`)
 - Logging: use `Logger.forComponent('Name')`, never raw `console.log`
-- Build: `npm run build:prod` = sync-version + clean + tsc + copy-static + esbuild
+- Build: `npm run build` = sync-version + clean + tsc + copy-static + esbuild (production, the canonical build)
 - Load in browser: `chrome://extensions` > Load unpacked > select `dist/`

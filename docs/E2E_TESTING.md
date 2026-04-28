@@ -152,7 +152,7 @@ node scripts/e2e-slowmo.mjs 800           # 800ms for stronger visibility
 node scripts/e2e-slowmo.mjs 400 e2e/01-tour.spec.ts   # slow-mo + single spec
 ```
 
-Build first if `dist/` is stale: `npm run build:prod && node scripts/e2e-slowmo.mjs`
+Build first if `dist/` is stale: `npm run build && node scripts/e2e-slowmo.mjs`
 
 Manual env (if you prefer):
 
@@ -323,7 +323,7 @@ By default, E2E tests run at full Playwright speed — no artificial delays. Slo
 | Scenario | Command | Speed |
 |----------|---------|-------|
 | Full-speed E2E | `npx playwright test` | ~30s |
-| Full-speed E2E (with build) | `npm run test:e2e` | ~60s |
+| Full-speed E2E (with build) | `npm run e2e` | ~60s |
 | Slow-mo (400ms default) | `node scripts/e2e-slowmo.mjs` | ~5min |
 | Slow-mo (custom ms) | `node scripts/e2e-slowmo.mjs 800` | ~8min |
 | Slow-mo + single spec | `node scripts/e2e-slowmo.mjs 400 e2e/popup-smoke.spec.ts` | varies |
@@ -341,7 +341,7 @@ Without either flag, verify uses plain `npx playwright test` (~4min total).
 
 If slow-mo appears to have no effect:
 
-1. **Using `npm run test:e2e` instead of slow-mo script** — `test:e2e` runs at full speed. Use `node scripts/e2e-slowmo.mjs` for slow-mo.
+1. **Using `npm run e2e` instead of slow-mo script** — `e2e` runs at full speed. Use `node scripts/e2e-slowmo.mjs` for slow-mo.
 2. **On an older revision** — before commit `853df39`, only `Page`-level methods were patched. Since tests use `page.locator().click()` (Locator methods), the delays had no effect. The current fixture patches `Locator.prototype` directly.
 3. **Delay too low** — 400ms can feel quick with many tests. Try `node scripts/e2e-slowmo.mjs 800` or `1000`.
 
@@ -366,7 +366,7 @@ node scripts/e2e-slowmo.mjs 400 e2e/popup-smoke.spec.ts   # slow-mo on a single 
 node scripts/e2e-slowmo.mjs -h            # show usage help
 ```
 
-If you need to build first, run `npm run build:prod` before the slow-mo command.
+If you need to build first, run `npm run build` before the slow-mo command.
 
 ### Run a Specific Test File
 
@@ -419,13 +419,13 @@ npx playwright test -g "Quick-search"
 E2E tests load the extension from `dist/`. Always build before running:
 
 ```bash
-npm run build:prod && npx playwright test
+npm run build && npx playwright test
 ```
 
 Or use the npm shortcut:
 
 ```bash
-npm run test:e2e
+npm run e2e
 ```
 
 ---
@@ -568,6 +568,6 @@ All sites are globally accessible and stable. `example.com` is IANA's reserved d
 
 - Chrome extensions **require headed mode** (`headless: false`). CI runners need a display server (Xvfb on Linux).
 - `workers: 1` is mandatory — extensions share a single browser state.
-- Build time (~30s) + test time (~20-30s) = ~50-60s total for `npm run test:e2e`.
+- Build time (~30s) + test time (~20-30s) = ~50-60s total for `npm run e2e`.
 - HTML report is generated in `playwright-report/` — archive as a CI artifact.
 - History tests may skip on CI if Chrome's temp profile doesn't flush history entries. This is expected behavior, not a failure.

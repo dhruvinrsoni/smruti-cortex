@@ -216,7 +216,7 @@ async function main() {
       console.log('  4. git commit again');
       console.log('');
       console.log('Or, if scaffolding for a new release:');
-      console.log('  node scripts/store-check.mjs <new-version> --init');
+      console.log('  npm run store init <new-version>');
       console.log('  (the scaffolder injects a PERMISSION DELTA banner showing exactly what to add)');
       console.log('');
       console.log('Escape hatch (NOT recommended — Chrome Web Store will reject):');

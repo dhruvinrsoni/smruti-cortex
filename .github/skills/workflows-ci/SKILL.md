@@ -48,7 +48,7 @@ metadata:
 ## Build Pipeline (build.yml)
 
 ```
-npm ci -> lint (JSON metrics + human-readable gate) -> test -> build:prod
+npm ci -> lint (JSON metrics + human-readable gate) -> test -> build
 ```
 
 - Lint runs twice: once for JSON metrics (`--format json`), once for human-readable output (gates the build)
