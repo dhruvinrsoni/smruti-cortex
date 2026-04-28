@@ -10,9 +10,10 @@
  *   lint -> build (prod) -> unit tests + coverage -> coverage ratchet -> E2E
  *
  * Release mode (`--release`) appends prod-release gates after the core run:
- *   bundle benchmark -> version & manifest sync (MV3, name+description) ->
- *   dist integrity (no underscore dirs, all critical files) -> git tree status.
- *   B2 will add: npm audit, store check inline, LICENSE, privacy URL, prev tag.
+ *   bundle benchmark -> npm audit (HIGH/CRITICAL CVEs) -> store check inline
+ *   (manifest <-> doc parity audit) -> version & manifest sync (MV3, name+description)
+ *   -> dist integrity (no underscore dirs, all critical files) -> LICENSE present
+ *   -> privacy policy URL HTTP 200 -> previous-version git tag exists -> git tree status.
  *
  * `--release` is what `npm run ship check` invokes (via release.mjs). It used
  * to live in scripts/preflight.mjs; folded in here to avoid drift.
@@ -22,6 +23,7 @@
  *   npm run verify -- --no-e2e        # skip E2E (faster, ~2min)
  *   npm run verify -- --e2e-slowmo    # run E2E with SLOW_MO (visual debugging)
  *   npm run verify -- --release       # core checks + release-only gates
+ *   npm run verify -- --release --no-network  # skip phases that need internet
  *   node ./scripts/verify.mjs --release --no-e2e   # CI-friendly release gate
  */
 
@@ -35,6 +37,7 @@ const root = join(__dirname, '..');
 const skipE2E = process.argv.includes('--no-e2e');
 const e2eSlowMo = process.argv.includes('--e2e-slowmo');
 const releaseMode = process.argv.includes('--release');
+const noNetwork = process.argv.includes('--no-network');
 
 const BOLD = '\x1b[1m';
 const GREEN = '\x1b[32m';
@@ -64,24 +67,7 @@ function step(name, cmd) {
 
 // Inline check helper for release-only gates that don't shell out (or where we
 // want richer pass/warn semantics than `step` provides).
-function check(name, fn) {
-  console.log(`\n${BOLD}${CYAN}▶ ${name}${RESET}`);
-  const t0 = Date.now();
-  let outcome = 'pass';
-  let detail = '';
-  try {
-    detail = fn() ?? '';
-    if (detail === 'WARN') {
-      outcome = 'warn';
-      detail = '';
-    } else if (detail.startsWith?.('WARN: ')) {
-      outcome = 'warn';
-      detail = detail.slice(6);
-    }
-  } catch (err) {
-    outcome = 'fail';
-    detail = err.message;
-  }
+function recordCheck(name, t0, outcome, detail) {
   const ms = Date.now() - t0;
   if (outcome === 'pass') {
     results.push({ name, passed: true, ms });
@@ -92,6 +78,35 @@ function check(name, fn) {
   } else {
     results.push({ name, passed: false, ms });
     console.log(`${RED}  ❌ ${name} — ${detail}${RESET}`);
+  }
+}
+
+function classifyDetail(raw) {
+  let detail = raw ?? '';
+  if (detail === 'WARN') return { outcome: 'warn', detail: '' };
+  if (detail.startsWith?.('WARN: ')) return { outcome: 'warn', detail: detail.slice(6) };
+  return { outcome: 'pass', detail };
+}
+
+function check(name, fn) {
+  console.log(`\n${BOLD}${CYAN}▶ ${name}${RESET}`);
+  const t0 = Date.now();
+  try {
+    const { outcome, detail } = classifyDetail(fn());
+    recordCheck(name, t0, outcome, detail);
+  } catch (err) {
+    recordCheck(name, t0, 'fail', err.message);
+  }
+}
+
+async function checkAsync(name, fn) {
+  console.log(`\n${BOLD}${CYAN}▶ ${name}${RESET}`);
+  const t0 = Date.now();
+  try {
+    const { outcome, detail } = classifyDetail(await fn());
+    recordCheck(name, t0, outcome, detail);
+  } catch (err) {
+    recordCheck(name, t0, 'fail', err.message);
   }
 }
 
@@ -127,6 +142,20 @@ if (releaseMode) {
   console.log(`\n${BOLD}${CYAN}═══ Release-only gates ═══${RESET}`);
 
   step('Bundle Size Benchmark', 'node ./scripts/benchmark-performance.mjs');
+
+  // (a) Dependency vulnerability scan. `--audit-level=high` exits non-zero only
+  //     when HIGH or CRITICAL CVEs are present; lower-severity advisories pass.
+  step('npm audit (HIGH/CRITICAL only)', 'npm audit --audit-level=high');
+
+  // (b) Manifest <-> submission-doc parity audit (the D1 perm-gap fix lives
+  //     inside store-check.mjs). This is the same audit a release reviewer
+  //     effectively runs, just enforced locally before any tag/push happens.
+  if (noNetwork) {
+    results.push({ name: 'Store check (manifest <-> doc parity)', passed: true, ms: 0, skipped: true });
+    console.log(`\n${DIM}  ⏭️  Store check skipped (--no-network)${RESET}`);
+  } else {
+    step('Store check (manifest <-> doc parity)', 'npm run store check');
+  }
 
   check('Version sync (package.json <-> manifest.json)', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
@@ -187,6 +216,55 @@ if (releaseMode) {
     if (missing.length > 0) throw new Error(`missing from dist/: ${missing.join(', ')}`);
 
     return `${criticalFiles.length} critical files present, MV3 safe`;
+  });
+
+  // (c) LICENSE file must exist and have real content. Cheap sanity that
+  //     prevents the "we shipped without a LICENSE" failure mode the BUSL-1.1
+  //     project would suffer from.
+  check('LICENSE present + non-empty', () => {
+    const licensePath = join(root, 'LICENSE');
+    if (!existsSync(licensePath)) throw new Error('LICENSE file not found at repo root');
+    const size = statSync(licensePath).size;
+    if (size < 100) throw new Error(`LICENSE file is suspiciously small (${size} bytes)`);
+    return `${size} bytes`;
+  });
+
+  // (d) Privacy policy URL must return HTTP 200. The CWS reviewer visits this
+  //     URL — if it 404s the listing gets rejected. Skippable via --no-network.
+  if (noNetwork) {
+    results.push({ name: 'Privacy policy URL HTTP 200', passed: true, ms: 0, skipped: true });
+    console.log(`\n${DIM}  ⏭️  Privacy policy URL check skipped (--no-network)${RESET}`);
+  } else {
+    await checkAsync('Privacy policy URL HTTP 200', async () => {
+      const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
+      const homepage = (pkg.homepage || '').replace(/\/$/, '');
+      if (!homepage) throw new Error('package.json has no homepage URL');
+      const url = `${homepage}/privacy.html`;
+      let res;
+      try {
+        res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+      } catch (err) {
+        return `WARN: could not reach ${url} (${err.message})`;
+      }
+      if (res.status !== 200) throw new Error(`${url} -> HTTP ${res.status}`);
+      return url;
+    });
+  }
+
+  // (e) Previous-version git tag must exist. release.mjs depends on
+  //     `git show v<prev>:manifest.json` to compute the permission delta;
+  //     a missing tag would silently break the next ship init.
+  check('Previous-version git tag exists', () => {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
+    const tag = `v${pkg.version}`;
+    // NOTE: don't use `${tag}^{commit}` — the `^` is a cmd.exe escape character
+    // on Windows and breaks the rev-parse arg. `refs/tags/<tag>` is portable.
+    try {
+      runCapture(`git rev-parse --verify --quiet refs/tags/${tag}`);
+    } catch {
+      throw new Error(`tag ${tag} not found locally — run 'git fetch --tags' or release this version first`);
+    }
+    return tag;
   });
 
   check('Git working tree clean', () => {
