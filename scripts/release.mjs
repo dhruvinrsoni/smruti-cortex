@@ -248,7 +248,7 @@ try {
   const builtManifest = JSON.parse(readFileSync(resolve(ROOT, 'dist/manifest.json'), 'utf-8'));
   if (builtManifest.version !== newVersion) throw new Error(`dist/manifest.json version is ${builtManifest.version}, expected ${newVersion}`);
 
-  const zipPath = resolve(ROOT, `release/smruti-cortex-v${newVersion}.zip`);
+  const zipPath = resolve(ROOT, `release/zips/smruti-cortex-v${newVersion}.zip`);
   if (!existsSync(zipPath)) throw new Error(`Release zip not found at ${zipPath}`);
 
   console.log(`${GREEN}✅ dist/manifest.json version: ${newVersion}${RESET}`);
@@ -289,7 +289,7 @@ const notes = sectionMatch ? sectionMatch[0] : `Release v${newVersion}`;
 writeFileSync(notesFile, notes);
 
 try {
-  const zipPath = `release/smruti-cortex-v${newVersion}.zip`;
+  const zipPath = `release/zips/smruti-cortex-v${newVersion}.zip`;
   const releaseUrl = runSilent(`gh release create v${newVersion} -t "v${newVersion}" -F "${notesFile}" "${zipPath}"`);
   console.log(`${GREEN}✅ GitHub Release created: ${releaseUrl}${RESET}`);
 } catch {
@@ -310,7 +310,7 @@ if (SKIP_E2E) {
 }
 
 console.log(`\n📋 Next steps:`);
-console.log(`  1. Upload release/smruti-cortex-v${newVersion}.zip to Chrome Web Store`);
+console.log(`  1. Upload release/zips/smruti-cortex-v${newVersion}.zip to Chrome Web Store`);
 console.log(`     https://chrome.google.com/webstore/devconsole`);
 console.log(`  2. Edit docs/store-submissions/v${newVersion}-chrome-web-store.md`);
 console.log(`     — Fill in Section 7 (Changes) and Section 9 (Checklist)`);

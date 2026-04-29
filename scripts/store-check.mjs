@@ -15,7 +15,7 @@
  * Given a version (or latest git tag), verify:
  *   1. Local submission doc exists at docs/store-submissions/vX.Y.Z-chrome-web-store.md
  *   2. Submission doc has a real "Submitted" date (not "TBD")
- *   3. Release zip exists at release/smruti-cortex-vX.Y.Z.zip
+ *   3. Release zip exists at release/zips/smruti-cortex-vX.Y.Z.zip
  *   4. CHANGELOG.md has a [X.Y.Z] entry
  *   5. Public Chrome Web Store listing is on the expected version
  *   6. Public listing "What's New" text does not reference a stale version

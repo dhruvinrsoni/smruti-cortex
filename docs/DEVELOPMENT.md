@@ -109,7 +109,7 @@ Then document the change in `CHANGELOG.md`:
 ```bash
 npm run package
 # Builds production bundle, then creates:
-# release/smruti-cortex-vX.Y.Z.zip
+# release/zips/smruti-cortex-vX.Y.Z.zip
 ```
 
 Then tag and push:
@@ -128,7 +128,7 @@ Full guide: `CHROME_WEB_STORE.md`
 
 Quick steps:
 1. Go to Chrome Developer Dashboard → find SmrutiCortex → click **Edit**
-2. Upload `release/smruti-cortex-vX.Y.Z.zip`
+2. Upload `release/zips/smruti-cortex-vX.Y.Z.zip`
 3. Fill "What's New" (copy highlights from CHANGELOG.md)
 4. Submit for review
 

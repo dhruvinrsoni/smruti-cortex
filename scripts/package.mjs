@@ -13,11 +13,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const distDir = join(rootDir, 'dist');
 const releaseDir = join(rootDir, 'release');
+// Canonical home for release zips (v9.1.0+). Legacy zips for v9.0.0 and earlier
+// still live at release/ root and are kept for historical traceability.
+const zipsDir = join(releaseDir, 'zips');
 
 const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'));
 const version = pkg.version;
 const zipName = `smruti-cortex-v${version}.zip`;
-const zipPath = join(releaseDir, zipName);
+const zipPath = join(zipsDir, zipName);
 
 async function createZip() {
   console.log(`\n📦 Packaging SmrutiCortex v${version}...`);
@@ -28,10 +31,9 @@ async function createZip() {
     process.exit(1);
   }
 
-  // Create release directory if it doesn't exist
-  if (!existsSync(releaseDir)) {
-    mkdirSync(releaseDir, { recursive: true });
-    console.log('✅ Created release/ directory');
+  if (!existsSync(zipsDir)) {
+    mkdirSync(zipsDir, { recursive: true });
+    console.log('✅ Created release/zips/ directory');
   }
 
   // List files that will be included

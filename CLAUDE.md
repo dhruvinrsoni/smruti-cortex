@@ -279,7 +279,7 @@ Then:
 2. Commit the submission doc: `git commit -m "docs: add Chrome Web Store submission record for vX.Y.Z"`
 3. Upload the submission doc as a GitHub release attachment alongside the zip
 4. Go to https://chrome.google.com/webstore/devconsole
-5. Upload `release/smruti-cortex-vX.Y.Z.zip`
+5. Upload `release/zips/smruti-cortex-vX.Y.Z.zip`
 6. Fill all fields using the submission doc as reference
 7. Submit for review
 

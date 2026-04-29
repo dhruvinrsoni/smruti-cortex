@@ -82,7 +82,7 @@ Use `--dry-run` to preview the version bump without making changes.
 2. Edit `docs/store-submissions/vX.Y.Z-chrome-web-store.md` — fill Sections 7 and 9, delete TODO preamble
 3. If permissions unchanged, say so explicitly in Section 7 (reviewer fast-path)
 4. Go to https://chrome.google.com/webstore/devconsole
-5. Upload `release/smruti-cortex-vX.Y.Z.zip` (path printed by ship command)
+5. Upload `release/zips/smruti-cortex-vX.Y.Z.zip` (path printed by ship command)
 6. Paste "What's new" text from Section 7 of the doc
 7. Submit for review (typically 1-3 business days)
 8. After submission: fill in the "Submitted" date and commit
