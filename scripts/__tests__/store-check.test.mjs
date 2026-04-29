@@ -18,6 +18,8 @@ import {
   auditPermissions,
   computePermissionDelta,
   classifySubmittedDate,
+  extractChangelogSection,
+  classifyChangelogBody,
 } from '../store-check.mjs';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -376,4 +378,100 @@ test('classifySubmittedDate: non-string inputs return fail without throwing', ()
   assert.equal(classifySubmittedDate(undefined, NOW).status, 'fail');
   assert.equal(classifySubmittedDate(null, NOW).status, 'fail');
   assert.equal(classifySubmittedDate(42, NOW).status, 'fail');
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// extractChangelogSection (S10)
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('extractChangelogSection: returns body up to next ## [ header', () => {
+  const text = `# Changelog
+
+## [9.2.0] - 2026-04-23
+
+### Features
+- a thing
+
+## [9.1.0] - 2026-03-12
+
+### Fixed
+- something else
+`;
+  const r = extractChangelogSection(text, '9.2.0');
+  assert.equal(r.found, true);
+  assert.match(r.headerLine, /## \[9\.2\.0\]/);
+  assert.match(r.body, /### Features/);
+  assert.match(r.body, /a thing/);
+  assert.doesNotMatch(r.body, /9\.1\.0/);
+  assert.doesNotMatch(r.body, /something else/);
+});
+
+test('extractChangelogSection: stops at standalone --- divider', () => {
+  const text = `## [9.2.0]
+- bullet
+
+---
+
+unrelated content
+`;
+  const r = extractChangelogSection(text, '9.2.0');
+  assert.equal(r.found, true);
+  assert.match(r.body, /bullet/);
+  assert.doesNotMatch(r.body, /unrelated content/);
+});
+
+test('extractChangelogSection: returns found=false when header missing', () => {
+  const text = `## [9.2.0]\n- bullet\n`;
+  const r = extractChangelogSection(text, '9.9.9');
+  assert.equal(r.found, false);
+});
+
+test('extractChangelogSection: header for the latest version (no following sections) returns rest of file', () => {
+  const text = `# Changelog\n\n## [9.2.0]\n- bullet\n- another\n`;
+  const r = extractChangelogSection(text, '9.2.0');
+  assert.equal(r.found, true);
+  assert.match(r.body, /- bullet/);
+  assert.match(r.body, /- another/);
+});
+
+test('extractChangelogSection: non-string inputs return found=false without throwing', () => {
+  assert.equal(extractChangelogSection(undefined, '9.2.0').found, false);
+  assert.equal(extractChangelogSection('text', undefined).found, false);
+  assert.equal(extractChangelogSection(null, null).found, false);
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// classifyChangelogBody (S10)
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('classifyChangelogBody: empty / whitespace-only body fails', () => {
+  assert.equal(classifyChangelogBody('').status, 'fail');
+  assert.equal(classifyChangelogBody('   \n\n  ').status, 'fail');
+});
+
+test('classifyChangelogBody: only subsection headers (no content) fails', () => {
+  // Auto-scaffolded skeleton with no bullets is the v9.0.0-class bug.
+  const body = `\n### Features\n\n### Fixed\n\n### Refactoring\n`;
+  const r = classifyChangelogBody(body);
+  assert.equal(r.status, 'fail');
+  assert.match(r.detail, /only subsection headers/);
+});
+
+test('classifyChangelogBody: real bullets pass', () => {
+  const body = `\n### Features\n- something nice\n### Fixed\n- a bug\n`;
+  const r = classifyChangelogBody(body);
+  assert.equal(r.status, 'pass');
+  assert.match(r.detail, /content line/);
+});
+
+test('classifyChangelogBody: prose-only body (no subsection headings) passes', () => {
+  const body = `\nThis release fixes a critical bug.\n`;
+  const r = classifyChangelogBody(body);
+  assert.equal(r.status, 'pass');
+});
+
+test('classifyChangelogBody: non-string body returns fail without throwing', () => {
+  assert.equal(classifyChangelogBody(undefined).status, 'fail');
+  assert.equal(classifyChangelogBody(null).status, 'fail');
+  assert.equal(classifyChangelogBody(42).status, 'fail');
 });

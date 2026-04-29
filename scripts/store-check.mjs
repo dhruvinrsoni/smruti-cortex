@@ -659,6 +659,69 @@ export function classifySubmittedDate(raw, now = new Date()) {
   return { status: 'pass', detail: trimmed, parsed, ageDays };
 }
 
+/**
+ * Extract a single version's body from a CHANGELOG.md.
+ *
+ * Looks for a `## [X.Y.Z]` header (with optional `- date` suffix), then
+ * captures every subsequent line until the next `## [` boundary or a
+ * standalone `---` divider (whichever comes first).
+ *
+ * Returns:
+ *   { found: false }                                 — header not present
+ *   { found: true,  body: string, headerLine: string }
+ *
+ * Pure (no I/O); takes the full CHANGELOG text as a string.
+ *
+ * @param {string} text     The full CHANGELOG.md contents.
+ * @param {string} version  The version string (e.g. "9.2.0").
+ * @returns {{ found: false } | { found: true, body: string, headerLine: string }}
+ */
+export function extractChangelogSection(text, version) {
+  if (typeof text !== 'string' || typeof version !== 'string') return { found: false };
+  const escaped = version.replace(/\./g, '\\.');
+  const headerRe = new RegExp(`^## \\[${escaped}\\][^\\n]*$`, 'm');
+  const headerMatch = text.match(headerRe);
+  if (!headerMatch) return { found: false };
+  const startIdx = headerMatch.index + headerMatch[0].length;
+  const remainder = text.slice(startIdx);
+  // Stop at the next `## [` header OR a stand-alone `---` divider.
+  const stopRe = /^(## \[|---\s*$)/m;
+  const stopMatch = remainder.match(stopRe);
+  const body = stopMatch ? remainder.slice(0, stopMatch.index) : remainder;
+  return { found: true, body, headerLine: headerMatch[0] };
+}
+
+/**
+ * Classify a CHANGELOG section body as 'pass' or 'fail' for the content check.
+ *
+ * Rules:
+ *   - Trim whitespace.
+ *   - Strip empty `### Heading` subsection markers (a bare `### Features`
+ *     with no bullets is just template noise, not real content).
+ *   - If anything substantive remains, it's 'pass'. Otherwise 'fail' with a
+ *     short explanation.
+ *
+ * Pure helper.
+ *
+ * @param {string} body  The section body returned by extractChangelogSection.
+ * @returns {{ status: 'pass'|'fail', detail: string }}
+ */
+export function classifyChangelogBody(body) {
+  if (typeof body !== 'string' || body.trim() === '') {
+    return { status: 'fail', detail: 'section is empty (header only)' };
+  }
+  // Drop blank lines and bare `### ...` subsection headers; if everything
+  // that remains is whitespace, the section has no real content.
+  const meaningful = body
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l !== '' && !/^###\s+/.test(l));
+  if (meaningful.length === 0) {
+    return { status: 'fail', detail: 'section has only subsection headers, no bullets/prose' };
+  }
+  return { status: 'pass', detail: `${meaningful.length} content line(s)` };
+}
+
 // ---------- check mode ----------
 
 async function runChecks() {
@@ -729,14 +792,20 @@ async function runChecks() {
     );
   }
 
-  // 4. CHANGELOG has a matching entry.
+  // 4. CHANGELOG has a matching entry — header present AND has real content.
   const changelog = readFileSync(CHANGELOG_PATH, 'utf-8');
-  const hasChangelogEntry = new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\]`, 'm').test(changelog);
-  record(
-    'CHANGELOG entry',
-    hasChangelogEntry ? 'pass' : 'fail',
-    hasChangelogEntry ? `[${version}] found` : `no [${version}] section in CHANGELOG.md`,
-  );
+  const section = extractChangelogSection(changelog, version);
+  if (!section.found) {
+    record('CHANGELOG entry', 'fail', `no [${version}] section in CHANGELOG.md`);
+  } else {
+    record('CHANGELOG entry', 'pass', `[${version}] found`);
+    // 4a. The header alone is meaningless — every release deserves a body.
+    // Catches the v9.0.0-class bug where the release tag was pushed but the
+    // CHANGELOG section was an empty stub (header only) the operator
+    // intended to fill in later and forgot.
+    const verdict = classifyChangelogBody(section.body);
+    record('CHANGELOG entry content', verdict.status, verdict.detail);
+  }
 
   // 4b. Manifest <-> submission doc permission parity.
   // Catches the v9.2.0 `idle` regression class: a permission silently added
