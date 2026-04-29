@@ -3,40 +3,58 @@
  * benchmark-performance.mjs — Bundle size analysis and threshold enforcement.
  *
  * Reads dist/ bundle sizes, verifies required build outputs exist, and
- * compares sizes against thresholds. Exits non-zero if any threshold is
- * exceeded or required files are missing — suitable as a release gate.
+ * compares sizes against TWO sets of limits:
+ *   • A hard ceiling (per-bundle, defined in `thresholds` below) — exceeding
+ *     this fails the gate.
+ *   • A soft baseline (scripts/baselines/bundle-sizes.json) — current size
+ *     >10% above baseline emits a WARN. Lets us catch silent bundle bloat
+ *     long before it brushes the ceiling.
  *
  * Called automatically by verify.mjs --release (Bundle Size Benchmark gate).
  * Can also be run standalone after a production build.
  *
  * Usage:
- *   node scripts/benchmark-performance.mjs        # run checks
- *   node scripts/benchmark-performance.mjs -h     # show this help
+ *   node scripts/benchmark-performance.mjs                   # run checks
+ *   node scripts/benchmark-performance.mjs --update-baseline # write current
+ *                                                            # sizes as new baseline
+ *   node scripts/benchmark-performance.mjs -h                # show this help
  *
  * In CI (when $CI is set), writes performance-results.json for archiving.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
 
 if (process.argv.includes('-h') || process.argv.includes('--help')) {
   console.log(`
 benchmark-performance.mjs — Bundle size analysis and threshold enforcement.
 
 Usage:
-  node scripts/benchmark-performance.mjs
+  node scripts/benchmark-performance.mjs                    # run checks
+  node scripts/benchmark-performance.mjs --update-baseline  # tighten baseline
 
 What it does:
   1. Reads dist/ bundle sizes for key JS outputs
   2. Verifies all required build artifacts exist in dist/
-  3. Compares sizes against thresholds (exits non-zero on breach)
-  4. Writes performance-results.json when $CI is set
+  3. Compares sizes against the soft baseline (>10% drift -> WARN)
+  4. Compares sizes against hard ceilings (over -> FAIL)
+  5. Writes performance-results.json when \$CI is set
 
 Prerequisite:
   dist/ must exist — run \`npm run build\` first.
+
+Baseline file: scripts/baselines/bundle-sizes.json (committed; tighten by
+running --update-baseline after intentional shrinks).
 `.trim());
   process.exit(0);
 }
+
+const updateBaseline = process.argv.includes('--update-baseline');
+const BASELINE_PATH = resolve(process.cwd(), 'scripts/baselines/bundle-sizes.json');
+// 10% drift triggers a warning. Picked to match the coverage ratchet's soft
+// drift policy — lets routine size noise (a few KB per release) through but
+// catches a 30+ KB regression on a 200 KB bundle before it gets normalized.
+const SOFT_DRIFT_PCT = 10;
 
 const results = {
   bundleSizes: {},
@@ -91,10 +109,27 @@ for (const file of requiredDistFiles) {
 }
 results.timing['distIntegrity'] = allPresent ? 'pass' : 'fail';
 
-// 3. Threshold Checks
-// Thresholds set at ~150% of current actual sizes (v9.0.0: 194, 1.8, 162, 162 KB).
+// --update-baseline: snapshot the current sizes and exit. Always run this
+// after an intentional bundle change (deps swapped, dead code removed,
+// chunking tweaked) so the soft ratchet doesn't keep warning forever.
+if (updateBaseline) {
+  const baseline = {};
+  for (const [file, sizeKB] of Object.entries(results.bundleSizes)) {
+    baseline[file] = parseFloat(sizeKB);
+  }
+  mkdirSync(dirname(BASELINE_PATH), { recursive: true });
+  writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n');
+  console.log(`\n  Updated bundle-size baseline at ${BASELINE_PATH}`);
+  for (const [file, sizeKB] of Object.entries(baseline)) {
+    console.log(`     ${file.padEnd(40)} ${sizeKB} KB`);
+  }
+  process.exit(0);
+}
+
+// 3. Hard ceiling checks
+// Ceilings set at ~150% of current actual sizes (v9.0.0: 194, 1.8, 162, 162 KB).
 // Tighten when sizes stabilize; loosen only with explicit justification.
-console.log('\n  3. Checking size thresholds...');
+console.log('\n  3. Checking hard ceilings...');
 const thresholds = {
   'background/service-worker.js': 300,
   'content_scripts/extractor.js': 5,
@@ -109,11 +144,39 @@ for (const [file, maxSize] of Object.entries(thresholds)) {
 
   if (actualSize > maxSize) {
     results.status = 'warn';
-    console.warn(`     [!] Bundle size exceeds threshold!`);
+    console.warn(`     [!] Bundle size exceeds hard ceiling!`);
   }
 }
 
-// 4. Summary
+// 4. Soft ratchet vs baseline
+// Loud WARN when current size > baseline * (1 + SOFT_DRIFT_PCT/100). Drift
+// signals creeping bloat that hasn't yet hit the ceiling — exactly the kind
+// of thing that's easy to address now and nightmarish to undo three releases
+// later.
+console.log('\n  4. Checking soft baseline (drift > ' + SOFT_DRIFT_PCT + '%)...');
+if (!existsSync(BASELINE_PATH)) {
+  console.log(`     [info] No baseline yet at ${BASELINE_PATH}`);
+  console.log(`     [info] Snapshot current sizes with: node scripts/benchmark-performance.mjs --update-baseline`);
+} else {
+  const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf-8'));
+  results.baselineDelta = {};
+  for (const [file, baseSize] of Object.entries(baseline)) {
+    const actual = parseFloat(results.bundleSizes[file] || '0');
+    if (actual === 0) continue;
+    const driftPct = ((actual - baseSize) / baseSize) * 100;
+    results.baselineDelta[file] = driftPct.toFixed(1);
+    const sign = driftPct >= 0 ? '+' : '';
+    if (driftPct > SOFT_DRIFT_PCT) {
+      results.status = results.status === 'pass' ? 'warn' : results.status;
+      console.warn(`     [DRIFT] ${file}: ${actual} KB vs baseline ${baseSize} KB (${sign}${driftPct.toFixed(1)}%)`);
+      console.warn(`             Investigate the bloat or, if intentional, run --update-baseline.`);
+    } else {
+      console.log(`     [ok]    ${file}: ${actual} KB vs baseline ${baseSize} KB (${sign}${driftPct.toFixed(1)}%)`);
+    }
+  }
+}
+
+// 5. Summary
 console.log('\n  Benchmark complete.');
 console.log(`     Status: ${results.status.toUpperCase()}`);
 console.log(`     Bundles checked: ${Object.keys(results.bundleSizes).length}`);
