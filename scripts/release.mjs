@@ -104,6 +104,17 @@ if (CHECK_ONLY && DRY_RUN) {
   console.error(`${YELLOW}⚠️  --dry-run is a no-op for \`ship check\` (check never writes anyway). Ignoring.${RESET}`);
 }
 
+// `ship check` IS the release-readiness gate. Letting --skip-e2e silently
+// weaken it defeats the entire purpose of running the gate. Hard-error
+// with a redirect to the lighter-weight local sanity check.
+if (CHECK_ONLY && SKIP_E2E) {
+  console.error(`${RED}❌ \`ship check --skip-e2e\` is rejected.${RESET}`);
+  console.error(`${YELLOW}   Ship check is the release readiness gate; --skip-e2e defeats the gate.${RESET}`);
+  console.error(`${YELLOW}   For a quick local sanity check that skips E2E, use:${RESET}`);
+  console.error(`     npm run verify -- --no-e2e`);
+  process.exit(2);
+}
+
 function run(cmd, opts = {}) {
   const stdio = opts.silent ? 'pipe' : 'inherit';
   return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio, timeout: opts.timeout ?? 600000 });
