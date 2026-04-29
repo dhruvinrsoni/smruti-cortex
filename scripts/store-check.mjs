@@ -60,6 +60,10 @@ const NO_REMOTE = args.includes('--no-remote');
 // that diagnostic [warn]s like "release zip exists" or "CWS unreachable"
 // hard-block a real release instead of silently sliding through.
 const STRICT_MODE = args.includes('--strict');
+// --init flags: --dry-run prints the scaffolded doc to stdout without
+// writing; --force overwrites an existing target doc with a confirmation.
+const INIT_DRY_RUN = args.includes('--dry-run');
+const INIT_FORCE = args.includes('--force');
 const explicitVersion = args.find(a => /^\d+\.\d+\.\d+$/.test(a));
 
 /**
@@ -226,7 +230,7 @@ function semverCompare(a, b) {
   return 0;
 }
 
-function initSubmissionDoc(newVersion) {
+function initSubmissionDoc(newVersion, { dryRun = false, force = false } = {}) {
   // Validate the version string before anything else — a malformed version
   // would silently break listPrevVersion and cascading checks below.
   if (!/^\d+\.\d+\.\d+$/.test(newVersion)) {
@@ -256,8 +260,12 @@ function initSubmissionDoc(newVersion) {
 
   const prevDoc = resolve(SUBMISSIONS_DIR, `v${prev}-chrome-web-store.md`);
   const newDoc = resolve(SUBMISSIONS_DIR, `v${newVersion}-chrome-web-store.md`);
-  if (existsSync(newDoc)) {
+  // --dry-run never writes, so don't bail on existing target — operators use
+  // --dry-run specifically to diff against the existing doc. --force allows
+  // overwrite with a noisy confirmation log line. Otherwise, refuse.
+  if (existsSync(newDoc) && !dryRun && !force) {
     console.error(`[fatal] ${newDoc} already exists. Refusing to overwrite.`);
+    console.error(`        Pass --force to overwrite, or --dry-run to preview without writing.`);
     process.exit(2);
   }
   if (!existsSync(prevDoc)) {
@@ -386,8 +394,23 @@ function initSubmissionDoc(newVersion) {
 
   scaffolded = preamble + scaffolded;
 
+  if (dryRun) {
+    // Print directly to stdout so operators can pipe into a pager or
+    // diff against the existing file. The preview banner goes to stderr
+    // so stdout stays a clean copy of the proposed content.
+    console.error(`[dry-run] Would write ${newDoc} (Base: v${prev} -> Target: v${newVersion}).`);
+    console.error(`[dry-run] No files modified. Re-run without --dry-run to write.`);
+    process.stdout.write(scaffolded);
+    return;
+  }
+
+  const overwriting = existsSync(newDoc);
   writeFileSync(newDoc, scaffolded, 'utf-8');
-  console.log(`[ok] Scaffolded ${newDoc}`);
+  if (overwriting) {
+    console.log(`[ok] OVERWROTE ${newDoc} (--force).`);
+  } else {
+    console.log(`[ok] Scaffolded ${newDoc}`);
+  }
   console.log(`[info] Base: v${prev} → Target: v${newVersion}`);
   console.log(`[info] Inserted a TODO preamble with the raw git log. Rewrite Section 7 before submitting.`);
 }
@@ -708,7 +731,7 @@ if (invokedAsMain) {
       console.error('[fatal] --init requires an explicit version (e.g. `node scripts/store-check.mjs 9.2.0 --init`).');
       process.exit(2);
     }
-    initSubmissionDoc(explicitVersion);
+    initSubmissionDoc(explicitVersion, { dryRun: INIT_DRY_RUN, force: INIT_FORCE });
   } else {
     await runChecks();
   }
