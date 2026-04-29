@@ -404,12 +404,29 @@ function initSubmissionDoc(newVersion, { dryRun = false, force = false } = {}) {
     return;
   }
 
+  // Capture the existing-doc size *before* the write so the --force log line
+  // can show the operator the line-count delta — a quiet sanity signal that
+  // the overwrite is the size they expect (and not e.g. a 200-line doc
+  // accidentally replaced with a 20-line stub).
   const overwriting = existsSync(newDoc);
-  writeFileSync(newDoc, scaffolded, 'utf-8');
+  let oldLineCount = 0;
   if (overwriting) {
-    console.log(`[ok] OVERWROTE ${newDoc} (--force).`);
+    try { oldLineCount = readFileSync(newDoc, 'utf-8').split(/\r?\n/).length; } catch { /* best-effort */ }
+  }
+  const newLineCount = scaffolded.split(/\r?\n/).length;
+
+  writeFileSync(newDoc, scaffolded, 'utf-8');
+
+  if (overwriting) {
+    // ANSI yellow so the OVERWROTE line is visually distinct in a long
+    // CI log — operators glancing at a release pipeline should never
+    // miss that a --force overwrite happened.
+    const YELLOW = '\x1b[33m';
+    const BOLD = '\x1b[1m';
+    const RESET = '\x1b[0m';
+    console.log(`${YELLOW}${BOLD}[OVERWROTE]${RESET} ${newDoc} (--force; ${oldLineCount} -> ${newLineCount} lines).`);
   } else {
-    console.log(`[ok] Scaffolded ${newDoc}`);
+    console.log(`[ok] Scaffolded ${newDoc} (${newLineCount} lines).`);
   }
   console.log(`[info] Base: v${prev} → Target: v${newVersion}`);
   console.log(`[info] Inserted a TODO preamble with the raw git log. Rewrite Section 7 before submitting.`);
