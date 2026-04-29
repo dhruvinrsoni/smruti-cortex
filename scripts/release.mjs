@@ -91,11 +91,64 @@ try {
 // real state of origin. Soft-fail: an offline operator can still ship a
 // patch from a known-clean local repo; we just print a warning so they know
 // the next checks ran without remote sync.
+let remoteSynced = false;
 try {
   runSilent('git fetch --tags origin', { timeout: 10_000 });
   console.log(`${GREEN}✅ Fetched remote tags${RESET}`);
+  remoteSynced = true;
 } catch {
   console.log(`${YELLOW}⚠️  git fetch failed (offline?) — collision checks will use local refs only${RESET}`);
+}
+
+// Tag-collision guard. If the tag we're about to create already exists
+// (either locally OR on the remote we just fetched), abort BEFORE any disk
+// writes happen. Most common cause: a previous `npm run ship <bump>` was
+// interrupted between the tag and the push, leaving a half-state. Re-running
+// the same command would silently bump again and try to create a second tag
+// with the same name. The fix is `npm run ship resume` (D1) once it lands;
+// for now, we tell the operator to clean up manually.
+if (BUMP_TYPE) {
+  const pkgEarly = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
+  const [maj, min, pat] = pkgEarly.version.split('.').map(Number);
+  const probe =
+    BUMP_TYPE === 'major' ? `${maj + 1}.0.0` :
+    BUMP_TYPE === 'minor' ? `${maj}.${min + 1}.0` :
+    `${maj}.${min}.${pat + 1}`;
+  const probeTag = `v${probe}`;
+
+  let localCollision = false;
+  try {
+    runSilent(`git rev-parse --verify --quiet refs/tags/${probeTag}`);
+    localCollision = true;
+  } catch { /* tag absent locally — good */ }
+
+  let remoteCollision = false;
+  if (remoteSynced) {
+    // After `git fetch --tags origin`, a remote tag is observable as a local
+    // ref under refs/tags/ (Git fetches tags into the local namespace by
+    // default). The local probe above already covers this case. We do a
+    // belt-and-braces check via `git ls-remote` only when local is clean
+    // but we want to be sure no race created a tag remotely between fetch
+    // and now.
+    try {
+      const remoteOut = runSilent(`git ls-remote --tags origin ${probeTag}`, { timeout: 10_000 });
+      if (remoteOut) remoteCollision = true;
+    } catch { /* offline/network blip — already warned above */ }
+  }
+
+  if (localCollision || remoteCollision) {
+    const where = localCollision && remoteCollision ? 'locally and on origin'
+                : localCollision ? 'locally'
+                : 'on origin';
+    console.error(`${RED}❌ Tag ${probeTag} already exists ${where}.${RESET}`);
+    console.error(`${RED}   A previous \`npm run ship ${BUMP_TYPE}\` may have been interrupted.${RESET}`);
+    console.error(`${YELLOW}   Recovery options:${RESET}`);
+    console.error(`     • Inspect: git log -1 ${probeTag} && gh release view ${probeTag}`);
+    console.error(`     • Resume the interrupted ship (after D1 lands): npm run ship resume`);
+    console.error(`     • Or clean up: git tag -d ${probeTag} && git push origin :refs/tags/${probeTag}`);
+    process.exit(1);
+  }
+  console.log(`${GREEN}✅ Tag ${probeTag} is available${RESET}`);
 }
 
 console.log(`${GREEN}✅ On main, clean tree, gh available${RESET}\n`);
