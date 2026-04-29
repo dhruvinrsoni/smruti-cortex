@@ -129,6 +129,13 @@ function stripHtml(html) {
     .trim();
 }
 
+/**
+ * 10-second cap on the entire CWS round-trip (connect + read body).
+ * A slow / hung CWS used to wedge `npm run ship` Step 2 indefinitely;
+ * now the public-store gate WARNs (or FAILs in --strict) instead of blocking.
+ */
+const FETCH_TIMEOUT_MS = 10_000;
+
 async function fetchStore() {
   if (NO_REMOTE) return null;
   try {
@@ -138,6 +145,7 @@ async function fetchStore() {
         'accept-language': 'en-US,en;q=0.9',
       },
       redirect: 'follow',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
       return { error: `HTTP ${res.status}` };
@@ -164,6 +172,11 @@ async function fetchStore() {
       rawTextLength: text.length,
     };
   } catch (err) {
+    // AbortSignal.timeout fires a TimeoutError DOMException; surface a clear,
+    // operator-friendly message instead of the cryptic "The operation was aborted".
+    if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      return { error: `CWS fetch timed out after ${FETCH_TIMEOUT_MS / 1000}s` };
+    }
     return { error: err.message };
   }
 }
