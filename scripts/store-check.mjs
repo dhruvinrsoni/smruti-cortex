@@ -25,8 +25,45 @@
  *   node scripts/store-check.mjs                    # check latest git tag
  *   node scripts/store-check.mjs 9.1.0              # check specific version
  *   node scripts/store-check.mjs 9.2.0 --init       # scaffold new submission doc
+ *   node scripts/store-check.mjs 9.2.0 --init --dry-run   # preview without writing
+ *   node scripts/store-check.mjs 9.2.0 --init --force     # overwrite existing doc
  *   node scripts/store-check.mjs --json             # machine-readable output
+ *   node scripts/store-check.mjs --strict           # promote WARNs to FAILs
  *   node scripts/store-check.mjs --no-remote        # skip CWS fetch (offline)
+ *
+ * --json output schema (schemaVersion: 1)
+ * ---------------------------------------
+ * The --json mode emits a single JSON object on stdout (pretty-printed) with
+ * the following stable contract. Consumers should pin to schemaVersion and
+ * IGNORE unknown keys (additive changes keep schemaVersion=1).
+ *
+ *   {
+ *     "schemaVersion": 1,
+ *     "version":       string,            // e.g. "9.2.0"
+ *     "vTag":          string,            // e.g. "v9.2.0"
+ *     "storeUrl":      string,            // CWS detail page URL
+ *     "submittedDate": string | null,     // raw "> Submitted: ..." text or null
+ *     "strict":        boolean,           // was --strict passed?
+ *     "noRemote":      boolean,           // was --no-remote passed?
+ *     "public":        object | null,     // CWS fetch result (null if --no-remote)
+ *     "results": [
+ *       {
+ *         "name":            string,                 // human-readable check label
+ *         "status":          "pass"|"warn"|"fail"|"info",
+ *         "detail":          string,                 // short message
+ *         "originalStatus"?: "warn"                  // present iff promoted by --strict
+ *       },
+ *       ...
+ *     ],
+ *     "summary": {
+ *       "failed":   number,
+ *       "warned":   number,
+ *       "passed":   number,
+ *       "info":     number,
+ *       "total":    number,
+ *       "exitCode": 0 | 1
+ *     }
+ *   }
  *
  * Exit codes
  * ----------
@@ -797,14 +834,26 @@ async function runChecks() {
   const warned = results.filter(r => r.status === 'warn').length;
 
   if (JSON_MODE) {
+    // schemaVersion 1 — documented contract for `store check --json`.
+    // CI / automation should pin to this version and degrade gracefully on
+    // unknown keys. Future breaking changes (key removed, semantics flipped)
+    // bump this number. Additive changes (new keys, new result fields) keep
+    // schemaVersion: 1 — clients must ignore unknown keys.
+    //
+    // See the file header for the canonical schema description.
+    const passed = results.filter(r => r.status === 'pass').length;
+    const info = results.filter(r => r.status === 'info').length;
     console.log(JSON.stringify({
+      schemaVersion: 1,
       version,
       vTag,
       storeUrl: STORE_URL,
       submittedDate,
+      strict: STRICT_MODE,
+      noRemote: NO_REMOTE,
       public: store,
       results,
-      summary: { failed, warned, passed: results.filter(r => r.status === 'pass').length },
+      summary: { failed, warned, passed, info, total: results.length, exitCode: failed > 0 ? 1 : 0 },
     }, null, 2));
   } else {
     console.log('='.repeat(72));
