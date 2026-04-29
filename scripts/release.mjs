@@ -87,6 +87,19 @@ try {
   process.exit(1);
 }
 
+// Verify the gh token is alive NOW, not at Step 8 after a tagged-and-pushed
+// commit. `gh auth status` exits non-zero on missing/expired/revoked tokens
+// and writes diagnostic output to stderr (which we surface). 5s timeout
+// covers slow networks; auth is a read-only check, no GitHub state changes.
+try {
+  runSilent('gh auth status', { timeout: 5_000 });
+  console.log(`${GREEN}✅ gh auth OK${RESET}`);
+} catch {
+  console.error(`${RED}❌ gh auth status failed — token missing/expired/revoked.${RESET}`);
+  console.error(`${YELLOW}   Fix: run \`gh auth login\` (or \`gh auth refresh\`) and retry.${RESET}`);
+  process.exit(1);
+}
+
 // Sync remote refs so subsequent collision/ahead-of-remote checks see the
 // real state of origin. Soft-fail: an offline operator can still ship a
 // patch from a known-clean local repo; we just print a warning so they know
