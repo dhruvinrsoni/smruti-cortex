@@ -190,6 +190,7 @@ console.log(`${'═'.repeat(50)}`);
 // ─────────────────────────────────────────────────
 // Core phases (always run)
 // ─────────────────────────────────────────────────
+await step('Version parity (manifest <-> package)', 'node scripts/sync-version.mjs --check');
 await step('Lint', 'npm run lint');
 await step('Build (prod)', 'npm run build');
 await step('Unit Tests + Coverage', 'npx vitest run --coverage');
