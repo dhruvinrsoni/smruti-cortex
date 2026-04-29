@@ -540,6 +540,48 @@ export function auditPermissions(manifestPerms, docPerms) {
   return issues;
 }
 
+/**
+ * Classify a Submitted-date string against a "now" reference time.
+ *
+ * Returns one of:
+ *   { status: 'pass',    detail: '<canonical iso>' }
+ *   { status: 'fail',    detail: 'unparseable: "..."'      }   // junk / typo
+ *   { status: 'fail',    detail: '<n> day(s) in the future' } // future-dated
+ *   { status: 'warn',    detail: '<n> days old (>365)'      } // stale
+ *
+ * Pure (no I/O); takes `now` so tests can pin the clock.
+ *
+ * @param {string} raw    The string after `> Submitted: ` in the doc.
+ * @param {Date}   now    Reference "today" — defaults to new Date().
+ * @returns {{ status: 'pass'|'warn'|'fail', detail: string, parsed?: Date, ageDays?: number }}
+ */
+export function classifySubmittedDate(raw, now = new Date()) {
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    return { status: 'fail', detail: 'unparseable: "" (empty)' };
+  }
+  const trimmed = raw.trim();
+  const ts = Date.parse(trimmed);
+  if (!Number.isFinite(ts)) {
+    return { status: 'fail', detail: `unparseable: "${trimmed}"` };
+  }
+  const parsed = new Date(ts);
+  // Compare on a whole-day grid in *local* time (not UTC) so that a date
+  // written by the operator like "April 24, 2026" — parsed as local midnight
+  // — and a reference "now" parsed from an ISO string don't end up on the
+  // wrong side of the date line in non-UTC timezones (e.g. IST = UTC+5:30).
+  const dayMs = 86_400_000;
+  const localDay = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const ageDays = Math.round((localDay(now) - localDay(parsed)) / dayMs);
+
+  if (ageDays < 0) {
+    return { status: 'fail', detail: `${Math.abs(ageDays)} day(s) in the future`, parsed, ageDays };
+  }
+  if (ageDays > 365) {
+    return { status: 'warn', detail: `${ageDays} days old (>365) — likely a stale doc`, parsed, ageDays };
+  }
+  return { status: 'pass', detail: trimmed, parsed, ageDays };
+}
+
 // ---------- check mode ----------
 
 async function runChecks() {
@@ -580,6 +622,12 @@ async function runChecks() {
     } else {
       submittedDate = raw;
       record('submission-doc Submitted date', 'pass', raw);
+      // 2b. Sanity: parseable, not in the future, not absurdly stale. A future
+      // date is almost always a typo (operator typed next year by mistake);
+      // a >365-day-old date usually means the doc was scaffolded ages ago and
+      // the operator forgot to refresh it before re-submission.
+      const verdict = classifySubmittedDate(raw);
+      record('submission-doc Submitted date sanity', verdict.status, verdict.detail);
     }
   } else {
     record('submission-doc Submitted date', 'fail', '(submission doc missing)');

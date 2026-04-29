@@ -17,6 +17,7 @@ import {
   parseDocPermissions,
   auditPermissions,
   computePermissionDelta,
+  classifySubmittedDate,
 } from '../store-check.mjs';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -220,4 +221,69 @@ test('computePermissionDelta: handles null/undefined manifests gracefully', () =
   assert.deepEqual(computePermissionDelta({}, {}), {
     requiredAdded: [], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
   });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// classifySubmittedDate (S6)
+// ──────────────────────────────────────────────────────────────────────────────
+
+const NOW = new Date('2026-04-29T00:00:00Z');
+
+test('classifySubmittedDate: same-day ISO date passes', () => {
+  const r = classifySubmittedDate('2026-04-29', NOW);
+  assert.equal(r.status, 'pass');
+  assert.equal(r.ageDays, 0);
+});
+
+test('classifySubmittedDate: yesterday ISO date passes (1 day old)', () => {
+  const r = classifySubmittedDate('2026-04-28', NOW);
+  assert.equal(r.status, 'pass');
+  assert.equal(r.ageDays, 1);
+});
+
+test('classifySubmittedDate: future date fails with day-count', () => {
+  const r = classifySubmittedDate('2026-05-01', NOW);
+  assert.equal(r.status, 'fail');
+  assert.match(r.detail, /2 day\(s\) in the future/);
+});
+
+test('classifySubmittedDate: 365 days old still passes (boundary)', () => {
+  const r = classifySubmittedDate('2025-04-29', NOW);
+  assert.equal(r.status, 'pass');
+  assert.equal(r.ageDays, 365);
+});
+
+test('classifySubmittedDate: 366 days old warns (just past the boundary)', () => {
+  const r = classifySubmittedDate('2025-04-28', NOW);
+  assert.equal(r.status, 'warn');
+  assert.match(r.detail, /366 days old/);
+});
+
+test('classifySubmittedDate: very old date warns', () => {
+  const r = classifySubmittedDate('2020-01-01', NOW);
+  assert.equal(r.status, 'warn');
+  assert.match(r.detail, /\d+ days old/);
+});
+
+test('classifySubmittedDate: verbose date format ("April 24, 2026") parses', () => {
+  const r = classifySubmittedDate('April 24, 2026', NOW);
+  assert.equal(r.status, 'pass');
+  assert.equal(r.ageDays, 5);
+});
+
+test('classifySubmittedDate: empty or whitespace-only returns fail', () => {
+  assert.equal(classifySubmittedDate('', NOW).status, 'fail');
+  assert.equal(classifySubmittedDate('   ', NOW).status, 'fail');
+});
+
+test('classifySubmittedDate: garbage strings return fail with "unparseable"', () => {
+  const r = classifySubmittedDate('not a date', NOW);
+  assert.equal(r.status, 'fail');
+  assert.match(r.detail, /unparseable/);
+});
+
+test('classifySubmittedDate: non-string inputs return fail without throwing', () => {
+  assert.equal(classifySubmittedDate(undefined, NOW).status, 'fail');
+  assert.equal(classifySubmittedDate(null, NOW).status, 'fail');
+  assert.equal(classifySubmittedDate(42, NOW).status, 'fail');
 });
