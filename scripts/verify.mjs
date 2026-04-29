@@ -38,6 +38,26 @@ const skipE2E = process.argv.includes('--no-e2e');
 const e2eSlowMo = process.argv.includes('--e2e-slowmo');
 const releaseMode = process.argv.includes('--release');
 const noNetwork = process.argv.includes('--no-network');
+const jsonMode = process.argv.includes('--json');
+
+// In --json mode we keep stdout pristine for NDJSON events and route the
+// pretty human-readable output to stderr. CI scrapers can pipe stdout into
+// jq / python while a watching operator still sees the formatted version
+// in their terminal (stderr).
+if (jsonMode) {
+  console.log = (...args) => process.stderr.write(args.join(' ') + '\n');
+  console.warn = (...args) => process.stderr.write(args.join(' ') + '\n');
+  console.error = (...args) => process.stderr.write(args.join(' ') + '\n');
+}
+
+// Emit one NDJSON event per line on stdout. Schema kept tiny on purpose:
+//   { ts, phase, name?, status?, ms?, detail? }
+// Schema additions are non-breaking — consumers should ignore unknown keys.
+function emitJson(phase, fields = {}) {
+  if (!jsonMode) return;
+  const event = { ts: new Date().toISOString(), phase, ...fields };
+  process.stdout.write(JSON.stringify(event) + '\n');
+}
 
 const BOLD = '\x1b[1m';
 const GREEN = '\x1b[32m';
@@ -82,15 +102,18 @@ function spawnAndCapture(cmd) {
 async function step(name, cmd) {
   console.log(`\n${BOLD}${CYAN}▶ ${name}${RESET}`);
   console.log(`${DIM}  ${cmd}${RESET}\n`);
+  emitJson('step.start', { name, cmd });
   const t0 = Date.now();
   const { code, tail } = await spawnAndCapture(cmd);
   const ms = Date.now() - t0;
   if (code === 0) {
     results.push({ name, passed: true, ms });
     console.log(`${GREEN}  ✅ ${name} passed (${(ms / 1000).toFixed(1)}s)${RESET}`);
+    emitJson('step.end', { name, status: 'pass', ms });
   } else {
     results.push({ name, passed: false, ms, tail });
     console.log(`${RED}  ❌ ${name} FAILED (${(ms / 1000).toFixed(1)}s, exit=${code})${RESET}`);
+    emitJson('step.end', { name, status: 'fail', ms, exitCode: code, tail });
   }
 }
 
@@ -101,12 +124,15 @@ function recordCheck(name, t0, outcome, detail) {
   if (outcome === 'pass') {
     results.push({ name, passed: true, ms });
     console.log(`${GREEN}  ✅ ${name}${RESET}${detail ? ' — ' + detail : ''}`);
+    emitJson('check.end', { name, status: 'pass', ms, detail });
   } else if (outcome === 'warn') {
     results.push({ name, passed: true, warned: true, ms });
     console.log(`${YELLOW}  ⚠️  ${name}${RESET}${detail ? ' — ' + detail : ''}`);
+    emitJson('check.end', { name, status: 'warn', ms, detail });
   } else {
     results.push({ name, passed: false, ms });
     console.log(`${RED}  ❌ ${name} — ${detail}${RESET}`);
+    emitJson('check.end', { name, status: 'fail', ms, detail });
   }
 }
 
@@ -407,5 +433,15 @@ if (failed.length === 0) {
     console.log(`${RED}${BOLD}└────────────────────────────────────────${RESET}\n`);
   }
 }
+
+emitJson('summary', {
+  totalMs,
+  total: results.length,
+  passed: results.filter(r => r.passed && !r.warned && !r.skipped).length,
+  warned: warned.length,
+  failed: failed.length,
+  skipped: results.filter(r => r.skipped).length,
+  status: failed.length > 0 ? 'fail' : (warned.length > 0 ? 'warn' : 'pass'),
+});
 
 process.exit(failed.length > 0 ? 1 : 0);

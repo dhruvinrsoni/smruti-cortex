@@ -52,7 +52,7 @@ const RESET = '\x1b[0m';
 // one-line change — just append to KNOWN_SUBCOMMANDS or KNOWN_FLAGS.
 // ─────────────────────────────────────────────────────────────────────────
 const KNOWN_SUBCOMMANDS = new Set(['patch', 'minor', 'major', 'check', 'resume']);
-const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run']);
+const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run', '--json']);
 
 function printUsage(toStderr = true) {
   const out = toStderr ? console.error : console.log;
@@ -64,6 +64,7 @@ function printUsage(toStderr = true) {
   out('  resume       pick up an interrupted ship from wherever it stopped (idempotent)');
   out('  --skip-e2e   skip E2E tests (emergency only; rejected by `check`)');
   out('  --dry-run    preview without pushing or tagging (release modes only)');
+  out('  --json       emit NDJSON events on stdout (pretty output -> stderr)');
 }
 
 function parseArgv(rawArgs) {
@@ -98,9 +99,29 @@ if (subcommands.length > 1) {
 const SUBCOMMAND = subcommands[0];
 const DRY_RUN = flags.has('--dry-run');
 const SKIP_E2E = flags.has('--skip-e2e');
+const JSON_MODE = flags.has('--json');
 const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
 const CHECK_ONLY = SUBCOMMAND === 'check';
 const RESUME = SUBCOMMAND === 'resume';
+
+// In --json mode, divert all pretty output to stderr so stdout stays a
+// pure NDJSON stream. Same pattern as verify.mjs --json. The downstream
+// `verify --release` invocation in Step 2 already sees --json forwarded
+// (we add it to its argv below) so events from the gate phase land on
+// the same stdout stream as our own.
+if (JSON_MODE) {
+  console.log = (...args) => process.stderr.write(args.join(' ') + '\n');
+  console.warn = (...args) => process.stderr.write(args.join(' ') + '\n');
+  console.error = (...args) => process.stderr.write(args.join(' ') + '\n');
+}
+
+function emitJson(phase, fields = {}) {
+  if (!JSON_MODE) return;
+  const event = { ts: new Date().toISOString(), phase, ...fields };
+  process.stdout.write(JSON.stringify(event) + '\n');
+}
+
+emitJson('release.start', { subcommand: SUBCOMMAND, skipE2E: SKIP_E2E, dryRun: DRY_RUN });
 
 // `resume` is mutually exclusive with --skip-e2e and --dry-run: resume picks
 // up a real, in-progress ship; flags that would change that ship's behaviour
@@ -380,6 +401,7 @@ if (RESUME) {
 
 // ===== Step 1: Validate prerequisites =====
 console.log(`\n${BOLD}═══ STEP 1: Validate Prerequisites ═══${RESET}\n`);
+emitJson('step.start', { name: 'prereqs', step: 1 });
 
 const branch = runSilent('git rev-parse --abbrev-ref HEAD');
 if (branch !== 'main') {
@@ -482,6 +504,8 @@ console.log(`${GREEN}✅ On main, clean tree, gh available${RESET}\n`);
 
 // ===== Step 2: Ship check gate (BEFORE any disk changes) =====
 console.log(`${BOLD}═══ STEP 2: Ship Check Gate (zero disk changes) ═══${RESET}\n`);
+emitJson('step.end', { name: 'prereqs', step: 1, status: 'pass' });
+emitJson('step.start', { name: 'ship-check-gate', step: 2 });
 
 if (SKIP_E2E) {
   console.log(`${YELLOW}${BOLD}┌─────────────────────────────────────────────────┐${RESET}`);
@@ -492,9 +516,15 @@ if (SKIP_E2E) {
   console.log(`${YELLOW}${BOLD}└─────────────────────────────────────────────────┘${RESET}\n`);
 }
 
-const shipCheckCmd = SKIP_E2E
-  ? 'node ./scripts/verify.mjs --release --no-e2e'
-  : 'node ./scripts/verify.mjs --release';
+// Forward --json so verify's NDJSON events land on the same stdout pipe
+// the operator (or CI) is already collecting from us. Without this, the
+// gate phase would silently fall back to pretty output and clobber the
+// JSON stream parsing.
+const verifyArgs = [];
+verifyArgs.push('--release');
+if (SKIP_E2E) verifyArgs.push('--no-e2e');
+if (JSON_MODE) verifyArgs.push('--json');
+const shipCheckCmd = `node ./scripts/verify.mjs ${verifyArgs.join(' ')}`;
 try {
   run(shipCheckCmd);
   console.log(`\n${GREEN}✅ Ship check passed${RESET}\n`);
@@ -508,11 +538,14 @@ try {
 if (CHECK_ONLY) {
   console.log(`${BOLD}${GREEN}🟢 Ship check passed.${RESET}`);
   console.log(`   The next \`npm run ship <patch|minor|major>\` will not fail at the gate.`);
+  emitJson('release.end', { status: 'pass', subcommand: 'check' });
   process.exit(0);
 }
 
 // ===== Step 3: Compute new version =====
 console.log(`${BOLD}═══ STEP 3: Compute Version ═══${RESET}\n`);
+emitJson('step.end', { name: 'ship-check-gate', step: 2, status: 'pass' });
+emitJson('step.start', { name: 'compute-version', step: 3 });
 
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
 const [major, minor, patch] = pkg.version.split('.').map(Number);
@@ -528,11 +561,14 @@ console.log(`📦 Version bump: ${pkg.version} → ${newVersion} (${BUMP_TYPE})\
 if (DRY_RUN) {
   console.log(`${BOLD}🏁 DRY RUN COMPLETE${RESET} — verified successfully, would bump to ${newVersion}\n`);
   console.log('  No disk changes made.');
+  emitJson('release.end', { status: 'pass', dryRun: true, newVersion });
   process.exit(0);
 }
 
 // ===== Step 4: Write disk changes =====
 console.log(`${BOLD}═══ STEP 4: Write Disk Changes ═══${RESET}\n`);
+emitJson('step.end', { name: 'compute-version', step: 3, status: 'pass', newVersion });
+emitJson('step.start', { name: 'write-disk', step: 4, newVersion });
 
 const submissionDocPath = resolve(ROOT, `docs/store-submissions/v${newVersion}-chrome-web-store.md`);
 // Hoisted out of the Step 4 try-block so Step 7's commit body can reuse it
@@ -652,6 +688,8 @@ try {
 
 // ===== Step 5: Re-build with new version + package zip =====
 console.log(`\n${BOLD}═══ STEP 5: Re-build + Package ═══${RESET}\n`);
+emitJson('step.end', { name: 'write-disk', step: 4, status: 'pass' });
+emitJson('step.start', { name: 'rebuild-package', step: 5 });
 
 try {
   run('npm run build');
@@ -664,6 +702,8 @@ try {
 
 // ===== Step 6: Post-bump integrity (version sync + zip) =====
 console.log(`\n${BOLD}═══ STEP 6: Post-bump Integrity ═══${RESET}\n`);
+emitJson('step.end', { name: 'rebuild-package', step: 5, status: 'pass' });
+emitJson('step.start', { name: 'integrity', step: 6 });
 
 try {
   const builtManifest = JSON.parse(readFileSync(resolve(ROOT, 'dist/manifest.json'), 'utf-8'));
@@ -680,6 +720,8 @@ try {
 
 // ===== Step 7: Commit =====
 console.log(`\n${BOLD}═══ STEP 7: Commit Release ═══${RESET}\n`);
+emitJson('step.end', { name: 'integrity', step: 6, status: 'pass' });
+emitJson('step.start', { name: 'commit', step: 7 });
 
 const commitFiles = ['package.json', 'manifest.json', 'CHANGELOG.md'];
 if (existsSync(submissionDocPath)) {
@@ -720,6 +762,8 @@ try {
 
 // ===== Step 8: Tag, push, GitHub Release =====
 console.log(`\n${BOLD}═══ STEP 8: Tag + Push + GitHub Release ═══${RESET}\n`);
+emitJson('step.end', { name: 'commit', step: 7, status: 'pass' });
+emitJson('step.start', { name: 'tag-push-release', step: 8 });
 
 run(`git tag -a v${newVersion} -m "SmrutiCortex v${newVersion}" --no-sign`);
 
@@ -751,6 +795,8 @@ try { unlinkSync(notesFile); } catch { /* best effort */ }
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`${BOLD}${GREEN}🎉 SmrutiCortex v${newVersion} released!${RESET}`);
 console.log(`${'═'.repeat(50)}`);
+emitJson('step.end', { name: 'tag-push-release', step: 8, status: 'pass' });
+emitJson('release.end', { status: 'pass', newVersion });
 
 if (SKIP_E2E) {
   console.log(`\n${YELLOW}⚠️  This release was shipped with --skip-e2e.${RESET}`);
