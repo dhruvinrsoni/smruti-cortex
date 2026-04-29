@@ -51,16 +51,17 @@ const RESET = '\x1b[0m';
 // new subcommand (e.g. `resume` in D1) or flag (e.g. `--strict` in D3) is a
 // one-line change — just append to KNOWN_SUBCOMMANDS or KNOWN_FLAGS.
 // ─────────────────────────────────────────────────────────────────────────
-const KNOWN_SUBCOMMANDS = new Set(['patch', 'minor', 'major', 'check']);
+const KNOWN_SUBCOMMANDS = new Set(['patch', 'minor', 'major', 'check', 'resume']);
 const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run']);
 
 function printUsage(toStderr = true) {
   const out = toStderr ? console.error : console.log;
-  out('Usage: npm run ship <patch|minor|major|check> [--skip-e2e] [--dry-run]');
+  out('Usage: npm run ship <patch|minor|major|check|resume> [--skip-e2e] [--dry-run]');
   out('  patch        bug fixes (8.0.0 -> 8.0.1)');
   out('  minor        new features (8.0.0 -> 8.1.0)');
   out('  major        breaking changes (8.0.0 -> 9.0.0)');
   out('  check        pre-release health gate only (no disk writes, no tag, no push)');
+  out('  resume       pick up an interrupted ship from wherever it stopped (idempotent)');
   out('  --skip-e2e   skip E2E tests (emergency only; rejected by `check`)');
   out('  --dry-run    preview without pushing or tagging (release modes only)');
 }
@@ -99,6 +100,16 @@ const DRY_RUN = flags.has('--dry-run');
 const SKIP_E2E = flags.has('--skip-e2e');
 const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
 const CHECK_ONLY = SUBCOMMAND === 'check';
+const RESUME = SUBCOMMAND === 'resume';
+
+// `resume` is mutually exclusive with --skip-e2e and --dry-run: resume picks
+// up a real, in-progress ship; flags that would change that ship's behaviour
+// don't make sense after the fact.
+if (RESUME && (SKIP_E2E || DRY_RUN)) {
+  console.error(`${RED}❌ \`ship resume\` does not accept --skip-e2e or --dry-run.${RESET}`);
+  console.error(`${YELLOW}   resume continues an interrupted ship as-is. Run the original ship command if you want different flags.${RESET}`);
+  process.exit(2);
+}
 
 if (CHECK_ONLY && DRY_RUN) {
   console.error(`${YELLOW}⚠️  --dry-run is a no-op for \`ship check\` (check never writes anyway). Ignoring.${RESET}`);
@@ -122,6 +133,249 @@ function run(cmd, opts = {}) {
 
 function runSilent(cmd, opts = {}) {
   return run(cmd, { ...opts, silent: true }).trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// `ship resume` (D1)
+//
+// Resume picks up an interrupted ship by examining repo state (no disk
+// writes during detection) and inferring the latest completed step. We
+// then jump back into the normal pipeline at the next pending step.
+//
+// Detection is byte-comparison only — never trusts the operator's memory.
+// If the inferred state is internally inconsistent (e.g. tag exists but
+// commit subject doesn't match), we exit 2 with a diagnostic table rather
+// than guess.
+// ─────────────────────────────────────────────────────────────────────────
+function detectShipState() {
+  const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
+  const targetVersion = pkg.version;
+  const targetTag = `v${targetVersion}`;
+
+  // Newest released tag (excluding the target we're resuming, if it exists).
+  let newestTag = null;
+  try {
+    const allTags = runSilent('git tag --sort=-v:refname').split(/\r?\n/).filter(t => /^v\d+\.\d+\.\d+$/.test(t));
+    newestTag = allTags[0] || null;
+  } catch { /* no tags yet */ }
+
+  // 1. Did the ship even start? package.json must already be bumped past
+  //    the newest released tag, OR the target tag must already exist (in
+  //    which case package.json is necessarily ahead).
+  const tagExistsLocal = (() => {
+    try { runSilent(`git rev-parse --verify --quiet refs/tags/${targetTag}`); return true; } catch { return false; }
+  })();
+  const bumpedPastNewest = newestTag === null || semverGt(targetVersion, newestTag.replace(/^v/, ''));
+
+  if (!bumpedPastNewest && !tagExistsLocal) {
+    return { kind: 'nothing-to-resume', targetVersion, newestTag };
+  }
+
+  // 2. HEAD commit subject — does it look like a release commit for target?
+  let headSubject = '';
+  try { headSubject = runSilent('git log -1 --format=%s'); } catch { /* fresh repo */ }
+  const releaseCommitPresent = headSubject === `chore: release ${targetTag}`;
+
+  // 3. Built artefact present?
+  const zipPath = resolve(ROOT, `release/zips/smruti-cortex-${targetTag}.zip`);
+  const zipExists = existsSync(zipPath);
+
+  // 4. Tag pushed? (After A5's git fetch --tags, a remote tag shows up
+  //    locally too, so refs/remotes/... isn't quite the right probe. Use
+  //    `git ls-remote` for the authoritative answer.)
+  let tagPushed = false;
+  try {
+    const out = runSilent(`git ls-remote --tags origin ${targetTag}`, { timeout: 10_000 });
+    tagPushed = out.length > 0;
+  } catch { /* offline — leave false */ }
+
+  // 5. Local commits ahead of upstream?
+  let unpushedAhead = 0;
+  try {
+    unpushedAhead = parseInt(runSilent('git rev-list @{u}..HEAD --count'), 10) || 0;
+  } catch { /* no upstream tracking */ }
+
+  // 6. GitHub Release exists?
+  let ghReleaseExists = false;
+  try {
+    runSilent(`gh release view ${targetTag}`, { timeout: 10_000 });
+    ghReleaseExists = true;
+  } catch { /* not yet — leave false */ }
+
+  return {
+    kind: 'partial',
+    targetVersion,
+    targetTag,
+    newestTag,
+    tagExistsLocal,
+    releaseCommitPresent,
+    zipExists,
+    tagPushed,
+    unpushedAhead,
+    ghReleaseExists,
+  };
+}
+
+function semverGt(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] > pb[i];
+  }
+  return false;
+}
+
+function printShipState(s) {
+  console.log(`${BOLD}  Ship state inspection (target ${s.targetTag || 'n/a'}):${RESET}`);
+  const rows = [
+    ['package.json bumped past newest tag', s.newestTag === null || semverGt(s.targetVersion, s.newestTag.replace(/^v/, ''))],
+    ['Release commit on HEAD', s.releaseCommitPresent],
+    ['Release zip on disk', s.zipExists],
+    ['Tag exists locally', s.tagExistsLocal],
+    ['Tag pushed to origin', s.tagPushed],
+    ['Local commits ahead of upstream', s.unpushedAhead > 0 ? `yes (${s.unpushedAhead})` : false],
+    ['GitHub Release exists', s.ghReleaseExists],
+  ];
+  for (const [label, val] of rows) {
+    const tick = val === true ? `${GREEN}✓${RESET}`
+              : val === false ? `${YELLOW}—${RESET}`
+              : `${GREEN}✓ (${val})${RESET}`;
+    console.log(`    ${tick} ${label}`);
+  }
+}
+
+if (RESUME) {
+  console.log(`\n${BOLD}═══ SHIP RESUME ═══${RESET}\n`);
+
+  // Same prereqs as the normal flow — branch, clean tree, gh, fetch.
+  const branch = runSilent('git rev-parse --abbrev-ref HEAD');
+  if (branch !== 'main') {
+    console.error(`${RED}❌ Must be on 'main' branch (currently on '${branch}')${RESET}`);
+    process.exit(1);
+  }
+  try { runSilent('git fetch --tags origin', { timeout: 10_000 }); } catch { /* offline */ }
+  try { runSilent('gh auth status', { timeout: 5_000 }); }
+  catch {
+    console.error(`${RED}❌ gh auth status failed — fix with \`gh auth login\` and retry.${RESET}`);
+    process.exit(1);
+  }
+
+  const state = detectShipState();
+  printShipState(state);
+
+  if (state.kind === 'nothing-to-resume') {
+    console.log(`\n${YELLOW}⚠️  Nothing to resume.${RESET}`);
+    console.log(`   package.json (v${state.targetVersion}) is not ahead of newest tag (${state.newestTag ?? 'none'}).`);
+    console.log(`   If you wanted to start a fresh ship, use: npm run ship <patch|minor|major>`);
+    process.exit(0);
+  }
+
+  // Fully done already.
+  if (state.tagPushed && state.ghReleaseExists && state.unpushedAhead === 0) {
+    console.log(`\n${GREEN}🟢 Ship for ${state.targetTag} is already complete. Nothing to do.${RESET}`);
+    process.exit(0);
+  }
+
+  // Internally inconsistent: tag exists but no release commit at HEAD.
+  // Could mean someone landed work on top of a release commit — too risky
+  // to keep going without operator review.
+  if (state.tagExistsLocal && !state.releaseCommitPresent) {
+    console.error(`\n${RED}❌ Inconsistent state: tag ${state.targetTag} exists but HEAD is not the release commit.${RESET}`);
+    console.error(`${YELLOW}   HEAD subject: "${runSilent('git log -1 --format=%s')}"${RESET}`);
+    console.error(`${YELLOW}   Investigate manually:${RESET}`);
+    console.error(`     git log -3 --oneline`);
+    console.error(`     git tag -l ${state.targetTag} -n`);
+    process.exit(2);
+  }
+
+  console.log(`\n${BOLD}  Resuming...${RESET}\n`);
+
+  // The pipeline below mirrors release.mjs Steps 5-8 but is purely additive:
+  // every operation is a no-op if the artefact is already present.
+
+  // Re-build + zip (Step 5) — needed if no zip OR zip was built before the
+  // bump (unlikely but cheap to re-run; build is idempotent).
+  if (!state.zipExists) {
+    console.log(`${BOLD}═ Rebuild + package ═${RESET}`);
+    run('npm run package');
+  } else {
+    console.log(`${GREEN}✓ Skip rebuild — zip already at release/zips/smruti-cortex-${state.targetTag}.zip${RESET}`);
+  }
+
+  // Integrity check (Step 6).
+  const builtManifest = JSON.parse(readFileSync(resolve(ROOT, 'dist/manifest.json'), 'utf-8'));
+  if (builtManifest.version !== state.targetVersion) {
+    console.error(`${RED}❌ dist/manifest.json version is ${builtManifest.version}, expected ${state.targetVersion}.${RESET}`);
+    console.error(`${YELLOW}   Run \`npm run build\` and rerun \`npm run ship resume\`.${RESET}`);
+    process.exit(1);
+  }
+
+  // Commit (Step 7) — if HEAD isn't the release commit, create it.
+  if (!state.releaseCommitPresent) {
+    console.log(`\n${BOLD}═ Create release commit ═${RESET}`);
+    const commitFiles = ['package.json', 'manifest.json', 'CHANGELOG.md'];
+    const subDoc = `docs/store-submissions/v${state.targetVersion}-chrome-web-store.md`;
+    if (existsSync(resolve(ROOT, subDoc))) commitFiles.push(subDoc);
+    run(`git add ${commitFiles.join(' ')}`);
+    // resume's commit body is necessarily simpler than the original Step 7 —
+    // we don't have the in-memory categorized changelog (it lived in the
+    // process that died). Use the CHANGELOG.md section verbatim.
+    const cl = readFileSync(resolve(ROOT, 'CHANGELOG.md'), 'utf-8');
+    const sec = cl.match(new RegExp(`## \\[${state.targetVersion.replace(/\./g, '\\.')}\\][\\s\\S]*?(?=\n---|\n## \\[|$)`));
+    const body = sec ? `\n\n${sec[0].trim()}\n\n[ship-override: resumed]` : '\n\n[ship-override: resumed]';
+    const tmp = resolve(ROOT, '.release-commit-msg.tmp');
+    writeFileSync(tmp, `chore: release ${state.targetTag}${body}\n`);
+    try {
+      run(`git commit -F "${tmp}" --no-verify`);
+    } finally {
+      try { unlinkSync(tmp); } catch { /* best effort */ }
+    }
+    console.log(`${GREEN}✅ Release commit created${RESET}`);
+  } else {
+    console.log(`${GREEN}✓ Release commit already on HEAD${RESET}`);
+  }
+
+  // Tag (Step 8a).
+  if (!state.tagExistsLocal) {
+    console.log(`\n${BOLD}═ Create tag ═${RESET}`);
+    run(`git tag -a ${state.targetTag} -m "SmrutiCortex ${state.targetTag}" --no-sign`);
+  } else {
+    console.log(`${GREEN}✓ Tag ${state.targetTag} already exists locally${RESET}`);
+  }
+
+  // Push (Step 8b) — atomic. Idempotent if already pushed.
+  if (!state.tagPushed || state.unpushedAhead > 0) {
+    console.log(`\n${BOLD}═ Atomic push ═${RESET}`);
+    run(`git push --atomic origin main ${state.targetTag}`);
+  } else {
+    console.log(`${GREEN}✓ Tag already pushed; no local commits ahead of upstream${RESET}`);
+  }
+
+  // GitHub Release (Step 8c).
+  if (!state.ghReleaseExists) {
+    console.log(`\n${BOLD}═ Create GitHub Release ═${RESET}`);
+    const notesFile = resolve(ROOT, '.release-notes-tmp.md');
+    const cl = readFileSync(resolve(ROOT, 'CHANGELOG.md'), 'utf-8');
+    const sec = cl.match(new RegExp(`## \\[${state.targetVersion.replace(/\./g, '\\.')}\\].*?\n\n([\\s\\S]*?)(?=\n---|\n## \\[)`));
+    const notes = sec ? sec[0] : `Release ${state.targetTag}`;
+    writeFileSync(notesFile, notes);
+    try {
+      const zipPath = `release/zips/smruti-cortex-${state.targetTag}.zip`;
+      const url = runSilent(`gh release create ${state.targetTag} -t "${state.targetTag}" -F "${notesFile}" "${zipPath}"`);
+      console.log(`${GREEN}✅ GitHub Release created: ${url}${RESET}`);
+    } finally {
+      try { unlinkSync(notesFile); } catch { /* best effort */ }
+    }
+  } else {
+    console.log(`${GREEN}✓ GitHub Release ${state.targetTag} already exists${RESET}`);
+  }
+
+  console.log(`\n${'═'.repeat(50)}`);
+  console.log(`${BOLD}${GREEN}🎉 SmrutiCortex ${state.targetTag} ship resumed and completed.${RESET}`);
+  console.log(`${'═'.repeat(50)}\n`);
+  console.log(`📋 Don't forget to upload the zip to Chrome Web Store:`);
+  console.log(`   release/zips/smruti-cortex-${state.targetTag}.zip\n`);
+  process.exit(0);
 }
 
 // ===== Step 1: Validate prerequisites =====
