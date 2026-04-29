@@ -503,6 +503,18 @@ async function runChecks() {
     results.push({ name, status, detail, ...extra });
   };
 
+  // 0. Version parity (manifest.json vs package.json). Cheap, no remote, and
+  // catches the class of bugs where sync-version was bypassed (manual edit,
+  // botched merge). Defers to scripts/sync-version.mjs --check as the single
+  // source of truth so the parity rule lives in one place.
+  try {
+    runSilent('node scripts/sync-version.mjs --check');
+    record('manifest <-> package version parity', 'pass', `both at ${pkg.version}`);
+  } catch (err) {
+    const tail = (err && err.stderrTail) ? err.stderrTail : (err && err.message) || 'unknown error';
+    record('manifest <-> package version parity', 'fail', tail.split(/\r?\n/)[0]);
+  }
+
   // 1. Local submission doc exists.
   const submissionPath = resolve(SUBMISSIONS_DIR, `v${version}-chrome-web-store.md`);
   const hasDoc = existsSync(submissionPath);
