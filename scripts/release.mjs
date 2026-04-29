@@ -28,7 +28,7 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync, rmSync } from 'fs';
 import { resolve } from 'path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -225,11 +225,38 @@ const submissionDocPath = resolve(ROOT, `docs/store-submissions/v${newVersion}-c
 function revertOnFailure(msg) {
   console.error(`\n${RED}❌ ${msg}${RESET}`);
   console.error(`${YELLOW}⏪ Reverting disk changes...${RESET}`);
+
+  // 1. Restore tracked files (package.json, manifest.json, CHANGELOG.md).
   try { run('git checkout -- .', { silent: true }); } catch { /* best effort */ }
+
+  // 2. Untracked submission doc — only the scaffolder created it; safe to nuke.
   try {
     if (existsSync(submissionDocPath)) unlinkSync(submissionDocPath);
   } catch { /* best effort */ }
+
+  // 3. Release zip created by Step 5 — must be deleted, otherwise next ship
+  //    sees a stale zip with the would-be version and store-check warns about
+  //    a "release zip exists" for a version that was never tagged.
+  try {
+    const newZip = resolve(ROOT, `release/zips/smruti-cortex-v${newVersion}.zip`);
+    if (existsSync(newZip)) {
+      unlinkSync(newZip);
+      console.error(`${YELLOW}   ⏪ Removed orphaned zip: ${newZip}${RESET}`);
+    }
+  } catch { /* best effort */ }
+
+  // 4. dist/ was rebuilt with the new manifest.version, but manifest.json on
+  //    disk has been reverted to the previous version. They now disagree.
+  //    Wipe dist/ — the next operator command will rebuild it from source.
+  //    Faster and safer than re-running the full build chain inside a revert
+  //    handler that might also be failing.
+  try {
+    rmSync(resolve(ROOT, 'dist'), { recursive: true, force: true });
+    console.error(`${YELLOW}   ⏪ Cleared dist/ (manifest mismatch after partial bump)${RESET}`);
+  } catch { /* best effort */ }
+
   console.error(`${GREEN}✅ Reverted. Tree is clean again.${RESET}`);
+  console.error(`${YELLOW}   Run \`npm run build\` to regenerate dist/ when you continue.${RESET}`);
   process.exit(1);
 }
 
