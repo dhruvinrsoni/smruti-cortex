@@ -57,8 +57,34 @@ const INIT_MODE = args.includes('--init');
 const NO_REMOTE = args.includes('--no-remote');
 const explicitVersion = args.find(a => /^\d+\.\d+\.\d+$/.test(a));
 
+/**
+ * Runs a shell command with stdin ignored and BOTH stdout/stderr captured
+ * (was: stderr piped to 'ignore', which made debug-time failures opaque
+ * — operators saw only `[fatal]` with no underlying cause from git).
+ *
+ * On non-zero exit, throws an Error whose `.message` carries the stderr
+ * tail (last ~20 lines) so callers and SUMMARY footers stay readable.
+ */
 function runSilent(cmd) {
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  try {
+    return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch (err) {
+    const stderr = (err.stderr || '').toString();
+    const stdout = (err.stdout || '').toString();
+    const tail = (stderr || stdout)
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(-20)
+      .join('\n');
+    const wrapped = new Error(tail
+      ? `Command failed: ${cmd}\n${tail}`
+      : `Command failed: ${cmd} (exit ${err.status ?? '?'})`,
+    );
+    wrapped.cause = err;
+    wrapped.stdoutTail = stdout;
+    wrapped.stderrTail = tail;
+    throw wrapped;
+  }
 }
 
 function latestGitTag() {
