@@ -437,49 +437,69 @@ function initSubmissionDoc(newVersion, { dryRun = false, force = false } = {}) {
 /**
  * Extract the declared permission lists from a parsed manifest.json.
  *
- * Returns an object with `required` and `optional` string arrays in their
- * original manifest declaration order. Missing arrays are normalised to `[]`
- * so callers never have to null-check.
+ * Returns four string arrays in original declaration order:
+ *   - required      : permissions[]
+ *   - optional      : optional_permissions[]
+ *   - hostRequired  : host_permissions[]
+ *   - hostOptional  : optional_host_permissions[]
+ *
+ * Missing arrays are normalised to `[]` so callers never have to null-check.
+ * The host arrays were added in S7; older callers that only care about
+ * required/optional can ignore the extra fields.
  *
  * @param {object} manifestJson  The parsed contents of manifest.json.
- * @returns {{required: string[], optional: string[]}}
+ * @returns {{required: string[], optional: string[], hostRequired: string[], hostOptional: string[]}}
  */
 export function parseManifestPermissions(manifestJson) {
-  const required = Array.isArray(manifestJson?.permissions) ? [...manifestJson.permissions] : [];
-  const optional = Array.isArray(manifestJson?.optional_permissions) ? [...manifestJson.optional_permissions] : [];
-  return { required, optional };
+  const required     = Array.isArray(manifestJson?.permissions)              ? [...manifestJson.permissions]              : [];
+  const optional     = Array.isArray(manifestJson?.optional_permissions)     ? [...manifestJson.optional_permissions]     : [];
+  const hostRequired = Array.isArray(manifestJson?.host_permissions)         ? [...manifestJson.host_permissions]         : [];
+  const hostOptional = Array.isArray(manifestJson?.optional_host_permissions) ? [...manifestJson.optional_host_permissions] : [];
+  return { required, optional, hostRequired, hostOptional };
 }
 
 /**
  * Extract the permission names that have a `#### \`<perm>\`` heading inside
- * the "### Required Permissions" / "### Optional Permissions" subsections of
- * the submission doc's Section 4.
+ * the four documented Section-4 subsections:
+ *   - "### Required Permissions"        -> required
+ *   - "### Optional Permissions"        -> optional
+ *   - "### Required Host Permissions"   -> hostRequired (S7)
+ *   - "### Optional Host Permissions"   -> hostOptional (S7)
  *
  * Recognises:
  *   #### `idle`
  *   #### `idle` *(new in v9.2.0)*
+ *   #### `<all_urls>`
  *
  * Stops scanning a subsection at the next `### `, `## `, or `---` boundary.
- * "### Optional Host Permissions" is intentionally NOT walked — host
- * permissions are audited separately (and the manifest field name differs).
  *
  * @param {string} docText  Full markdown text of vX.Y.Z-chrome-web-store.md.
- * @returns {{required: string[], optional: string[]}}
+ * @returns {{required: string[], optional: string[], hostRequired: string[], hostOptional: string[]}}
  */
 export function parseDocPermissions(docText) {
   const required = [];
   const optional = [];
+  const hostRequired = [];
+  const hostOptional = [];
+  // Order matters: longer / more-specific headings first, so "Optional Host
+  // Permissions" is checked before "Optional Permissions" (which would
+  // otherwise match "Optional" via the prefix).
   let mode = null;
   for (const line of docText.split(/\r?\n/)) {
-    if (/^###\s+Required Permissions\b/.test(line))         { mode = 'required'; continue; }
-    if (/^###\s+Optional Permissions\b/.test(line))         { mode = 'optional'; continue; }
-    if (/^###\s+Optional Host Permissions\b/.test(line))    { mode = null;       continue; }
+    if (/^###\s+Required Host Permissions\b/.test(line))    { mode = 'hostRequired'; continue; }
+    if (/^###\s+Optional Host Permissions\b/.test(line))    { mode = 'hostOptional'; continue; }
+    if (/^###\s+Required Permissions\b/.test(line))         { mode = 'required';     continue; }
+    if (/^###\s+Optional Permissions\b/.test(line))         { mode = 'optional';     continue; }
     if (/^##\s+/.test(line) || /^###\s+/.test(line) || /^---\s*$/.test(line)) { mode = null; continue; }
     if (!mode) continue;
     const m = line.match(/^####\s+`([^`]+)`/);
-    if (m) (mode === 'required' ? required : optional).push(m[1]);
+    if (!m) continue;
+    if (mode === 'required')          required.push(m[1]);
+    else if (mode === 'optional')     optional.push(m[1]);
+    else if (mode === 'hostRequired') hostRequired.push(m[1]);
+    else if (mode === 'hostOptional') hostOptional.push(m[1]);
   }
-  return { required, optional };
+  return { required, optional, hostRequired, hostOptional };
 }
 
 /**
@@ -516,26 +536,46 @@ export function computePermissionDelta(prevManifestJson, currentManifestJson) {
   const prev = parseManifestPermissions(prevManifestJson || {});
   const cur = parseManifestPermissions(currentManifestJson || {});
   return {
-    requiredAdded:   cur.required.filter(p => !prev.required.includes(p)),
-    requiredRemoved: prev.required.filter(p => !cur.required.includes(p)),
-    optionalAdded:   cur.optional.filter(p => !prev.optional.includes(p)),
-    optionalRemoved: prev.optional.filter(p => !cur.optional.includes(p)),
+    requiredAdded:       cur.required.filter(p => !prev.required.includes(p)),
+    requiredRemoved:     prev.required.filter(p => !cur.required.includes(p)),
+    optionalAdded:       cur.optional.filter(p => !prev.optional.includes(p)),
+    optionalRemoved:     prev.optional.filter(p => !cur.optional.includes(p)),
+    // Host-permission deltas (S7) — same shape semantics for symmetry. Older
+    // callers iterating only the four core arrays will silently ignore these.
+    hostRequiredAdded:   cur.hostRequired.filter(p => !prev.hostRequired.includes(p)),
+    hostRequiredRemoved: prev.hostRequired.filter(p => !cur.hostRequired.includes(p)),
+    hostOptionalAdded:   cur.hostOptional.filter(p => !prev.hostOptional.includes(p)),
+    hostOptionalRemoved: prev.hostOptional.filter(p => !cur.hostOptional.includes(p)),
   };
 }
 
 export function auditPermissions(manifestPerms, docPerms) {
   const issues = [];
+  // Missing-first (most actionable: manifest declares it, doc doesn't justify).
   for (const p of manifestPerms.required) {
     if (!docPerms.required.includes(p)) issues.push({ kind: 'missing-required-justification', perm: p });
   }
   for (const p of manifestPerms.optional) {
     if (!docPerms.optional.includes(p)) issues.push({ kind: 'missing-optional-justification', perm: p });
   }
+  for (const p of (manifestPerms.hostRequired || [])) {
+    if (!(docPerms.hostRequired || []).includes(p)) issues.push({ kind: 'missing-host-justification', perm: p });
+  }
+  for (const p of (manifestPerms.hostOptional || [])) {
+    if (!(docPerms.hostOptional || []).includes(p)) issues.push({ kind: 'missing-host-justification', perm: p });
+  }
+  // Then stale (doc still describes a permission no longer in the manifest).
   for (const p of docPerms.required) {
     if (!manifestPerms.required.includes(p)) issues.push({ kind: 'stale-required-justification', perm: p });
   }
   for (const p of docPerms.optional) {
     if (!manifestPerms.optional.includes(p)) issues.push({ kind: 'stale-optional-justification', perm: p });
+  }
+  for (const p of (docPerms.hostRequired || [])) {
+    if (!(manifestPerms.hostRequired || []).includes(p)) issues.push({ kind: 'stale-host-justification', perm: p });
+  }
+  for (const p of (docPerms.hostOptional || [])) {
+    if (!(manifestPerms.hostOptional || []).includes(p)) issues.push({ kind: 'stale-host-justification', perm: p });
   }
   return issues;
 }

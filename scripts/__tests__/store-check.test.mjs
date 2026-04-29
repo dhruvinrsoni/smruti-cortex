@@ -24,23 +24,38 @@ import {
 // parseManifestPermissions
 // ──────────────────────────────────────────────────────────────────────────────
 
-test('parseManifestPermissions: returns required + optional in declaration order', () => {
+test('parseManifestPermissions: returns all four permission arrays in declaration order', () => {
   const manifest = {
     permissions: ['history', 'storage', 'idle'],
     optional_permissions: ['tabGroups', 'topSites'],
+    host_permissions: ['https://example.com/*'],
+    optional_host_permissions: ['<all_urls>'],
   };
   const result = parseManifestPermissions(manifest);
   assert.deepEqual(result, {
     required: ['history', 'storage', 'idle'],
     optional: ['tabGroups', 'topSites'],
+    hostRequired: ['https://example.com/*'],
+    hostOptional: ['<all_urls>'],
   });
 });
 
 test('parseManifestPermissions: normalises missing arrays to []', () => {
-  assert.deepEqual(parseManifestPermissions({}), { required: [], optional: [] });
-  assert.deepEqual(parseManifestPermissions({ permissions: ['a'] }), { required: ['a'], optional: [] });
-  assert.deepEqual(parseManifestPermissions({ optional_permissions: ['b'] }), { required: [], optional: ['b'] });
-  assert.deepEqual(parseManifestPermissions(null), { required: [], optional: [] });
+  assert.deepEqual(parseManifestPermissions({}), {
+    required: [], optional: [], hostRequired: [], hostOptional: [],
+  });
+  assert.deepEqual(parseManifestPermissions({ permissions: ['a'] }), {
+    required: ['a'], optional: [], hostRequired: [], hostOptional: [],
+  });
+  assert.deepEqual(parseManifestPermissions({ optional_permissions: ['b'] }), {
+    required: [], optional: ['b'], hostRequired: [], hostOptional: [],
+  });
+  assert.deepEqual(parseManifestPermissions({ optional_host_permissions: ['<all_urls>'] }), {
+    required: [], optional: [], hostRequired: [], hostOptional: ['<all_urls>'],
+  });
+  assert.deepEqual(parseManifestPermissions(null), {
+    required: [], optional: [], hostRequired: [], hostOptional: [],
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -67,6 +82,8 @@ text.
   assert.deepEqual(parseDocPermissions(doc), {
     required: ['history', 'storage'],
     optional: ['tabGroups'],
+    hostRequired: [],
+    hostOptional: [],
   });
 });
 
@@ -84,13 +101,21 @@ new in this release.
   assert.deepEqual(result.required, ['alarms', 'idle']);
 });
 
-test('parseDocPermissions: ignores headings outside permission subsections', () => {
+test('parseDocPermissions: routes the four documented Section-4 subsections correctly', () => {
   const doc = `
 ## 4. Permissions
 
 ### Required Permissions
 
 #### \`history\`
+
+### Optional Permissions
+
+#### \`tabGroups\`
+
+### Required Host Permissions
+
+#### \`https://example.com/*\`
 
 ### Optional Host Permissions
 
@@ -100,12 +125,30 @@ test('parseDocPermissions: ignores headings outside permission subsections', () 
 
 #### \`bogus\`
 `;
-  // <all_urls> lives under Optional Host Permissions (separately audited),
-  // and #### bogus is under section 5 — neither should leak into either bucket.
+  // #### bogus is under section 5 — must not leak into any bucket.
   assert.deepEqual(parseDocPermissions(doc), {
     required: ['history'],
-    optional: [],
+    optional: ['tabGroups'],
+    hostRequired: ['https://example.com/*'],
+    hostOptional: ['<all_urls>'],
   });
+});
+
+test('parseDocPermissions: "Optional Host Permissions" is matched before "Optional Permissions" prefix', () => {
+  // Regression: an earlier draft routed "### Optional Host Permissions" to
+  // the optional bucket because the regex order was wrong.
+  const doc = `
+### Optional Permissions
+
+#### \`tabGroups\`
+
+### Optional Host Permissions
+
+#### \`<all_urls>\`
+`;
+  const r = parseDocPermissions(doc);
+  assert.deepEqual(r.optional, ['tabGroups']);
+  assert.deepEqual(r.hostOptional, ['<all_urls>']);
 });
 
 test('parseDocPermissions: stops a subsection at --- divider', () => {
@@ -170,16 +213,46 @@ test('auditPermissions: missing issues come before stale issues', () => {
   assert.equal(issues[1].kind, 'stale-required-justification');
 });
 
+test('auditPermissions: detects missing-host-justification (S7)', () => {
+  // Manifest declares <all_urls> as optional_host_permissions; doc forgot the
+  // matching #### block under "### Optional Host Permissions".
+  const manifest = { required: [], optional: [], hostRequired: [], hostOptional: ['<all_urls>'] };
+  const doc =      { required: [], optional: [], hostRequired: [], hostOptional: [] };
+  const issues = auditPermissions(manifest, doc);
+  assert.deepEqual(issues, [{ kind: 'missing-host-justification', perm: '<all_urls>' }]);
+});
+
+test('auditPermissions: detects stale-host-justification (S7)', () => {
+  // Doc still has a #### block for a host that was removed from the manifest.
+  const manifest = { required: [], optional: [], hostRequired: [], hostOptional: [] };
+  const doc =      { required: [], optional: [], hostRequired: [], hostOptional: ['<all_urls>'] };
+  const issues = auditPermissions(manifest, doc);
+  assert.deepEqual(issues, [{ kind: 'stale-host-justification', perm: '<all_urls>' }]);
+});
+
+test('auditPermissions: tolerates legacy callers passing only required/optional (S7)', () => {
+  // Defensive: callers who haven't been updated to populate hostRequired/
+  // hostOptional should still get a sensible audit on the regular perms.
+  const manifest = { required: ['idle'], optional: [] };
+  const doc      = { required: [],       optional: [] };
+  const issues = auditPermissions(manifest, doc);
+  assert.deepEqual(issues, [{ kind: 'missing-required-justification', perm: 'idle' }]);
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 // computePermissionDelta — drives the --init scaffolder banner
 // ──────────────────────────────────────────────────────────────────────────────
 
+// All-empty delta shape used as a baseline by several tests below.
+const EMPTY_DELTA = {
+  requiredAdded: [], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
+  hostRequiredAdded: [], hostRequiredRemoved: [], hostOptionalAdded: [], hostOptionalRemoved: [],
+};
+
 test('computePermissionDelta: empty delta when manifests match', () => {
   const prev = { permissions: ['history', 'storage'], optional_permissions: ['tabGroups'] };
   const cur  = { permissions: ['history', 'storage'], optional_permissions: ['tabGroups'] };
-  assert.deepEqual(computePermissionDelta(prev, cur), {
-    requiredAdded: [], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
-  });
+  assert.deepEqual(computePermissionDelta(prev, cur), EMPTY_DELTA);
 });
 
 test('computePermissionDelta: detects v9.1.0 -> v9.2.0 idle addition', () => {
@@ -204,11 +277,29 @@ test('computePermissionDelta: detects removals and optional-side changes simulta
   const prev = { permissions: ['history', 'tabs'],    optional_permissions: ['topSites'] };
   const cur  = { permissions: ['history'],            optional_permissions: ['tabGroups', 'browsingData'] };
   assert.deepEqual(computePermissionDelta(prev, cur), {
-    requiredAdded: [],
+    ...EMPTY_DELTA,
     requiredRemoved: ['tabs'],
     optionalAdded: ['tabGroups', 'browsingData'],
     optionalRemoved: ['topSites'],
   });
+});
+
+test('computePermissionDelta: detects host-permission additions and removals (S7)', () => {
+  const prev = {
+    permissions: ['history'],
+    host_permissions: ['https://old.example.com/*'],
+    optional_host_permissions: [],
+  };
+  const cur = {
+    permissions: ['history'],
+    host_permissions: ['https://new.example.com/*'],
+    optional_host_permissions: ['<all_urls>'],
+  };
+  const delta = computePermissionDelta(prev, cur);
+  assert.deepEqual(delta.hostRequiredAdded, ['https://new.example.com/*']);
+  assert.deepEqual(delta.hostRequiredRemoved, ['https://old.example.com/*']);
+  assert.deepEqual(delta.hostOptionalAdded, ['<all_urls>']);
+  assert.deepEqual(delta.hostOptionalRemoved, []);
 });
 
 test('computePermissionDelta: handles null/undefined manifests gracefully', () => {
@@ -216,11 +307,10 @@ test('computePermissionDelta: handles null/undefined manifests gracefully', () =
   // The scaffolder catches the throw, but the helper itself shouldn't crash
   // on an empty argument either.
   assert.deepEqual(computePermissionDelta(null, { permissions: ['idle'] }), {
-    requiredAdded: ['idle'], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
+    ...EMPTY_DELTA,
+    requiredAdded: ['idle'],
   });
-  assert.deepEqual(computePermissionDelta({}, {}), {
-    requiredAdded: [], requiredRemoved: [], optionalAdded: [], optionalRemoved: [],
-  });
+  assert.deepEqual(computePermissionDelta({}, {}), EMPTY_DELTA);
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
