@@ -27,7 +27,7 @@
  *   node ./scripts/verify.mjs --release --no-e2e   # CI-friendly release gate
  */
 
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -49,19 +49,48 @@ const RESET = '\x1b[0m';
 
 const results = [];
 
-function step(name, cmd) {
+// How many tail lines of a failed step's output to surface in the SUMMARY
+// footer. Big enough to capture a typical stack trace + a vitest failure
+// header; small enough that a multi-failure summary still fits in a normal
+// terminal scrollback.
+const FAILURE_TAIL_LINES = 50;
+
+// Tee a child process's stdout/stderr to our own streams (so the operator
+// still sees live output) while accumulating a rolling tail buffer that
+// we'll surface in the summary if the step fails. Returns a Promise that
+// resolves with { code, tail } so the caller can decide pass/fail.
+function spawnAndCapture(cmd) {
+  return new Promise((resolveResult) => {
+    const child = spawn(cmd, { cwd: root, shell: true, stdio: ['inherit', 'pipe', 'pipe'] });
+    const buf = [];
+    const push = (chunk) => {
+      const text = chunk.toString();
+      // Keep tail bounded so a 10-minute build with 50k lines doesn't blow
+      // memory. Split on newlines, trim to the last FAILURE_TAIL_LINES.
+      const lines = (buf.join('') + text).split(/\r?\n/);
+      const trimmed = lines.slice(-FAILURE_TAIL_LINES);
+      buf.length = 0;
+      buf.push(trimmed.join('\n'));
+    };
+    child.stdout.on('data', (c) => { process.stdout.write(c); push(c); });
+    child.stderr.on('data', (c) => { process.stderr.write(c); push(c); });
+    child.on('error', (err) => resolveResult({ code: 1, tail: `[spawn error] ${err.message}` }));
+    child.on('close', (code) => resolveResult({ code: code ?? 0, tail: buf.join('') }));
+  });
+}
+
+async function step(name, cmd) {
   console.log(`\n${BOLD}${CYAN}▶ ${name}${RESET}`);
   console.log(`${DIM}  ${cmd}${RESET}\n`);
   const t0 = Date.now();
-  try {
-    execSync(cmd, { cwd: root, stdio: 'inherit', shell: true, timeout: 600_000 });
-    const ms = Date.now() - t0;
+  const { code, tail } = await spawnAndCapture(cmd);
+  const ms = Date.now() - t0;
+  if (code === 0) {
     results.push({ name, passed: true, ms });
     console.log(`${GREEN}  ✅ ${name} passed (${(ms / 1000).toFixed(1)}s)${RESET}`);
-  } catch {
-    const ms = Date.now() - t0;
-    results.push({ name, passed: false, ms });
-    console.log(`${RED}  ❌ ${name} FAILED (${(ms / 1000).toFixed(1)}s)${RESET}`);
+  } else {
+    results.push({ name, passed: false, ms, tail });
+    console.log(`${RED}  ❌ ${name} FAILED (${(ms / 1000).toFixed(1)}s, exit=${code})${RESET}`);
   }
 }
 
@@ -121,18 +150,18 @@ console.log(`${'═'.repeat(50)}`);
 // ─────────────────────────────────────────────────
 // Core phases (always run)
 // ─────────────────────────────────────────────────
-step('Lint', 'npm run lint');
-step('Build (prod)', 'npm run build');
-step('Unit Tests + Coverage', 'npx vitest run --coverage');
-step('Coverage Ratchet (soft ±1%)', 'node scripts/coverage-ratchet.mjs');
+await step('Lint', 'npm run lint');
+await step('Build (prod)', 'npm run build');
+await step('Unit Tests + Coverage', 'npx vitest run --coverage');
+await step('Coverage Ratchet (soft ±1%)', 'node scripts/coverage-ratchet.mjs');
 
 if (skipE2E) {
   results.push({ name: 'E2E Tests', passed: true, ms: 0, skipped: true });
   console.log(`\n${DIM}  ⏭️  E2E tests skipped (--no-e2e)${RESET}`);
 } else if (e2eSlowMo) {
-  step('E2E Tests (slow-mo)', 'node ./scripts/e2e-slowmo.mjs');
+  await step('E2E Tests (slow-mo)', 'node ./scripts/e2e-slowmo.mjs');
 } else {
-  step('E2E Tests', 'npx playwright test');
+  await step('E2E Tests', 'npx playwright test');
 }
 
 // ─────────────────────────────────────────────────
@@ -141,11 +170,11 @@ if (skipE2E) {
 if (releaseMode) {
   console.log(`\n${BOLD}${CYAN}═══ Release-only gates ═══${RESET}`);
 
-  step('Bundle Size Benchmark', 'node ./scripts/benchmark-performance.mjs');
+  await step('Bundle Size Benchmark', 'node ./scripts/benchmark-performance.mjs');
 
   // (a) Dependency vulnerability scan. `--audit-level=high` exits non-zero only
   //     when HIGH or CRITICAL CVEs are present; lower-severity advisories pass.
-  step('npm audit (HIGH/CRITICAL only)', 'npm audit --audit-level=high');
+  await step('npm audit (HIGH/CRITICAL only)', 'npm audit --audit-level=high');
 
   // (b) Manifest <-> submission-doc parity audit (the D1 perm-gap fix lives
   //     inside store-check.mjs). This is the same audit a release reviewer
@@ -159,9 +188,9 @@ if (releaseMode) {
   //     probe inside store-check is genuinely network-bound; --no-remote
   //     skips just that probe.
   if (noNetwork) {
-    step('Store check (manifest <-> doc parity, offline)', 'npm run store check -- --no-remote');
+    await step('Store check (manifest <-> doc parity, offline)', 'npm run store check -- --no-remote');
   } else {
-    step('Store check (manifest <-> doc parity)', 'npm run store check');
+    await step('Store check (manifest <-> doc parity)', 'npm run store check');
   }
 
   check('Version sync (package.json <-> manifest.json)', () => {
@@ -363,6 +392,20 @@ if (failed.length === 0) {
     console.log(`${RED}     - ${f.name}${RESET}`);
   }
   console.log();
+
+  // Replay the captured tail of every step that failed. With long pipelines
+  // (build → tests → coverage → e2e → release gates) the failing step's
+  // output can be hundreds or thousands of lines back in scrollback by the
+  // time we reach the summary. Surfacing the tail here means the operator
+  // can copy-paste the diagnostic without scrolling.
+  for (const f of failed) {
+    if (!f.tail) continue;
+    console.log(`${RED}${BOLD}┌─ tail of "${f.name}" (last ${FAILURE_TAIL_LINES} lines) ─${RESET}`);
+    for (const line of f.tail.split(/\r?\n/)) {
+      console.log(`${DIM}│${RESET} ${line}`);
+    }
+    console.log(`${RED}${BOLD}└────────────────────────────────────────${RESET}\n`);
+  }
 }
 
 process.exit(failed.length > 0 ? 1 : 0);
