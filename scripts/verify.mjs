@@ -251,10 +251,17 @@ if (releaseMode) {
     });
   }
 
-  // (e) Previous-version git tag must exist. release.mjs depends on
-  //     `git show v<prev>:manifest.json` to compute the permission delta;
-  //     a missing tag would silently break the next ship init.
-  check('Previous-version git tag exists', () => {
+  // (e) The currently-released version's tag must exist. release.mjs depends
+  //     on `git show v<current>:manifest.json` to compute the permission
+  //     delta for the NEXT release; a missing tag would silently break the
+  //     next ship init.
+  //
+  //     NOTE: This is named "Current release tag" not "Previous-version" —
+  //     when this gate runs, package.json holds the *most recently released*
+  //     version (release.mjs runs verify --release BEFORE bumping). What's
+  //     "previous" from the perspective of the next release is "current"
+  //     from the perspective of the file we're reading.
+  check('Current release tag exists (v<X.Y.Z>)', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
     const tag = `v${pkg.version}`;
     // NOTE: don't use `${tag}^{commit}` — the `^` is a cmd.exe escape character
@@ -265,6 +272,31 @@ if (releaseMode) {
       throw new Error(`tag ${tag} not found locally — run 'git fetch --tags' or release this version first`);
     }
     return tag;
+  });
+
+  // Sibling check: report (as WARN) any of the three possible next-bump tags
+  // that already exist locally. release.mjs has its own pre-bump collision
+  // guard (A3) that hard-fails for the *specific* bump the operator chose,
+  // but seeing a stray patch/minor/major tag here often signals a previously
+  // interrupted ship that someone forgot to clean up — surface it now so the
+  // operator can sort it out before the next release attempt.
+  check('Next-bump tags do not collide', () => {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
+    const [maj, min, pat] = pkg.version.split('.').map(Number);
+    const candidates = {
+      patch: `v${maj}.${min}.${pat + 1}`,
+      minor: `v${maj}.${min + 1}.0`,
+      major: `v${maj + 1}.0.0`,
+    };
+    const collisions = [];
+    for (const [bump, tag] of Object.entries(candidates)) {
+      try {
+        runCapture(`git rev-parse --verify --quiet refs/tags/${tag}`);
+        collisions.push(`${bump}=${tag}`);
+      } catch { /* tag absent — good */ }
+    }
+    if (collisions.length === 0) return Object.values(candidates).join(', ') + ' all clear';
+    return `WARN: pre-existing tag(s) found — ${collisions.join(', ')} — likely from an interrupted ship; clean up before the next release`;
   });
 
   check('Git working tree clean', () => {
