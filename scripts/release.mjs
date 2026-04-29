@@ -815,10 +815,10 @@ if (SKIP_E2E) {
   console.log(`${YELLOW}   [ship-override: skip-e2e] is recorded in the commit body.${RESET}`);
 }
 
-console.log(`\n📋 Next steps:`);
-console.log(`  1. Upload release/zips/smruti-cortex-v${newVersion}.zip to Chrome Web Store`);
-console.log(`     https://chrome.google.com/webstore/devconsole`);
-console.log(`  2. Edit docs/store-submissions/v${newVersion}-chrome-web-store.md`);
-console.log(`     — Fill in Section 7 (Changes) and Section 9 (Checklist)`);
-console.log(`     — Delete the TODO preamble`);
-console.log(`  3. After CWS upload: npm run store check`);
+// Swift, action-oriented banner (T1) — three steps, no prose. Each line
+// tells the operator exactly one thing to do. The submission doc's TODO
+// preamble (S4 init shape) carries the rest.
+console.log(`\nReleased v${newVersion}. Next:`);
+console.log(`  1. Upload release/zips/smruti-cortex-v${newVersion}.zip at https://chrome.google.com/webstore/devconsole`);
+console.log(`  2. Paste docs/store-submissions/v${newVersion}-chrome-web-store.md into the form (delete the TODO preamble first).`);
+console.log(`  3. Submit for review, then run \`npm run store check\` once the listing updates.`);

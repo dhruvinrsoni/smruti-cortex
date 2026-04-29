@@ -101,6 +101,10 @@ const STRICT_MODE = args.includes('--strict');
 // writing; --force overwrites an existing target doc with a confirmation.
 const INIT_DRY_RUN = args.includes('--dry-run');
 const INIT_FORCE = args.includes('--force');
+// --verbose restores the long-form `store check` banner (header + version
+// preamble) that used to print unconditionally. Default is now terse: just
+// the per-check rows + a one-line outcome.
+const VERBOSE = args.includes('--verbose') || args.includes('-v');
 const explicitVersion = args.find(a => /^\d+\.\d+\.\d+$/.test(a));
 
 /**
@@ -426,8 +430,24 @@ function initSubmissionDoc(newVersion, { dryRun = false, force = false } = {}) {
     permBannerLines.push(`  Manually diff manifest.json against v${prev} and update Section 4 accordingly.`);
   }
 
-  // Append a scaffolding hint at the top so the operator knows what still needs editing.
-  const preamble = `<!--\n  SCAFFOLDED by scripts/store-check.mjs --init on ${today}.\n  TODO before submission:\n    1. Fill in Submitted date once uploaded.\n    2. Review Section 7 (Changes from Previous Submission) — the git log\n       below is a raw dump; rewrite into categorised prose.\n    3. If any permission was added/removed, follow the PERMISSION DELTA\n       banner below to update Section 4 (the \`npm run store check\` audit\n       will fail until you do).\n    4. Delete this comment block.\n${permBannerLines.join('\n')}\n\n  Raw git log v${prev}..v${newVersion}:\n${gitLog.split('\n').map(l => '    ' + l).join('\n')}\n-->\n\n`;
+  // Swift, action-oriented preamble (T1). Trimmed from the previous
+  // numbered-paragraph form to a 5-item checklist so an operator can
+  // tick boxes instead of reading prose. The PERMISSION DELTA banner
+  // (when non-empty) and raw git log still follow — those are the
+  // editable bits the operator actually consults.
+  const preamble = `<!-- TODO before submitting v${newVersion} (delete this block when done):
+- [ ] Fill in "Submitted" date after upload.
+- [ ] What's New: 3 bullets max, user-facing language.
+- [ ] Section 4 reflects manifest.json (run \`npm run store check\`).
+- [ ] Section 7 rewritten from the raw git log below into prose.
+- [ ] Screenshots refreshed if the UI changed.
+${permBannerLines.join('\n')}
+
+  Raw git log v${prev}..v${newVersion}:
+${gitLog.split('\n').map(l => '    ' + l).join('\n')}
+-->
+
+`;
 
   scaffolded = preamble + scaffolded;
 
@@ -924,7 +944,8 @@ async function runChecks() {
       results,
       summary: { failed, warned, passed, info, total: results.length, exitCode: failed > 0 ? 1 : 0 },
     }, null, 2));
-  } else {
+  } else if (VERBOSE) {
+    // Long-form output: header banner + per-check rows + footer divider.
     console.log('='.repeat(72));
     console.log(`  SmrutiCortex store check — ${vTag}`);
     console.log(`  Expected: v${version}   Store URL: ${STORE_URL}`);
@@ -941,6 +962,20 @@ async function runChecks() {
       console.log(`  All checks passed.`);
     }
     console.log('='.repeat(72));
+  } else {
+    // Swift default (T1): one row per check, then a single outcome line.
+    // No banner, no dividers — operators glancing at a CI log see the
+    // signal immediately. --verbose / -v restores the long form.
+    for (const r of results) {
+      console.log(fmt(r.status, r.name, r.detail));
+    }
+    if (failed > 0) {
+      console.log(`store check (${vTag}): ${failed} failed, ${warned} warning(s). Fix the failures above.`);
+    } else if (warned > 0) {
+      console.log(`store check (${vTag}): pass with ${warned} warning(s).`);
+    } else {
+      console.log(`store check (${vTag}): all checks passed.`);
+    }
   }
 
   process.exit(failed > 0 ? 1 : 0);
