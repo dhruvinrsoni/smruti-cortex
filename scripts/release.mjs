@@ -57,11 +57,11 @@ if (!SUBCOMMAND) {
 
 function run(cmd, opts = {}) {
   const stdio = opts.silent ? 'pipe' : 'inherit';
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio, timeout: 600000 });
+  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio, timeout: opts.timeout ?? 600000 });
 }
 
-function runSilent(cmd) {
-  return run(cmd, { silent: true }).trim();
+function runSilent(cmd, opts = {}) {
+  return run(cmd, { ...opts, silent: true }).trim();
 }
 
 // ===== Step 1: Validate prerequisites =====
@@ -85,6 +85,17 @@ try {
 } catch {
   console.error(`${RED}❌ GitHub CLI (gh) not found. Install: https://cli.github.com/${RESET}`);
   process.exit(1);
+}
+
+// Sync remote refs so subsequent collision/ahead-of-remote checks see the
+// real state of origin. Soft-fail: an offline operator can still ship a
+// patch from a known-clean local repo; we just print a warning so they know
+// the next checks ran without remote sync.
+try {
+  runSilent('git fetch --tags origin', { timeout: 10_000 });
+  console.log(`${GREEN}✅ Fetched remote tags${RESET}`);
+} catch {
+  console.log(`${YELLOW}⚠️  git fetch failed (offline?) — collision checks will use local refs only${RESET}`);
 }
 
 console.log(`${GREEN}✅ On main, clean tree, gh available${RESET}\n`);
