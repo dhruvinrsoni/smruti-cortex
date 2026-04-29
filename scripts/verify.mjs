@@ -150,9 +150,16 @@ if (releaseMode) {
   // (b) Manifest <-> submission-doc parity audit (the D1 perm-gap fix lives
   //     inside store-check.mjs). This is the same audit a release reviewer
   //     effectively runs, just enforced locally before any tag/push happens.
+  //
+  //     Under --no-network we *downgrade* this gate (pass --no-remote) instead
+  //     of skipping entirely. The local checks — manifest<->doc parity,
+  //     submission doc presence, CHANGELOG section, release zip presence —
+  //     need zero network and are exactly the kind of audit an offline
+  //     operator still wants to enforce. Only the public-store-reachable
+  //     probe inside store-check is genuinely network-bound; --no-remote
+  //     skips just that probe.
   if (noNetwork) {
-    results.push({ name: 'Store check (manifest <-> doc parity)', passed: true, ms: 0, skipped: true });
-    console.log(`\n${DIM}  ⏭️  Store check skipped (--no-network)${RESET}`);
+    step('Store check (manifest <-> doc parity, offline)', 'npm run store check -- --no-remote');
   } else {
     step('Store check (manifest <-> doc parity)', 'npm run store check');
   }
