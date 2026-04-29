@@ -170,12 +170,46 @@ async function fetchStore() {
 
 // ---------- init mode ----------
 
+// Compare two semver strings. Returns negative if a < b, zero if equal,
+// positive if a > b. Only handles strict X.Y.Z (no prerelease tags) — the
+// extension uses pure numeric semver.
+function semverCompare(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  }
+  return 0;
+}
+
 function initSubmissionDoc(newVersion) {
+  // Validate the version string before anything else — a malformed version
+  // would silently break listPrevVersion and cascading checks below.
+  if (!/^\d+\.\d+\.\d+$/.test(newVersion)) {
+    console.error(`[fatal] Invalid version "${newVersion}" — expected X.Y.Z (numeric only).`);
+    process.exit(2);
+  }
+
   const prev = listPrevVersion(newVersion);
   if (!prev) {
     console.error(`[fatal] Cannot scaffold — no previous released tag found before v${newVersion}.`);
     process.exit(2);
   }
+
+  // Refuse downgrades BEFORE checking for an existing target doc. If both
+  // gates fired, the operator would see "doc already exists" and assume
+  // the cleanup was just that path, when the real problem is they typed
+  // a stale version number. Surface the semantic error first.
+  //
+  // listPrevVersion picks the largest released version strictly less than
+  // newVersion, so if `newVersion <= prev` the operator either fat-fingered
+  // the version or there's a stale tag we should not step over.
+  if (semverCompare(newVersion, prev) <= 0) {
+    console.error(`[fatal] Refusing to scaffold v${newVersion} — not greater than previous released v${prev}.`);
+    console.error(`        Did you mean to bump the next version? Or is there a stale tag at v${newVersion}?`);
+    process.exit(2);
+  }
+
   const prevDoc = resolve(SUBMISSIONS_DIR, `v${prev}-chrome-web-store.md`);
   const newDoc = resolve(SUBMISSIONS_DIR, `v${newVersion}-chrome-web-store.md`);
   if (existsSync(newDoc)) {
@@ -188,6 +222,20 @@ function initSubmissionDoc(newVersion) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+
+  // Prefer the git-tag date for "Released (tagged)" when the new tag exists
+  // (typical when scaffolding post-tag, e.g. for a re-submission). Fall back
+  // to today's ISO date when no tag yet (typical pre-release scaffold during
+  // `npm run ship` Step 4). `git log -1 --format=%ai` returns ISO 8601 with
+  // a timezone; we slice to YYYY-MM-DD to match the doc convention.
+  let releasedDate = today;
+  try {
+    const tagRef = `v${newVersion}`;
+    if (runSilent(`git tag -l ${tagRef}`)) {
+      releasedDate = runSilent(`git log -1 --format=%ai ${tagRef}`).slice(0, 10);
+    }
+  } catch { /* fall back to today */ }
+
   const prevContent = readFileSync(prevDoc, 'utf-8');
 
   // Generate a rough Changes-from-Previous section from git log.
@@ -204,14 +252,37 @@ function initSubmissionDoc(newVersion) {
     gitLog = `(no commits between v${prev} and ${targetRef})`;
   }
 
-  let scaffolded = prevContent
-    .replace(/# Chrome Web Store Submission — SmrutiCortex v[\d.]+/, `# Chrome Web Store Submission — SmrutiCortex v${newVersion}`)
-    .replace(/> Version: [\d.]+/, `> Version: ${newVersion}`)
-    .replace(/> Released \(tagged\): [\d-]+/, `> Released (tagged): ${today}`)
-    .replace(/> Drafted: [\d-]+/, `> Drafted: ${today}`)
-    .replace(/> Submitted: [^\n]+/, `> Submitted: _TBD — fill in after upload_`)
-    .replace(/> Package: `release\/(zips\/)?smruti-cortex-v[\d.]+\.zip`/, `> Package: \`release/zips/smruti-cortex-v${newVersion}.zip\``)
-    .replace(/> Previous version: v[\d.]+/, `> Previous version: v${prev}`);
+  // Each entry is [pattern, replacement, label]. We apply them in order and
+  // verify each one actually matched something in the previous doc — if a
+  // pattern fails to match (e.g. previous operator hand-edited the header
+  // and broke the template shape), we want a loud error now, not a silently
+  // mis-scaffolded doc that downstream `store check` flags as a parity bug.
+  const replacements = [
+    [/# Chrome Web Store Submission — SmrutiCortex v[\d.]+/, `# Chrome Web Store Submission — SmrutiCortex v${newVersion}`, 'title'],
+    [/> Version: [\d.]+/, `> Version: ${newVersion}`, 'Version'],
+    [/> Released \(tagged\): [\d-]+/, `> Released (tagged): ${releasedDate}`, 'Released (tagged)'],
+    [/> Drafted: [\d-]+/, `> Drafted: ${today}`, 'Drafted'],
+    [/> Submitted: [^\n]+/, `> Submitted: _TBD — fill in after upload_`, 'Submitted'],
+    [/> Package: `release\/(zips\/)?smruti-cortex-v[\d.]+\.zip`/, `> Package: \`release/zips/smruti-cortex-v${newVersion}.zip\``, 'Package path'],
+    [/> Previous version: v[\d.]+/, `> Previous version: v${prev}`, 'Previous version'],
+  ];
+
+  let scaffolded = prevContent;
+  const unmatched = [];
+  for (const [pattern, replacement, label] of replacements) {
+    if (!pattern.test(scaffolded)) {
+      unmatched.push(label);
+      continue;
+    }
+    scaffolded = scaffolded.replace(pattern, replacement);
+  }
+
+  if (unmatched.length > 0) {
+    console.error(`[fatal] Template replacement(s) failed to match in v${prev} doc:`);
+    for (const label of unmatched) console.error(`        - ${label}`);
+    console.error(`        The previous doc may have drifted from template shape. Restore the missing header lines or scaffold from a different base.`);
+    process.exit(2);
+  }
 
   // Compute permission delta vs the previous tagged version so the scaffolded
   // doc carries an explicit fill-in-the-blank banner. Without this, an operator
