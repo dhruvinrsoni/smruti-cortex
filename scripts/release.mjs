@@ -289,9 +289,12 @@ console.log(`\n${BOLD}═══ STEP 8: Tag + Push + GitHub Release ═══${R
 
 run(`git tag -a v${newVersion} -m "SmrutiCortex v${newVersion}" --no-sign`);
 
-console.log('🚀 Pushing to origin...');
-run('git push origin main');
-run(`git push origin v${newVersion}`);
+console.log('🚀 Pushing to origin (atomic — main + tag in one transaction)...');
+// --atomic: either both refs are accepted by the remote or neither is. Without
+// this, a network blip between two separate pushes leaves a committed-but-
+// untagged remote (commit on main, no v<X.Y.Z> tag), which then trips up the
+// next release that tries to compute the previous tag.
+run(`git push --atomic origin main v${newVersion}`);
 
 const notesFile = resolve(ROOT, '.release-notes-tmp.md');
 const changelogSection2 = readFileSync(resolve(ROOT, 'CHANGELOG.md'), 'utf-8');
