@@ -1,0 +1,8 @@
+{
+  "default": {
+    "floor":  { "lines": 70, "branches": 70, "functions": 70, "statements": 70 },
+    "target": { "lines": 80, "branches": 80, "functions": 80, "statements": 80 },
+    "goal":   { "lines": 90, "branches": 90, "functions": 90, "statements": 90 }
+  },
+  "perDir": []
+}

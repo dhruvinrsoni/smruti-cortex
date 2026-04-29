@@ -12,15 +12,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  SOFT_THRESHOLD_PCT,
   METRICS,
-  classifyMetric,
-  evaluate,
-  parseSoftThresholdArg,
+  DEFAULT_THRESHOLDS,
+  classifyAbsolute,
+  resolveThresholdsForPath,
+  evaluateThresholds,
+  loadThresholds,
 } from '../coverage-ratchet.mjs';
 
 // Helper: build a `coverage-summary.total`-shaped object from a flat map.
-function asSummary(pcts) {
+function asSummaryTotal(pcts) {
   const out = {};
   for (const m of METRICS) {
     out[m] = { pct: pcts[m] };
@@ -28,194 +29,291 @@ function asSummary(pcts) {
   return out;
 }
 
+// Helper: build a full coverage-summary.json shape with optional per-file entries.
+function asSummary(totalPcts, perFile = {}) {
+  const summary = { total: asSummaryTotal(totalPcts) };
+  for (const [path, pcts] of Object.entries(perFile)) {
+    summary[path] = asSummaryTotal(pcts);
+  }
+  return summary;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
-
-test('SOFT_THRESHOLD_PCT default is 1.00 (one percentage point)', () => {
-  assert.equal(SOFT_THRESHOLD_PCT, 1.00);
-});
 
 test('METRICS covers the four v8 summary metrics in fixed order', () => {
   assert.deepEqual(METRICS, ['lines', 'branches', 'functions', 'statements']);
 });
 
-// ──────────────────────────────────────────────────────────────────────────────
-// classifyMetric
-// ──────────────────────────────────────────────────────────────────────────────
-
-test('classifyMetric: equal → green with diff 0', () => {
-  const r = classifyMetric(90.00, 90.00);
-  assert.equal(r.zone, 'green');
-  assert.equal(r.diff, 0);
-});
-
-test('classifyMetric: improvement → green with positive diff', () => {
-  const r = classifyMetric(92.50, 90.00);
-  assert.equal(r.zone, 'green');
-  assert.equal(r.diff, 2.50);
-});
-
-test('classifyMetric: tiny drop (0.02%) → soft with default 1% threshold', () => {
-  const r = classifyMetric(96.29, 96.31);
-  assert.equal(r.zone, 'soft');
-  assert.equal(r.diff, -0.02);
-});
-
-test('classifyMetric: drop near but below 1% → soft', () => {
-  const r = classifyMetric(95.32, 96.31);
-  assert.equal(r.zone, 'soft');
-  assert.equal(r.diff, -0.99);
-});
-
-test('classifyMetric: drop exactly 1% → hard (threshold is inclusive fail)', () => {
-  const r = classifyMetric(95.31, 96.31);
-  assert.equal(r.zone, 'hard');
-  assert.equal(r.diff, -1.00);
-});
-
-test('classifyMetric: large drop (> 1%) → hard', () => {
-  const r = classifyMetric(90.00, 96.31);
-  assert.equal(r.zone, 'hard');
-  assert.equal(r.diff, -6.31);
-});
-
-test('classifyMetric: strict=true forces ANY negative delta into hard', () => {
-  const r = classifyMetric(96.30, 96.31, { strict: true });
-  assert.equal(r.zone, 'hard');
-  assert.equal(r.diff, -0.01);
-});
-
-test('classifyMetric: strict=true leaves non-negative deltas green', () => {
-  assert.equal(classifyMetric(96.31, 96.31, { strict: true }).zone, 'green');
-  assert.equal(classifyMetric(97.00, 96.31, { strict: true }).zone, 'green');
-});
-
-test('classifyMetric: softThreshold=0.5 narrows the soft zone', () => {
-  // -0.6% would be soft at default (1.00) but hard at 0.5.
-  const r = classifyMetric(95.71, 96.31, { softThreshold: 0.5 });
-  assert.equal(r.zone, 'hard');
-  assert.equal(r.diff, -0.60);
-});
-
-test('classifyMetric: softThreshold=2.0 widens the soft zone', () => {
-  // -1.50% would be hard at default (1.00) but soft at 2.0.
-  const r = classifyMetric(94.81, 96.31, { softThreshold: 2.0 });
-  assert.equal(r.zone, 'soft');
-  assert.equal(r.diff, -1.50);
-});
-
-test('classifyMetric: IEEE-754 drift is rounded out of the diff', () => {
-  // 96.31 - 96.21 should be exactly 0.10, not 0.09999999999999432.
-  const r = classifyMetric(96.21, 96.31);
-  assert.equal(r.diff, -0.10);
-});
-
-// ──────────────────────────────────────────────────────────────────────────────
-// evaluate — aggregate over all four metrics
-// ──────────────────────────────────────────────────────────────────────────────
-
-test('evaluate: all metrics equal/improved → exitCode 0, all green', () => {
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  const current = asSummary({ lines: 96.50, branches: 90.28, functions: 96.10, statements: 95.72 });
-  const r = evaluate(current, baseline);
-  assert.equal(r.exitCode, 0);
-  assert.equal(r.greenCount, 4);
-  assert.equal(r.softCount, 0);
-  assert.equal(r.hardCount, 0);
-});
-
-test('evaluate: today-like sub-1% drift → exitCode 0 with soft advisory', () => {
-  // Real numbers from the failing verify run.
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  const current = asSummary({ lines: 96.29, branches: 90.10, functions: 95.92, statements: 95.62 });
-  const r = evaluate(current, baseline);
-  assert.equal(r.exitCode, 0, 'sub-1% drift must not block the pipeline');
-  assert.equal(r.greenCount, 0);
-  assert.equal(r.softCount, 4);
-  assert.equal(r.hardCount, 0);
-});
-
-test('evaluate: mix of green + soft → exitCode 0', () => {
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  const current = asSummary({ lines: 96.31, branches: 90.00, functions: 96.00, statements: 95.72 });
-  const r = evaluate(current, baseline);
-  assert.equal(r.exitCode, 0);
-  assert.equal(r.greenCount, 3);
-  assert.equal(r.softCount, 1);
-  assert.equal(r.hardCount, 0);
-});
-
-test('evaluate: any hard → exitCode 1', () => {
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  const current = asSummary({ lines: 94.00, branches: 90.28, functions: 96.00, statements: 95.72 });
-  const r = evaluate(current, baseline);
-  assert.equal(r.exitCode, 1);
-  assert.equal(r.hardCount, 1);
-});
-
-test('evaluate: strict=true promotes every negative delta to hard', () => {
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  const current = asSummary({ lines: 96.29, branches: 90.10, functions: 95.92, statements: 95.62 });
-  const r = evaluate(current, baseline, { strict: true });
-  assert.equal(r.exitCode, 1);
-  assert.equal(r.hardCount, 4);
-  assert.equal(r.softCount, 0);
-});
-
-test('evaluate: softThreshold=0.5 reclassifies 0.6% drops as hard', () => {
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  // branches drops 0.60% — soft at default, hard at 0.5 threshold.
-  const current = asSummary({ lines: 96.31, branches: 89.68, functions: 96.00, statements: 95.72 });
-  const relaxed = evaluate(current, baseline);
-  assert.equal(relaxed.exitCode, 0);
-  assert.equal(relaxed.softCount, 1);
-  const tight = evaluate(current, baseline, { softThreshold: 0.5 });
-  assert.equal(tight.exitCode, 1);
-  assert.equal(tight.hardCount, 1);
-});
-
-test('evaluate: rows preserve metric order and carry per-metric detail', () => {
-  const baseline = { lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 };
-  const current = asSummary({ lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 });
-  const r = evaluate(current, baseline);
-  assert.deepEqual(r.rows.map(x => x.metric), METRICS);
-  for (const row of r.rows) {
-    assert.equal(row.zone, 'green');
-    assert.equal(row.diff, 0);
+test('DEFAULT_THRESHOLDS encodes the 70/80/90 tier model uniformly', () => {
+  for (const m of METRICS) {
+    assert.equal(DEFAULT_THRESHOLDS.floor[m], 70);
+    assert.equal(DEFAULT_THRESHOLDS.target[m], 80);
+    assert.equal(DEFAULT_THRESHOLDS.goal[m], 90);
   }
 });
 
+test('DEFAULT_THRESHOLDS is frozen so callers cannot mutate it', () => {
+  assert.ok(Object.isFrozen(DEFAULT_THRESHOLDS));
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
-// parseSoftThresholdArg
+// classifyAbsolute
 // ──────────────────────────────────────────────────────────────────────────────
 
-test('parseSoftThresholdArg: extracts float from --soft-threshold=0.5', () => {
-  assert.equal(parseSoftThresholdArg(['--soft-threshold=0.5']), 0.5);
+test('classifyAbsolute: at goal returns "at-goal"', () => {
+  assert.equal(classifyAbsolute(95.5, DEFAULT_THRESHOLDS, 'lines'), 'at-goal');
+  assert.equal(classifyAbsolute(90.0, DEFAULT_THRESHOLDS, 'lines'), 'at-goal');
 });
 
-test('parseSoftThresholdArg: extracts integer-like 2 as 2.0', () => {
-  assert.equal(parseSoftThresholdArg(['--soft-threshold=2']), 2);
+test('classifyAbsolute: at target but below goal returns "on-target"', () => {
+  assert.equal(classifyAbsolute(80.0, DEFAULT_THRESHOLDS, 'lines'), 'on-target');
+  assert.equal(classifyAbsolute(89.99, DEFAULT_THRESHOLDS, 'lines'), 'on-target');
 });
 
-test('parseSoftThresholdArg: missing flag → fallback (default 1.00)', () => {
-  assert.equal(parseSoftThresholdArg([]), SOFT_THRESHOLD_PCT);
-  assert.equal(parseSoftThresholdArg(['--strict']), SOFT_THRESHOLD_PCT);
+test('classifyAbsolute: at floor but below target returns "below-target"', () => {
+  assert.equal(classifyAbsolute(70.0, DEFAULT_THRESHOLDS, 'lines'), 'below-target');
+  assert.equal(classifyAbsolute(79.99, DEFAULT_THRESHOLDS, 'lines'), 'below-target');
 });
 
-test('parseSoftThresholdArg: explicit fallback is honored', () => {
-  assert.equal(parseSoftThresholdArg([], 0.25), 0.25);
+test('classifyAbsolute: below floor returns "fail"', () => {
+  assert.equal(classifyAbsolute(69.99, DEFAULT_THRESHOLDS, 'lines'), 'fail');
+  assert.equal(classifyAbsolute(0, DEFAULT_THRESHOLDS, 'lines'), 'fail');
 });
 
-test('parseSoftThresholdArg: invalid value falls back silently', () => {
-  assert.equal(parseSoftThresholdArg(['--soft-threshold=abc']), SOFT_THRESHOLD_PCT);
-  assert.equal(parseSoftThresholdArg(['--soft-threshold=']), SOFT_THRESHOLD_PCT);
+test('classifyAbsolute: missing floor entry treats metric as informational only', () => {
+  // Custom thresholds with no floor for branches.
+  const t = { floor: {}, target: { branches: 80 }, goal: { branches: 90 } };
+  assert.equal(classifyAbsolute(50, t, 'branches'), 'below-target');
+  assert.equal(classifyAbsolute(85, t, 'branches'), 'on-target');
+  assert.equal(classifyAbsolute(95, t, 'branches'), 'at-goal');
 });
 
-test('parseSoftThresholdArg: negative value rejected → fallback', () => {
-  assert.equal(parseSoftThresholdArg(['--soft-threshold=-1']), SOFT_THRESHOLD_PCT);
+// ──────────────────────────────────────────────────────────────────────────────
+// resolveThresholdsForPath
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('resolveThresholdsForPath: empty perDir returns the default thresholds', () => {
+  const cfg = { default: DEFAULT_THRESHOLDS, perDir: [] };
+  const t = resolveThresholdsForPath('/repo/src/foo.ts', cfg);
+  assert.equal(t, DEFAULT_THRESHOLDS);
 });
 
-test('parseSoftThresholdArg: coexists with other flags in argv', () => {
-  assert.equal(parseSoftThresholdArg(['--strict', '--soft-threshold=0.25', '--update']), 0.25);
+test('resolveThresholdsForPath: missing perDir is also fine', () => {
+  const cfg = { default: DEFAULT_THRESHOLDS };
+  const t = resolveThresholdsForPath('/repo/src/foo.ts', cfg);
+  assert.equal(t, DEFAULT_THRESHOLDS);
+});
+
+test('resolveThresholdsForPath: path match overrides only the floor tier', () => {
+  const cfg = {
+    default: DEFAULT_THRESHOLDS,
+    perDir: [
+      { path: 'src/background/search/', floor: { lines: 90, branches: 85, functions: 90, statements: 90 } },
+    ],
+  };
+  const t = resolveThresholdsForPath('/repo/src/background/search/scorer.ts', cfg);
+  assert.equal(t.floor.lines, 90);
+  assert.equal(t.floor.branches, 85);
+  assert.deepEqual(t.target, DEFAULT_THRESHOLDS.target);
+  assert.deepEqual(t.goal, DEFAULT_THRESHOLDS.goal);
+});
+
+test('resolveThresholdsForPath: longest-prefix wins among multiple matches', () => {
+  const cfg = {
+    default: DEFAULT_THRESHOLDS,
+    perDir: [
+      { path: 'src/', floor: { lines: 75, branches: 75, functions: 75, statements: 75 } },
+      { path: 'src/background/search/', floor: { lines: 90, branches: 85, functions: 90, statements: 90 } },
+    ],
+  };
+  const t = resolveThresholdsForPath('/repo/src/background/search/scorer.ts', cfg);
+  assert.equal(t.floor.lines, 90, 'longer prefix wins');
+});
+
+test('resolveThresholdsForPath: no match falls back to default', () => {
+  const cfg = {
+    default: DEFAULT_THRESHOLDS,
+    perDir: [{ path: 'src/popup/', floor: { lines: 50, branches: 50, functions: 50, statements: 50 } }],
+  };
+  const t = resolveThresholdsForPath('/repo/src/background/foo.ts', cfg);
+  assert.equal(t, DEFAULT_THRESHOLDS);
+});
+
+test('resolveThresholdsForPath: tolerates Windows-style backslashes', () => {
+  const cfg = {
+    default: DEFAULT_THRESHOLDS,
+    perDir: [{ path: 'src/popup/', floor: { lines: 50, branches: 50, functions: 50, statements: 50 } }],
+  };
+  const t = resolveThresholdsForPath('C:\\repo\\src\\popup\\popup-utils.ts', cfg);
+  assert.equal(t.floor.lines, 50);
+});
+
+test('resolveThresholdsForPath: malformed perDir entries are skipped without throwing', () => {
+  const cfg = {
+    default: DEFAULT_THRESHOLDS,
+    perDir: [null, undefined, {}, { path: '' }, { path: 42 }, { path: 'src/popup/' }],
+  };
+  const t = resolveThresholdsForPath('/repo/src/popup/foo.ts', cfg);
+  // The only valid entry has no floor override, so result is default.
+  assert.equal(t, DEFAULT_THRESHOLDS);
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// evaluateThresholds — totals
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('evaluateThresholds: all totals at goal → exitCode 0, all "at-goal"', () => {
+  const summary = asSummary({ lines: 96.31, branches: 90.28, functions: 96.00, statements: 95.72 });
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS });
+  assert.equal(r.exitCode, 0);
+  for (const t of r.totals) assert.equal(t.zone, 'at-goal');
+});
+
+test('evaluateThresholds: totals between target and goal → exitCode 0, "on-target"', () => {
+  const summary = asSummary({ lines: 85, branches: 82, functions: 88, statements: 84 });
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS });
+  assert.equal(r.exitCode, 0);
+  for (const t of r.totals) assert.equal(t.zone, 'on-target');
+});
+
+test('evaluateThresholds: any total below floor → exitCode 1', () => {
+  const summary = asSummary({ lines: 69, branches: 90, functions: 90, statements: 90 });
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS });
+  assert.equal(r.exitCode, 1);
+  assert.equal(r.totals[0].zone, 'fail');
+});
+
+test('evaluateThresholds: rows preserve metric order and carry tier numbers', () => {
+  const summary = asSummary({ lines: 95, branches: 85, functions: 75, statements: 90 });
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS });
+  assert.deepEqual(r.totals.map(x => x.metric), METRICS);
+  for (const row of r.totals) {
+    assert.equal(row.floor, 70);
+    assert.equal(row.target, 80);
+    assert.equal(row.goal, 90);
+  }
+});
+
+test('evaluateThresholds: pct values are rounded to 2 decimal places', () => {
+  // 96.314159 should be reported as 96.31, not the raw float.
+  const summary = asSummary({ lines: 96.314159, branches: 90.28, functions: 96.00, statements: 95.72 });
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS });
+  assert.equal(r.totals[0].pct, 96.31);
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// evaluateThresholds — per-file
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('evaluateThresholds: per-file off by default — under-covered files do NOT fail the run', () => {
+  const summary = asSummary(
+    { lines: 95, branches: 90, functions: 95, statements: 95 },
+    { '/repo/src/background/foo.ts': { lines: 0, branches: 0, functions: 0, statements: 0 } },
+  );
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS });
+  assert.equal(r.exitCode, 0);
+  assert.deepEqual(r.perFileFailures, []);
+});
+
+test('evaluateThresholds: per-file mode fails when any file metric is below floor', () => {
+  const summary = asSummary(
+    { lines: 95, branches: 90, functions: 95, statements: 95 },
+    {
+      '/repo/src/background/foo.ts': { lines: 65, branches: 90, functions: 95, statements: 95 },
+      '/repo/src/background/bar.ts': { lines: 95, branches: 95, functions: 95, statements: 95 },
+    },
+  );
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS }, { perFile: true });
+  assert.equal(r.exitCode, 1);
+  assert.equal(r.perFileFailures.length, 1);
+  assert.equal(r.perFileFailures[0].file, '/repo/src/background/foo.ts');
+  assert.equal(r.perFileFailures[0].metric, 'lines');
+  assert.equal(r.perFileFailures[0].pct, 65);
+  assert.equal(r.perFileFailures[0].floor, 70);
+});
+
+test('evaluateThresholds: per-file mode honours per-directory floor overrides', () => {
+  const config = {
+    default: DEFAULT_THRESHOLDS,
+    perDir: [
+      { path: 'src/background/search/', floor: { lines: 90, branches: 90, functions: 90, statements: 90 } },
+    ],
+  };
+  const summary = asSummary(
+    { lines: 95, branches: 90, functions: 95, statements: 95 },
+    {
+      // 80% lines passes the default 70 floor but fails the 90 floor for search/.
+      '/repo/src/background/search/scorer.ts': { lines: 80, branches: 95, functions: 95, statements: 95 },
+      // 80% lines is fine outside search/.
+      '/repo/src/background/other.ts': { lines: 80, branches: 95, functions: 95, statements: 95 },
+    },
+  );
+  const r = evaluateThresholds(summary, config, { perFile: true });
+  assert.equal(r.exitCode, 1);
+  assert.equal(r.perFileFailures.length, 1);
+  assert.match(r.perFileFailures[0].file, /scorer\.ts$/);
+});
+
+test('evaluateThresholds: per-file mode tolerates files with missing/malformed pct entries', () => {
+  const summary = {
+    total: asSummaryTotal({ lines: 95, branches: 90, functions: 95, statements: 95 }),
+    '/repo/src/odd.ts': { lines: { /* no pct */ }, branches: { pct: 'bad' }, functions: { pct: 95 }, statements: { pct: 95 } },
+  };
+  const r = evaluateThresholds(summary, { default: DEFAULT_THRESHOLDS }, { perFile: true });
+  assert.equal(r.exitCode, 0);
+  assert.deepEqual(r.perFileFailures, []);
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// loadThresholds
+// ──────────────────────────────────────────────────────────────────────────────
+
+test('loadThresholds: missing file falls back to defaults', () => {
+  const r = loadThresholds('/definitely/not/a/real/path/coverage-thresholds.json');
+  assert.equal(r.default, DEFAULT_THRESHOLDS);
+  assert.deepEqual(r.perDir, []);
+});
+
+test('loadThresholds: malformed JSON attaches _warning and uses defaults', async () => {
+  // Write a temp bad file
+  const { writeFileSync, mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: pjoin } = await import('node:path');
+  const dir = mkdtempSync(pjoin(tmpdir(), 'ratchet-test-'));
+  const bad = pjoin(dir, 'coverage-thresholds.json');
+  writeFileSync(bad, '{ not valid json', 'utf-8');
+  try {
+    const r = loadThresholds(bad);
+    assert.equal(r.default, DEFAULT_THRESHOLDS);
+    assert.match(r._warning, /Failed to parse/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('loadThresholds: valid file is read through verbatim', async () => {
+  const { writeFileSync, mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: pjoin } = await import('node:path');
+  const dir = mkdtempSync(pjoin(tmpdir(), 'ratchet-test-'));
+  const ok = pjoin(dir, 'coverage-thresholds.json');
+  const cfg = {
+    default: {
+      floor: { lines: 75, branches: 75, functions: 75, statements: 75 },
+      target: { lines: 85, branches: 85, functions: 85, statements: 85 },
+      goal: { lines: 95, branches: 95, functions: 95, statements: 95 },
+    },
+    perDir: [{ path: 'src/popup/', floor: { lines: 60, branches: 60, functions: 60, statements: 60 } }],
+  };
+  writeFileSync(ok, JSON.stringify(cfg), 'utf-8');
+  try {
+    const r = loadThresholds(ok);
+    assert.equal(r.default.floor.lines, 75);
+    assert.equal(r.perDir.length, 1);
+    assert.equal(r.perDir[0].path, 'src/popup/');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

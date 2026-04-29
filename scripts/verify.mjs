@@ -193,7 +193,7 @@ console.log(`${'═'.repeat(50)}`);
 await step('Lint', 'npm run lint');
 await step('Build (prod)', 'npm run build');
 await step('Unit Tests + Coverage', 'npx vitest run --coverage');
-await step('Coverage Ratchet (soft ±1%)', 'node scripts/coverage-ratchet.mjs');
+await step('Coverage Ratchet (absolute floors 70/80/90)', 'node scripts/coverage-ratchet.mjs');
 
 if (skipE2E) {
   results.push({ name: 'E2E Tests', passed: true, ms: 0, skipped: true });

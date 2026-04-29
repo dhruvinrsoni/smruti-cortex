@@ -1,134 +1,211 @@
 #!/usr/bin/env node
 
 /**
- * coverage-ratchet.mjs — Graduated coverage drift policy.
+ * coverage-ratchet.mjs — Absolute tiered coverage floors.
  *
- * Compares the current coverage report against a checked-in baseline and
- * classifies each metric (lines, branches, functions, statements) into one
- * of three zones based on delta = current - baseline:
+ * Compares the current coverage report against absolute thresholds organised
+ * into three tiers per the user's mental model:
  *
- *   delta >= 0                        → GREEN    (PASS, exit 0)
- *   -SOFT_THRESHOLD_PCT < delta < 0   → SOFT     (ADVISORY warning, exit 0)
- *   delta <= -SOFT_THRESHOLD_PCT      → HARD     (FAIL, exit 1)
+ *   floor  (default 70)  — FAIL below this. Catches cliff drops, not noise.
+ *   target (default 80)  — informational; "industry standard" tier.
+ *   goal   (default 90)  — informational; "best practice" tier.
  *
- * Rationale: tiny per-release drift (e.g. -0.10%) is noise and should never
- * block `npm run verify` or the release pipeline (preflight chains through
- * verify). A drop of ≥ 1.00%, however, almost always means a test file got
- * deleted or a large module became uncovered — that still fails loud.
+ * Coverage will naturally drift down over time as code grows faster than
+ * tests; the goal here is NOT to block on every per-release dip, but to
+ * shout when a metric crosses below the floor (something deleted? a large
+ * module went uncovered?).
+ *
+ * Defaults are baked in. `coverage-thresholds.json` at the repo root may
+ * override them and add per-directory floor overrides:
+ *
+ *   {
+ *     "default": {
+ *       "floor":  { "lines": 70, "branches": 70, "functions": 70, "statements": 70 },
+ *       "target": { "lines": 80, ... },
+ *       "goal":   { "lines": 90, ... }
+ *     },
+ *     "perDir": [
+ *       { "path": "src/background/search/",
+ *         "floor": { "lines": 90, "branches": 85, "functions": 90, "statements": 90 } }
+ *     ]
+ *   }
+ *
+ * Per-directory floors only override the `floor` tier (target/goal stay at
+ * the default values) to keep the config small.
  *
  * Flags:
- *   --strict                  Zero-tolerance: ANY negative delta is HARD.
- *                             Use this in CI jobs that must never regress.
- *   --soft-threshold=<float>  Override SOFT_THRESHOLD_PCT (default 1.00).
- *   --update                  Write current coverage as the new baseline.
+ *   --per-file  Also classify every file in coverage-summary.json (default: totals only).
+ *   --json      Emit NDJSON events to stdout; pretty output goes to stderr.
  *
  * Usage:
- *   node scripts/coverage-ratchet.mjs                       # graduated (default)
- *   node scripts/coverage-ratchet.mjs --strict              # zero-tolerance
- *   node scripts/coverage-ratchet.mjs --soft-threshold=0.5  # tighter soft zone
- *   node scripts/coverage-ratchet.mjs --update              # tighten baseline
+ *   node scripts/coverage-ratchet.mjs                # totals-only, pretty
+ *   node scripts/coverage-ratchet.mjs --per-file     # also check every file
+ *   node scripts/coverage-ratchet.mjs --json         # NDJSON for CI
  *
- * Pure helpers (classifyMetric, evaluate, parseSoftThresholdArg) are exported
- * so that unit tests in scripts/__tests__/coverage-ratchet.test.mjs can
- * exercise the decision logic without touching disk or process.exit.
+ * Pure helpers (classifyAbsolute, resolveThresholdsForPath, evaluateThresholds,
+ * loadThresholds) are exported so unit tests in
+ * scripts/__tests__/coverage-ratchet.test.mjs can exercise the decision logic
+ * without touching disk or process.exit.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-/** Default soft-zone width in percentage points. A drop < this is advisory. */
-export const SOFT_THRESHOLD_PCT = 1.00;
-
-const BASELINE_PATH = join(root, 'coverage-baseline.json');
+const THRESHOLDS_PATH = join(root, 'coverage-thresholds.json');
 const SUMMARY_PATH = join(root, 'coverage', 'coverage-summary.json');
+
 export const METRICS = ['lines', 'branches', 'functions', 'statements'];
+
+/** Baked-in defaults: 70 / 80 / 90 (market / industry / best practice). */
+export const DEFAULT_THRESHOLDS = Object.freeze({
+  floor:  { lines: 70, branches: 70, functions: 70, statements: 70 },
+  target: { lines: 80, branches: 80, functions: 80, statements: 80 },
+  goal:   { lines: 90, branches: 90, functions: 90, statements: 90 },
+});
 
 const BOLD = '\x1b[1m';
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
 const YELLOW = '\x1b[33m';
+const CYAN = '\x1b[36m';
+const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
+// ──────────────────────────────────────────────────────────────────────────
+// Pure helpers (exported for tests)
+// ──────────────────────────────────────────────────────────────────────────
+
 /**
- * Classify a single metric's delta into a green / soft / hard zone.
+ * Classify a single metric pct against the resolved thresholds.
+ * Returns one of:
+ *   'fail'         — pct < floor (only zone that fails the build)
+ *   'below-target' — floor <= pct < target
+ *   'on-target'    — target <= pct < goal
+ *   'at-goal'      — pct >= goal
  *
- * @param {number} cur     Current percentage (rounded to 2 dp by caller).
- * @param {number} base    Baseline percentage.
- * @param {{ strict?: boolean, softThreshold?: number }} [opts]
- * @returns {{ zone: 'green'|'soft'|'hard', diff: number }}
- *
- * Notes:
- * - `diff` is rounded to 2 dp to avoid IEEE-754 noise like -0.09999999.
- * - In strict mode, ANY negative delta is hard (no soft zone).
- * - At the boundary (|diff| === softThreshold), the drop counts as HARD —
- *   we treat the threshold as "inclusive fail" so that `softThreshold=1.00`
- *   means "1.00% or more is a hard fail".
+ * @param {number} pct        Coverage percentage (0-100, rounded by caller).
+ * @param {{ floor: object, target: object, goal: object }} thresholds
+ * @param {'lines'|'branches'|'functions'|'statements'} metric
  */
-export function classifyMetric(cur, base, { strict = false, softThreshold = SOFT_THRESHOLD_PCT } = {}) {
-  const diff = +(cur - base).toFixed(2);
-  if (diff >= 0) return { zone: 'green', diff };
-  if (strict) return { zone: 'hard', diff };
-  if (Math.abs(diff) >= softThreshold) return { zone: 'hard', diff };
-  return { zone: 'soft', diff };
+export function classifyAbsolute(pct, thresholds, metric) {
+  const floor = thresholds?.floor?.[metric];
+  const target = thresholds?.target?.[metric];
+  const goal = thresholds?.goal?.[metric];
+  if (typeof floor === 'number' && pct < floor) return 'fail';
+  if (typeof goal === 'number' && pct >= goal) return 'at-goal';
+  if (typeof target === 'number' && pct >= target) return 'on-target';
+  return 'below-target';
 }
 
 /**
- * Evaluate all four metrics against baseline and derive overall exit code.
+ * Resolve thresholds for a given file path by longest-prefix match against
+ * config.perDir. Only `floor` is overridden; target/goal stay default.
  *
- * @param {Record<string, { pct: number }>} currentTotal  `coverage-summary.json`.total
- * @param {Record<string, number>} baseline               `coverage-baseline.json`
- * @param {{ strict?: boolean, softThreshold?: number }} [opts]
- * @returns {{
- *   rows: Array<{ metric: string, base: number, cur: number, diff: number, zone: 'green'|'soft'|'hard' }>,
- *   exitCode: 0 | 1,
- *   greenCount: number,
- *   softCount: number,
- *   hardCount: number,
- * }}
+ * @param {string} filePath  Absolute or relative path from coverage-summary.
+ * @param {{ default?: object, perDir?: Array<{ path: string, floor: object }> }} config
  */
-export function evaluate(currentTotal, baseline, opts = {}) {
-  const rows = [];
-  let greenCount = 0;
-  let softCount = 0;
-  let hardCount = 0;
-  for (const m of METRICS) {
-    const base = baseline[m];
-    const cur = parseFloat(currentTotal[m].pct.toFixed(2));
-    const { zone, diff } = classifyMetric(cur, base, opts);
-    if (zone === 'green') greenCount++;
-    else if (zone === 'soft') softCount++;
-    else hardCount++;
-    rows.push({ metric: m, base, cur, diff, zone });
+export function resolveThresholdsForPath(filePath, config) {
+  const base = config?.default || DEFAULT_THRESHOLDS;
+  const perDir = Array.isArray(config?.perDir) ? config.perDir : [];
+  if (perDir.length === 0) return base;
+  const normalized = String(filePath).replace(/\\/g, '/');
+  let bestMatch = null;
+  for (const entry of perDir) {
+    if (!entry || typeof entry.path !== 'string' || !entry.path) continue;
+    if (normalized.includes(entry.path)) {
+      if (!bestMatch || entry.path.length > bestMatch.path.length) {
+        bestMatch = entry;
+      }
+    }
   }
+  if (!bestMatch || !bestMatch.floor) return base;
   return {
-    rows,
-    exitCode: hardCount > 0 ? 1 : 0,
-    greenCount,
-    softCount,
-    hardCount,
+    floor: { ...base.floor, ...bestMatch.floor },
+    target: base.target,
+    goal: base.goal,
   };
 }
 
 /**
- * Parse `--soft-threshold=<float>` from argv; return fallback if absent/invalid.
+ * Evaluate totals + (optionally) per-file against the config.
  *
- * @param {string[]} argv
- * @param {number} [fallback]
- * @returns {number}
+ * @param {object} summary    `coverage-summary.json` parsed
+ * @param {object} config     loaded thresholds config
+ * @param {{ perFile?: boolean }} [opts]
+ * @returns {{
+ *   totals: Array<{ metric, pct, zone, floor, target, goal }>,
+ *   perFileFailures: Array<{ file, metric, pct, floor }>,
+ *   exitCode: 0 | 1,
+ * }}
  */
-export function parseSoftThresholdArg(argv, fallback = SOFT_THRESHOLD_PCT) {
-  const prefix = '--soft-threshold=';
-  for (const a of argv) {
-    if (a.startsWith(prefix)) {
-      const parsed = parseFloat(a.slice(prefix.length));
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+export function evaluateThresholds(summary, config, { perFile = false } = {}) {
+  const baseThresholds = config?.default || DEFAULT_THRESHOLDS;
+  const totals = [];
+  let exitCode = 0;
+  for (const m of METRICS) {
+    const pct = parseFloat(summary.total[m].pct.toFixed(2));
+    const zone = classifyAbsolute(pct, baseThresholds, m);
+    if (zone === 'fail') exitCode = 1;
+    totals.push({
+      metric: m,
+      pct,
+      zone,
+      floor: baseThresholds.floor?.[m],
+      target: baseThresholds.target?.[m],
+      goal: baseThresholds.goal?.[m],
+    });
+  }
+  const perFileFailures = [];
+  if (perFile) {
+    for (const [filePath, fileSummary] of Object.entries(summary)) {
+      if (filePath === 'total') continue;
+      if (!fileSummary || typeof fileSummary !== 'object') continue;
+      const thresholds = resolveThresholdsForPath(filePath, config);
+      for (const m of METRICS) {
+        const raw = fileSummary[m]?.pct;
+        if (typeof raw !== 'number') continue;
+        const pct = parseFloat(raw.toFixed(2));
+        const zone = classifyAbsolute(pct, thresholds, m);
+        if (zone === 'fail') {
+          exitCode = 1;
+          perFileFailures.push({
+            file: filePath,
+            metric: m,
+            pct,
+            floor: thresholds.floor?.[m],
+          });
+        }
+      }
     }
   }
-  return fallback;
+  return { totals, perFileFailures, exitCode };
+}
+
+/**
+ * Load the thresholds config from disk; fall back to defaults if absent
+ * or unreadable. A parse error attaches a `_warning` for the CLI to print.
+ */
+export function loadThresholds(thresholdsPath = THRESHOLDS_PATH) {
+  if (!existsSync(thresholdsPath)) {
+    return { default: DEFAULT_THRESHOLDS, perDir: [] };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(thresholdsPath, 'utf-8'));
+    return {
+      default: parsed.default || DEFAULT_THRESHOLDS,
+      perDir: Array.isArray(parsed.perDir) ? parsed.perDir : [],
+    };
+  } catch (err) {
+    return {
+      default: DEFAULT_THRESHOLDS,
+      perDir: [],
+      _warning: `Failed to parse ${thresholdsPath}: ${err.message}; using built-in defaults.`,
+    };
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -144,78 +221,95 @@ function loadJSON(path, label) {
   return JSON.parse(readFileSync(path, 'utf-8'));
 }
 
+function zoneLabel(zone) {
+  switch (zone) {
+    case 'fail':         return `${RED}FAIL${RESET}`;
+    case 'below-target': return `${YELLOW}BELOW TARGET${RESET}`;
+    case 'on-target':    return `${CYAN}ON TARGET${RESET}`;
+    case 'at-goal':      return `${GREEN}AT GOAL${RESET}`;
+    default:             return zone;
+  }
+}
+
 const invokedAsMain =
   Boolean(process.argv[1]) &&
   import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedAsMain) {
   const argv = process.argv.slice(2);
-  const update = argv.includes('--update');
-  const strict = argv.includes('--strict');
-  const softThreshold = parseSoftThresholdArg(argv);
+  const jsonMode = argv.includes('--json');
+  const perFile = argv.includes('--per-file');
+  const help = argv.includes('--help') || argv.includes('-h');
 
-  if (update) {
-    const summary = loadJSON(SUMMARY_PATH, 'Coverage summary');
-    const total = summary.total;
-    const baseline = {};
-    for (const m of METRICS) {
-      baseline[m] = parseFloat(total[m].pct.toFixed(2));
-    }
-    writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n');
-    console.log(`${GREEN}${BOLD}Ratchet updated:${RESET}`);
-    for (const m of METRICS) {
-      console.log(`  ${m.padEnd(12)} ${baseline[m]}%`);
-    }
+  if (help) {
+    console.log(`Usage: node scripts/coverage-ratchet.mjs [--per-file] [--json]
+
+Checks coverage-summary.json against absolute tiered floors (70/80/90 by
+default). Override via coverage-thresholds.json at the repo root.
+
+Flags:
+  --per-file   Also classify each file (default: totals only).
+  --json       Emit NDJSON events to stdout (pretty output -> stderr).
+  -h, --help   Show this help.`);
     process.exit(0);
   }
 
-  const baseline = loadJSON(BASELINE_PATH, 'Coverage baseline');
+  // In --json mode, route pretty output to stderr so stdout is parseable NDJSON.
+  const log = jsonMode ? (...args) => console.error(...args) : (...args) => console.log(...args);
+  const emit = (event) => {
+    if (jsonMode) process.stdout.write(JSON.stringify(event) + '\n');
+  };
+
+  const config = loadThresholds();
+  if (config._warning) log(`${YELLOW}[warn] ${config._warning}${RESET}`);
+
   const summary = loadJSON(SUMMARY_PATH, 'Coverage summary');
-  const { rows, softCount, hardCount } = evaluate(summary.total, baseline, { strict, softThreshold });
+  const { totals, perFileFailures, exitCode } = evaluateThresholds(summary, config, { perFile });
 
-  const modeLabel = strict
-    ? `strict (zero-tolerance)`
-    : `graduated (soft zone: |drop| < ${softThreshold.toFixed(2)}%)`;
+  log(`\n${BOLD}Coverage Ratchet${RESET} — absolute floors (${perFile ? 'totals + per-file' : 'totals only'})`);
+  log('─'.repeat(64));
+  log(`  ${'Metric'.padEnd(11)} ${'Current'.padStart(8)}  ${'Floor'.padStart(6)} ${'Target'.padStart(6)} ${'Goal'.padStart(6)}  Result`);
+  log('─'.repeat(64));
+  for (const r of totals) {
+    log(`  ${r.metric.padEnd(11)} ${(r.pct + '%').padStart(8)}  ${String(r.floor).padStart(6)} ${String(r.target).padStart(6)} ${String(r.goal).padStart(6)}  ${zoneLabel(r.zone)}`);
+    emit({ event: 'metric.checked', scope: 'total', metric: r.metric, pct: r.pct, floor: r.floor, target: r.target, goal: r.goal, zone: r.zone });
+  }
+  log('─'.repeat(64));
 
-  console.log(`\n${BOLD}Coverage Ratchet Check${RESET} — ${modeLabel}`);
-  console.log('─'.repeat(56));
-  console.log(`  ${'Metric'.padEnd(12)} ${'Baseline'.padStart(10)} ${'Current'.padStart(10)}  Result`);
-  console.log('─'.repeat(56));
-
-  for (const r of rows) {
-    const sign = r.diff >= 0 ? '+' : '';
-    const deltaStr = `${sign}${r.diff.toFixed(2)}%`;
-    let label;
-    if (r.zone === 'green') {
-      label = `${GREEN}PASS (${deltaStr})${RESET}`;
-    } else if (r.zone === 'soft') {
-      label = `${YELLOW}ADVISORY (${deltaStr})${RESET}`;
+  if (perFile) {
+    if (perFileFailures.length > 0) {
+      log(`\n${RED}${BOLD}Per-file failures (${perFileFailures.length})${RESET}`);
+      for (const f of perFileFailures) {
+        log(`  ${RED}FAIL${RESET}  ${f.file}  ${f.metric}=${f.pct}% (floor ${f.floor}%)`);
+        emit({ event: 'metric.checked', scope: 'file', file: f.file, metric: f.metric, pct: f.pct, floor: f.floor, zone: 'fail' });
+      }
     } else {
-      label = `${RED}FAIL (${deltaStr})${RESET}`;
+      log(`${DIM}  All files at or above their floor.${RESET}`);
     }
-    console.log(`  ${r.metric.padEnd(12)} ${(r.base + '%').padStart(10)} ${(r.cur + '%').padStart(10)}  ${label}`);
   }
 
-  console.log('─'.repeat(56));
+  emit({
+    event: 'summary',
+    exitCode,
+    totals: totals.map(t => ({ metric: t.metric, pct: t.pct, zone: t.zone })),
+    perFileFailures: perFileFailures.length,
+    perFile,
+  });
 
-  if (hardCount > 0) {
-    const reason = strict
-      ? `(strict mode — any decrease fails)`
-      : `(drop of ≥ ${softThreshold.toFixed(2)}%)`;
-    console.log(`\n${RED}${BOLD}RATCHET FAILED${RESET} — ${hardCount} metric(s) in hard zone ${reason}.`);
-    console.log('Write more tests or revert the change that lowered coverage.\n');
+  if (exitCode !== 0) {
+    log(`\n${RED}${BOLD}RATCHET FAILED${RESET} — at least one metric below floor.`);
+    log('Add tests for the regressed area, or adjust coverage-thresholds.json with justification.\n');
     process.exit(1);
-  } else if (softCount > 0) {
-    console.log(`\n${YELLOW}${BOLD}RATCHET OK${RESET} ${YELLOW}(advisory: ${softCount} metric(s) down but within ±${softThreshold.toFixed(2)}%)${RESET}`);
-    console.log(`${YELLOW}Drift is non-blocking. Pass --strict for zero-tolerance enforcement.${RESET}\n`);
-    process.exit(0);
-  } else {
-    console.log(`\n${GREEN}${BOLD}RATCHET OK${RESET}`);
-    const improved = rows.some(r => r.diff > 0);
-    if (improved) {
-      console.log(`${YELLOW}Tip: run "node scripts/coverage-ratchet.mjs --update" to tighten the baseline.${RESET}`);
-    }
-    console.log();
-    process.exit(0);
   }
+
+  const allAtGoal = totals.every(t => t.zone === 'at-goal');
+  const anyBelowTarget = totals.some(t => t.zone === 'below-target');
+  if (allAtGoal) {
+    log(`\n${GREEN}${BOLD}RATCHET OK${RESET} — all metrics at or above goal (${totals[0].goal}%+).\n`);
+  } else if (anyBelowTarget) {
+    log(`\n${YELLOW}${BOLD}RATCHET OK${RESET} ${YELLOW}(below target on at least one metric — informational only)${RESET}\n`);
+  } else {
+    log(`\n${GREEN}${BOLD}RATCHET OK${RESET}\n`);
+  }
+  process.exit(0);
 }
