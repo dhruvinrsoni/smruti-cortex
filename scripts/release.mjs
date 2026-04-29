@@ -281,6 +281,9 @@ if (DRY_RUN) {
 console.log(`${BOLD}═══ STEP 4: Write Disk Changes ═══${RESET}\n`);
 
 const submissionDocPath = resolve(ROOT, `docs/store-submissions/v${newVersion}-chrome-web-store.md`);
+// Hoisted out of the Step 4 try-block so Step 7's commit body can reuse it
+// without re-reading and re-parsing CHANGELOG.md.
+let changelogSection = '';
 
 function revertOnFailure(msg) {
   console.error(`\n${RED}❌ ${msg}${RESET}`);
@@ -350,7 +353,7 @@ try {
   }
 
   const today = new Date().toISOString().split('T')[0];
-  let changelogSection = `## [${newVersion}] — ${today}\n\n`;
+  changelogSection = `## [${newVersion}] — ${today}\n\n`;
 
   if (categorized.feat.length) {
     changelogSection += '### Features\n' + categorized.feat.map(m => `- ${m}`).join('\n') + '\n\n';
@@ -430,12 +433,36 @@ if (existsSync(submissionDocPath)) {
 }
 run(`git add ${commitFiles.join(' ')}`);
 
-let commitMsg = `chore: release v${newVersion}`;
+// Build a richer commit body so `git log v<X>` and `gh release view v<X>`
+// give the operator the categorized excerpt without forcing them to crack
+// open CHANGELOG.md. The release-notes section we just generated is already
+// in `changelogSection`. Stripped of the "## [X.Y.Z] - date" header line
+// (which is redundant with the commit subject), it slots in cleanly.
+const bodyExcerpt = changelogSection
+  .replace(/^## \[.*?\].*?\n\n/, '')
+  .trimEnd();
+
+const commitMsgLines = [
+  `chore: release v${newVersion}`,
+  '',
+  bodyExcerpt,
+];
 if (SKIP_E2E) {
-  commitMsg += '\n\n[ship-override: skip-e2e]';
+  commitMsgLines.push('', '[ship-override: skip-e2e]');
 }
-run(`git commit -m "${commitMsg}" --no-verify`);
-console.log(`${GREEN}✅ Release commit created${RESET}`);
+
+// Use -F + temp file: the changelog excerpt can contain backticks, quotes,
+// dashes, and shell metacharacters that don't survive `-m "..."` cleanly,
+// especially through PowerShell's quoting. Temp file is the only reliable
+// cross-platform path. Always best-effort cleaned up.
+const commitMsgFile = resolve(ROOT, '.release-commit-msg.tmp');
+writeFileSync(commitMsgFile, commitMsgLines.join('\n') + '\n');
+try {
+  run(`git commit -F "${commitMsgFile}" --no-verify`);
+  console.log(`${GREEN}✅ Release commit created (with categorized excerpt)${RESET}`);
+} finally {
+  try { unlinkSync(commitMsgFile); } catch { /* best effort */ }
+}
 
 // ===== Step 8: Tag, push, GitHub Release =====
 console.log(`\n${BOLD}═══ STEP 8: Tag + Push + GitHub Release ═══${RESET}\n`);
