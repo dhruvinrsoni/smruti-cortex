@@ -228,10 +228,15 @@ if (releaseMode) {
   //     operator still wants to enforce. Only the public-store-reachable
   //     probe inside store-check is genuinely network-bound; --no-remote
   //     skips just that probe.
+  // Forward --strict so that release-gate calls promote WARNs (release zip
+  // missing, CWS unreachable, etc.) into FAILs. Standalone `npm run verify`
+  // keeps the lenient default unless the operator passes --strict explicitly.
+  const storeStrict = strictMode ? ' -- --strict' : '';
   if (noNetwork) {
-    await step('Store check (manifest <-> doc parity, offline)', 'npm run store check -- --no-remote');
+    const storeFlags = strictMode ? ' -- --no-remote --strict' : ' -- --no-remote';
+    await step('Store check (manifest <-> doc parity, offline)', `npm run store check${storeFlags}`);
   } else {
-    await step('Store check (manifest <-> doc parity)', 'npm run store check');
+    await step('Store check (manifest <-> doc parity)', `npm run store check${storeStrict}`);
   }
 
   check('Version sync (package.json <-> manifest.json)', () => {

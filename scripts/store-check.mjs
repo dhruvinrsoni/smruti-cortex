@@ -55,6 +55,11 @@ const args = process.argv.slice(2);
 const JSON_MODE = args.includes('--json');
 const INIT_MODE = args.includes('--init');
 const NO_REMOTE = args.includes('--no-remote');
+// --strict promotes every WARN outcome to FAIL. Used by `npm run ship`'s
+// release gate (verify.mjs forwards its own --strict flag down here) so
+// that diagnostic [warn]s like "release zip exists" or "CWS unreachable"
+// hard-block a real release instead of silently sliding through.
+const STRICT_MODE = args.includes('--strict');
 const explicitVersion = args.find(a => /^\d+\.\d+\.\d+$/.test(a));
 
 /**
@@ -646,6 +651,19 @@ async function runChecks() {
   }
 
   // ---------- render ----------
+
+  // In --strict mode, every WARN is treated as a FAIL. Mutate the result rows
+  // (recording the original status under `originalStatus`) so the JSON output
+  // and the pretty render both reflect the promotion consistently.
+  if (STRICT_MODE) {
+    for (const r of results) {
+      if (r.status === 'warn') {
+        r.originalStatus = 'warn';
+        r.status = 'fail';
+        r.detail = `${r.detail} [strict: promoted from warn]`;
+      }
+    }
+  }
 
   const failed = results.filter(r => r.status === 'fail').length;
   const warned = results.filter(r => r.status === 'warn').length;
