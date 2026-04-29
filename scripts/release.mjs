@@ -52,7 +52,7 @@ const RESET = '\x1b[0m';
 // one-line change — just append to KNOWN_SUBCOMMANDS or KNOWN_FLAGS.
 // ─────────────────────────────────────────────────────────────────────────
 const KNOWN_SUBCOMMANDS = new Set(['patch', 'minor', 'major', 'check', 'resume']);
-const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run', '--json']);
+const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run', '--json', '--strict']);
 
 function printUsage(toStderr = true) {
   const out = toStderr ? console.error : console.log;
@@ -65,6 +65,7 @@ function printUsage(toStderr = true) {
   out('  --skip-e2e   skip E2E tests (emergency only; rejected by `check`)');
   out('  --dry-run    preview without pushing or tagging (release modes only)');
   out('  --json       emit NDJSON events on stdout (pretty output -> stderr)');
+  out('  --strict     promote verify WARNs to FAILs (always on for real releases)');
 }
 
 function parseArgv(rawArgs) {
@@ -100,6 +101,7 @@ const SUBCOMMAND = subcommands[0];
 const DRY_RUN = flags.has('--dry-run');
 const SKIP_E2E = flags.has('--skip-e2e');
 const JSON_MODE = flags.has('--json');
+const STRICT = flags.has('--strict');
 const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
 const CHECK_ONLY = SUBCOMMAND === 'check';
 const RESUME = SUBCOMMAND === 'resume';
@@ -520,10 +522,20 @@ if (SKIP_E2E) {
 // the operator (or CI) is already collecting from us. Without this, the
 // gate phase would silently fall back to pretty output and clobber the
 // JSON stream parsing.
+//
+// Always pass --strict (D3) when this is the gate phase of a real release
+// (not standalone `ship check`). A WARN from verify is "the next ship will
+// almost certainly fail somewhere" — the whole point of the gate is to
+// catch that BEFORE we start writing to disk. Standalone `ship check`
+// keeps the lenient default so an operator can quickly diagnose without
+// fighting the strict policy.
 const verifyArgs = [];
 verifyArgs.push('--release');
 if (SKIP_E2E) verifyArgs.push('--no-e2e');
 if (JSON_MODE) verifyArgs.push('--json');
+// Real releases (patch/minor/major) always run strict. Standalone `ship
+// check` only runs strict if the operator explicitly asked for it.
+if (BUMP_TYPE || STRICT) verifyArgs.push('--strict');
 const shipCheckCmd = `node ./scripts/verify.mjs ${verifyArgs.join(' ')}`;
 try {
   run(shipCheckCmd);

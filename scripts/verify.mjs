@@ -39,6 +39,11 @@ const e2eSlowMo = process.argv.includes('--e2e-slowmo');
 const releaseMode = process.argv.includes('--release');
 const noNetwork = process.argv.includes('--no-network');
 const jsonMode = process.argv.includes('--json');
+// Strict mode promotes every WARN to FAIL. release.mjs Step 2 always passes
+// --strict so a warning blocks a real release; standalone `npm run verify`
+// keeps the lenient default. Operators who want a paranoid pre-flight can
+// pass --strict explicitly.
+const strictMode = process.argv.includes('--strict');
 
 // In --json mode we keep stdout pristine for NDJSON events and route the
 // pretty human-readable output to stderr. CI scrapers can pipe stdout into
@@ -126,9 +131,18 @@ function recordCheck(name, t0, outcome, detail) {
     console.log(`${GREEN}  ✅ ${name}${RESET}${detail ? ' — ' + detail : ''}`);
     emitJson('check.end', { name, status: 'pass', ms, detail });
   } else if (outcome === 'warn') {
-    results.push({ name, passed: true, warned: true, ms });
-    console.log(`${YELLOW}  ⚠️  ${name}${RESET}${detail ? ' — ' + detail : ''}`);
-    emitJson('check.end', { name, status: 'warn', ms, detail });
+    if (strictMode) {
+      // Strict promotes WARN to FAIL: a release-blocking gate must not
+      // ship with any soft signals. The detail line gets a "[strict]"
+      // prefix so the operator can see the original outcome at a glance.
+      results.push({ name, passed: false, ms, promotedFromWarn: true });
+      console.log(`${RED}  ❌ ${name} [strict-promoted] — ${detail || 'warning'}${RESET}`);
+      emitJson('check.end', { name, status: 'fail', ms, detail, promotedFromWarn: true });
+    } else {
+      results.push({ name, passed: true, warned: true, ms });
+      console.log(`${YELLOW}  ⚠️  ${name}${RESET}${detail ? ' — ' + detail : ''}`);
+      emitJson('check.end', { name, status: 'warn', ms, detail });
+    }
   } else {
     results.push({ name, passed: false, ms });
     console.log(`${RED}  ❌ ${name} — ${detail}${RESET}`);
