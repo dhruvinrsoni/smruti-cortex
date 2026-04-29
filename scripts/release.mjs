@@ -32,11 +32,6 @@ import { readFileSync, writeFileSync, existsSync, unlinkSync, rmSync } from 'fs'
 import { resolve } from 'path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const DRY_RUN = process.argv.includes('--dry-run');
-const SKIP_E2E = process.argv.includes('--skip-e2e');
-const SUBCOMMAND = process.argv.find(a => ['patch', 'minor', 'major', 'check'].includes(a));
-const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
-const CHECK_ONLY = SUBCOMMAND === 'check';
 
 const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';
@@ -44,15 +39,69 @@ const YELLOW = '\x1b[33m';
 const BOLD = '\x1b[1m';
 const RESET = '\x1b[0m';
 
-if (!SUBCOMMAND) {
-  console.error('Usage: npm run ship <patch|minor|major|check> [--skip-e2e] [--dry-run]');
-  console.error('  patch   — bug fixes (8.0.0 → 8.0.1)');
-  console.error('  minor   — new features (8.0.0 → 8.1.0)');
-  console.error('  major   — breaking changes (8.0.0 → 9.0.0)');
-  console.error('  check   — pre-release health gate only (no disk writes, no tag, no push)');
-  console.error('  --skip-e2e  — skip E2E tests (emergency only)');
-  console.error('  --dry-run   — preview without pushing or tagging (release modes only)');
+// ─────────────────────────────────────────────────────────────────────────
+// Strict argv parser (B3)
+//
+// The dispatcher is the single source of truth for what the operator asked
+// for. Reject anything ambiguous up front rather than silently picking the
+// "first match wins" interpretation that the previous `argv.find(...)` soup
+// produced (e.g. `npm run ship patch minor` quietly chose `patch`).
+//
+// Recognised subcommands and flags live in the constants below. Adding a
+// new subcommand (e.g. `resume` in D1) or flag (e.g. `--strict` in D3) is a
+// one-line change — just append to KNOWN_SUBCOMMANDS or KNOWN_FLAGS.
+// ─────────────────────────────────────────────────────────────────────────
+const KNOWN_SUBCOMMANDS = new Set(['patch', 'minor', 'major', 'check']);
+const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run']);
+
+function printUsage(toStderr = true) {
+  const out = toStderr ? console.error : console.log;
+  out('Usage: npm run ship <patch|minor|major|check> [--skip-e2e] [--dry-run]');
+  out('  patch        bug fixes (8.0.0 -> 8.0.1)');
+  out('  minor        new features (8.0.0 -> 8.1.0)');
+  out('  major        breaking changes (8.0.0 -> 9.0.0)');
+  out('  check        pre-release health gate only (no disk writes, no tag, no push)');
+  out('  --skip-e2e   skip E2E tests (emergency only; rejected by `check`)');
+  out('  --dry-run    preview without pushing or tagging (release modes only)');
+}
+
+function parseArgv(rawArgs) {
+  const subcommands = [];
+  const flags = new Set();
+  const unknown = [];
+  for (const arg of rawArgs) {
+    if (KNOWN_SUBCOMMANDS.has(arg)) subcommands.push(arg);
+    else if (KNOWN_FLAGS.has(arg)) flags.add(arg);
+    else unknown.push(arg);
+  }
+  return { subcommands, flags, unknown };
+}
+
+const { subcommands, flags, unknown } = parseArgv(process.argv.slice(2));
+
+if (unknown.length > 0) {
+  console.error(`${RED}❌ Unknown argument(s): ${unknown.join(', ')}${RESET}`);
+  printUsage();
+  process.exit(2);
+}
+if (subcommands.length === 0) {
+  printUsage();
   process.exit(1);
+}
+if (subcommands.length > 1) {
+  console.error(`${RED}❌ Multiple subcommands provided (${subcommands.join(', ')}). Pick exactly one.${RESET}`);
+  printUsage();
+  process.exit(2);
+}
+
+const SUBCOMMAND = subcommands[0];
+const DRY_RUN = flags.has('--dry-run');
+const SKIP_E2E = flags.has('--skip-e2e');
+const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
+const CHECK_ONLY = SUBCOMMAND === 'check';
+
+if (CHECK_ONLY && DRY_RUN) {
+  console.error(`${YELLOW}⚠️  --dry-run is a no-op for \`ship check\` (check never writes anyway). Ignoring.${RESET}`);
 }
 
 function run(cmd, opts = {}) {
