@@ -3,12 +3,21 @@ name: coverage-policy
 description: Coverage thresholds, ratchet enforcement, exclusion rules, and test-writing obligations
 metadata:
   project: smruti-cortex
-  version: "9.1"
+  version: "9.2"
 ---
 
 # Coverage Policy
 
-## Thresholds (Hard Floor)
+Two complementary gates protect coverage in this repo:
+
+| Gate | Source | Role |
+|------|--------|------|
+| **Hard floor** | `vitest.config.ts` `coverage.thresholds` | Fails `npm run coverage` if coverage drops below the project's current achievement level. |
+| **Tiered ratchet** | `scripts/coverage-ratchet.mjs` + `coverage-thresholds.json` | Tier feedback (floor / target / goal) and optional per-file modulewise enforcement. |
+
+## Vitest Hard Floor (current achievement level)
+
+These mirror approximately where the repo sits today and stop noisy regressions:
 
 | Metric     | Minimum |
 |------------|---------|
@@ -17,17 +26,33 @@ metadata:
 | Functions  | 95%     |
 | Statements | 95%     |
 
-These are enforced by `vitest.config.ts` `coverage.thresholds` and the ratchet script.
+## Tiered Ratchet (long-term floors + visibility)
 
-## Ratchet Rule
+Coverage will drift down naturally as code grows; the ratchet is here to shout when a metric falls **off a cliff**, not when it dips by 0.10%. It uses absolute tiered floors:
 
-Coverage can go **up** but never **down**. The file `coverage-baseline.json` at repo root records the current floor for each metric.
+| Tier   | Default | Meaning |
+|--------|---------|---------|
+| floor  | 70      | **FAIL below this.** Market practice; below this is unacceptable. |
+| target | 80      | Industry standard; informational only. |
+| goal   | 90      | Best practice; informational only. |
 
-- `node scripts/coverage-ratchet.mjs` — compares current coverage to baseline. Exits 1 on regression.
-- `node scripts/coverage-ratchet.mjs --update` — tightens the baseline to current values. Only run after adding tests.
-- The ratchet runs inside `npm run verify` and the pre-commit hook.
+Defaults are baked into the script. To override or add per-directory floors, edit `coverage-thresholds.json` at the repo root:
 
-**NEVER lower values in `coverage-baseline.json` without a documented justification in the commit message.**
+```json
+{
+  "default": {
+    "floor":  { "lines": 70, "branches": 70, "functions": 70, "statements": 70 },
+    "target": { "lines": 80, "branches": 80, "functions": 80, "statements": 80 },
+    "goal":   { "lines": 90, "branches": 90, "functions": 90, "statements": 90 }
+  },
+  "perDir": [
+    { "path": "src/background/search/",
+      "floor": { "lines": 90, "branches": 85, "functions": 90, "statements": 90 } }
+  ]
+}
+```
+
+Per-directory overrides only affect the `floor` tier (target/goal stay default) — keeps the config small.
 
 ## Exclusion Policy
 
@@ -60,7 +85,10 @@ Before refactoring any file:
 ## Commands
 
 ```bash
-npm run coverage                            # run tests + generate coverage
-node scripts/coverage-ratchet.mjs           # check against baseline
-node scripts/coverage-ratchet.mjs --update  # tighten baseline
+npm run coverage                              # vitest + summary report
+node scripts/coverage-ratchet.mjs             # totals against tiered floors
+node scripts/coverage-ratchet.mjs --per-file  # also enforce per-file floors
+node scripts/coverage-ratchet.mjs --json      # NDJSON for CI
 ```
+
+The ratchet runs inside `npm run verify` (totals only) and is wired into the release pipeline.

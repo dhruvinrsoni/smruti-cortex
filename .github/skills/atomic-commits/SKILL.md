@@ -17,7 +17,7 @@ metadata:
 1. `git status` — verify only relevant files are staged.
 2. `git diff --staged` — review every line that will be committed.
 3. `npm run coverage` — all tests must pass and coverage must not regress.
-4. `node scripts/coverage-ratchet.mjs` — confirm no metric dropped.
+4. `node scripts/coverage-ratchet.mjs` — confirm no metric is below floor (70).
 
 ## Commit Message Format
 
@@ -39,7 +39,7 @@ type(scope): concise why-description
 Examples:
 - `test(service-worker): characterize message dispatch for all known types`
 - `refactor(background): extract Port interfaces for database and ollama`
-- `chore: ratchet coverage thresholds to 95/90/95/95`
+- `chore: raise per-directory coverage floor for src/background/search/ to 90`
 
 ## Forbidden Operations
 

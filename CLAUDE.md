@@ -113,7 +113,7 @@ One-paragraph description of every script in `scripts/`. Quick-reference for whe
 
 **`scripts/package.mjs`** — zips `dist/` into `release/zips/smruti-cortex-vX.Y.Z.zip`. Called after `build` by `npm run package`.
 
-**`scripts/coverage-ratchet.mjs`** — graduated coverage drift policy. Compares current coverage against checked-in baseline; tiny drift is advisory, big drops fail. Called inside verify.mjs.
+**`scripts/coverage-ratchet.mjs`** — absolute tiered coverage floors (70 / 80 / 90 by default). Fails only when a metric falls below the floor; target/goal tiers are informational. Optional `coverage-thresholds.json` overrides the defaults and adds per-directory floor overrides. Called inside verify.mjs.
 
 **`scripts/benchmark-performance.mjs`** — bundle size threshold checker. Called inside `verify.mjs --release`.
 
@@ -308,9 +308,9 @@ Then:
 Hard rules that apply to **every** code change — human or AI. These are non-negotiable.
 
 ### Coverage
-- **95% lines / 90% branches / 95% functions / 95% statements** — enforced by `vitest.config.ts` thresholds and the ratchet script.
-- Coverage must **never decrease**. The ratchet (`scripts/coverage-ratchet.mjs`) blocks commits that lower any metric.
-- Run `npm run coverage` before every commit. Run `node scripts/coverage-ratchet.mjs` to verify.
+- **vitest hard floor**: 95 / 90 / 95 / 95 (lines / branches / functions / statements) — fails `npm run coverage` if any metric drops below the project's current achievement level.
+- **Tiered ratchet** (`scripts/coverage-ratchet.mjs`): absolute floors of 70 / 80 / 90 (floor / target / goal). Only the **floor** can fail a build; target/goal tiers are informational. Override or add per-directory floors via `coverage-thresholds.json`.
+- Run `npm run coverage` before every commit. Run `node scripts/coverage-ratchet.mjs` (or `--per-file` for modulewise) to verify the tiers.
 - See `.github/skills/coverage-policy/SKILL.md` for exclusion rules and characterization-test-first pattern.
 
 ### SOLID Architecture
