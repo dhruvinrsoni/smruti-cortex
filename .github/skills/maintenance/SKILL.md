@@ -251,6 +251,121 @@ Each layer adds exactly one concern. Lower layers never depend on upper layers.
 
 ---
 
+## Issue Triage — Ranking Reports
+
+The in-extension Report ranking-issue button (popup footer + quick-search
+overlay) files GitHub issues in a dedicated silo so the maintainer's
+primary backlog stays uncluttered. Three GitHub Actions and one
+client-side floodgate keep the silo healthy without daily intervention.
+
+### Triage URL (bookmark this)
+
+The maintainer-only filter that hides everything except live, un-triaged
+ranking reports:
+
+```
+https://github.com/dhruvinrsoni/smruti-cortex/issues?q=is%3Aopen+is%3Aissue+label%3Aranking-bug+label%3Aneeds-triage
+```
+
+Save it. Skim once a week, more often if D5's rate limit is loosened.
+Anything legitimate gets repriced (`priority: high|medium|low` strips it
+out of the stale workflow's reaper too); anything bogus gets closed.
+
+### Label Family
+
+| Label | Source | Meaning |
+|-------|--------|---------|
+| `ranking-bug` | Extension `ranking-report.ts` + Issue Form template | Every report-button-filed issue carries this. Used by all three workflows as their scope filter. |
+| `auto-report` | Extension only (PAT path *and* URL fallback in `ranking-report.ts`) | Distinguishes "filed by clicking the button" from "filed by hand via the form". Workflows treat them identically; the label exists for human triage signal. |
+| `sink: ranking-reports` | Extension + triage workflow | The actual silo marker. Filtering on this label keeps ranking issues out of any "all open" view that excludes it. |
+| `needs-triage` | Triage workflow + Issue Form default | Cleared by the maintainer once the report has been read. Powers the triage URL above. |
+| `duplicate?` | Dedupe workflow | Question-marked deliberately — the workflow proposes, the maintainer disposes. Don't auto-close on this label. |
+| `priority: high\|medium\|low` | Maintainer only | Exempts an issue from the stale reaper. Apply to anything you actually plan to act on. |
+| `pinned` | Maintainer only | Same exemption as priority labels. Use for canonical "we know about this, here's the master thread" issues. |
+
+Source of truth for label colours and descriptions: `.github/labels.yml`.
+Sync with `bash .github/tools/sync-labels.sh` (requires `gh` auth).
+
+### Workflows
+
+All three live in `.github/workflows/` and only act on issues already
+tagged `ranking-bug`. Safe to land/touch independently — none of them
+read or write any other label family.
+
+1. **`triage-ranking-reports.yml`** (D2)
+   - Trigger: `issues` opened/labeled.
+   - Adds `needs-triage` + `sink: ranking-reports` defensively (no-op if
+     already present from the extension's URL fallback path).
+   - Posts a one-shot orientation comment so a hand-filed report (no
+     `auto-report` label) gets the same maintainer expectations as an
+     auto-filed one.
+   - Idempotent via a marker comment.
+
+2. **`stale-ranking-reports.yml`** (D3)
+   - Trigger: cron, weekly Mon 04:00 UTC.
+   - Marks stale at 60d, closes at 90d. Caps at 50 ops per run.
+   - Exempts `priority: high|medium|low` and `pinned`.
+   - User-facing copy points back at the triage URL above.
+
+3. **`dedupe-ranking-reports.yml`** (D4)
+   - Trigger: `issues` opened/labeled.
+   - Parses the title shape the extension emits:
+     `[Ranking] "<query>" — <N> results, sort=<mode> (v<x.y>.<z>)`
+   - Dedupe key: `(query, sort, major.minor)` — patch is excluded.
+   - On match, posts `Possible duplicate of #N` and adds `duplicate?`.
+     Maintainer confirms and closes manually.
+   - Idempotent via a marker comment. Tolerates `--`, `–`, `—`.
+   - Hand-filed reports that don't match the canonical title shape are
+     skipped silently — humans dedupe themselves better than regex.
+
+### Kill Switch / Rate Limit (D5)
+
+Two-layered floodgate at the source:
+
+- **Setting `reportButtonEnabled`** (default `true`).
+  - Hides the Report button on both popup and quick-search overlay when
+    flipped to `false`. Defensive re-check in the click handler closes
+    the SETTINGS_CHANGED-vs-render race.
+  - **Maintainer-only kill switch.** No UI surface — flip via the debug
+    page or service worker console:
+
+    ```js
+    // From the service worker DevTools console (chrome://serviceworker-internals)
+    chrome.storage.local.get('smrutiCortexSettings', ({ smrutiCortexSettings }) => {
+      chrome.storage.local.set({
+        smrutiCortexSettings: { ...smrutiCortexSettings, reportButtonEnabled: false },
+      });
+    });
+    ```
+
+  - When to flip: a sustained burst of low-quality / spam reports after
+    a release. The triage URL above will spike well above its usual
+    weekly cadence.
+  - Restoring: same snippet with `reportButtonEnabled: true`.
+
+- **5/24h sliding-window rate limit** (`src/shared/report-rate-limit.ts`).
+  - Per-user, stored in `chrome.storage.local`. Survives browser
+    restart (the maintainer's inbox doesn't reset at midnight).
+  - Records the press *eagerly* in the click handler, before the chooser
+    opens, so a rapid double-click cannot burst-file two reports.
+  - Fails open on storage errors — never silently kills the debug
+    channel.
+  - To loosen / tighten: edit `MAX_REPORTS_PER_WINDOW` and `WINDOW_MS`
+    constants in the module. Don't add a setting; user-facing knobs
+    defeat the floodgate.
+
+### Triage Cadence
+
+- **Weekly**: open the triage URL, skim everything tagged
+  `needs-triage`. Tag with `priority:` if real, close as
+  `not-planned` if not.
+- **Monthly**: spot-check `duplicate?` labels — confirm or strip.
+- **On suspected abuse**: flip the kill switch (above), then open all
+  recent ranking-bug issues sorted by created-desc and bulk-close as
+  spam if appropriate.
+
+---
+
 ## Commit Convention
 
 | Prefix | Meaning | Triggers |
