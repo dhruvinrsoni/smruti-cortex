@@ -73,6 +73,8 @@ import {
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import {
   type PaletteMode,
+  type PaletteRowAttrs,
+  type ResolvedCopyTarget,
   sanitizeQuery as sanitizeQueryPure,
   detectMode as detectModePure,
   clampWidth as clampWidthPure,
@@ -86,6 +88,7 @@ import {
   shouldSuppressDispatch,
   markDispatched,
   clearInflight,
+  resolvePaletteCopyTarget,
 } from './quick-search-utils';
 
 // Extend window interface for our extension
@@ -3159,6 +3162,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         li.dataset.tabId = String(tabId);
         li.dataset.windowId = String(windowId);
         if (tabUrl) {li.dataset.tabUrl = tabUrl;}
+        // dataset.title mirrors what resolvePaletteCopyTarget consumes; the
+        // existing dataset.tabUrl / dataset.tabId are kept for the click /
+        // switchToTab path.
+        if (tab.title) {li.dataset.title = tab.title;}
         li.addEventListener('click', (ev) => {
           const sk = (ev as MouseEvent).shiftKey;
           if (sk && tabUrl) {
@@ -3354,6 +3361,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       if (idx === 0) {li.classList.add('selected');}
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+      // dataset.url / dataset.title let resolvePaletteCopyTarget surface the
+      // row for Ctrl+C / Ctrl+M without needing to re-walk cachedBookmarks.
+      if (bm.url) {li.dataset.url = bm.url;}
+      if (bm.title) {li.dataset.title = bm.title;}
 
       const folderPath = (bm as unknown as { folderPath?: string }).folderPath || '';
       let qsBmFavUrl = '';
@@ -4526,30 +4537,79 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== COPY TO CLIPBOARD (using shared utility) =====
+  /**
+   * Read dataset attributes + visible title text off a palette row in a
+   * shape the pure resolvePaletteCopyTarget helper can consume. Kept here
+   * (next to the DOM access) so the resolver itself stays free of any
+   * HTMLElement references and can be unit-tested without jsdom for every
+   * mode.
+   */
+  function paletteRowAttrs(row: HTMLElement | null): PaletteRowAttrs | null {
+    if (!row) { return null; }
+    const ds = row.dataset || {};
+    const titleEl = row.querySelector('.tab-title') || row.querySelector('.bookmark-title');
+    return {
+      url: ds.url ?? null,
+      tabUrl: ds.tabUrl ?? null,
+      bookmarkUrl: ds.bookmarkUrl ?? null,
+      title: ds.title ?? null,
+      textTitle: titleEl?.textContent ?? null,
+    };
+  }
+
+  /**
+   * Resolve the {url, title} target for the row at `index` in the visible
+   * list, dispatching on the current palette mode. Returns null when the
+   * mode (e.g. /, >, ??) renders rows without a URL — copy paths then
+   * silently no-op rather than copying the wrong thing.
+   *
+   * For the history mode, falls back to currentResults[index] so the
+   * existing pre-palette behaviour is preserved bit-for-bit.
+   */
+  function resolveOverlayCopyTarget(index: number): ResolvedCopyTarget | null {
+    if (index < 0) { return null; }
+    if (currentMode === 'history') {
+      return resolvePaletteCopyTarget('history', null, currentResults[index] ?? null);
+    }
+    if (!resultsEl) { return null; }
+    const sel = getActiveItemSelector();
+    const rows = resultsEl.querySelectorAll(sel);
+    const row = rows[index] as HTMLElement | undefined;
+    return resolvePaletteCopyTarget(currentMode, paletteRowAttrs(row ?? null), null);
+  }
+
   function copyMarkdownLink(index: number): void {
-    const result = currentResults[index];
-    if (!result?.url) {return;}
-    
-    const markdown = createMarkdownLink(result);
-    
+    const target = resolveOverlayCopyTarget(index);
+    if (!target) {
+      // Palette mode without a URL (e.g. a / command without an open-URL action).
+      // Toast lets the user know the keystroke registered.
+      if (currentMode !== 'history') { showToast('Nothing to copy in this mode', 'info'); }
+      return;
+    }
+
+    const markdown = createMarkdownLink({ url: target.url, title: target.title } as SearchResult);
+
     navigator.clipboard.writeText(markdown).then(() => {
       showToast('📋 Copied markdown link!');
     }).catch(() => {
       showToast('❌ Copy failed', 'error');
     });
-    addRecentInteraction(result.url, result.title || '', 'copy').catch(e => log.debug('copyMarkdown', 'Failed to record interaction', e));
+    addRecentInteraction(target.url, target.title, 'copy').catch(e => log.debug('copyMarkdown', 'Failed to record interaction', e));
   }
 
   function copyHtmlLink(index: number): void {
-    const result = currentResults[index];
-    if (!result?.url) {return;}
-    
-    copyHtmlLinkToClipboard(result).then(() => {
+    const target = resolveOverlayCopyTarget(index);
+    if (!target) {
+      if (currentMode !== 'history') { showToast('Nothing to copy in this mode', 'info'); }
+      return;
+    }
+
+    copyHtmlLinkToClipboard({ url: target.url, title: target.title } as SearchResult).then(() => {
       showToast('📋 Copied HTML link!');
     }).catch(() => {
       showToast('📋 Copied (text only)', 'info');
     });
-    addRecentInteraction(result.url, result.title || '', 'copy').catch(e => log.debug('copyHtml', 'Failed to record interaction', e));
+    addRecentInteraction(target.url, target.title, 'copy').catch(e => log.debug('copyHtml', 'Failed to record interaction', e));
   }
 
   // ===== TAB NAVIGATION =====
@@ -4767,40 +4827,38 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
         break;
       
-      case KeyboardAction.OPEN_NEW_TAB:
-        if (currentResults.length > 0) {
-          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
-          if (idx >= 0) { openResult(idx, true, false); }
-        }
+      case KeyboardAction.OPEN_NEW_TAB: {
+        const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+        if (idx >= 0) { openOverlayTarget(idx, true, false); }
         break;
+      }
+
+      case KeyboardAction.OPEN_BACKGROUND_TAB: {
+        const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+        if (idx >= 0) { openOverlayTarget(idx, true, true); }
+        break;
+      }
+
+      case KeyboardAction.OPEN: {
+        const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+        if (idx >= 0) { openOverlayTarget(idx, false, false); }
+        break;
+      }
       
-      case KeyboardAction.OPEN_BACKGROUND_TAB:
-        if (currentResults.length > 0) {
-          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
-          if (idx >= 0) { openResult(idx, true, true); }
-        }
+      case KeyboardAction.COPY_MARKDOWN: {
+        // Palette modes (#, @, /, >, ??) leave currentResults empty but
+        // resolveOverlayCopyTarget reads from the visible row dataset, so
+        // we no longer bail on currentResults.length === 0.
+        const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+        if (idx >= 0) { copyMarkdownLink(idx); }
         break;
-      
-      case KeyboardAction.OPEN:
-        if (currentResults.length > 0) {
-          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
-          if (idx >= 0) { openResult(idx, false, false); }
-        }
+      }
+
+      case KeyboardAction.COPY_HTML: {
+        const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+        if (idx >= 0) { copyHtmlLink(idx); }
         break;
-      
-      case KeyboardAction.COPY_MARKDOWN:
-        if (currentResults.length > 0) {
-          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
-          if (idx >= 0) { copyMarkdownLink(idx); }
-        }
-        break;
-      
-      case KeyboardAction.COPY_HTML:
-        if (currentResults.length > 0) {
-          const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
-          if (idx >= 0) { copyHtmlLink(idx); }
-        }
-        break;
+      }
       
       case KeyboardAction.TAB_FORWARD:
         handleTabNavigation(false); // Forward tab
@@ -4836,6 +4894,46 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         // ignore focus errors
       }
     }
+  }
+
+  /**
+   * Open the row at `index` in the visible list, dispatching on palette mode.
+   *
+   * - History mode: keeps the existing `openResult` path so recent-search
+   *   tracking, masking, and recent-interaction recording all stay intact.
+   * - Palette modes (#, @, /, >, ??): synthesises a click on the focused row.
+   *   Each palette renderer (renderTabResults, renderBookmarkResults,
+   *   renderCommands, etc.) already attaches a click handler that knows how
+   *   to perform the per-mode action (chrome.tabs.update, window.open,
+   *   executeCommand, …). Re-using those handlers keeps a single source of
+   *   truth for the open semantics — Enter and the mouse must do the same
+   *   thing or users get confused.
+   *
+   * For modifier-aware opens (newTab / background) on palette rows, we still
+   * dispatch the click; the renderer's handler may or may not honour them.
+   * Today only history rows track the modifiers, which matches user
+   * expectations (e.g. middle-click on an open tab doesn't make sense).
+   */
+  function openOverlayTarget(index: number, newTab: boolean, background: boolean = false): void {
+    if (currentMode === 'history') {
+      if (currentResults.length > 0) { openResult(index, newTab, background); }
+      return;
+    }
+    if (!resultsEl) { return; }
+    const sel = getActiveItemSelector();
+    const rows = resultsEl.querySelectorAll(sel);
+    const row = rows[index] as HTMLElement | undefined;
+    if (!row) { return; }
+    // Synthesise a click; modifier flags propagate so any future
+    // handler can read them off the event if needed.
+    row.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: newTab && !background,
+      metaKey: newTab && !background,
+      shiftKey: false,
+      button: background ? 1 : 0,
+    }));
   }
 
   function openResult(index: number, newTab: boolean, background: boolean = false): void {
@@ -4976,7 +5074,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         const sel = val.substring(start, end);
         if (sel.length > 0) {
           try { navigator.clipboard.writeText(sel); showToast('📋 Copied'); } catch { showToast('Copy failed', 'error'); }
-        } else if (currentResults.length > 0) {
+        } else {
+          // Palette modes (#, @, /, >, ??) leave currentResults empty —
+          // copyHtmlLink resolves the row from the visible DOM in those modes.
+          // For history mode it falls back to currentResults internally.
           copyHtmlLink(selectedIndex >= 0 ? selectedIndex : 0);
         }
         return;
@@ -5011,9 +5112,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       // Ctrl+M => Copy markdown link
       if (lk === 'm') {
-        if (currentResults.length > 0) {
-          copyMarkdownLink(selectedIndex >= 0 ? selectedIndex : 0);
-        }
+        // Same palette-aware reasoning as Ctrl+C above.
+        copyMarkdownLink(selectedIndex >= 0 ? selectedIndex : 0);
         return;
       }
 

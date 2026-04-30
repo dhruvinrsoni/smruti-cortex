@@ -65,6 +65,96 @@ export function detectMode(value: string, settings: DetectModeSettings): DetectM
   return { mode: 'history', query: value };
 }
 
+/**
+ * Pure resolver for "what URL+title should Ctrl+C / Ctrl+M / Open copy?"
+ * given a snapshot of the focused row across palette modes.
+ *
+ * Why this exists: the overlay's copy + open actions historically read from
+ * `currentResults[idx]`, which is only populated for the history mode.
+ * In palette modes (`#` bookmarks, `@` tabs, `/` `>` `??` commands /
+ * websearch), `currentResults` stays empty, so Ctrl+C silently failed
+ * even though a row was visibly selected. This helper centralises the
+ * "what does the user mean by 'copy this'?" decision so call sites can
+ * just hand off DOM dataset attributes + a history fallback and get back
+ * a normalised `{ url, title }` (or `null` for "nothing meaningful to copy",
+ * e.g. a command-palette action without a URL).
+ *
+ * Resolution order is intentional:
+ *   1. Explicit `url` dataset attribute (added by bookmark/tab renderers).
+ *   2. `tabUrl` dataset (existing tab-row attribute, kept for backwards compat).
+ *   3. `bookmarkUrl` dataset (kept for backwards compat).
+ *   4. `historyResult.url` fallback when the mode is history and no row attrs.
+ *
+ * Title resolution:
+ *   1. `title` dataset (added by bookmark renderer).
+ *   2. `textTitle` (callers should pass the `.tab-title` / `.bookmark-title`
+ *       text content so we don't depend on jsdom in tests).
+ *   3. `historyResult.title` fallback for history mode.
+ */
+export interface PaletteRowAttrs {
+  /** Generic URL attribute set by render-time on bookmark / future palette rows. */
+  url?: string | null;
+  /** Existing tab-row attribute (`li.dataset.tabUrl`). */
+  tabUrl?: string | null;
+  /** Reserved for future: bookmark renderer may use this if `url` is taken. */
+  bookmarkUrl?: string | null;
+  /** Generic title attribute set by render-time on bookmark / future palette rows. */
+  title?: string | null;
+  /** Visible row title text (e.g. `.tab-title` text content). */
+  textTitle?: string | null;
+}
+
+export interface PaletteHistoryResult {
+  url?: string;
+  title?: string;
+}
+
+export interface ResolvedCopyTarget {
+  url: string;
+  title: string;
+}
+
+/**
+ * @param mode - current palette mode driving the visible list
+ * @param rowAttrs - attributes of the focused/selected row in the palette list,
+ *                    or null when no row is selected (history mode then falls
+ *                    back to `historyResult`).
+ * @param historyResult - the `currentResults[idx]` entry for history mode.
+ *                         Ignored in non-history modes (those never populate
+ *                         `currentResults`).
+ * @returns `{ url, title }` for the row to copy/open, or `null` when there's
+ *           nothing meaningful to act on (caller should toast "Nothing to copy"
+ *           or silently no-op).
+ */
+export function resolvePaletteCopyTarget(
+  mode: PaletteMode,
+  rowAttrs: PaletteRowAttrs | null,
+  historyResult: PaletteHistoryResult | null,
+): ResolvedCopyTarget | null {
+  // History mode: prefer the selected row's data attrs if rendered with them;
+  // otherwise fall back to the historyResult passed in (the legacy path).
+  if (mode === 'history') {
+    if (rowAttrs) {
+      const url = (rowAttrs.url || rowAttrs.tabUrl || rowAttrs.bookmarkUrl || '').trim();
+      if (url) {
+        const title = (rowAttrs.title || rowAttrs.textTitle || '').trim();
+        return { url, title };
+      }
+    }
+    if (historyResult?.url) {
+      return { url: historyResult.url, title: historyResult.title || '' };
+    }
+    return null;
+  }
+
+  // All non-history palette modes resolve from the visible row only.
+  if (!rowAttrs) { return null; }
+  const url = (rowAttrs.url || rowAttrs.tabUrl || rowAttrs.bookmarkUrl || '').trim();
+  if (!url) { return null; } // command/websearch rows without a URL: caller no-ops
+  const title = (rowAttrs.title || rowAttrs.textTitle || '').trim();
+  return { url, title };
+}
+
 /** Clamp a width value between min and a viewport-relative max. */
 export function clampWidth(w: number, min: number, viewportWidth: number): number {
   const maxW = viewportWidth * 0.92;

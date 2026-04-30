@@ -13,6 +13,7 @@ import {
   markDispatched,
   clearInflight,
   createDispatchGuardState,
+  resolvePaletteCopyTarget,
   DEFAULT_INFLIGHT_MAX_MS,
   RAPID_REPEAT_WINDOW_MS,
   type DetectModeSettings,
@@ -407,5 +408,160 @@ describe('dispatch guard', () => {
     markDispatched(state, key, 1000);
     expect(shouldSuppressDispatch(state, key, 1300, 200).suppress).toBe(false);
     expect(shouldSuppressDispatch(state, key, 1150, 200).suppress).toBe(true);
+  });
+});
+
+describe('resolvePaletteCopyTarget', () => {
+  describe('history mode', () => {
+    it('returns the historyResult when no row attrs are passed (legacy currentResults path)', () => {
+      const target = resolvePaletteCopyTarget(
+        'history',
+        null,
+        { url: 'https://example.com/a', title: 'Example A' },
+      );
+      expect(target).toEqual({ url: 'https://example.com/a', title: 'Example A' });
+    });
+
+    it('returns null when both rowAttrs and historyResult are absent', () => {
+      expect(resolvePaletteCopyTarget('history', null, null)).toBeNull();
+    });
+
+    it('returns null when historyResult has no URL (we never copy a title-only row)', () => {
+      expect(
+        resolvePaletteCopyTarget('history', null, { title: 'No URL', url: undefined }),
+      ).toBeNull();
+    });
+
+    it('prefers rowAttrs.url over historyResult when both supplied (focused-row wins over array index)', () => {
+      const target = resolvePaletteCopyTarget(
+        'history',
+        { url: 'https://row-attr.example/page', title: 'From row' },
+        { url: 'https://history.example/other', title: 'From currentResults' },
+      );
+      expect(target?.url).toBe('https://row-attr.example/page');
+      expect(target?.title).toBe('From row');
+    });
+
+    it('coerces missing title to empty string so callers don\'t emit "undefined"', () => {
+      const target = resolvePaletteCopyTarget(
+        'history',
+        null,
+        { url: 'https://example.com/a' },
+      );
+      expect(target).toEqual({ url: 'https://example.com/a', title: '' });
+    });
+  });
+
+  describe('bookmarks mode (#)', () => {
+    it('reads url+title from row dataset attributes', () => {
+      const target = resolvePaletteCopyTarget(
+        'bookmarks',
+        { url: 'https://news.ycombinator.com', title: 'Hacker News' },
+        null,
+      );
+      expect(target).toEqual({ url: 'https://news.ycombinator.com', title: 'Hacker News' });
+    });
+
+    it('falls back to bookmarkUrl + textTitle when generic dataset is empty', () => {
+      const target = resolvePaletteCopyTarget(
+        'bookmarks',
+        { bookmarkUrl: 'https://news.ycombinator.com', textTitle: 'Hacker News' },
+        null,
+      );
+      expect(target).toEqual({ url: 'https://news.ycombinator.com', title: 'Hacker News' });
+    });
+
+    it('returns null when no row attrs are passed (no row selected)', () => {
+      expect(resolvePaletteCopyTarget('bookmarks', null, null)).toBeNull();
+    });
+
+    it('ignores historyResult fallback (palette modes never read currentResults)', () => {
+      // Even if a stale currentResults entry is sitting around, bookmarks mode
+      // must not surface it — the user expects to copy the bookmark they see.
+      expect(
+        resolvePaletteCopyTarget(
+          'bookmarks',
+          null,
+          { url: 'https://stale.example', title: 'Stale' },
+        ),
+      ).toBeNull();
+    });
+  });
+
+  describe('tabs mode (@)', () => {
+    it('reads tabUrl + textTitle when those are the renderer\'s attributes', () => {
+      const target = resolvePaletteCopyTarget(
+        'tabs',
+        { tabUrl: 'https://tab.example/path', textTitle: 'Tab title' },
+        null,
+      );
+      expect(target).toEqual({ url: 'https://tab.example/path', title: 'Tab title' });
+    });
+
+    it('also accepts the generic url+title dataset (the post-A1 enrichment path)', () => {
+      const target = resolvePaletteCopyTarget(
+        'tabs',
+        { url: 'https://tab.example/path', title: 'Tab title' },
+        null,
+      );
+      expect(target).toEqual({ url: 'https://tab.example/path', title: 'Tab title' });
+    });
+
+    it('returns null when row exists but has no URL of any flavour', () => {
+      expect(resolvePaletteCopyTarget('tabs', { textTitle: 'Title only' }, null)).toBeNull();
+    });
+  });
+
+  describe('command-bearing modes (commands /, power >, websearch ??)', () => {
+    it('returns null for a command row without a URL (e.g. /toggle-something)', () => {
+      // Command rows that just dispatch an action should not be copyable —
+      // there's nothing useful to put on the clipboard.
+      expect(
+        resolvePaletteCopyTarget('commands', { textTitle: 'Toggle dark mode' }, null),
+      ).toBeNull();
+      expect(
+        resolvePaletteCopyTarget('power', { textTitle: 'Reload extension' }, null),
+      ).toBeNull();
+    });
+
+    it('surfaces the URL when a command row carries one (websearch result row)', () => {
+      const target = resolvePaletteCopyTarget(
+        'websearch',
+        { url: 'https://www.google.com/search?q=foo', title: 'Search Google: foo' },
+        null,
+      );
+      expect(target).toEqual({
+        url: 'https://www.google.com/search?q=foo',
+        title: 'Search Google: foo',
+      });
+    });
+
+    it('null row attrs means "no row selected" -> null', () => {
+      expect(resolvePaletteCopyTarget('commands', null, null)).toBeNull();
+      expect(resolvePaletteCopyTarget('websearch', null, null)).toBeNull();
+    });
+  });
+
+  describe('robustness', () => {
+    it('trims whitespace around url + title from dataset attributes', () => {
+      const target = resolvePaletteCopyTarget(
+        'bookmarks',
+        { url: '  https://example.com  ', title: '  Hello  ' },
+        null,
+      );
+      expect(target).toEqual({ url: 'https://example.com', title: 'Hello' });
+    });
+
+    it('treats whitespace-only URL as missing (returns null in palette mode)', () => {
+      expect(
+        resolvePaletteCopyTarget('bookmarks', { url: '   ', title: 'X' }, null),
+      ).toBeNull();
+    });
+
+    it('help mode falls into the non-history branch and rejects rows without URLs', () => {
+      // The help screen has no copyable URL — exercising the default branch
+      // keeps us honest if someone adds a new mode without thinking through copy.
+      expect(resolvePaletteCopyTarget('help', { textTitle: 'Help' }, null)).toBeNull();
+    });
   });
 });
