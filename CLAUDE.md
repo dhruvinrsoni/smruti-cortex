@@ -23,7 +23,8 @@ Navigate here first — don't broad-search when the location is known:
 | All 9 scorers | `src/background/search/scorers/` |
 | Tokenizer | `src/background/search/tokenizer.ts` |
 | Settings schema | `src/core/settings.ts` (single source of truth) |
-| IndexedDB layer | `src/background/database.ts` |
+| IndexedDB layer | `src/background/database.ts` (incl. `upsertRecentVisit` fast path) |
+| Recent-view freshness | `src/background/handlers/recent-merge.ts` + `src/shared/recent-history-cache.ts` (see `indexing` skill) |
 | Ollama client | `src/background/ollama-service.ts` |
 | Command palette registry | `src/shared/command-registry.ts` (all palette commands, tiers, modes) |
 | Web search module | `src/shared/web-search.ts` (`??` prefix engines, URL builders) |
@@ -145,6 +146,7 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | Skill | Load when... |
 |-------|-------------|
 | `search-engine` | Changing scorers, tokenizer, or ranking logic |
+| `indexing` | Touching the Recent-view freshness path (`onVisited` fast path, bulk reconciliation, live-merge fallback, warm cache) |
 | `ai-ollama` | Working on AI expansion, embeddings, circuit breaker |
 | `ui-components` | Touching popup, quick-search overlay, Shadow DOM |
 | `command-palette` | Adding/changing palette commands, prefix modes, web search engines |
