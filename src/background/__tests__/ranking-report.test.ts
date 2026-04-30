@@ -206,14 +206,51 @@ describe('buildGitHubIssueUrl', () => {
     expect(url.length).toBeLessThan(10000);
   });
 
-  it('includes query, version, and timestamp in stub body', () => {
+  it('points the URL at the dedicated Issue Form template', () => {
     recordSearchSnapshot(makeSnapshot());
     const report = generateRankingReport({ maskingLevel: 'none' })!;
     const url = buildGitHubIssueUrl(report);
     const params = new URLSearchParams(url.split('?')[1]);
-    expect(params.get('body')).toContain('wiki leave');
-    expect(params.get('body')).toContain('8.1.0');
+    expect(params.get('template')).toBe('ranking-report.yml');
+    // body= must NOT be set when template= is — GitHub silently drops
+    // it and sending one would put us back in the stub-body world the
+    // template was supposed to replace.
+    expect(params.get('body')).toBeNull();
     expect(params.get('labels')).toBe('ranking-bug,auto-report');
+  });
+
+  it('pre-fills Issue Form fields (query, sort-mode, extension-version)', () => {
+    recordSearchSnapshot(makeSnapshot());
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    const url = buildGitHubIssueUrl(report);
+    const params = new URLSearchParams(url.split('?')[1]);
+    expect(params.get('query')).toBe('wiki leave');
+    expect(params.get('extension-version')).toBe(report.version);
+    // best-match (snapshot default) maps to the dropdown's "Best Match"
+    // label. Other sortBy values map similarly — see sortByToTemplateLabel.
+    expect(params.get('sort-mode')).toBe('Best Match');
+  });
+
+  it('maps every sortBy value onto a valid dropdown label', () => {
+    const cases: Array<[string, string]> = [
+      ['most-recent', 'Most Recent'],
+      ['most-visited', 'Most Visited'],
+      ['alphabetical', 'Alphabetical'],
+      ['best-match', 'Best Match'],
+    ];
+    for (const [internal, label] of cases) {
+      recordSearchSnapshot(makeSnapshot({ sortBy: internal }));
+      const report = generateRankingReport({ maskingLevel: 'none' })!;
+      const params = new URLSearchParams(buildGitHubIssueUrl(report).split('?')[1]);
+      expect(params.get('sort-mode')).toBe(label);
+    }
+  });
+
+  it('falls back to Best Match for unknown sortBy values', () => {
+    recordSearchSnapshot(makeSnapshot({ sortBy: 'mystery-mode' }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    const params = new URLSearchParams(buildGitHubIssueUrl(report).split('?')[1]);
+    expect(params.get('sort-mode')).toBe('Best Match');
   });
 });
 

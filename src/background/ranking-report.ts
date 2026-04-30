@@ -23,6 +23,7 @@ export interface RankingReport {
     version: string;
     timestamp: string;
     query: string;
+    sortBy: string;
 }
 
 /**
@@ -51,9 +52,17 @@ export function generateRankingReport(options: RankingReportOptions): RankingRep
     const title = `[Ranking] "${maskedQueryForTitle}" — ${snapshot.resultCount} results (v${version})`;
     const body = formatReportBody(snapshot, version, timestamp, options);
 
-    // report.query is used by buildGitHubIssueUrl() to pre-fill the stub body.
-    // At level=full the stub must not leak the raw query either.
-    return { title, body, version, timestamp, query: maskedQueryForTitle };
+    // report.query and report.sortBy are used by buildGitHubIssueUrl()
+    // to pre-fill the Issue Form fields. At level=full the query must
+    // not leak the raw user input — we already masked it for the title.
+    return {
+        title,
+        body,
+        version,
+        timestamp,
+        query: maskedQueryForTitle,
+        sortBy: snapshot.sortBy,
+    };
 }
 
 /**
@@ -314,38 +323,57 @@ export async function createGitHubIssue(report: RankingReport): Promise<string> 
 }
 
 /**
+ * Map our internal sortBy values onto the dropdown labels declared in
+ * .github/ISSUE_TEMPLATE/ranking-report.yml. Issue-Form dropdowns reject
+ * pre-fill values that don't match an existing option exactly, so we
+ * normalise here once.
+ */
+function sortByToTemplateLabel(sortBy: string): string {
+    switch (sortBy) {
+        case 'best-match': return 'Best Match';
+        case 'most-recent': return 'Most Recent';
+        case 'most-visited': return 'Most Visited';
+        case 'alphabetical': return 'Alphabetical';
+        default: return 'Best Match';
+    }
+}
+
+/**
  * Build a pre-filled GitHub issue URL (fallback when no PAT).
- * The full report body is too large for URL params, so the URL only contains
- * a stub. The full report is copied to clipboard by the UI caller.
+ *
+ * Strategy: drive the dedicated `ranking-report.yml` Issue Form rather
+ * than dumping a stub body into a blank issue. The form gives us:
+ *   - Required `Query`, `Sort Mode`, `Ranking Problem` fields.
+ *   - A dedicated `Debug Data` textarea (id=debug-data, render: markdown)
+ *     so the user pastes the clipboard payload into a labelled box
+ *     instead of an unstructured blob.
+ *   - Default labels (ranking-bug, needs-triage) baked into the template
+ *     — we still send labels= explicitly so legacy URL-fallbacks
+ *     without a template id keep tagging issues consistently.
+ *
+ * URL params we set:
+ *   - title              → our auto-generated `[Ranking] "..." ...` title
+ *   - template           → ranking-report.yml (selects the form)
+ *   - labels             → comma-joined label set (defensive duplicate)
+ *   - query              → the masked query (form input id=query)
+ *   - sort-mode          → mapped dropdown label
+ *   - extension-version  → e.g. "9.2.0"
+ *
+ * We deliberately do NOT pass body= alongside template= — GitHub
+ * silently drops body= when template= is present, and the previous
+ * stub body confused users into thinking that was the only place to
+ * paste their clipboard.
  */
 export function buildGitHubIssueUrl(report: RankingReport): string {
     const baseUrl = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/new`;
 
-    const stubBody = [
-        '## Ranking Bug Report (Auto-generated)',
-        '',
-        `**Query:** \`${report.query}\``,
-        `**Version:** ${report.version}`,
-        `**Timestamp:** ${report.timestamp}`,
-        '',
-        '### Debug Data',
-        '',
-        '> **Paste the full report from your clipboard below this line.**',
-        '> It was auto-copied when you clicked the Report button.',
-        '',
-        '',
-        '',
-        '### What\'s Wrong with the Ranking?',
-        '',
-        '_Describe which results are misranked and where you expected them._',
-        '',
-        '',
-    ].join('\n');
-
     const params = new URLSearchParams({
+        template: 'ranking-report.yml',
         title: report.title,
-        body: stubBody,
         labels: 'ranking-bug,auto-report',
+        query: report.query,
+        'sort-mode': sortByToTemplateLabel(report.sortBy),
+        'extension-version': report.version,
     });
 
     return `${baseUrl}?${params.toString()}`;

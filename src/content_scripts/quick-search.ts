@@ -1552,7 +1552,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     titleEl.style.cssText = 'font-size:14px;font-weight:700;margin-bottom:8px;';
 
     const msg = document.createElement('div');
-    msg.textContent = 'A new GitHub issue will open. Paste the report into the "Debug Data" section, describe what\'s wrong, and submit.';
+    msg.textContent = 'A new GitHub issue form will open with most fields pre-filled. Paste your clipboard into the "Debug Data" textarea, describe what looks mis-ranked, and submit.';
     msg.style.cssText = 'font-size:12px;color:var(--text-secondary,#666);line-height:1.5;margin-bottom:16px;';
 
     const btnRow = document.createElement('div');
