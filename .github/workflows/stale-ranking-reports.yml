@@ -1,0 +1,78 @@
+name: Stale Ranking Reports
+
+# Purpose: Garbage-collect inactive `ranking-bug` issues so the silo
+# doesn't grow unbounded.
+#
+# Without this, an extension running in the wild can file ~5 reports
+# per user per day (the rate-limit ceiling from D5). At even 100 active
+# users that's ~500 issues/day — most of them likely duplicates or one-
+# offs. Without GC the silo becomes maintenance debt.
+#
+# Policy:
+#   - Stale after 60 days of inactivity.
+#   - Closed after 90 days (i.e. 30 more days as 'stale' to give the
+#     reporter a chance to reply).
+#   - Excludes anything a maintainer has already prioritised
+#     (`priority: high|medium|low`) or marked `pinned`. Those are
+#     either real bugs the maintainer plans to fix, or pinned for
+#     other reasons — never let the GC eat them.
+#   - Only touches `ranking-bug` issues. Other label families
+#     (bug / enhancement / etc.) keep the maintainer's existing
+#     manual triage cadence.
+
+on:
+  schedule:
+    # Mondays at 04:00 UTC — quiet hour, doesn't collide with the
+    # existing weekly security cron at 00:00 Mondays.
+    - cron: '0 4 * * 1'
+  workflow_dispatch: # manual run for one-off cleanups
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  stale:
+    name: Mark + close stale ranking reports
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Stale ranking reports
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Only act on issues, not PRs.
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+
+          # Issue lifecycle: 60d → stale, +30d → close.
+          days-before-issue-stale: 60
+          days-before-issue-close: 30
+
+          # Scope: only ranking-bug, never anything maintainer-prioritised.
+          any-of-issue-labels: 'ranking-bug'
+          exempt-issue-labels: 'priority: high,priority: medium,priority: low,pinned'
+
+          # User-facing copy.
+          stale-issue-label: 'stale'
+          stale-issue-message: >
+            👋 This ranking report has had no activity for 60 days. If
+            it's still relevant, please drop a comment to reset the
+            clock. Otherwise, this issue will be closed automatically
+            in 30 days. Maintainer triage of unprioritised ranking
+            reports is best-effort — see the
+            [ranking reports filter](https://github.com/${{ github.repository }}/issues?q=is%3Aissue+label%3Aranking-bug)
+            for the live list.
+          close-issue-message: >
+            ⌛ Closing this report due to 90 days of inactivity. If the
+            ranking issue still reproduces in the latest extension
+            version, please file a fresh report — the auto-generated
+            payload will be more useful with current code.
+
+          # Don't blast the API: ~50 op/day is plenty for our scale.
+          operations-per-run: 50
+
+          # Newest issues are most likely the worth-keeping ones.
+          ascending: false

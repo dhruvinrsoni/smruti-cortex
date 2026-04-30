@@ -1,0 +1,122 @@
+name: Dedupe Ranking Reports
+
+# Purpose: Flag likely-duplicate ranking-bug issues at file time so the
+# maintainer never has to manually skim past N copies of the same
+# 'random results for "s"' report.
+#
+# Dedupe key: (query, sort, major.minor) parsed from the issue title.
+# The extension's title shape (set in ranking-report.ts) is:
+#
+#   [Ranking] "<query>" — <N> results, sort=<mode> (v<major.minor.patch>)
+#
+# We deliberately key on major.minor (not the full version) because
+# patch releases shouldn't change ranking behaviour — if the same
+# (query, sort) on 9.2.0 vs 9.2.1 is filed twice they're duplicates.
+#
+# Behaviour on a new ranking-bug issue:
+#   - Parse title; abort cleanly if it doesn't match the canonical shape
+#     (e.g. somebody hand-filed via the form). No false positives in
+#     that case — humans dedupe themselves better than regex anyway.
+#   - Search open issues with the same label for an older title that
+#     normalises to the same key.
+#   - On match: comment `Possible duplicate of #N` and apply the
+#     `duplicate?` label so the maintainer can confirm/dismiss.
+#
+# Idempotent: gates on a marker string in the comment body; re-running
+# (e.g. on a labeled event) won't double-post.
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  dedupe:
+    name: Flag possible duplicates
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'ranking-bug')
+    timeout-minutes: 5
+
+    steps:
+      - name: Find and flag duplicates
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const title = process.env.ISSUE_TITLE || '';
+            const MARKER = '<!-- smruti-cortex:dedupe-ranking-reports:v1 -->';
+
+            // Parse: [Ranking] "<query>" — <N> results, sort=<mode> (v<x.y.z>)
+            // Tolerates straight quotes and the various dash glyphs the
+            // extension might end up emitting on different platforms.
+            const titlePattern =
+              /^\[Ranking\]\s+"([^"]+)"\s+[—–-]\s+\d+\s+results,\s+sort=([\w-]+)\s+\(v(\d+\.\d+)(?:\.\d+)?\)/;
+            const match = title.match(titlePattern);
+            if (!match) {
+              core.info(`Title does not match canonical shape; skipping dedupe. title=${title}`);
+              return;
+            }
+            const [, query, sortMode, majorMinor] = match;
+            const key = `${query}|${sortMode}|${majorMinor}`;
+            core.info(`Dedupe key: ${key}`);
+
+            // Idempotency: don't re-post if we already commented on this issue.
+            const ourComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100 },
+            );
+            if (ourComments.some(c => (c.body || '').includes(MARKER))) {
+              core.info('Dedupe comment already posted; skipping.');
+              return;
+            }
+
+            // Search open ranking-bug issues, oldest first (so the
+            // earliest occurrence becomes the canonical 'master' issue).
+            const candidates = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'ranking-bug',
+                sort: 'created',
+                direction: 'asc',
+                per_page: 100,
+              },
+            );
+
+            for (const issue of candidates) {
+              if (issue.number === issueNumber) { continue; }
+              if (issue.pull_request) { continue; } // shouldn't happen for label search but be safe
+              const m = (issue.title || '').match(titlePattern);
+              if (!m) { continue; }
+              const otherKey = `${m[1]}|${m[2]}|${m[3]}`;
+              if (otherKey !== key) { continue; }
+
+              core.info(`Possible duplicate found: #${issue.number}`);
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `${MARKER}\n👀 **Possible duplicate of #${issue.number}**\n\nKey: \`query="${m[1]}", sort=${m[2]}, version=${m[3]}.x\`. The dedupe workflow flagged this because the older issue shares the same query, sort mode, and minor version. Maintainer will confirm — feel free to add new repro details if you think this is genuinely different.`,
+              });
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ['duplicate?'],
+              });
+
+              return; // First (oldest) match wins; don't spam multiple comments.
+            }
+
+            core.info('No duplicates found.');
