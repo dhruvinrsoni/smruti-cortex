@@ -1,4 +1,4 @@
-### [9.3.0] — 2026-04-30
+## [9.3.0] — 2026-04-30
 
 ### Features
 - report-button kill switch + 5/24h client-side rate limit
