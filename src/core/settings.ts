@@ -40,6 +40,15 @@ export interface AppSettings {
     sortBy?: string;  // Sort order for results: 'best-match', 'most-recent', 'most-visited', 'alphabetical' (default: 'best-match')
     defaultResultCount?: number;  // Number of recent results to show when popup opens with no query (default: 50)
     showRecentHistory?: boolean;   // Show recent browsing history when input is empty (default: true)
+    /**
+     * Live-merge fallback for the popup's "Recent" view. When true,
+     * GET_RECENT_HISTORY merges the IndexedDB top-N with a
+     * `chrome.history.search` query for the last hour, sorted by lastVisit
+     * desc and deduplicated by URL (IDB row wins on conflict). Provides a
+     * safety net for the rare cases where the onVisited fast-path upsert
+     * loses a write (extension paused, IDB transient error). Default: true.
+     */
+    recentLiveMergeEnabled?: boolean;
     showRecentSearches?: boolean;  // Show recent search queries when input is empty (default: true)
     unifiedScroll?: boolean;       // Merge sections + results into single scroll (default: false)
     // Toolbar toggle chip bar — which toggles are visible on the main screen
@@ -174,6 +183,10 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     },
     
     showRecentHistory: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    recentLiveMergeEnabled: {
         default: true,
         validate: (val) => typeof val === 'boolean',
     },

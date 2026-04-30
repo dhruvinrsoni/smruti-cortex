@@ -27,17 +27,59 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
       const historyLimit = Math.min(Math.max(1, Number(msg.limit) || 50), MAX_HISTORY_LIMIT);
       log.debug('GET_RECENT_HISTORY', `Requested with limit: ${historyLimit}`);
       try {
-        const { getRecentIndexedItems } = await import('../database');
+        const { getRecentIndexedItems, getSetting } = await import('../database');
         const recentItems = await getRecentIndexedItems(historyLimit);
-        log.debug('GET_RECENT_HISTORY', `Completed, items: ${recentItems.length}`);
-        sendResponse({ results: recentItems });
+
+        // Live-merge fallback. Behind a setting (default true) so an
+        // operator can disable it without a code change if it ever causes
+        // grief. Bounded: a single chrome.history.search for the last hour,
+        // capped at `historyLimit` rows, with a 500 ms timeout. Any failure
+        // (timeout, missing API, exception) falls back silently to the
+        // IDB-only result so a degraded fallback can never turn into a
+        // user-visible error.
+        const liveMergeEnabled = await getSetting<boolean>('recentLiveMergeEnabled', true);
+        let finalItems: IndexedItem[] = recentItems;
+        if (liveMergeEnabled && typeof chrome !== 'undefined' && chrome.history?.search) {
+          try {
+            const liveItems = await Promise.race<chrome.history.HistoryItem[]>([
+              new Promise<chrome.history.HistoryItem[]>((resolve, reject) => {
+                try {
+                  chrome.history.search(
+                    {
+                      text: '',
+                      maxResults: historyLimit,
+                      startTime: Date.now() - 60 * 60 * 1000,
+                    },
+                    (results) => {
+                      const lastErr = chrome.runtime?.lastError;
+                      if (lastErr) {reject(new Error(lastErr.message));}
+                      else {resolve(results || []);}
+                    },
+                  );
+                } catch (err) { reject(err as Error); }
+              }),
+              new Promise<chrome.history.HistoryItem[]>((_, reject) =>
+                setTimeout(() => reject(new Error('chrome.history.search timeout')), 500),
+              ),
+            ]);
+            const { mergeRecentSources } = await import('./recent-merge');
+            finalItems = mergeRecentSources(recentItems, liveItems, historyLimit) as IndexedItem[];
+            log.debug('GET_RECENT_HISTORY', `Live merge: idb=${recentItems.length}, live=${liveItems.length}, merged=${finalItems.length}`);
+          } catch (mergeErr) {
+            log.warn('GET_RECENT_HISTORY', 'Live merge failed; falling back to IDB-only', errorMeta(mergeErr));
+            finalItems = recentItems;
+          }
+        }
+
+        log.debug('GET_RECENT_HISTORY', `Completed, items: ${finalItems.length}`);
+        sendResponse({ results: finalItems });
         // Warm the session cache so the next quick-search / popup open
         // can render these rows instantly without waiting for a new SW
         // cold start + IndexedDB round-trip. Fire-and-forget: cache
         // failures must not impact the user-visible response.
-        if (recentItems.length > 0) {
+        if (finalItems.length > 0) {
           void import('../../shared/recent-history-cache').then(
-            ({ setRecentHistoryCache }) => setRecentHistoryCache(recentItems, historyLimit),
+            ({ setRecentHistoryCache }) => setRecentHistoryCache(finalItems, historyLimit),
           ).catch(() => { /* module load failure is non-fatal */ });
         }
       } catch (error) {

@@ -30,7 +30,10 @@ vi.mock('../../database', () => ({
   getAllIndexedItems: vi.fn(async () => []),
   saveIndexedItem: vi.fn(async () => {}),
   getStorageQuotaInfo: vi.fn(async () => ({})),
-  getSetting: vi.fn(async () => 0),
+  // Default getSetting returns false so live-merge is OFF by default in
+  // tests that don't opt in. Tests that exercise the live-merge path
+  // override this per-call with mockResolvedValueOnce(true).
+  getSetting: vi.fn(async () => false),
   setSetting: vi.fn(async () => {}),
 }));
 
@@ -140,6 +143,88 @@ describe('registerSearchHandlers', () => {
       expect(res).toEqual({ results: [] });
       expect(setRecentHistoryCache).not.toHaveBeenCalled();
     });
+
+    it('does NOT call chrome.history.search when recentLiveMergeEnabled is false', async () => {
+      // Default getSetting() returns false in this suite. The handler
+      // must short-circuit before touching chrome.history at all so
+      // operators who disable the live-merge see exactly the IDB rows.
+      const { getRecentIndexedItems } = await import('../../database');
+      (getRecentIndexedItems as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{ url: 'https://idb.example', lastVisit: 1 }]);
+      const historySearch = vi.fn();
+      vi.stubGlobal('chrome', {
+        runtime: { getManifest: () => ({ version: '1.0.0' }), lastError: null },
+        history: { search: historySearch },
+      });
+
+      const res = await dispatch(registry, { type: 'GET_RECENT_HISTORY', limit: 5 });
+      await flushMicrotasks();
+
+      expect(res).toEqual({ results: [{ url: 'https://idb.example', lastVisit: 1 }] });
+      expect(historySearch).not.toHaveBeenCalled();
+    });
+
+    it('merges chrome.history.search results into the IDB rows when live-merge is enabled', async () => {
+      const { getRecentIndexedItems, getSetting } = await import('../../database');
+      (getRecentIndexedItems as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        { url: 'https://idb.example/p', title: 'IDB row', hostname: 'idb.example', visitCount: 1, lastVisit: 100, tokens: ['t'] },
+      ]);
+      (getSetting as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+      const liveRows = [
+        { url: 'https://live-only.example/p', title: 'Live only', lastVisitTime: 500 },
+        { url: 'https://idb.example/p', title: 'live-conflict', lastVisitTime: 600 }, // conflict; IDB wins, lastVisit advances
+      ];
+      const historySearch = vi.fn((_q: unknown, cb: (r: unknown[]) => void) => cb(liveRows));
+      vi.stubGlobal('chrome', {
+        runtime: { getManifest: () => ({ version: '1.0.0' }), lastError: null },
+        history: { search: historySearch },
+      });
+
+      const res = await dispatch(registry, { type: 'GET_RECENT_HISTORY', limit: 10 });
+      await flushMicrotasks();
+
+      expect(historySearch).toHaveBeenCalledTimes(1);
+      const results = (res as { results: Array<Record<string, unknown>> }).results;
+      expect(results.map(r => r.url)).toEqual([
+        'https://idb.example/p',     // lastVisit advanced to 600
+        'https://live-only.example/p', // lastVisit 500
+      ]);
+      expect(results[0].title).toBe('IDB row'); // IDB wins on field conflicts
+      expect(results[0].lastVisit).toBe(600);
+    });
+
+    it('falls back to IDB-only when chrome.history.search throws synchronously', async () => {
+      const { getRecentIndexedItems, getSetting } = await import('../../database');
+      const idbRows = [{ url: 'https://idb.example', title: 'idb', hostname: 'idb.example', visitCount: 1, lastVisit: 1, tokens: [] }];
+      (getRecentIndexedItems as ReturnType<typeof vi.fn>).mockResolvedValueOnce(idbRows);
+      (getSetting as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+      vi.stubGlobal('chrome', {
+        runtime: { getManifest: () => ({ version: '1.0.0' }), lastError: null },
+        history: { search: () => { throw new Error('history blocked'); } },
+      });
+
+      const res = await dispatch(registry, { type: 'GET_RECENT_HISTORY', limit: 10 });
+      await flushMicrotasks();
+
+      // IDB rows surface unchanged; the merge failure is silent.
+      expect((res as { results: unknown[] }).results).toEqual(idbRows);
+    });
+
+    it('falls back to IDB-only when chrome.history.search never invokes its callback (timeout)', async () => {
+      const { getRecentIndexedItems, getSetting } = await import('../../database');
+      const idbRows = [{ url: 'https://idb-timeout.example', title: 'idb', hostname: 'idb-timeout.example', visitCount: 1, lastVisit: 7, tokens: [] }];
+      (getRecentIndexedItems as ReturnType<typeof vi.fn>).mockResolvedValueOnce(idbRows);
+      (getSetting as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+      // Callback never called — the 500 ms internal timeout must fire.
+      vi.stubGlobal('chrome', {
+        runtime: { getManifest: () => ({ version: '1.0.0' }), lastError: null },
+        history: { search: vi.fn() },
+      });
+
+      const res = await dispatch(registry, { type: 'GET_RECENT_HISTORY', limit: 5 });
+      await flushMicrotasks();
+
+      expect((res as { results: unknown[] }).results).toEqual(idbRows);
+    }, 2000);
 
     it('response is sent before the cache write awaits, so cache latency cannot slow the consumer', async () => {
       const { getRecentIndexedItems } = await import('../../database');
