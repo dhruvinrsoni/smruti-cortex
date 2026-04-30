@@ -4,6 +4,7 @@ import {
   formatBytes,
   formatModelSize,
   buildHintMap,
+  shouldRefreshRecentAfterManualIndex,
   type DetectModeSettings,
 } from '../popup-utils';
 
@@ -152,5 +153,38 @@ describe('buildHintMap', () => {
     const map = buildHintMap(defaults);
     expect(map.get('gemma2')).toBe('1.6 GB · Google');
     expect(map.size).toBe(4);
+  });
+});
+
+describe('shouldRefreshRecentAfterManualIndex', () => {
+  it('returns true on a successful index that wrote new rows', () => {
+    expect(shouldRefreshRecentAfterManualIndex({ status: 'OK', added: 3, updated: 0, total: 3 })).toBe(true);
+  });
+
+  it('returns true on a successful index that only updated existing rows', () => {
+    // Updating lastVisit / visitCount on an existing row still shifts the
+    // sort order on the popup's "Recent" list, so we must re-fetch.
+    expect(shouldRefreshRecentAfterManualIndex({ status: 'OK', added: 0, updated: 5, total: 5 })).toBe(true);
+  });
+
+  it('returns true when total > 0 even if added/updated were not reported', () => {
+    // Defensive: older indexer responses may not break out added/updated.
+    expect(shouldRefreshRecentAfterManualIndex({ status: 'OK', total: 7 })).toBe(true);
+  });
+
+  it('returns false when the index reported success but found nothing to do', () => {
+    // No-op index: re-fetching would just repaint the same rows. Skip the
+    // round-trip so the popup doesn't flicker.
+    expect(shouldRefreshRecentAfterManualIndex({ status: 'OK', added: 0, updated: 0, total: 0 })).toBe(false);
+  });
+
+  it('returns false on an ERROR response regardless of counts', () => {
+    expect(shouldRefreshRecentAfterManualIndex({ status: 'ERROR', added: 5, total: 5, message: 'boom' })).toBe(false);
+  });
+
+  it('returns false on null / undefined / missing-status responses', () => {
+    expect(shouldRefreshRecentAfterManualIndex(null)).toBe(false);
+    expect(shouldRefreshRecentAfterManualIndex(undefined)).toBe(false);
+    expect(shouldRefreshRecentAfterManualIndex({} as unknown as Parameters<typeof shouldRefreshRecentAfterManualIndex>[0])).toBe(false);
   });
 });

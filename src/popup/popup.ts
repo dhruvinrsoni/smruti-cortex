@@ -53,6 +53,7 @@ import {
   formatBytes,
   formatModelSize,
   buildHintMap,
+  shouldRefreshRecentAfterManualIndex,
 } from './popup-utils';
 import {
   type SearchResult,
@@ -3937,6 +3938,20 @@ function initializePopup() {
               
               // Refresh storage quota display
               await fetchStorageQuotaInfo();
+            }
+
+            // The popup's main "Recent" list is fed by a previous
+            // GET_RECENT_HISTORY round-trip and stored in module-level
+            // resultsLocal. Without an explicit re-fetch the visible row
+            // order doesn't budge after a successful Index Now — the bug
+            // operators were reporting as "I clicked Index Now and nothing
+            // happened". The pure shouldRefreshRecentAfterManualIndex
+            // policy keeps this branch testable in isolation.
+            if (shouldRefreshRecentAfterManualIndex(resp)) {
+              try { await loadRecentHistory(); }
+              catch (refreshErr) {
+                logger.warn('settingsModal', 'Recent refresh after manual index failed', errorMeta(refreshErr));
+              }
             }
           } else {
             manualIndexFeedback.textContent = '✗ Indexing failed: ' + (resp?.message || 'Unknown error');

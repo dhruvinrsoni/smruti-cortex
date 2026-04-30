@@ -73,3 +73,36 @@ export function buildHintMap(defaults: Array<{ value: string; hint?: string }>):
   }
   return map;
 }
+
+/** Shape of a MANUAL_INDEX response from the service worker. */
+export interface ManualIndexResponse {
+  status?: 'OK' | 'ERROR' | string;
+  added?: number;
+  updated?: number;
+  total?: number;
+  duration?: number;
+  message?: string;
+}
+
+/**
+ * Decide whether the popup should re-fetch its "Recent" list after a
+ * MANUAL_INDEX round-trip. Pure policy function — no DOM, no Chrome APIs.
+ *
+ * Refresh only when the indexer reported success AND actually changed
+ * something. A no-op index (`status === 'OK'` with `total === 0` and
+ * `added === 0`) leaves IDB untouched, so re-running loadRecentHistory()
+ * would just repaint the same rows the popup already shows.
+ *
+ * Bug history: before this helper, the click handler in popup.ts updated
+ * feedback / quota / toast on success but never asked the popup to re-fetch
+ * the Recent list. Operators clicked "Index Now", saw the success toast,
+ * and wondered why the visible row order didn't budge. That was the
+ * primary symptom behind the v9.2.x "Recent looks stale" reports.
+ */
+export function shouldRefreshRecentAfterManualIndex(resp: ManualIndexResponse | null | undefined): boolean {
+  if (!resp || resp.status !== 'OK') {return false;}
+  const added = typeof resp.added === 'number' ? resp.added : 0;
+  const updated = typeof resp.updated === 'number' ? resp.updated : 0;
+  const total = typeof resp.total === 'number' ? resp.total : 0;
+  return added > 0 || updated > 0 || total > 0;
+}
