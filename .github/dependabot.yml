@@ -1,7 +1,16 @@
-# Dependabot — automated dependency updates.
+# Dependabot — security-only mode.
 #
-# PRs go through existing CI gates (build.yml + e2e.yml + security.yml)
-# so regressions fail before merge. Most minor/patch bumps are rubber-stamp.
+# Policy: this extension ships dist/ only (no runtime npm deps reach users)
+# and verify.mjs already gates `npm audit --audit-level=high` on every release,
+# so weekly devDep version churn was net-negative — the queue grew faster
+# than it drained, and group bumps (e.g. @types/chrome major jumps) cost
+# real refactor time.
+#
+# `open-pull-requests-limit: 0` disables version-update PRs entirely.
+# Security update PRs (CVE-driven, surfaced by GitHub's advisory database)
+# still fire automatically — they have their own internal limit of 10
+# and are not affected by this setting.
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#open-pull-requests-limit
 
 version: 2
 updates:
@@ -9,17 +18,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
-      day: monday
-    groups:
-      dev-minor:
-        dependency-type: development
-        update-types: [minor, patch]
-      prod-minor:
-        dependency-type: production
-        update-types: [minor, patch]
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 0
