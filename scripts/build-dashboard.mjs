@@ -2,19 +2,25 @@
 /**
  * build-dashboard.mjs — Generate the Quality Report HTML dashboard.
  *
- * Used by .github/workflows/health-check.yml to produce a self-contained
- * report bundled into the `smruti-cortex-health-bundle` artifact. Download
- * the artifact and open `dashboard/index.html` to view it.
+ * Two output modes:
  *
- * NOT published to GitHub Pages. The Pages source is intentionally kept on
- * "Deploy from a branch (main / docs/)" so the marketing site + the
- * CWS-required privacy policy at /privacy.html are served straight from
- * `docs/` on main and never depend on this workflow running successfully.
- * See the rationale in `.github/workflows/health-check.yml` header comment.
+ * 1. **Artifact mode** (default, used by health-check.yml):
+ *    Self-contained per-run report bundled into the `smruti-cortex-health-bundle`
+ *    artifact. Download from any Actions run and open `dashboard/index.html`.
+ *    Always reflects the workflow run that built it.
  *
- * Also runnable locally to preview the dashboard before pushing — extracts
- * from coverage/coverage-summary.json, optional nfr-reports/audit.json,
- * optional lint-report.json, and dist/ bundle sizes.
+ * 2. **Snapshot mode** (with `--snapshot-version vX.Y.Z`, used by `npm run ship`
+ *    and `npm run dashboard refresh`):
+ *    Static snapshot committed into `docs/quality-report/` and served at
+ *    https://dhruvinrsoni.github.io/smruti-cortex/quality-report/ via Pages
+ *    "Deploy from a branch (main/docs/)". Refreshes ONLY at release boundaries
+ *    or when manually invoked — never auto-committed by CI. Adds a "stale
+ *    snapshot" banner so viewers know to look at the artifact for live numbers.
+ *
+ * Pages source is intentionally kept on "Deploy from a branch (main / docs/)"
+ * so the marketing site + the CWS-required privacy policy at /privacy.html
+ * are served straight from `docs/` on main and never depend on any workflow
+ * running successfully. See `.github/workflows/health-check.yml` header.
  *
  * Inputs (auto-discovered, optional unless noted):
  *   coverage/coverage-summary.json   — vitest --coverage output (REQUIRED)
@@ -30,20 +36,26 @@
  *   GITHUB_REPOSITORY, GITHUB_REF_NAME, GITHUB_RUN_ID, GITHUB_RUN_NUMBER
  *
  * Outputs (under --out, default: dashboard/):
- *   index.html          — main dashboard
+ *   index.html          — main dashboard (banner differs by mode)
  *   summary.json        — machine-readable scorecard
  *   coverage/           — vitest HTML coverage (when --copy-coverage passed)
  *
- * Local preview:
+ * Local preview (artifact mode):
  *
  *   npm run coverage
  *   node scripts/build-dashboard.mjs --copy-coverage
  *   # then open dashboard/index.html
  *
+ * Manual snapshot refresh (commits required afterwards):
+ *
+ *   npm run dashboard refresh   # wraps build-dashboard.mjs with the right flags
+ *   git add docs/quality-report && git commit -m "docs: refresh quality snapshot"
+ *
  * Usage:
- *   node scripts/build-dashboard.mjs                  # writes dashboard/
- *   node scripts/build-dashboard.mjs --out site       # writes site/
- *   node scripts/build-dashboard.mjs --copy-coverage  # also copies coverage/* HTML
+ *   node scripts/build-dashboard.mjs                          # writes dashboard/ (artifact mode)
+ *   node scripts/build-dashboard.mjs --out site               # custom dir
+ *   node scripts/build-dashboard.mjs --copy-coverage          # also copies coverage/* HTML
+ *   node scripts/build-dashboard.mjs --snapshot-version v9.3.0  # snapshot mode + version stamp
  *   node scripts/build-dashboard.mjs --help
  *
  * Exit codes:
@@ -184,13 +196,25 @@ function buildHtml(data, status, actions) {
     return `<span class="${cls}">${esc(label)}: ${esc(st)}</span>`;
   };
 
+  const isSnapshot = Boolean(data.snapshotVersion);
+  const titleSuffix = isSnapshot ? ` (${esc(data.snapshotVersion)} snapshot)` : '';
+  const snapshotBanner = isSnapshot
+    ? `      <div class="banner">
+        <strong>Static snapshot @ ${esc(data.snapshotVersion)}</strong> — refreshed on release.
+        Numbers reflect the code as shipped at the tagged version. For always-fresh numbers from the latest <code>main</code>,
+        download the <code>smruti-cortex-health-bundle</code> artifact from any
+        <a href="https://github.com/${esc(data.repository === 'local' ? 'dhruvinrsoni/smruti-cortex' : data.repository)}/actions/workflows/health-check.yml" target="_blank" rel="noopener">Health Check workflow run</a>
+        and open <code>dashboard/index.html</code>.
+      </div>`
+    : '';
+
   return [
     '<!doctype html>',
     '<html lang="en">',
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    '  <title>SmrutiCortex — Quality Report</title>',
+    `  <title>SmrutiCortex — Quality Report${titleSuffix}</title>`,
     '  <style>',
     '    :root { --bg: #f6f8fb; --card: #ffffff; --ink: #0f172a; --muted: #475569; --line: #dbe3ee; --accent: #0f766e; --warn: #b45309; --pass: #166534; --unknown: #334155; }',
     '    body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: linear-gradient(180deg, #eff4ff 0%, #f6f8fb 45%); color: var(--ink); }',
@@ -216,17 +240,20 @@ function buildHtml(data, status, actions) {
     '    .kpi { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }',
     '    .kpi .label { color: var(--muted); font-size: 12px; }',
     '    .kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; }',
+    '    .banner { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px solid #fcd34d; background: #fffbeb; color: #78350f; font-size: 14px; line-height: 1.5; }',
+    '    .banner code { background: rgba(120, 53, 15, 0.08); padding: 1px 6px; border-radius: 4px; font-size: 13px; }',
     '    @media (max-width: 680px) { .wrap { padding: 16px 12px 24px; } h1 { font-size: 24px; } }',
     '  </style>',
     '</head>',
     '<body>',
     '  <div class="wrap">',
     '    <section class="hero">',
-    '      <h1>SmrutiCortex — Quality Report</h1>',
+    `      <h1>SmrutiCortex — Quality Report${titleSuffix}</h1>`,
+    snapshotBanner,
     `      <p class="meta">Generated: ${esc(data.generatedAt)} | Run #${esc(data.runNumber || 'local')} | Ref: ${esc(data.ref || 'local')} | Coverage source: ${esc(data.coverageSource)}</p>`,
     data.runId ? `      <p class="meta"><a href="https://github.com/${esc(data.repository)}/actions/runs/${esc(data.runId)}" target="_blank" rel="noopener">Open workflow run details</a></p>` : '',
     `      <div class="chips">${chip('Lint', status.lint)}${chip('Tests', status.tests)}${chip('Coverage', status.coverage)}${chip('Security', status.security)}${chip('Performance', status.performance)}</div>`,
-    '      <p class="meta"><a href="./coverage/index.html">Coverage details (HTML)</a></p>',
+    isSnapshot ? '' : '      <p class="meta"><a href="./coverage/index.html">Coverage details (HTML)</a></p>',
     '      <div class="kpis">',
     `        <div class="kpi"><div class="label">Coverage</div><div class="value">${esc(toCoverageLabel(data.coverageLinesPct))}</div></div>`,
     `        <div class="kpi"><div class="label">Lint Errors</div><div class="value">${esc(data.lintErrors)}</div></div>`,
@@ -266,12 +293,13 @@ function buildHtml(data, status, actions) {
 }
 
 function parseArgs(argv) {
-  const out = { outDir: 'dashboard', copyCoverage: false, help: false };
+  const out = { outDir: 'dashboard', copyCoverage: false, help: false, snapshotVersion: '' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') out.help = true;
     else if (a === '--out') out.outDir = argv[++i];
     else if (a === '--copy-coverage') out.copyCoverage = true;
+    else if (a === '--snapshot-version') out.snapshotVersion = argv[++i] || '';
   }
   return out;
 }
@@ -284,11 +312,13 @@ if (invokedAsMain) {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.help) {
-    console.log(`Usage: node scripts/build-dashboard.mjs [--out <dir>] [--copy-coverage]
+    console.log(`Usage: node scripts/build-dashboard.mjs [--out <dir>] [--copy-coverage] [--snapshot-version vX.Y.Z]
 
 Defaults:
-  --out             dashboard
-  --copy-coverage   off (when on, copies coverage/* into <out>/coverage/)
+  --out                  dashboard
+  --copy-coverage        off (when on, copies coverage/* into <out>/coverage/)
+  --snapshot-version     '' (when set, renders snapshot-mode HTML with stale-version banner;
+                             pass the release tag, e.g. --snapshot-version v9.3.0)
 
 Auto-discovers inputs from coverage/, nfr-reports/, lint-report.json, dist/.
 CI environment variables (GITHUB_REPOSITORY, GITHUB_REF_NAME, GITHUB_RUN_ID,
@@ -326,6 +356,7 @@ GITHUB_RUN_NUMBER, COVERAGE_DELTA, BASELINE_COVERAGE) are picked up if set.`);
     popupKb: Math.floor(bundle.popup / 1024),
     qsKb: Math.floor(bundle.qs / 1024),
     totalJsKb: Math.floor(bundle.totalJs / 1024),
+    snapshotVersion: args.snapshotVersion || '',
   };
 
   const status = classifyStatus({ lint, coverage, audit, hasDist });

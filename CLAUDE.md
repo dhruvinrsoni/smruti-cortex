@@ -40,13 +40,16 @@ Navigate here first — don't broad-search when the location is known:
 | Vitest config | `vitest.config.ts` |
 | Playwright config | `playwright.config.ts` |
 | Build scripts | `scripts/esbuild-*.mjs` |
+| Quality dashboard generator | `scripts/build-dashboard.mjs` (artifact + snapshot modes) |
+| Dashboard dispatcher (`npm run dashboard …`) | `scripts/dashboard.mjs` |
+| Static quality snapshot (live URL: `…/quality-report/`) | `docs/quality-report/index.html` + `summary.json` (refreshed on release only) |
 | Store submission docs | `docs/store-submissions/vX.Y.Z-chrome-web-store.md` |
 
 ---
 
 ## Common Commands
 
-11 top-level npm verbs route 17 documented invocations. Naming policy: single-word verbs first (`build`, `dev`, `verify`, `coverage`, `e2e`); space-separated subcommands when a verb has sub-modes (`test watch`, `lint strict`, `ship patch`, `store check`); zero colons.
+12 top-level npm verbs route 19 documented invocations. Naming policy: single-word verbs first (`build`, `dev`, `verify`, `coverage`, `e2e`); space-separated subcommands when a verb has sub-modes (`test watch`, `lint strict`, `ship patch`, `store check`, `dashboard refresh`); zero colons.
 
 **Develop:**
 
@@ -66,6 +69,8 @@ Navigate here first — don't broad-search when the location is known:
 | `npm run e2e` | Build + Playwright E2E tests (45 tests, 7 specs) | ~90s |
 | `npm run lint` | ESLint check (errors block, warnings inform) | ~5s |
 | `npm run lint strict` | ESLint zero-warning check (manual cleanup use) | ~5s |
+| `npm run dashboard preview` | Build artifact-mode dashboard into `dashboard/` for local preview (no commit) | ~2s |
+| `npm run dashboard refresh` | Wipe & rebuild snapshot at `docs/quality-report/` (commit afterwards). Auto-runs inside `ship`. | ~2s |
 
 **Ship:**
 
@@ -92,7 +97,7 @@ Navigate here first — don't broad-search when the location is known:
 
 One-paragraph description of every script in `scripts/`. Quick-reference for when you come back after 6 months.
 
-**`scripts/release.mjs`** — invoked by `npm run ship <patch|minor|major|check>`. Validates prerequisites (clean tree, on main, gh CLI authenticated). Runs `ship check` as the gate. Bumps `package.json`, syncs manifest, regenerates CHANGELOG, scaffolds submission doc via `store init`. Re-builds with new version baked in, packages zip into `release/zips/`. Single git commit + tag + push, creates the GitHub Release with the zip attached. Prints next-steps (CWS dashboard URL, submission doc path). When called with `check`, skips the bump/build/tag/push pipeline and just runs the `verify.mjs --release` gate.
+**`scripts/release.mjs`** — invoked by `npm run ship <patch|minor|major|check>`. Validates prerequisites (clean tree, on main, gh CLI authenticated). Runs `ship check` as the gate. Bumps `package.json`, syncs manifest, regenerates CHANGELOG, scaffolds submission doc via `store init`. Re-builds with new version baked in, packages zip into `release/zips/`. **Refreshes the public Quality Report snapshot at `docs/quality-report/` (between Steps 6 and 7) so the live URL `…/quality-report/` is version-stamped to the release** — non-blocking on failure. Single git commit + tag + push, creates the GitHub Release with the zip attached. Prints next-steps (CWS dashboard URL, submission doc path). When called with `check`, skips the bump/build/tag/push pipeline and just runs the `verify.mjs --release` gate.
 
 **`scripts/verify.mjs`** — invoked by `npm run verify` or `npm run ship check` (via release.mjs). Default mode: lint + build + unit tests + coverage + coverage ratchet + E2E. `--release` mode adds: bundle benchmark, version sync, MV3 manifest_version, dist integrity (no underscore dirs, critical files present), git tree clean + on main/master branch, plus the release-only phases — `npm audit --audit-level=high`, inline `npm run store check`, LICENSE present, privacy URL HTTP 200, previous-version git tag exists. Continues on individual failures so one run reports the full picture. Flags: `--no-e2e`, `--e2e-slowmo`, `--no-network`, `--release`.
 
@@ -111,6 +116,10 @@ One-paragraph description of every script in `scripts/`. Quick-reference for whe
 **`scripts/copy-static.mjs`** — copies non-bundled assets (manifest.json, popup.html/css, icons, error-guard.js) from source tree into `dist/`. Called by build chain. Also strips any underscore-prefixed dirs that would break Chrome MV3 "Load Unpacked".
 
 **`scripts/esbuild-dev.mjs`** / **`scripts/esbuild-prod.mjs`** — esbuild bundling configs. Dev = source maps + watch (used by `npm run dev`); prod = minified (used by `npm run build`).
+
+**`scripts/build-dashboard.mjs`** — generates the Quality Report HTML dashboard from `coverage/coverage-summary.json` + `nfr-reports/audit.json` + `lint-report.json` + `dist/` bundle sizes. Two modes: artifact (default — used by `health-check.yml` to write `dashboard/` into the run-bundle artifact) and snapshot (with `--snapshot-version vX.Y.Z` — used by `release.mjs` to write a stale-banner-stamped copy into `docs/quality-report/`). Same data, same template; only the title/banner differ.
+
+**`scripts/dashboard.mjs`** — dispatcher behind `npm run dashboard <subcommand>`. `refresh` wipes `docs/quality-report/` and regenerates with the current `package.json` version stamped in (operator commits afterwards). `preview` builds artifact-mode dashboard into `dashboard/` with `--copy-coverage` for local preview. `release.mjs` calls `build-dashboard.mjs` directly — `dashboard.mjs` is the human-facing entry point.
 
 **`scripts/package.mjs`** — zips `dist/` into `release/zips/smruti-cortex-vX.Y.Z.zip`. Called after `build` by `npm run package`.
 

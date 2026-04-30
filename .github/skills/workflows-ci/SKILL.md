@@ -12,7 +12,7 @@ metadata:
 
 | Workflow | Triggers | Purpose |
 |---|---|---|
-| `health-check.yml` | PR main, push main, push tag `v[0-9]+.[0-9]+.[0-9]+`, monthly cron, manual | The single CI gate. Wraps `npm run verify` + adds explicit `npm audit` / `license-checker` / hardcoded-secret grep. Posts PR coverage delta comment. Generates the Quality Report dashboard into the run artifact (NOT published anywhere — see "GitHub Pages" section below). **Upserts the GitHub Release with the zip on strict-format tag push** (CI's `GITHUB_TOKEN` always works — fixes the local `gh release create` work-account auth pain). |
+| `health-check.yml` | PR main, push main, push tag `v[0-9]+.[0-9]+.[0-9]+`, monthly cron, manual | The single CI gate. Wraps `npm run verify` + adds explicit `npm audit` / `license-checker` / hardcoded-secret grep. Posts PR coverage delta comment. Generates the always-fresh Quality Report dashboard into the run artifact (CI does NOT touch `docs/quality-report/` — see "GitHub Pages" + "Quality Report — two surfaces" below). **Upserts the GitHub Release with the zip on strict-format tag push** (CI's `GITHUB_TOKEN` always works — fixes the local `gh release create` work-account auth pain). |
 | `lint-report.yml` | manual only (`workflow_dispatch`) | On-demand LLM-friendly lint dump. Runs ESLint with JSON output, builds a Markdown digest grouped by rule + file, uploads as artifact (90d). Zero auto-cost. |
 | `ranking-reports.yml` | `issues: opened/labeled` (gated to `ranking-bug`), Mondays 04:00 UTC cron, manual | Two jobs: `intake` (triage + dedupe combined into one `github-script` call), `gc` (`actions/stale@v9` weekly garbage collection). Replaces three older single-purpose ranking workflows. |
 
@@ -24,11 +24,27 @@ This is deliberate, not a leftover:
 
 - **Reliability priority.** Marketing + privacy must be live regardless of CI health. If `health-check.yml` breaks for any reason — a YAML typo, an action upgrade, a permissions glitch, a quota issue — the public site doesn't notice. `verify.mjs` `--release` mode already asserts HTTP 200 on `https://dhruvinrsoni.github.io/smruti-cortex/privacy.html` (`scripts/verify.mjs` line ~324) so `npm run ship check` catches a broken privacy URL before any release ships.
 - **UI fallback is trivial.** If something does go wrong, push a `docs/` fix → Pages picks it up in ~30s. No CI involvement needed.
-- **No `[skip ci]` commit-back noise.** The old `nfr-report.yml` published the dashboard by committing back to `docs/quality-report/` on every main push. We retired that pattern. The dashboard is now an artifact instead.
+- **No `[skip ci]` commit-back noise.** The old `nfr-report.yml` used to commit back into `docs/quality-report/` on every main push. We retired that. CI never writes to `docs/` anymore.
 
-**Trade-off accepted:** there is no live dashboard URL. To view the dashboard, download the latest `smruti-cortex-health-bundle` artifact from the Actions tab and open `dashboard/index.html` locally. The PR coverage-delta comment + the rich `GITHUB_STEP_SUMMARY` cover the day-to-day need.
+If you ever feel tempted to make CI deploy or Pages-Action-publish: **don't.** It single-points-of-failures the privacy URL on whatever workflow does the publishing. We learned this the painful way once.
 
-If you ever feel tempted to put the dashboard on Pages: **don't.** It single-points-of-failures the privacy URL on whatever workflow is doing the publishing. We learned this the painful way once.
+## Quality Report — two surfaces, one source
+
+| Surface | Where | Refreshed by | When |
+|---|---|---|---|
+| **Live (artifact)** | `smruti-cortex-health-bundle` artifact, `dashboard/index.html` inside | `health-check.yml` (every run) | Per-run, always fresh. Download from any Actions run. |
+| **Static (snapshot)** | `https://dhruvinrsoni.github.io/smruti-cortex/quality-report/` | `scripts/release.mjs` (auto on `npm run ship`) + `npm run dashboard refresh` (manual ad-hoc) | On release boundaries, version-stamped. CI never touches it. |
+
+The static snapshot is committed to `docs/quality-report/index.html` + `summary.json` (~6 KB total, no `coverage/` HTML drill-down — that lives in the artifact only). It carries a yellow "Static snapshot @ vX.Y.Z" banner pointing back at the live artifact for current numbers.
+
+**Why this hybrid:** the live URL gives external visitors a one-click read of "this extension's quality at the version they have installed" without the CI commit-back noise we explicitly retired. Maintainers and reviewers who want live numbers grab the artifact. Both surfaces use the same `scripts/build-dashboard.mjs` script — only the `--snapshot-version` flag differentiates them (and triggers the banner).
+
+**`npm run dashboard <subcommand>`:**
+
+- `refresh` — wipe `docs/quality-report/`, regenerate from current `coverage/`/`nfr-reports/`/`dist/`, stamp current `package.json` version. Operator commits afterwards. Useful for ad-hoc updates between releases.
+- `preview` — build into local `dashboard/` (no commit), mirrors what CI's artifact looks like.
+
+`scripts/release.mjs` calls `build-dashboard.mjs` directly between Steps 6 and 7, folding the regenerated snapshot into the release commit — zero extra commits per release.
 
 ## Design Principles
 
@@ -43,7 +59,8 @@ If you ever feel tempted to put the dashboard on Pages: **don't.** It single-poi
 
 | Script | Purpose | Local equivalent |
 |---|---|---|
-| `scripts/build-dashboard.mjs` | Read `coverage/`, `nfr-reports/audit.json`, `lint-report.json`, `dist/` sizes; write `dashboard/index.html` + `summary.json`. With `--copy-coverage` also copies coverage HTML | `node scripts/build-dashboard.mjs --copy-coverage` (preview locally; opens `dashboard/index.html` in your browser) |
+| `scripts/build-dashboard.mjs` | Read `coverage/`, `nfr-reports/audit.json`, `lint-report.json`, `dist/` sizes; write `dashboard/index.html` + `summary.json`. With `--copy-coverage` also copies coverage HTML. With `--snapshot-version vX.Y.Z` switches to snapshot-mode (banner + page-title stamp). | `npm run dashboard preview` (artifact-mode preview) or `npm run dashboard refresh` (regenerate `docs/quality-report/` snapshot for commit) |
+| `scripts/dashboard.mjs` | Tiny dispatcher behind `npm run dashboard <refresh\|preview>`. `refresh` wipes `docs/quality-report/`, calls `build-dashboard.mjs --out docs/quality-report --snapshot-version v$(package.json.version)`. `preview` calls it with `--out dashboard --copy-coverage` for local preview. | n/a — this IS the local entry point |
 | `scripts/build-lint-report.mjs` | Read `lint-report.json` (ESLint JSON output) → write `lint-report.md` Markdown digest grouped by rule + file | `npm run lint -- --format json --output-file lint-report.json && node scripts/build-lint-report.mjs` |
 | `scripts/extract-changelog.mjs` | Extract one version's `## [X.Y.Z]` section from `CHANGELOG.md`. Used by health-check's tag-trigger Release notes | `node scripts/extract-changelog.mjs v9.3.0` |
 

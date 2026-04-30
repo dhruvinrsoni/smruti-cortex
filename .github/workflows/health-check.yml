@@ -3,20 +3,32 @@ name: Health Check
 # Single CI gate. Wraps `npm run verify` (the perfected local pipeline)
 # so CI inherits every check verify learns. Upserts the GitHub Release
 # on strict-format tag push. Generates the Quality Report dashboard
-# as part of the run-bundle artifact (NOT published to Pages — see why below).
+# as part of the run-bundle artifact (NOT published to Pages — see below).
 #
-# Why the dashboard isn't published to GitHub Pages:
-#   The Pages source is intentionally set to "Deploy from a branch (main / docs/)"
+# Quality Report — two surfaces, one source:
+#
+#   1. Live (artifact) dashboard — produced by THIS workflow on every run.
+#      Bundled into the `smruti-cortex-health-bundle` artifact alongside
+#      coverage HTML, audit.json, lint-report. Always reflects this run.
+#      Open: download artifact → open dashboard/index.html.
+#
+#   2. Static (snapshot) dashboard — a stripped-down copy committed at
+#      docs/quality-report/index.html, refreshed ONLY on release by
+#      scripts/release.mjs (or manually via `npm run dashboard refresh`).
+#      Carries a "stale snapshot @ vX.Y.Z" banner pointing back at #1.
+#      Live URL: https://dhruvinrsoni.github.io/smruti-cortex/quality-report/.
+#      This workflow does NOT touch docs/quality-report/.
+#
+# Why the snapshot is not auto-refreshed by CI:
+#   The Pages source is intentionally set to "Deploy from a branch (main/docs/)"
 #   so the marketing site at https://dhruvinrsoni.github.io/smruti-cortex/ and
 #   the CWS-required privacy policy at /privacy.html are served straight from
-#   docs/ on main. No CI involved. If health-check.yml ever breaks, the public
-#   site doesn't notice. The dashboard would have required either committing
-#   back into docs/ ([skip ci] noise we explicitly retired) or assembling docs/
-#   into a Pages-Actions artifact on every run (single-point-of-failure on
-#   privacy.html). Trade-off: the live dashboard URL is gone; download the
-#   `smruti-cortex-health-bundle` artifact and open `dashboard/index.html`
-#   when you want to see it. The PR coverage-delta comment + the rich
-#   GITHUB_STEP_SUMMARY cover the day-to-day need.
+#   docs/ on main. No CI involvement on the public surface. If health-check.yml
+#   ever breaks, the public site (privacy URL especially) doesn't notice.
+#   Auto-refreshing the snapshot from CI would mean either committing back
+#   into docs/ ([skip ci] noise we explicitly retired) or running an Actions-
+#   based Pages deploy (single-point-of-failure on privacy.html). Both ruled
+#   out. Snapshot-on-release-only is the ceiling for how often docs/ changes.
 #
 # Trigger matrix:
 #   pull_request main         → verify (default mode) + audit + license + secret grep
@@ -251,8 +263,9 @@ jobs:
             echo ""
             echo "### Details"
             echo ""
-            echo "- Download artifact \`smruti-cortex-health-bundle\` for verify.log, audit.json, lint-report.md, coverage HTML, and \`dashboard/index.html\` (full Quality Report)."
-            echo "- Public marketing site + privacy policy live at https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/ (served from \`docs/\` on main, NOT this workflow)."
+            echo "- Download artifact \`smruti-cortex-health-bundle\` for verify.log, audit.json, lint-report.md, coverage HTML, and \`dashboard/index.html\` (always-fresh Quality Report)."
+            echo "- Static snapshot of last release: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/quality-report/ (refreshed only on release; numbers may be stale)."
+            echo "- Public marketing site + privacy policy: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/ (served from \`docs/\` on main, NOT this workflow)."
             if [ -s nfr-reports/copyleft.txt ]; then
               echo ""
               echo "### Copyleft licenses detected"
