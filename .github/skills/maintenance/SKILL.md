@@ -255,8 +255,9 @@ Each layer adds exactly one concern. Lower layers never depend on upper layers.
 
 The in-extension Report ranking-issue button (popup footer + quick-search
 overlay) files GitHub issues in a dedicated silo so the maintainer's
-primary backlog stays uncluttered. Three GitHub Actions and one
-client-side floodgate keep the silo healthy without daily intervention.
+primary backlog stays uncluttered. One GitHub Actions workflow
+(`ranking-reports.yml`, two jobs) and one client-side floodgate keep
+the silo healthy without daily intervention.
 
 ### Triage URL (bookmark this)
 
@@ -275,7 +276,7 @@ out of the stale workflow's reaper too); anything bogus gets closed.
 
 | Label | Source | Meaning |
 |-------|--------|---------|
-| `ranking-bug` | Extension `ranking-report.ts` + Issue Form template | Every report-button-filed issue carries this. Used by all three workflows as their scope filter. |
+| `ranking-bug` | Extension `ranking-report.ts` + Issue Form template | Every report-button-filed issue carries this. Used by both `ranking-reports.yml` jobs as their scope filter. |
 | `auto-report` | Extension only (PAT path *and* URL fallback in `ranking-report.ts`) | Distinguishes "filed by clicking the button" from "filed by hand via the form". Workflows treat them identically; the label exists for human triage signal. |
 | `sink: ranking-reports` | Extension + triage workflow | The actual silo marker. Filtering on this label keeps ranking issues out of any "all open" view that excludes it. |
 | `needs-triage` | Triage workflow + Issue Form default | Cleared by the maintainer once the report has been read. Powers the triage URL above. |
@@ -286,37 +287,40 @@ out of the stale workflow's reaper too); anything bogus gets closed.
 Source of truth for label colours and descriptions: `.github/labels.yml`.
 Sync with `bash .github/tools/sync-labels.sh` (requires `gh` auth).
 
-### Workflows
+### Workflow
 
-All three live in `.github/workflows/` and only act on issues already
-tagged `ranking-bug`. Safe to land/touch independently — none of them
+All ranking-bug lifecycle now lives in a single file:
+`.github/workflows/ranking-reports.yml`. Only acts on issues already
+tagged `ranking-bug`. Safe to land/touch independently — does not
 read or write any other label family.
 
-1. **`triage-ranking-reports.yml`** (D2)
-   - Trigger: `issues` opened/labeled.
-   - Adds `needs-triage` + `sink: ranking-reports` defensively (no-op if
-     already present from the extension's URL fallback path).
-   - Posts a one-shot orientation comment so a hand-filed report (no
-     `auto-report` label) gets the same maintainer expectations as an
-     auto-filed one.
-   - Idempotent via a marker comment.
+**Two jobs gated by `if: github.event_name`:**
 
-2. **`stale-ranking-reports.yml`** (D3)
-   - Trigger: cron, weekly Mon 04:00 UTC.
-   - Marks stale at 60d, closes at 90d. Caps at 50 ops per run.
+1. **`intake` job** (was `triage-ranking-reports.yml` + `dedupe-ranking-reports.yml`)
+   - Trigger: `issues: opened, labeled` filtered to `ranking-bug`.
+   - Single `actions/github-script@v7` call:
+     - Adds `needs-triage` + `sink: ranking-reports` defensively (no-op if
+       already present from the extension's URL fallback path).
+     - Posts a one-shot orientation comment so a hand-filed report (no
+       `auto-report` label) gets the same maintainer expectations as an
+       auto-filed one. Idempotent via marker `<!-- smruti-cortex:ranking-reports:intake-triage:v1 -->`.
+     - Parses canonical title shape the extension emits:
+       `[Ranking] "<query>" — <N> results, sort=<mode> (v<x.y>.<z>)`
+       Dedupe key: `(query, sort, major.minor)` — patch excluded.
+       On match, posts `Possible duplicate of #N` and adds `duplicate?`.
+       Maintainer confirms and closes manually. Tolerates `--`, `–`, `—`.
+       Hand-filed reports that don't match are skipped silently —
+       humans dedupe themselves better than regex.
+       Idempotent via marker `<!-- smruti-cortex:ranking-reports:intake-dedupe:v1 -->`.
+   - Merging triage + dedupe into one script call avoids double-fetching
+     issue metadata (one `paginate(listComments)` call serves both
+     idempotency checks).
+
+2. **`gc` job** (was `stale-ranking-reports.yml`)
+   - Trigger: cron Mondays 04:00 UTC + `workflow_dispatch`.
+   - `actions/stale@v9`: marks stale at 60d, closes at 90d. Caps at 50 ops per run.
    - Exempts `priority: high|medium|low` and `pinned`.
    - User-facing copy points back at the triage URL above.
-
-3. **`dedupe-ranking-reports.yml`** (D4)
-   - Trigger: `issues` opened/labeled.
-   - Parses the title shape the extension emits:
-     `[Ranking] "<query>" — <N> results, sort=<mode> (v<x.y>.<z>)`
-   - Dedupe key: `(query, sort, major.minor)` — patch is excluded.
-   - On match, posts `Possible duplicate of #N` and adds `duplicate?`.
-     Maintainer confirms and closes manually.
-   - Idempotent via a marker comment. Tolerates `--`, `–`, `—`.
-   - Hand-filed reports that don't match the canonical title shape are
-     skipped silently — humans dedupe themselves better than regex.
 
 ### Kill Switch / Rate Limit (D5)
 

@@ -152,7 +152,7 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | `command-palette` | Adding/changing palette commands, prefix modes, web search engines |
 | `testing` | Writing or fixing tests |
 | `settings` | Changing any setting key, default, or validation |
-| `workflows-ci` | Modifying GitHub Actions or Docker |
+| `workflows-ci` | Modifying GitHub Actions (3 active workflows: health-check, lint-report, ranking-reports) |
 | `test-generation` | Generating new test files (full rules + mock patterns) |
 | `maintenance` | Bug fixes, releases, Chrome Web Store submissions |
 | `coverage-policy` | **MANDATORY** before any test/coverage work — thresholds, ratchet, exclusion rules |
