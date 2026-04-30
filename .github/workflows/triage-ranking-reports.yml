@@ -67,23 +67,29 @@ jobs:
             exit 0
           fi
 
-          BODY=$(cat <<EOF
-$MARKER
-Thanks for the ranking report! 🙏 A few notes on what happens next:
-
-- This issue was siloed into the \`sink: ranking-reports\` bucket so it
-  doesn't drown out other tickets in the maintainer's main triage queue.
-  You can still find it via the [ranking reports filter](https://github.com/${REPO}/issues?q=is%3Aissue+label%3Aranking-bug).
-- A maintainer will look at the auto-generated debug data, look for
-  duplicates, and either prioritise it (\`priority: low/medium/high\`)
-  or close as \`wontfix\` / \`duplicate\`.
-- If the report includes a "🧊 Degenerate ranking detected" callout
-  the answer is usually "add more query tokens" — short queries hit
-  hundreds of items that all tie on every relevance tier, so the final
-  order falls back to your sort preference.
-
-If you have repro steps beyond what the form captured, please add them
-as a follow-up comment.
-EOF
-)
+          # NOTE: A heredoc (cat <<EOF ... EOF) would be the obvious choice
+          # here, but bash requires the closing EOF marker to sit at column 1
+          # with no leading whitespace — which directly conflicts with YAML's
+          # literal-block-scalar indent rule (every non-empty line must be
+          # indented to the block baseline). printf with one arg per line is
+          # the only pattern that satisfies both: args are YAML-indented for
+          # the parser, but the produced strings carry no leading whitespace.
+          BODY=$(printf '%s\n' \
+            "$MARKER" \
+            "" \
+            "Thanks for the ranking report! 🙏 A few notes on what happens next:" \
+            "" \
+            "- This issue was siloed into the \`sink: ranking-reports\` bucket so it" \
+            "  doesn't drown out other tickets in the maintainer's main triage queue." \
+            "  You can still find it via the [ranking reports filter](https://github.com/${REPO}/issues?q=is%3Aissue+label%3Aranking-bug)." \
+            "- A maintainer will look at the auto-generated debug data, look for" \
+            "  duplicates, and either prioritise it (\`priority: low/medium/high\`)" \
+            "  or close as \`wontfix\` / \`duplicate\`." \
+            "- If the report includes a \"🧊 Degenerate ranking detected\" callout" \
+            "  the answer is usually \"add more query tokens\" — short queries hit" \
+            "  hundreds of items that all tie on every relevance tier, so the final" \
+            "  order falls back to your sort preference." \
+            "" \
+            "If you have repro steps beyond what the form captured, please add them" \
+            "as a follow-up comment.")
           gh issue comment "$ISSUE" --repo "$REPO" --body "$BODY"
