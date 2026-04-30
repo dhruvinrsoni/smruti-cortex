@@ -102,7 +102,7 @@ jobs:
           # Use centralized packaging script which creates a versioned zip in release/
           npm run package
           VERSION=$(node -e "console.log(require('./package.json').version)")
-          PACKAGE_ZIP=$(ls -t release/*.zip 2>/dev/null | head -n1 || true)
+          PACKAGE_ZIP=$(ls -t release/zips/*.zip 2>/dev/null | head -n1 || true)
           if [ -z "$PACKAGE_ZIP" ]; then
             echo "Error: no package zip found in release/" >&2
             exit 1
