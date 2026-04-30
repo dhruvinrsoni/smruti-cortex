@@ -39,6 +39,7 @@ import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import type { MaskingLevel } from '../shared/data-masker';
 import { STAGE_TIMINGS, waitRemaining, ensureReportButton } from '../shared/report-chooser-utils';
 import { buildReportChooser } from '../shared/report-chooser-modal';
+import { checkAndRecord as checkAndRecordReportRateLimit, formatRetryAfter } from '../shared/report-rate-limit';
 import {
   DEFAULT_GENERATION_MODEL,
   DEFAULT_EMBEDDING_MODEL,
@@ -473,61 +474,113 @@ function initializePopup() {
 
       btn.addEventListener('click', () => {
         if (btn.disabled) { return; }
-        showReportChooser({
-          onPick: async (level) => {
-            btn.disabled = true;
-            btn.classList.add('pulsing');
-            btn.style.color = RED;
-            btn.style.borderColor = RED;
-            btn.textContent = 'Generating…';
-
-            const method = SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url';
-            const tGen = performance.now();
-            interface RankingReportResponse {
-              status?: 'OK' | 'ERROR';
-              method?: 'api' | 'url';
-              issueUrl?: string;
-              reportBody?: string;
-              message?: string;
-            }
-            let resp: RankingReportResponse | null = null;
-            try {
-              resp = await sendMessage({
-                type: 'GENERATE_RANKING_REPORT',
-                maskingLevel: level,
-                method,
-              }) as RankingReportResponse | null;
-            } catch {
-              resp = null;
-            }
-            await waitRemaining(tGen, STAGE_TIMINGS.minGen);
-
-            btn.textContent = 'Copying…';
-            const tCopy = performance.now();
-
-            if (resp?.status === 'OK') {
-              try { await navigator.clipboard.writeText(resp.reportBody || ''); } catch { /* clipboard may be blocked */ }
-              await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
-              btn.classList.remove('pulsing');
-              btn.textContent = resp.method === 'api' ? 'Filed & Copied!' : 'Copied!';
-              btn.style.color = GREEN;
-              btn.style.borderColor = GREEN;
-              if (resp.method === 'url' && resp.issueUrl) {
-                showReportConfirmation(resp.issueUrl);
-              }
-              setTimeout(revert, STAGE_TIMINGS.successHold);
-            } else {
-              await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
-              btn.classList.remove('pulsing');
-              btn.textContent = resp?.message || 'Error';
-              btn.style.color = RED;
-              setTimeout(revert, STAGE_TIMINGS.errorHold);
-            }
-          },
+        // Defensive kill-switch re-check at click time. The button's
+        // visibility is already gated in updateReportButton via the
+        // `hidden` attribute, but a stale render between SETTINGS_CHANGED
+        // and the next renderResults pass could let a click slip through.
+        if (!(SettingsManager.getSetting('reportButtonEnabled') ?? true)) {
+          showToast('Reporting is currently disabled.', 'info');
+          return;
+        }
+        // Per-user 5/24h floodgate. Records the press synchronously
+        // before the chooser opens so a user clicking the button five
+        // times in rapid succession doesn't burst-file five reports.
+        // Recorded eagerly: if the user cancels the chooser the slot
+        // is "lost", which we accept — the cap exists to deter abuse,
+        // not to give power-users surgical control of their daily quota.
+        checkAndRecordReportRateLimit().then((decision) => {
+          if (!decision.allowed) {
+            showToast(
+              `Daily limit reached (5/24h). Try again in ${formatRetryAfter(decision.retryAfterMs)}.`,
+              'warning',
+              6000,
+            );
+            return;
+          }
+          showReportChooser({
+            onPick: async (level) => {
+              await runReportFlow(btn, level);
+            },
+          });
+        }).catch((err) => {
+          // Fail open — never let a rate-limit bug kill the debug channel.
+          logger.debug('reportButton', 'Rate limit check failed; proceeding', errorMeta(err));
+          showReportChooser({
+            onPick: async (level) => {
+              await runReportFlow(btn, level);
+            },
+          });
         });
       });
       return btn;
     });
+  }
+
+  /**
+   * Drives the staged Generating → Copying → Copied! UX once the user
+   * has chosen a masking level. Extracted from the click handler so the
+   * rate-limit and kill-switch gates can short-circuit without
+   * duplicating the staged flow.
+   */
+  async function runReportFlow(btn: HTMLButtonElement, level: MaskingLevel): Promise<void> {
+    const RED = '#ef4444';
+    const GREEN = '#10b981';
+    const revert = () => {
+      btn.textContent = 'Report';
+      btn.style.color = RED;
+      btn.style.borderColor = RED;
+      btn.classList.remove('pulsing');
+      btn.disabled = false;
+    };
+
+    btn.disabled = true;
+    btn.classList.add('pulsing');
+    btn.style.color = RED;
+    btn.style.borderColor = RED;
+    btn.textContent = 'Generating…';
+
+    const method = SettingsManager.getSetting('developerGithubPat') ? 'api' : 'url';
+    const tGen = performance.now();
+    interface RankingReportResponse {
+      status?: 'OK' | 'ERROR';
+      method?: 'api' | 'url';
+      issueUrl?: string;
+      reportBody?: string;
+      message?: string;
+    }
+    let resp: RankingReportResponse | null = null;
+    try {
+      resp = await sendMessage({
+        type: 'GENERATE_RANKING_REPORT',
+        maskingLevel: level,
+        method,
+      }) as RankingReportResponse | null;
+    } catch {
+      resp = null;
+    }
+    await waitRemaining(tGen, STAGE_TIMINGS.minGen);
+
+    btn.textContent = 'Copying…';
+    const tCopy = performance.now();
+
+    if (resp?.status === 'OK') {
+      try { await navigator.clipboard.writeText(resp.reportBody || ''); } catch { /* clipboard may be blocked */ }
+      await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+      btn.classList.remove('pulsing');
+      btn.textContent = resp.method === 'api' ? 'Filed & Copied!' : 'Copied!';
+      btn.style.color = GREEN;
+      btn.style.borderColor = GREEN;
+      if (resp.method === 'url' && resp.issueUrl) {
+        showReportConfirmation(resp.issueUrl);
+      }
+      setTimeout(revert, STAGE_TIMINGS.successHold);
+    } else {
+      await waitRemaining(tCopy, STAGE_TIMINGS.minCopy);
+      btn.classList.remove('pulsing');
+      btn.textContent = resp?.message || 'Error';
+      btn.style.color = RED;
+      setTimeout(revert, STAGE_TIMINGS.errorHold);
+    }
   }
 
   /**
@@ -1892,7 +1945,12 @@ function initializePopup() {
 
     resultsNode.innerHTML = '';
     resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
-    updateReportButton(resultsLocal.length > 0);
+    // Kill switch: when reportButtonEnabled is flipped to false (maintainer
+    // can do this remotely via debug page) the button is hidden as if there
+    // were no results. The chooser modal and rate limiter never get a chance
+    // to fire. Default is true so existing users see no behaviour change.
+    const reportButtonEnabled = SettingsManager.getSetting('reportButtonEnabled') ?? true;
+    updateReportButton(reportButtonEnabled && resultsLocal.length > 0);
 
     if (resultsLocal.length === 0) {
       const empty = document.createElement('div');
@@ -4516,7 +4574,7 @@ function initializePopup() {
     } else {
       syncToggleBar();
     }
-    if (keys.some(k => ['displayMode', 'highlightMatches', 'loadFavicons'].includes(k))) {
+    if (keys.some(k => ['displayMode', 'highlightMatches', 'loadFavicons', 'reportButtonEnabled'].includes(k))) {
       renderResults();
     }
     if (keys.some(k => ['showRecentHistory', 'showRecentSearches', 'sortBy', 'defaultResultCount'].includes(k))) {

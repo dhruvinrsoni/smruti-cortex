@@ -47,6 +47,7 @@ import { runTour, type TourStep } from '../shared/tour';
 import { getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
 import type { MaskingLevel } from '../shared/data-masker';
 import { STAGE_TIMINGS, waitRemaining, ensureReportButton } from '../shared/report-chooser-utils';
+import { checkAndRecord as checkAndRecordReportRateLimit, formatRetryAfter } from '../shared/report-rate-limit';
 import { buildReportChooser } from '../shared/report-chooser-modal';
 import {
   type PaletteCommand,
@@ -2649,6 +2650,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         renderResults(currentResults);
       }
     }
+    if (key === 'reportButtonEnabled') {
+      // Kill-switch can flip mid-session via SETTINGS_CHANGED; refresh the
+      // button visibility immediately rather than waiting for the next
+      // render to do it.
+      updateOverlayReportButton(currentResults.length > 0);
+    }
     if (key === 'maxResults' || key === 'defaultResultCount') {
       if (currentMode === 'history' && !(inputEl?.value?.trim())) {
         loadRecentHistory();
@@ -3793,7 +3800,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // a single stable DOM node and only toggles `hidden`. This protects the
     // `button` captured by runOverlayReportFlow from being detached mid-flow
     // by a concurrent overlay re-render.
-    ensureReportButton(footerEl, hasResults, () => {
+    //
+    // Kill switch: when reportButtonEnabled is flipped to false the button
+    // is hidden as if there were no results. Mirrors popup.updateReportButton
+    // and avoids surface drift between the two render paths.
+    const reportButtonEnabled = cachedSettings?.reportButtonEnabled ?? true;
+    ensureReportButton(footerEl, reportButtonEnabled && hasResults, () => {
       const btn = document.createElement('button');
       btn.className = 'report-ranking-btn';
       btn.textContent = 'Report';
@@ -3803,8 +3815,33 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
       btn.addEventListener('click', () => {
         if (btn.disabled) { return; }
-        showOverlayReportChooser({
-          onPick: (level) => runOverlayReportFlow(btn, level),
+        // Defensive kill-switch re-check at click time; see popup.ts
+        // updateReportButton for the rationale (settings race vs render).
+        if (!(cachedSettings?.reportButtonEnabled ?? true)) {
+          showToast('Reporting is currently disabled.', 'info');
+          return;
+        }
+        // Per-user 5/24h floodgate. Same shape and rationale as the popup.
+        // Eager record before opening the chooser so a rapid double-click
+        // can't burst-file two reports.
+        checkAndRecordReportRateLimit().then((decision) => {
+          if (!decision.allowed) {
+            showToast(
+              `Daily limit reached (5/24h). Try again in ${formatRetryAfter(decision.retryAfterMs)}.`,
+              'warning',
+              6000,
+            );
+            return;
+          }
+          showOverlayReportChooser({
+            onPick: (level) => runOverlayReportFlow(btn, level),
+          });
+        }).catch((err) => {
+          // Fail open — never let a rate-limit bug kill the debug channel.
+          log.debug('bugReport', 'Rate limit check failed; proceeding', err);
+          showOverlayReportChooser({
+            onPick: (level) => runOverlayReportFlow(btn, level),
+          });
         });
       });
       return btn;

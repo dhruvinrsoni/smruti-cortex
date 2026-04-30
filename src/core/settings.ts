@@ -67,6 +67,14 @@ export interface AppSettings {
     // Advanced browser commands — opt-in for tab power, tab groups, browsing data
     advancedBrowserCommands?: boolean;
     developerGithubPat?: string;        // GitHub PAT for direct issue creation (optional, falls back to URL)
+    /**
+     * Master kill-switch for the in-extension Report button (popup + quick-search overlay).
+     * Defaults to true; flip to false to hide the button entirely without shipping a new
+     * release. Useful if the GitHub `ranking-bug` silo is being abused / overwhelmed and
+     * needs an immediate brake. Toggle is honoured by the live extension on the next
+     * SETTINGS_CHANGED tick.
+     */
+    reportButtonEnabled?: boolean;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -311,6 +319,12 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     developerGithubPat: {
         default: '',
         validate: (val) => typeof val === 'string',
+    },
+
+    // Kill-switch for the Report ranking-issue button. Defaults to ON.
+    reportButtonEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
     },
 
     // Future settings (placeholders)
