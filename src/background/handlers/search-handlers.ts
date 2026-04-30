@@ -94,6 +94,14 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
 
         await setSetting('lastIndexedTimestamp', Date.now());
 
+        // Manual index updates IDB rows; the warm session cache may still hold
+        // a snapshot from before the run. Drop it (mirrors REBUILD_INDEX /
+        // CLEAR_ALL_DATA) so the next popup open paints from fresh IDB instead
+        // of pre-index rows. Fire-and-forget — cache failures must not turn an
+        // otherwise successful index into a user-visible error.
+        const { clearRecentHistoryCache } = await import('../../shared/recent-history-cache');
+        void clearRecentHistoryCache();
+
         log.info('MANUAL_INDEX', '✅ Completed', result);
         sendResponse({ status: 'OK', ...result });
       } catch (error) {

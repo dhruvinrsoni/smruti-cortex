@@ -213,5 +213,29 @@ describe('registerSearchHandlers', () => {
       expect(res).toMatchObject({ status: 'ERROR' });
       expect(clearRecentHistoryCache).not.toHaveBeenCalled();
     });
+
+    it('MANUAL_INDEX clears the cache after a successful incremental index', async () => {
+      // Mirrors REBUILD_INDEX behaviour. Without this, the next popup open
+      // can paint pre-index rows from the warm session cache even though
+      // the incremental indexer just wrote fresher rows to IndexedDB.
+      const { clearRecentHistoryCache } = await import('../../../shared/recent-history-cache');
+      const res = await dispatch(registry, { type: 'MANUAL_INDEX' });
+      await flushMicrotasks();
+      expect(res).toMatchObject({ status: 'OK' });
+      expect(clearRecentHistoryCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('MANUAL_INDEX does not clear the cache when the incremental indexer throws', async () => {
+      const { performIncrementalHistoryIndexManual } = await import('../../indexing');
+      const { clearRecentHistoryCache } = await import('../../../shared/recent-history-cache');
+      (performIncrementalHistoryIndexManual as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('history.search blew up'));
+
+      const res = await dispatch(registry, { type: 'MANUAL_INDEX' });
+      await flushMicrotasks();
+
+      expect(res).toMatchObject({ status: 'ERROR' });
+      expect(clearRecentHistoryCache).not.toHaveBeenCalled();
+    });
   });
 });
