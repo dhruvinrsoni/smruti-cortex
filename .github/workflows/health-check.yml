@@ -1,0 +1,372 @@
+name: Health Check
+
+# Single CI gate. Wraps `npm run verify` (the perfected local pipeline)
+# so CI inherits every check verify learns. Owns the public Quality Report
+# dashboard (published via Pages Actions API) and upserts the GitHub Release
+# on strict-format tag push.
+#
+# Trigger matrix:
+#   pull_request main         → verify (default mode) + audit + license + secret grep
+#                               + dashboard build + PR coverage delta comment
+#   push main                 → same as PR, plus Pages publish (refreshes public dashboard)
+#   push tags 'v[0-9]+.[0-9]+.[0-9]+'
+#                             → verify --release + audit + license + secret grep
+#                               + package + GitHub Release upsert with zip attached
+#   schedule monthly          → same as push main; catches dependency drift
+#   workflow_dispatch         → on-demand re-run; supports verify_flags override
+#
+# Strict tag pattern: matches v9.3.0, v10.0.0; rejects v9.3.0-rc1,
+# v9.3.0-experiment, mark-this-commit. Playground tags safe.
+#
+# Reports everything: every check uses continue-on-error so one failure
+# doesn't mask the others. Final step re-exits non-zero based on verify's
+# result so the GitHub UI marks the run red.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  schedule:
+    - cron: '0 9 1 * *'  # Monthly, 1st @ 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      verify_flags:
+        description: 'Extra flags for `npm run verify` (e.g. --no-e2e, --release, --strict). Blank for default.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write       # Release upsert on tag push, baseline coverage worktree
+  pages: write          # actions/deploy-pages
+  id-token: write       # OIDC for actions/deploy-pages
+  pull-requests: write  # PR coverage delta comment
+
+# One in-flight Pages deployment at a time; cancel queued duplicates.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  health:
+    name: Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    # Pages deployment env (only used when the deploy step actually runs).
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout (fetch-depth 0 for baseline coverage delta)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Determine verify flags
+        id: mode
+        run: |
+          # Tag push → release-mode verify. PR/push/cron → default. Dispatch can override.
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            FLAGS="--release"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FLAGS="${{ inputs.verify_flags }}"
+          else
+            FLAGS=""
+          fi
+          echo "VERIFY_FLAGS=$FLAGS" >> "$GITHUB_ENV"
+          echo "mode=$FLAGS" >> "$GITHUB_OUTPUT"
+          echo "Resolved verify flags: '$FLAGS'"
+
+      - name: Run npm run verify (collect everything, don't fail-fast)
+        id: verify
+        continue-on-error: true
+        run: |
+          mkdir -p nfr-reports
+          set +e
+          xvfb-run --auto-servernum npm run verify -- $VERIFY_FLAGS 2>&1 | tee nfr-reports/verify.log
+          VERIFY_EXIT=${PIPESTATUS[0]}
+          echo "VERIFY_EXIT_CODE=$VERIFY_EXIT" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Security — npm audit (HIGH+)
+        continue-on-error: true
+        run: |
+          mkdir -p nfr-reports
+          set +e
+          npm audit --json > nfr-reports/audit.json 2>/dev/null
+          npm audit --audit-level=high 2>&1 | tee nfr-reports/audit.txt
+          AUDIT_EXIT=${PIPESTATUS[0]}
+          echo "AUDIT_EXIT_CODE=$AUDIT_EXIT" >> "$GITHUB_ENV"
+          # Parse counts for the summary
+          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' nfr-reports/audit.json 2>/dev/null || echo 0)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' nfr-reports/audit.json 2>/dev/null || echo 0)
+          MOD=$(jq '.metadata.vulnerabilities.moderate // 0' nfr-reports/audit.json 2>/dev/null || echo 0)
+          LOW=$(jq '.metadata.vulnerabilities.low // 0' nfr-reports/audit.json 2>/dev/null || echo 0)
+          TOT=$(jq '.metadata.vulnerabilities.total // 0' nfr-reports/audit.json 2>/dev/null || echo 0)
+          echo "AUDIT_CRITICAL=$CRIT" >> "$GITHUB_ENV"
+          echo "AUDIT_HIGH=$HIGH"     >> "$GITHUB_ENV"
+          echo "AUDIT_MODERATE=$MOD"  >> "$GITHUB_ENV"
+          echo "AUDIT_LOW=$LOW"       >> "$GITHUB_ENV"
+          echo "AUDIT_TOTAL=$TOT"     >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Security — license-checker (copyleft scan)
+        continue-on-error: true
+        run: |
+          mkdir -p nfr-reports
+          set +e
+          npx --yes license-checker --summary --json > nfr-reports/licenses.json 2>nfr-reports/licenses.err
+          # Detect GPL/AGPL transitives
+          COPYLEFT=$(jq -r 'to_entries[] | select(.value.licenses | tostring | test("GPL|AGPL"; "i")) | .key' nfr-reports/licenses.json 2>/dev/null || true)
+          if [ -n "$COPYLEFT" ]; then
+            echo "LICENSE_STATUS=warn" >> "$GITHUB_ENV"
+            printf '%s\n' "$COPYLEFT" > nfr-reports/copyleft.txt
+          else
+            echo "LICENSE_STATUS=ok" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Security — hardcoded-secret regex grep
+        continue-on-error: true
+        run: |
+          mkdir -p nfr-reports
+          # High false-positive rate; informational only. Filter known noise.
+          set +e
+          grep -r -i -n -E "(password|secret|api[_-]?key|token|credential)" src/ \
+            --include="*.ts" --include="*.js" \
+            | grep -v "PASSWORD" | grep -v "SECRET" | grep -v "// " | grep -v "getSettings" \
+            > nfr-reports/secret-grep.txt || true
+          HITS=$(wc -l < nfr-reports/secret-grep.txt | tr -d ' ')
+          echo "SECRET_HITS=${HITS:-0}" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Build LLM-friendly lint report
+        continue-on-error: true
+        run: |
+          # Re-run lint with JSON output (verify ran lint with text output already)
+          set +e
+          npm run lint -- --format json --output-file lint-report.json 2>/dev/null || true
+          node scripts/build-lint-report.mjs --in lint-report.json --out lint-report.md
+          exit 0
+
+      - name: Compute baseline coverage delta (PR only)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          BASE_REF="${{ github.base_ref || 'main' }}"
+          echo "BASELINE_REF=$BASE_REF" >> "$GITHUB_ENV"
+          mkdir -p ../baseline-worktree
+          set +e
+          git worktree add ../baseline-worktree "origin/$BASE_REF" > nfr-reports/baseline.log 2>&1
+          if [ $? -ne 0 ]; then
+            echo "BASELINE_COVERAGE=n/a" >> "$GITHUB_ENV"
+            echo "COVERAGE_DELTA=n/a" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          pushd ../baseline-worktree > /dev/null
+          npm ci >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1
+          npm run coverage >> "$GITHUB_WORKSPACE/nfr-reports/baseline.log" 2>&1 || true
+          popd > /dev/null
+          node -e "
+          const fs=require('fs');
+          const summaryPath='../baseline-worktree/coverage/coverage-summary.json';
+          const lcovPath='../baseline-worktree/coverage/lcov.info';
+          let pct='n/a';
+          if (fs.existsSync(summaryPath)) {
+            const s=JSON.parse(fs.readFileSync(summaryPath,'utf8'));
+            const lines=s.total?.lines?.pct;
+            if (typeof lines==='number') pct=String(lines);
+          } else if (fs.existsSync(lcovPath)) {
+            const c=fs.readFileSync(lcovPath,'utf8');
+            let lf=0,lh=0;
+            for (const line of c.split(/\r?\n/)) {
+              if (line.startsWith('LF:')) lf+=Number(line.slice(3))||0;
+              if (line.startsWith('LH:')) lh+=Number(line.slice(3))||0;
+            }
+            if (lf>0) pct=((lh*100)/lf).toFixed(2);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, 'BASELINE_COVERAGE='+pct+'\n');
+          let curr='n/a';
+          const cs='coverage/coverage-summary.json';
+          if (fs.existsSync(cs)) {
+            const s=JSON.parse(fs.readFileSync(cs,'utf8'));
+            const lines=s.total?.lines?.pct;
+            if (typeof lines==='number') curr=String(lines);
+          }
+          let delta='n/a';
+          if (curr!=='n/a' && pct!=='n/a') delta=(Number(curr)-Number(pct)).toFixed(2);
+          fs.appendFileSync(process.env.GITHUB_ENV, 'COVERAGE_DELTA='+delta+'\n');
+          "
+          git worktree remove ../baseline-worktree --force >> nfr-reports/baseline.log 2>&1 || true
+          exit 0
+
+      - name: Build dashboard (HTML + summary.json)
+        continue-on-error: true
+        run: |
+          node scripts/build-dashboard.mjs --out _site --copy-coverage
+
+      - name: Package extension (tag push only — for Release asset)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: npm run package
+
+      - name: Write rich step summary
+        if: always()
+        run: |
+          # Pull current coverage % out of summary.json
+          CURR_PCT=$(node -e "try{const s=require('./coverage/coverage-summary.json');console.log(s.total.lines.pct)}catch{console.log('n/a')}")
+          BASE_PCT="${BASELINE_COVERAGE:-n/a}"
+          DELTA="${COVERAGE_DELTA:-n/a}"
+          {
+            echo "## Health Check Summary"
+            echo ""
+            echo "| Signal | Value |"
+            echo "|---|---|"
+            echo "| verify exit code | \`${VERIFY_EXIT_CODE:-?}\` |"
+            echo "| Coverage (lines) | **${CURR_PCT}%** (baseline ${BASE_PCT}%, delta ${DELTA}%) |"
+            echo "| Vulnerabilities | total ${AUDIT_TOTAL:-?}, critical ${AUDIT_CRITICAL:-?}, high ${AUDIT_HIGH:-?}, moderate ${AUDIT_MODERATE:-?}, low ${AUDIT_LOW:-?} |"
+            echo "| License | ${LICENSE_STATUS:-?} |"
+            echo "| Secret grep hits | ${SECRET_HITS:-?} (informational, high false-positive) |"
+            echo ""
+            echo "### Details"
+            echo ""
+            echo "- See artifact \`smruti-cortex-health-bundle\` for verify.log, audit.json, lint-report.md, coverage HTML."
+            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "- Public dashboard: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/quality-report/"
+            fi
+            if [ -s nfr-reports/copyleft.txt ]; then
+              echo ""
+              echo "### Copyleft licenses detected"
+              echo '```'
+              cat nfr-reports/copyleft.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upsert PR coverage delta comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- health-check-coverage-comment -->';
+            const fs = require('fs');
+            let curr = 'n/a';
+            try {
+              const s = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+              if (typeof s.total?.lines?.pct === 'number') curr = `${s.total.lines.pct}%`;
+            } catch {}
+            const base = process.env.BASELINE_COVERAGE && process.env.BASELINE_COVERAGE !== 'n/a'
+              ? `${process.env.BASELINE_COVERAGE}%` : 'n/a';
+            const delta = process.env.COVERAGE_DELTA && process.env.COVERAGE_DELTA !== 'n/a'
+              ? `${process.env.COVERAGE_DELTA}%` : 'n/a';
+            const verifyExit = process.env.VERIFY_EXIT_CODE || '?';
+            const verifyLabel = verifyExit === '0' ? 'pass' : 'fail';
+
+            const body = [
+              marker,
+              '## Health Check Snapshot',
+              '',
+              `- **verify**: ${verifyLabel} (exit ${verifyExit})`,
+              `- **coverage (lines)**: ${curr} (baseline ${process.env.BASELINE_REF || 'main'}: ${base}, delta ${delta})`,
+              `- **security**: ${process.env.AUDIT_TOTAL || '?'} total (${process.env.AUDIT_CRITICAL || '?'} critical, ${process.env.AUDIT_HIGH || '?'} high)`,
+              '',
+              'Non-blocking informational comment. See workflow run for full output.'
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            if (!issue_number) return;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Upload health bundle artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smruti-cortex-health-bundle
+          path: |
+            coverage
+            nfr-reports
+            lint-report.json
+            lint-report.md
+            dist
+            release/zips
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Pages artifact (push main / cron / dispatch only)
+        if: |
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages (push main / cron / dispatch only)
+        id: deploy
+        if: |
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch'
+        uses: actions/deploy-pages@v4
+
+      - name: Upsert GitHub Release with zip (tag push only)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          ZIP=$(ls -t release/zips/*.zip 2>/dev/null | head -n1)
+          if [ -z "$ZIP" ]; then
+            echo "::error::No zip found in release/zips/ — npm run package must have failed."
+            exit 1
+          fi
+          echo "Tag: $TAG  Zip: $ZIP"
+          NOTES_FILE=$(mktemp)
+          node scripts/extract-changelog.mjs "$TAG" > "$NOTES_FILE" 2>/dev/null || \
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for details." > "$NOTES_FILE"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release exists — uploading zip with --clobber"
+            gh release upload "$TAG" "$ZIP" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "Release does not exist — creating it"
+            gh release create "$TAG" "$ZIP" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "SmrutiCortex $TAG" \
+              --notes-file "$NOTES_FILE"
+          fi
+
+      - name: Re-exit with verify's status (so GitHub UI marks the run red on failure)
+        if: always()
+        run: |
+          if [ "${VERIFY_EXIT_CODE:-0}" != "0" ]; then
+            echo "::error::npm run verify failed (exit ${VERIFY_EXIT_CODE}). See verify.log artifact for tail."
+            exit 1
+          fi
+          echo "All checks passed."

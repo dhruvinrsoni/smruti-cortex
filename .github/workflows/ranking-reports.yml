@@ -1,0 +1,196 @@
+name: Ranking Reports Bot
+
+# Single-file bot managing the `ranking-bug` issue silo end-to-end.
+#
+# Replaces three older single-purpose workflows (triage, dedupe, stale).
+# Merging is safe because all three operate on the same domain with the
+# same permissions, and the intake half (triage + dedupe) shares the same
+# trigger/event metadata — folding into one github-script call avoids
+# double-fetching issue data and removes a small race window.
+#
+# Two jobs gated by event_name:
+#   intake — issues:opened/labeled with `ranking-bug` label
+#            • Apply `needs-triage` and `sink: ranking-reports` labels.
+#            • Post idempotent orientation comment (marker-gated).
+#            • Search open `ranking-bug` issues for title-key duplicates;
+#              post `Possible duplicate of #N` and apply `duplicate?` label
+#              if found. Marker-gated so re-running won't double-post.
+#   gc     — Mondays 04:00 UTC (and manual)
+#            • actions/stale@v9: ranking-bug → stale at 60d, close at 90d.
+#              Excludes priority/pinned issues. Cap 50 ops/run.
+
+on:
+  issues:
+    types: [opened, labeled]
+  schedule:
+    - cron: '0 4 * * 1'  # Mondays 04:00 UTC — quiet hour
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+
+  intake:
+    name: Triage and dedupe new ranking-bug issue
+    if: github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'ranking-bug')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Apply labels, post orientation, flag duplicates (single script)
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const title = process.env.ISSUE_TITLE || '';
+            const TRIAGE_MARKER = '<!-- smruti-cortex:ranking-reports:intake-triage:v1 -->';
+            const DEDUPE_MARKER = '<!-- smruti-cortex:ranking-reports:intake-dedupe:v1 -->';
+
+            // ── Step 1: ensure base labels are applied ────────────────────────
+            // addLabels is idempotent — safe to re-run.
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: issueNumber,
+              labels: ['needs-triage', 'sink: ranking-reports']
+            });
+
+            // ── Step 2: fetch comments once for both idempotency checks ───────
+            const ourComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: issueNumber, per_page: 100 }
+            );
+
+            // ── Step 3: post orientation comment if not present ───────────────
+            const haveTriage = ourComments.some((c) => (c.body || '').includes(TRIAGE_MARKER));
+            if (!haveTriage) {
+              const orientationBody = [
+                TRIAGE_MARKER,
+                '',
+                'Thanks for the ranking report! 🙏 A few notes on what happens next:',
+                '',
+                '- This issue was siloed into the `sink: ranking-reports` bucket so it',
+                "  doesn't drown out other tickets in the maintainer's main triage queue.",
+                `  You can still find it via the [ranking reports filter](https://github.com/${owner}/${repo}/issues?q=is%3Aissue+label%3Aranking-bug).`,
+                '- A maintainer will look at the auto-generated debug data, look for',
+                '  duplicates, and either prioritise it (`priority: low/medium/high`)',
+                '  or close as `wontfix` / `duplicate`.',
+                '- If the report includes a "🧊 Degenerate ranking detected" callout',
+                '  the answer is usually "add more query tokens" — short queries hit',
+                '  hundreds of items that all tie on every relevance tier, so the final',
+                '  order falls back to your sort preference.',
+                '',
+                'If you have repro steps beyond what the form captured, please add them',
+                'as a follow-up comment.'
+              ].join('\n');
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issueNumber, body: orientationBody
+              });
+              core.info('Orientation comment posted.');
+            } else {
+              core.info('Orientation comment already present — skipping.');
+            }
+
+            // ── Step 4: dedupe by parsed title key (query, sort, major.minor) ─
+            const titlePattern =
+              /^\[Ranking\]\s+"([^"]+)"\s+[—–-]\s+\d+\s+results,\s+sort=([\w-]+)\s+\(v(\d+\.\d+)(?:\.\d+)?\)/;
+            const match = title.match(titlePattern);
+            if (!match) {
+              core.info(`Title does not match canonical shape; skipping dedupe. title=${title}`);
+              return;
+            }
+
+            const haveDedupe = ourComments.some((c) => (c.body || '').includes(DEDUPE_MARKER));
+            if (haveDedupe) {
+              core.info('Dedupe comment already posted; skipping.');
+              return;
+            }
+
+            const [, query, sortMode, majorMinor] = match;
+            const key = `${query}|${sortMode}|${majorMinor}`;
+            core.info(`Dedupe key: ${key}`);
+
+            // Search open ranking-bug issues, oldest first (older = canonical master).
+            const candidates = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner, repo,
+                state: 'open',
+                labels: 'ranking-bug',
+                sort: 'created',
+                direction: 'asc',
+                per_page: 100,
+              }
+            );
+
+            for (const candidate of candidates) {
+              if (candidate.number === issueNumber) continue;
+              if (candidate.pull_request) continue;
+              const m = (candidate.title || '').match(titlePattern);
+              if (!m) continue;
+              const otherKey = `${m[1]}|${m[2]}|${m[3]}`;
+              if (otherKey !== key) continue;
+
+              core.info(`Possible duplicate found: #${candidate.number}`);
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issueNumber,
+                body: `${DEDUPE_MARKER}\n👀 **Possible duplicate of #${candidate.number}**\n\nKey: \`query="${m[1]}", sort=${m[2]}, version=${m[3]}.x\`. The dedupe step flagged this because the older issue shares the same query, sort mode, and minor version. Maintainer will confirm — feel free to add new repro details if you think this is genuinely different.`
+              });
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number: issueNumber,
+                labels: ['duplicate?']
+              });
+              return; // First (oldest) match wins; don't spam.
+            }
+
+            core.info('No duplicates found.');
+
+  gc:
+    name: Garbage-collect stale ranking reports
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Mark + close stale ranking reports
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Issues only — never touch PRs.
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+
+          # 60d → stale, +30d → close.
+          days-before-issue-stale: 60
+          days-before-issue-close: 30
+
+          # Scope: ranking-bug only; never anything maintainer-prioritised.
+          any-of-issue-labels: 'ranking-bug'
+          exempt-issue-labels: 'priority: high,priority: medium,priority: low,pinned'
+
+          stale-issue-label: 'stale'
+          stale-issue-message: >
+            👋 This ranking report has had no activity for 60 days. If
+            it's still relevant, please drop a comment to reset the
+            clock. Otherwise, this issue will be closed automatically
+            in 30 days. Maintainer triage of unprioritised ranking
+            reports is best-effort — see the
+            [ranking reports filter](https://github.com/${{ github.repository }}/issues?q=is%3Aissue+label%3Aranking-bug)
+            for the live list.
+          close-issue-message: >
+            ⌛ Closing this report due to 90 days of inactivity. If the
+            ranking issue still reproduces in the latest extension
+            version, please file a fresh report — the auto-generated
+            payload will be more useful with current code.
+
+          # Don't blast the API: ~50 op/day is plenty for our scale.
+          operations-per-run: 50
+
+          # Newest issues are most likely the worth-keeping ones.
+          ascending: false
