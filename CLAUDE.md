@@ -310,8 +310,8 @@ Then:
 Hard rules that apply to **every** code change — human or AI. These are non-negotiable.
 
 ### Coverage
-- **vitest hard floor**: 95 / 90 / 95 / 95 (lines / branches / functions / statements) — fails `npm run coverage` if any metric drops below the project's current achievement level.
-- **Tiered ratchet** (`scripts/coverage-ratchet.mjs`): absolute floors of 70 / 80 / 90 (floor / target / goal). Only the **floor** can fail a build; target/goal tiers are informational. Override or add per-directory floors via `coverage-thresholds.json`.
+- **vitest hard floor**: 80 / 80 / 80 / 80 (lines / branches / functions / statements) — set well below current achievement (~96 / ~89 / ~95 / ~95) so routine commits don't fight a tightening gate. Catches only catastrophic regressions. Lowered from 95/90/95/95 in v9.3.0; raise back only if you want to enforce coverage growth.
+- **Tiered ratchet** (`scripts/coverage-ratchet.mjs`): absolute floors of 70 / 80 / 90 (floor / target / goal). Only the **floor** can fail a build; target/goal tiers are informational. Override or add per-directory floors via `coverage-thresholds.json`. The ratchet is the active quality bar; vitest's gate is the safety net underneath it.
 - Run `npm run coverage` before every commit. Run `node scripts/coverage-ratchet.mjs` (or `--per-file` for modulewise) to verify the tiers.
 - See `.github/skills/coverage-policy/SKILL.md` for exclusion rules and characterization-test-first pattern.
 

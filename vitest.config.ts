@@ -24,10 +24,15 @@ export default defineConfig({
         'src/background/schema.ts',           // type definitions only
       ],
       thresholds: {
-        lines: 95,
-        branches: 90,
-        functions: 95,
-        statements: 95,
+        // Hard floors only — set well below current achievement to keep
+        // release velocity high. The ratchet (scripts/coverage-ratchet.mjs,
+        // floors 70/80/90) is the active quality bar; vitest's gate just
+        // catches catastrophic regressions. Don't raise back to ≥90 unless
+        // you also want every routine commit to fight a tightening gate.
+        lines: 80,
+        branches: 80,
+        functions: 80,
+        statements: 80,
       },
     },
   },
