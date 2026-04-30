@@ -182,6 +182,53 @@ describe('sortResults', () => {
     expect(sorted.map(r => r.title)).toEqual(['Banana', 'Apple', 'Cherry']);
   });
 
+  // A3: trustEngineOrder is the no-op switch the search-result render
+  // sites use to honour the engine's tier-aware sort. Without this,
+  // any sortBy other than 'best-match' would shuffle the engine's
+  // relevance tiers by raw lastVisit / visitCount / title — the root
+  // cause of the v9.2.x "service-now feels random" symptom.
+  describe('trustEngineOrder option', () => {
+    it('returns input untouched when trustEngineOrder=true with most-recent', () => {
+      // If we re-sorted, Apple would move to the top by lastVisit.
+      // Instead the original (engine-tier) order survives.
+      const copy = [...results];
+      const sorted = sortResults(copy, 'most-recent', { trustEngineOrder: true });
+      expect(sorted.map(r => r.title)).toEqual(['Banana', 'Apple', 'Cherry']);
+    });
+
+    it('returns input untouched when trustEngineOrder=true with most-visited', () => {
+      const copy = [...results];
+      const sorted = sortResults(copy, 'most-visited', { trustEngineOrder: true });
+      expect(sorted.map(r => r.title)).toEqual(['Banana', 'Apple', 'Cherry']);
+    });
+
+    it('returns input untouched when trustEngineOrder=true with alphabetical', () => {
+      const copy = [...results];
+      const sorted = sortResults(copy, 'alphabetical', { trustEngineOrder: true });
+      expect(sorted.map(r => r.title)).toEqual(['Banana', 'Apple', 'Cherry']);
+    });
+
+    it('returns the SAME array reference when trustEngineOrder=true (no copy)', () => {
+      // Performance contract: search-result render paths run on every
+      // keystroke, so the no-op path must not allocate.
+      const copy = [...results];
+      expect(sortResults(copy, 'most-recent', { trustEngineOrder: true })).toBe(copy);
+    });
+
+    it('still sorts when trustEngineOrder=false (explicit opt-out is the legacy path)', () => {
+      const copy = [...results];
+      const sorted = sortResults(copy, 'most-recent', { trustEngineOrder: false });
+      expect(sorted.map(r => r.title)).toEqual(['Apple', 'Banana', 'Cherry']);
+    });
+
+    it('default (no opts) preserves the legacy GET_RECENT_HISTORY behaviour', () => {
+      // Empty-query / Recent paths must keep raw sort semantics so
+      // strict recency / visits / alpha is honoured on the Recent list.
+      const copy = [...results];
+      const sorted = sortResults(copy, 'most-recent');
+      expect(sorted.map(r => r.title)).toEqual(['Apple', 'Banana', 'Cherry']);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

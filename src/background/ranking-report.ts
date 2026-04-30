@@ -213,9 +213,10 @@ function formatReportBody(
     lines.push('1. **Matches** — count of query tokens found in the item (2/2 > 1/2)');
     lines.push('2. **Intent** — bonus for exact title/URL phrase matches');
     lines.push('3. **Coverage** — fraction of title+URL covered by query tokens');
-    lines.push('4. **Quality** — how well tokens match (exact > prefix > substring)');
-    lines.push('5. **sortBy preference** — user\'s chosen sort (recency/visits/alpha) within same tier');
-    lines.push('6. **Final Score** — weighted sum of all 9 scorers as tiebreaker');
+    lines.push('4. **Split coverage** — bonus when tokens hit BOTH title and URL (cross-field signal)');
+    lines.push('5. **Quality** — how well tokens match (exact > prefix > substring)');
+    lines.push('6. **sortBy preference** — within-tier ordering (recency / visits / alphabetical)');
+    lines.push('7. **Final Score** — weighted sum of all 9 scorers (only used when sortBy = best-match)');
     lines.push('');
     lines.push('</details>');
     lines.push('');

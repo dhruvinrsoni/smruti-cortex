@@ -1421,9 +1421,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
           currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
-          // Apply current sort setting from cached settings
+          // Trust engine order: tier-aware sort is already applied SW-side.
+          // See A3 in the all-eight pass for why a UI-side resort here was
+          // breaking ranking for short queries (the "service-now random
+          // results" #9 symptom).
           const currentSort = cachedSettings?.sortBy || 'best-match';
-          sortResults(currentResults, currentSort);
+          sortResults(currentResults, currentSort, { trustEngineOrder: true });
 
           currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
           selectedIndex = currentResults.length > 0 ? 0 : -1;
@@ -4274,9 +4277,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
               currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
-              // Apply current sort setting from cached settings
+              // Trust engine order — see comment on the port handler above.
               const currentSort = cachedSettings?.sortBy || 'best-match';
-              sortResults(currentResults, currentSort);
+              sortResults(currentResults, currentSort, { trustEngineOrder: true });
 
               currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
               selectedIndex = currentResults.length > 0 ? 0 : -1;

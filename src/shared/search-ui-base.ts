@@ -167,35 +167,65 @@ export function truncateUrl(url: string, maxLength: number = 60): string {
 }
 
 /**
- * Shared utility: Sort search results by given sort option
- * 
- * @param results Search results to sort (mutates array in-place for performance)
- * @param sortBy Sort option from SortBy enum
- * @returns Sorted results (same reference as input)
+ * Options for sortResults — kept as an object so the call site reads
+ * intentionally ("trust the engine") rather than as a positional boolean.
  */
-export function sortResults(results: SearchResult[], sortBy: string): SearchResult[] {
+export interface SortResultsOptions {
+  /**
+   * When true, the function is a no-op: the array is returned untouched
+   * because the search engine has already applied its tier-aware ordering
+   * (Matches > Intent > Coverage > Split coverage > Quality > sortBy
+   * preference > Final score). The UI must NOT shuffle that output by
+   * raw `lastVisit` / `visitCount` / `title`, otherwise an irrelevant-but-
+   * recent row can outrank a high-relevance match — the root cause of
+   * the v9.2.x "service-now feels random" report.
+   *
+   * Set this for SEARCH_QUERY render paths (popup + quick-search). Leave
+   * it unset (default false) for empty-query / GET_RECENT_HISTORY paths
+   * where strict recency / visits / alpha is exactly what the user wants.
+   */
+  trustEngineOrder?: boolean;
+}
+
+/**
+ * Shared utility: Sort search results by given sort option.
+ *
+ * @param results Search results to sort (mutates in-place for performance).
+ * @param sortBy Sort option from SortBy enum.
+ * @param opts Optional flags; pass `{ trustEngineOrder: true }` from
+ *             search-result render sites to honour engine tier ordering.
+ * @returns Sorted results (same reference as input).
+ */
+export function sortResults(
+  results: SearchResult[],
+  sortBy: string,
+  opts: SortResultsOptions = {},
+): SearchResult[] {
+  if (opts.trustEngineOrder) {
+    // Engine already applied tiers + sortBy preference within ties.
+    // Re-sorting here would discard relevance signals.
+    return results;
+  }
+
   switch (sortBy) {
     case SortBy.MOST_RECENT:
-      // Sort by lastVisit descending (most recent first)
       results.sort((a, b) => b.lastVisit - a.lastVisit);
       break;
-    
+
     case SortBy.MOST_VISITED:
-      // Sort by visitCount descending (most visited first)
       results.sort((a, b) => b.visitCount - a.visitCount);
       break;
-    
+
     case SortBy.ALPHABETICAL:
-      // Sort by title ascending (A-Z)
       results.sort((a, b) => a.title.localeCompare(b.title));
       break;
-    
+
     case SortBy.BEST_MATCH:
     default:
       // No sorting - keep scorer algorithm order
       break;
   }
-  
+
   return results;
 }
 

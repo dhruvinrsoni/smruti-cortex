@@ -1829,9 +1829,13 @@ function initializePopup() {
       resultsLocal = (resp && resp.results) ? resp.results : [];
       currentAIExpandedKeywords = resp?.aiStatus?.aiExpandedKeywords ?? [];
 
-      // Apply current sort setting
+      // Trust engine order: the search engine has already applied its
+      // tier-aware sort (Matches > Intent > Coverage > Split > Quality
+      // > sortBy preference). Re-sorting here by raw lastVisit / visitCount
+      // / title would override those tiers and produce the "service-now
+      // feels random" symptom (#9 in the all-eight pass).
       const sortBy = SettingsManager.getSetting('sortBy') || 'best-match';
-      sortResults(resultsLocal, sortBy);
+      sortResults(resultsLocal, sortBy, { trustEngineOrder: true });
 
       activeIndex = resultsLocal.length ? 0 : -1;
       renderResults();

@@ -127,6 +127,7 @@ describe('search-engine', () => {
     settingsMap.embeddingsEnabled = false;
     settingsMap.showNonMatchingResults = false;
     settingsMap.showDuplicateUrls = false;
+    settingsMap.sortBy = 'best-match';
     mockCache.get.mockReturnValue(null);
   });
 
@@ -1514,6 +1515,88 @@ describe('search-engine', () => {
       const { runSearch, getLastAIStatus } = await import('../search-engine');
       await runSearch('example');
       expect(getLastAIStatus()?.semantic).toBe('active');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // A3: sortBy tier-tiebreak coverage
+  //
+  // The "service-now feels random" report (#9 in the all-eight pass) traced
+  // back to short queries where every result hits the same relevance tier.
+  // When that happens, the engine's sortBy preference is the ONLY signal
+  // ordering the result set — so it must be honoured strictly. These tests
+  // pin the within-tier ordering for each sortBy, and double as a
+  // regression net for any future refactor that changes the comparator.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('sortBy tiebreak after full tier tie', () => {
+    function seedTiedItems() {
+      // Five items all containing the single-letter query 's' in their
+      // title — all share matchCount=1, intent=0, coverage=1.0,
+      // splitField=0, quality≈equal. The within-tier sortBy preference
+      // is the only thing left to order them.
+      const now = 2_000_000;
+      indexedItems.length = 0;
+      indexedItems.push(
+        makeItem({ url: 'https://a.example/s', title: 'svc a', hostname: 'a.example', lastVisit: now - 5000, visitCount: 1 }),
+        makeItem({ url: 'https://b.example/s', title: 'svc b', hostname: 'b.example', lastVisit: now - 4000, visitCount: 5 }),
+        makeItem({ url: 'https://c.example/s', title: 'svc c', hostname: 'c.example', lastVisit: now - 3000, visitCount: 3 }),
+        makeItem({ url: 'https://d.example/s', title: 'svc d', hostname: 'd.example', lastVisit: now - 2000, visitCount: 2 }),
+        makeItem({ url: 'https://e.example/s', title: 'svc e', hostname: 'e.example', lastVisit: now - 1000, visitCount: 4 }),
+      );
+    }
+
+    it('sortBy=most-recent orders strictly by lastVisit within the same relevance tier', async () => {
+      seedTiedItems();
+      settingsMap.sortBy = 'most-recent';
+      const { runSearch } = await importModule();
+      const results = await runSearch('s');
+      // Newest lastVisit first, oldest last.
+      expect(results.map(r => r.title)).toEqual(['svc e', 'svc d', 'svc c', 'svc b', 'svc a']);
+    });
+
+    it('sortBy=most-visited orders strictly by visitCount within the same relevance tier', async () => {
+      seedTiedItems();
+      settingsMap.sortBy = 'most-visited';
+      const { runSearch } = await importModule();
+      const results = await runSearch('s');
+      expect(results.map(r => r.title)).toEqual(['svc b', 'svc e', 'svc c', 'svc d', 'svc a']);
+    });
+
+    it('sortBy=alphabetical orders strictly by title.localeCompare within the same relevance tier', async () => {
+      seedTiedItems();
+      settingsMap.sortBy = 'alphabetical';
+      const { runSearch } = await importModule();
+      const results = await runSearch('s');
+      expect(results.map(r => r.title)).toEqual(['svc a', 'svc b', 'svc c', 'svc d', 'svc e']);
+    });
+
+    it('sortBy=best-match falls through to finalScore as the within-tier tiebreaker', async () => {
+      seedTiedItems();
+      settingsMap.sortBy = 'best-match';
+      const { runSearch } = await importModule();
+      const results = await runSearch('s');
+      // With our simple test scorer all finalScores are equal; assert
+      // we get the same 5 items (no ones get dropped) and that the
+      // engine doesn't throw on a totally degenerate tiebreak.
+      expect(results).toHaveLength(5);
+      const titles = new Set(results.map(r => r.title));
+      expect(titles).toEqual(new Set(['svc a', 'svc b', 'svc c', 'svc d', 'svc e']));
+    });
+
+    it('relevance tiers always win over sortBy: a higher matchCount item beats a more-recent low-match item', async () => {
+      const now = 2_000_000;
+      indexedItems.length = 0;
+      // "high" matches both query tokens; "fresh" matches only one but
+      // is the most recent. Even with sortBy=most-recent, the higher
+      // matchCount tier must win.
+      indexedItems.push(
+        makeItem({ url: 'https://high.example', title: 'service now portal', hostname: 'high.example', lastVisit: now - 60_000, visitCount: 1 }),
+        makeItem({ url: 'https://fresh.example', title: 'service only', hostname: 'fresh.example', lastVisit: now, visitCount: 100 }),
+      );
+      settingsMap.sortBy = 'most-recent';
+      const { runSearch } = await importModule();
+      const results = await runSearch('service now');
+      expect(results[0].url).toBe('https://high.example');
     });
   });
 });
