@@ -169,6 +169,112 @@ describe('generateRankingReport', () => {
   });
 });
 
+describe('title shape', () => {
+  it('embeds resultCount + sort=<mode> + version', () => {
+    recordSearchSnapshot(makeSnapshot({ sortBy: 'most-recent', resultCount: 100 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.title).toBe('[Ranking] "wiki leave" — 100 results, sort=most-recent (v8.1.0)');
+  });
+
+  it('keeps sort=<mode> even when resultCount is zero', () => {
+    recordSearchSnapshot(makeSnapshot({ sortBy: 'best-match', results: [], resultCount: 0 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    // Empty result set must still surface sort= so D4's dedupe key stays
+    // intact (otherwise zero-result reports would all collide).
+    expect(report.title).toContain('sort=best-match');
+    expect(report.title).toContain('0 results');
+  });
+
+  it('survives full-masking (sort=<mode> is metadata, not user content)', () => {
+    recordSearchSnapshot(makeSnapshot({ sortBy: 'most-visited' }));
+    const report = generateRankingReport({ maskingLevel: 'full' })!;
+    // The query in the title is masked, but sort= is internal metadata
+    // and stays raw on every level.
+    expect(report.title).toContain('sort=most-visited');
+  });
+});
+
+describe('degeneracy hint', () => {
+  // Helper: build N rows that share an identical tier signature.
+  function makeDegenerateRow(rank: number): SearchDebugSnapshot['results'][number] {
+    return {
+      rank,
+      url: `https://example.com/page-${rank}`,
+      title: `Page ${rank}`,
+      hostname: 'example.com',
+      finalScore: 1 - rank * 0.001, // unique to break the tie elsewhere
+      originalMatchCount: 1,
+      intentPriority: 0,
+      titleUrlCoverage: 1.0,
+      splitFieldCoverage: 0,
+      titleUrlQuality: 1.0,
+      keywordMatch: true,
+      aiMatch: false,
+      scorerBreakdown: [
+        { name: 'multiTokenMatch', score: 0, weight: 0.35 },
+        { name: 'title', score: 0.2, weight: 0.35 },
+      ],
+    };
+  }
+
+  it('appears when every top-N row ties on every tier', () => {
+    const rows = Array.from({ length: 10 }, (_, i) => makeDegenerateRow(i + 1));
+    recordSearchSnapshot(makeSnapshot({ sortBy: 'most-recent', results: rows, resultCount: 10 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.body).toContain('🧊 **Degenerate ranking detected.**');
+    expect(report.body).toContain('top-10');
+    expect(report.body).toContain('sortBy=`most-recent`');
+  });
+
+  it('does NOT appear when even one tier value differs', () => {
+    const rows = Array.from({ length: 5 }, (_, i) => makeDegenerateRow(i + 1));
+    rows[2].titleUrlCoverage = 0.5; // breaks the signature
+    recordSearchSnapshot(makeSnapshot({ results: rows, resultCount: 5 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.body).not.toContain('Degenerate ranking detected');
+  });
+
+  it('does NOT appear for a single-row result set', () => {
+    const rows = [makeDegenerateRow(1)];
+    recordSearchSnapshot(makeSnapshot({ results: rows, resultCount: 1 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    // One row trivially "ties" with itself — but that's not a degenerate
+    // ranking, that's just one result. Avoid the noisy hint.
+    expect(report.body).not.toContain('Degenerate ranking detected');
+  });
+
+  it('does NOT appear when the result list is empty', () => {
+    recordSearchSnapshot(makeSnapshot({ results: [], resultCount: 0 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.body).not.toContain('Degenerate ranking detected');
+  });
+
+  it('treats only the top-25 window as the signal source', () => {
+    // 25 identical rows + 1 outlier at the bottom (which the report
+    // truncates anyway). The hint must still fire because the top-25
+    // window — what the user actually sees — is degenerate.
+    const rows = Array.from({ length: 25 }, (_, i) => makeDegenerateRow(i + 1));
+    rows.push({ ...makeDegenerateRow(26), titleUrlCoverage: 0.0 });
+    recordSearchSnapshot(makeSnapshot({ results: rows, resultCount: 26 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.body).toContain('Degenerate ranking detected');
+    expect(report.body).toContain('top-25');
+  });
+
+  it('rounds float tiers to 2dp before comparing (matches visible precision)', () => {
+    // 0.501 vs 0.504 — both render as "0.50" in the report, so the user
+    // sees them as tied. The hint should treat them as tied too.
+    const rows = Array.from({ length: 4 }, (_, i) => makeDegenerateRow(i + 1));
+    rows[0].titleUrlQuality = 0.501;
+    rows[1].titleUrlQuality = 0.504;
+    rows[2].titleUrlQuality = 0.499;
+    rows[3].titleUrlQuality = 0.502;
+    recordSearchSnapshot(makeSnapshot({ results: rows, resultCount: 4 }));
+    const report = generateRankingReport({ maskingLevel: 'none' })!;
+    expect(report.body).toContain('Degenerate ranking detected');
+  });
+});
+
 describe('buildGitHubIssueUrl', () => {
   it('builds a valid GitHub issue URL', () => {
     recordSearchSnapshot(makeSnapshot());
