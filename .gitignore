@@ -24,6 +24,14 @@ docker-output/
 # Logs
 *.log
 
+# Local outputs of scripts/build-dashboard.mjs and scripts/build-lint-report.mjs.
+# These are CI-generated for the Pages artifact / health-check artifact bundle.
+# Locally they only exist when previewing — never commit them.
+_site/
+lint-report.json
+lint-report.md
+nfr-reports/
+
 # Environment
 .env
 .env.*
