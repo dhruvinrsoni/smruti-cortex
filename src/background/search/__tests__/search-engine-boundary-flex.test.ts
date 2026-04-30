@@ -71,6 +71,8 @@ vi.mock('../../ai-keyword-expander', () => ({
 
 vi.mock('../diversity-filter', () => ({
   applyDiversityFilter: vi.fn((items: unknown[]) => items),
+  applyTitleHostDedup: vi.fn((items: unknown[]) => items),
+  normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
 }));
 
 vi.mock('../../performance-monitor', () => ({

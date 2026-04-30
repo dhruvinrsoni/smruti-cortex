@@ -121,3 +121,84 @@ export function applyDiversityFilter<T extends ScoredItem>(
 
     return filtered;
 }
+
+/**
+ * Normalize a title for the title+host dedup pass: lowercase, collapse
+ * runs of whitespace, trim. Keeps non-ASCII characters intact so titles
+ * like "Sign in - Google Accounts" and "  SIGN IN -  Google Accounts "
+ * collapse to the same key, but "Sign in (work)" stays distinct.
+ *
+ * Public for testability.
+ */
+export function normalizeTitleForDedup(title: string): string {
+    return (title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Second-pass deduplication keyed on (hostname + normalized title).
+ *
+ * Why this exists: the URL-path dedup in `applyDiversityFilter` collapses
+ * `?utm_*` variants of the same page, but it does NOT collapse rows that
+ * share a title and a hostname yet sit on different paths (e.g. multiple
+ * "Sign in - Google Accounts" rows on accounts.google.com/signin/v2/
+ * vs /signin/v2/identifier vs /signin/identifier?continue=…). Users
+ * see these as visually identical and report them as duplicates even
+ * though the underlying URLs differ.
+ *
+ * Behaviour:
+ *   - First-wins: input order is preserved (caller is responsible for
+ *     sorting before calling, same contract as `applyDiversityFilter`).
+ *   - Cross-domain rows with the same title are NOT collapsed — variety
+ *     across hostnames is a useful signal.
+ *   - Empty / missing titles fall through (we never collapse to a key
+ *     of just `host|`, which would erase distinct titleless rows on
+ *     the same domain).
+ *   - Malformed URLs (URL parser throws) fall through with empty host;
+ *     since the empty-title guard also kicks in for `|<title>`, only a
+ *     row with BOTH a usable host AND a non-empty normalised title
+ *     contributes a dedup key.
+ *
+ * @param results Scored items, in the order the caller wants preserved.
+ * @returns Filtered array (subset of input), original order maintained.
+ */
+export function applyTitleHostDedup<T extends ScoredItem>(results: T[]): T[] {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    let collapsed = 0;
+
+    for (const r of results) {
+        let host = '';
+        try {
+            host = new URL(r.item.url).hostname;
+        } catch {
+            // Keep malformed-URL rows; they cannot collide on host so the
+            // empty-host guard below preserves them automatically.
+        }
+
+        const normTitle = normalizeTitleForDedup(r.item.title);
+        // Only items with BOTH a real host AND a non-empty title can
+        // collide. Anything else is preserved (defensive against keying
+        // unrelated rows together as "|<title>" or "<host>|").
+        if (!host || !normTitle) {
+            out.push(r);
+            continue;
+        }
+
+        const key = `${host}|${normTitle}`;
+        if (seen.has(key)) {
+            collapsed++;
+            continue;
+        }
+        seen.add(key);
+        out.push(r);
+    }
+
+    if (collapsed > 0) {
+        logger.debug('applyTitleHostDedup', `Title+host dedup collapsed ${collapsed} rows`, {
+            originalCount: results.length,
+            filteredCount: out.length,
+        });
+    }
+
+    return out;
+}

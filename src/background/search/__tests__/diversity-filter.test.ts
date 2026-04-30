@@ -5,11 +5,31 @@ import { mockLogger, makeItem } from '../../../__test-utils__';
 
 vi.mock('../../../core/logger', () => mockLogger());
 
-import { normalizeUrl, applyDiversityFilter, ScoredItem } from '../diversity-filter';
+import {
+  normalizeUrl,
+  applyDiversityFilter,
+  applyTitleHostDedup,
+  normalizeTitleForDedup,
+  ScoredItem,
+} from '../diversity-filter';
 
 function makeScoredItem(url: string, score: number): ScoredItem {
   return {
     item: makeItem({ url, hostname: new URL(url).hostname }),
+    finalScore: score,
+  };
+}
+
+/**
+ * Variant for the title+host dedup tests: lets us set both `url` and
+ * `title` (and skips hostname auto-derivation when the URL is malformed,
+ * exercising the empty-host fallthrough branch).
+ */
+function makeTitled(url: string, title: string, score = 1.0): ScoredItem {
+  let hostname = '';
+  try { hostname = new URL(url).hostname; } catch { /* malformed URL — leave host empty */ }
+  return {
+    item: makeItem({ url, title, hostname }),
     finalScore: score,
   };
 }
@@ -132,5 +152,119 @@ describe('applyDiversityFilter', () => {
     expect(result[0].item.url).toBe('https://a.com/page');
     expect(result[1].item.url).toBe('https://b.com/page');
     expect(result[2].item.url).toBe('https://c.com/page');
+  });
+});
+
+describe('normalizeTitleForDedup', () => {
+  it('lowercases and trims whitespace', () => {
+    expect(normalizeTitleForDedup('  Sign In  ')).toBe('sign in');
+  });
+
+  it('collapses runs of internal whitespace to a single space', () => {
+    expect(normalizeTitleForDedup('Sign\tIn   to   Account')).toBe('sign in to account');
+  });
+
+  it('returns empty string for empty / nullish input', () => {
+    expect(normalizeTitleForDedup('')).toBe('');
+    expect(normalizeTitleForDedup(undefined as unknown as string)).toBe('');
+    expect(normalizeTitleForDedup(null as unknown as string)).toBe('');
+  });
+
+  it('preserves punctuation and non-ASCII characters', () => {
+    // Different titles with different punctuation must NOT collapse —
+    // we only normalise case + whitespace.
+    expect(normalizeTitleForDedup('Sign in - work')).not.toBe(normalizeTitleForDedup('Sign in (work)'));
+    expect(normalizeTitleForDedup('Café')).toBe('café');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// A4: applyTitleHostDedup — second-pass dedup keyed on (host + normTitle).
+// Reproduces the user-reported "4× Sign in - Google Accounts" case from
+// the v9.2.0 'service-now' bug, plus the cross-domain / empty-title /
+// malformed-URL edge cases.
+// ──────────────────────────────────────────────────────────────────────────
+describe('applyTitleHostDedup', () => {
+  it('collapses multiple Sign-in rows on the same host (the user-reported case)', () => {
+    const items = [
+      makeTitled('https://accounts.google.com/signin/v2/identifier', 'Sign in - Google Accounts', 1.5),
+      makeTitled('https://accounts.google.com/signin/v2/sl/pwd', 'Sign in - Google Accounts', 1.4),
+      makeTitled('https://accounts.google.com/signin/v2/challenge/pwd', 'Sign in - Google Accounts', 1.3),
+      makeTitled('https://accounts.google.com/signin/identifier?continue=…', 'Sign in - Google Accounts', 1.2),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out).toHaveLength(1);
+    expect(out[0].item.url).toBe('https://accounts.google.com/signin/v2/identifier');
+  });
+
+  it('preserves cross-domain rows with the same title (variety across hosts is signal)', () => {
+    const items = [
+      makeTitled('https://a.example.com/login', 'Sign in', 1.0),
+      makeTitled('https://b.example.com/login', 'Sign in', 0.9),
+      makeTitled('https://c.example.com/login', 'Sign in', 0.8),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out).toHaveLength(3);
+  });
+
+  it('treats whitespace + casing variants as the same title (collapses)', () => {
+    const items = [
+      makeTitled('https://x.example.com/a', '  SIGN  IN  -  Google Accounts  ', 1.0),
+      makeTitled('https://x.example.com/b', 'Sign in - Google Accounts', 0.9),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out).toHaveLength(1);
+    expect(out[0].item.url).toBe('https://x.example.com/a');
+  });
+
+  it('does NOT collapse rows with empty titles (no false |host shared key)', () => {
+    // If we keyed on `${host}|` for empty titles, every titleless row on
+    // the same host would collapse to one — destroying distinct results
+    // for sites that index path-only rows. Empty-title rows fall through.
+    const items = [
+      makeTitled('https://x.example.com/a', '', 1.0),
+      makeTitled('https://x.example.com/b', '', 0.9),
+      makeTitled('https://x.example.com/c', '', 0.8),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out).toHaveLength(3);
+  });
+
+  it('does NOT drop rows with malformed URLs (URL parser throws -> empty host -> fallthrough)', () => {
+    const items = [
+      makeTitled('not a url at all !!', 'Some title', 1.0),
+      makeTitled('://still-bad', 'Some title', 0.9),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out).toHaveLength(2);
+  });
+
+  it('preserves first-wins ordering when collapse occurs (later duplicates dropped)', () => {
+    const items = [
+      makeTitled('https://x.example.com/a', 'Same', 1.0),
+      makeTitled('https://y.example.com/a', 'Other', 0.9),
+      makeTitled('https://x.example.com/b', 'Same', 0.8),
+      makeTitled('https://z.example.com/a', 'Third', 0.7),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out.map(r => r.item.url)).toEqual([
+      'https://x.example.com/a',
+      'https://y.example.com/a',
+      'https://z.example.com/a',
+    ]);
+  });
+
+  it('returns empty array unchanged', () => {
+    expect(applyTitleHostDedup([])).toHaveLength(0);
+  });
+
+  it('passes through unique (host, title) pairs untouched', () => {
+    const items = [
+      makeTitled('https://a.com/x', 'Title A', 1.0),
+      makeTitled('https://b.com/y', 'Title B', 0.9),
+      makeTitled('https://a.com/x2', 'Title C', 0.8),
+    ];
+    const out = applyTitleHostDedup(items);
+    expect(out).toHaveLength(3);
   });
 });

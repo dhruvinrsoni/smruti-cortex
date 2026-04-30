@@ -69,6 +69,8 @@ vi.mock('../../ai-keyword-expander', () => ({
 
 vi.mock('../diversity-filter', () => ({
   applyDiversityFilter: vi.fn((items: unknown[]) => items),
+  applyTitleHostDedup: vi.fn((items: unknown[]) => items),
+  normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
 }));
 
 vi.mock('../../performance-monitor', () => ({
@@ -191,6 +193,8 @@ describe('search-engine', () => {
     }));
     vi.doMock('../diversity-filter', () => ({
       applyDiversityFilter: vi.fn((items: unknown[]) => items),
+      applyTitleHostDedup: vi.fn((items: unknown[]) => items),
+      normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
     }));
     vi.doMock('../../performance-monitor', () => ({
       performanceTracker: { recordSearch: vi.fn() },
@@ -599,6 +603,8 @@ describe('search-engine', () => {
       }));
       vi.doMock('../diversity-filter', () => ({
         applyDiversityFilter: vi.fn((items: unknown[]) => items),
+        applyTitleHostDedup: vi.fn((items: unknown[]) => items),
+        normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
       }));
       vi.doMock('../../performance-monitor', () => ({
         performanceTracker: { recordSearch: vi.fn() },
@@ -698,6 +704,8 @@ describe('search-engine', () => {
       }));
       vi.doMock('../diversity-filter', () => ({
         applyDiversityFilter: vi.fn((items: unknown[]) => items),
+        applyTitleHostDedup: vi.fn((items: unknown[]) => items),
+        normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
       }));
       vi.doMock('../../performance-monitor', () => ({
         performanceTracker: { recordSearch: vi.fn() },
@@ -896,6 +904,8 @@ describe('search-engine', () => {
       }));
       vi.doMock('../diversity-filter', () => ({
         applyDiversityFilter: vi.fn((i: unknown[]) => i),
+        applyTitleHostDedup: vi.fn((i: unknown[]) => i),
+        normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
       }));
       vi.doMock('../../performance-monitor', () => ({
         performanceTracker: { recordSearch: vi.fn() },
@@ -1172,7 +1182,7 @@ describe('search-engine', () => {
         : vi.fn(async (q: string) => q.toLowerCase().split(/\s+/).filter((t: string) => t.length > 0)),
       getLastExpansionSource: overrides.getLastExpansionSource ? vi.fn(overrides.getLastExpansionSource) : vi.fn(() => 'disabled'),
     }));
-    vi.doMock('../diversity-filter', () => ({ applyDiversityFilter: vi.fn((i: unknown[]) => i) }));
+    vi.doMock('../diversity-filter', () => ({ applyDiversityFilter: vi.fn((i: unknown[]) => i), applyTitleHostDedup: vi.fn((i: unknown[]) => i), normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()) }));
     vi.doMock('../../performance-monitor', () => ({ performanceTracker: { recordSearch: vi.fn() } }));
     vi.doMock('../query-expansion', () => ({
       getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),

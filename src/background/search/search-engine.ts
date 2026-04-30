@@ -39,7 +39,7 @@ import { traced } from '../../core/traced';
 import { SettingsManager } from '../../core/settings';
 import { ScorerContext } from '../../core/scorer-types';
 import { expandQueryKeywords, getLastExpansionSource } from '../ai-keyword-expander';
-import { applyDiversityFilter, ScoredItem } from './diversity-filter';
+import { applyDiversityFilter, applyTitleHostDedup, ScoredItem } from './diversity-filter';
 import { performanceTracker } from '../performance-monitor';
 import { getExpandedTerms } from './query-expansion';
 import { recordSearchDebug, recordSearchSnapshot } from '../diagnostics';
@@ -627,7 +627,17 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     // Apply diversity filter to remove duplicate URLs (same page, different query params)
     const showDuplicateUrls = SettingsManager.getSetting('showDuplicateUrls') ?? false;
     const enableDiversity = !showDuplicateUrls; // Diversity ON = filter duplicates
-    const diverseResults = applyDiversityFilter(results, enableDiversity);
+    let diverseResults = applyDiversityFilter(results, enableDiversity);
+
+    // Polar dedup (A4): when the user has duplicates OFF, also collapse rows
+    // sharing (hostname + normalized title). The first-pass URL-path filter
+    // above doesn't catch visually-identical rows that live on different paths
+    // of the same host (e.g. multiple "Sign in - Google Accounts" pages).
+    // Gated on the same `!showDuplicateUrls` setting so power users who turn
+    // duplicates ON keep seeing every distinct row.
+    if (enableDiversity) {
+        diverseResults = applyTitleHostDedup(diverseResults);
+    }
 
     // Less restrictive domain diversification for power users - allow more results per domain
     const diversified: ScoredItem[] = [];
