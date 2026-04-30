@@ -25,3 +25,4 @@ The workflow will start running on the next matching trigger.
 |----------|----------|--------|
 | `docker-build.yml` | 2026-04-18 | Chrome extensions aren't distributed via Docker; GHCR images aren't consumed anywhere. Revive if containerised builds become useful again. |
 | `nfr-report.yml` | 2026-05-01 | Replaced by `health-check.yml`. Dashboard generation extracted into `scripts/build-dashboard.mjs` and published via `actions/deploy-pages@v4` instead of commit-back to main. PR coverage delta comment moved into health-check. |
+| `build.yml` | 2026-05-01 | Replaced by `health-check.yml`. Lint + tests + build + package now flow through `npm run verify` (the perfected local pipeline) inside health-check. Tag-trigger Release upsert moved into health-check (fixes the `gh release create` work-account auth pain by using CI's `GITHUB_TOKEN`). The dead `release:` job (`if: false`) is dropped entirely. |
