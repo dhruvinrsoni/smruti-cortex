@@ -88,7 +88,7 @@ export function buildReportChooser(
 
     const subtitle = doc.createElement('div');
     subtitle.className = 'report-chooser-subtitle';
-    subtitle.textContent = 'The report is copied to your clipboard. Pick how much to redact before you paste it into GitHub.';
+    subtitle.textContent = 'Your full report is auto copied to the clipboard. Pick a redaction level, then paste it into the Debug Data box on the GitHub form that opens next.';
     subtitle.style.cssText = 'font-size:11px;color:var(--muted,#666);line-height:1.45;margin-bottom:14px;';
 
     dialog.appendChild(title);

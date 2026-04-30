@@ -232,7 +232,7 @@ function formatReportBody(
 
     lines.push('### Expected Behavior');
     lines.push('');
-    lines.push('_Describe what you expected to see ranked differently:_');
+    lines.push('_Describe which rows look mis-ranked and where you expected them to land:_');
     lines.push('');
 
     lines.push('---');

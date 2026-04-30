@@ -34,7 +34,7 @@ body:
     id: ranking-problem
     attributes:
       label: What's Wrong with the Ranking?
-      description: Describe which results are misranked and where you expected them.
+      description: Describe which results are mis-ranked and where you expected them to appear.
       placeholder: |
         Result #8 "Wiki Leave Policy" matches both tokens but appeared below
         Result #2 "Wiki Login" which only matches one token.
