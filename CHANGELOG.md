@@ -1,4 +1,94 @@
-## [9.2.0] — 2026-04-23
+### [9.3.0] — 2026-04-30
+
+### Features
+- report-button kill switch + 5/24h client-side rate limit
+- enrich title with sort= and add degeneracy hint
+- use Issue Form template for ranking-bug URLs
+- polar dedup pass keyed on hostname + normalized title
+- live-merge fallback in GET_RECENT_HISTORY
+- CHANGELOG entry content check (header-only is FAIL)
+- --dry-run, --quiet, and protected-dir guard
+- formalize `store check --json` schema (schemaVersion: 1)
+- host_permissions parity (manifest <-> submission doc)
+- Submitted date sanity (future fails, >365d warns)
+- `store init --force` overwrite is loud + sized
+- add `store init --dry-run` (preview without writing)
+- --strict promotes WARN outcomes to FAIL
+- add version parity check (manifest vs package)
+- --strict flag promotes WARN to FAIL
+- --json structured log mode (NDJSON on stdout)
+- `npm run ship resume` — pick up an interrupted ship
+- soft baseline ratchet + --update-baseline flag
+- capture step output, replay tail of failures in summary
+- include categorized changelog excerpt in commit body
+- reject `ship check --skip-e2e`
+- verify gh auth status during prereqs
+- pre-bump tag-collision guard in Step 1
+- hard-fail when manifest perms change without store-submission doc edit
+- scaffolder injects PERMISSION DELTA banner into new submission docs
+- audit manifest <-> submission-doc permission parity
+
+### Bug Fixes
+- point build.yml package step at release/zips/ path
+- tighten typos and phrasing in ranking-report surface
+- trust engine tier order in UI; align ranking-report legend
+- palette-aware Ctrl+C/Ctrl+M for tabs, bookmarks, websearch
+- palette-aware Ctrl+C/Ctrl+M and Enter across all prefix modes
+- fast-path single-row IDB upsert on chrome.history.onVisited
+- re-fetch Recent list after a successful Index Now
+- MANUAL_INDEX clears the recent-history session warm cache
+- runSilent surfaces stderr tail on failure
+- cap fetchStore() at 10s via AbortSignal.timeout
+- write release zip to canonical release/zips/ path
+- support release/zips/ canonical layout
+- repair CHANGELOG heading + archive release notes under docs/release-notes/
+
+### Refactoring
+- swift submission UX (init preamble + check + ship banner)
+- semver validation, atomic write, and --check mode
+- replace delta baseline with absolute tiered floors (70/80/90)
+- harden --init scaffolder
+- --no-network downgrades store check, doesn't skip it
+- strict argv parser with explicit allow-lists
+- full revert cleanup on Step 5/6 failure
+- rename prev-tag check + add next-bump collision check
+- push main + tag atomically
+- fetch remote tags during prereqs (soft-fail)
+- C — delete orphan scripts (Phase C, audit + cleanup)
+- B2 — add five new ship check phases to verify.mjs --release
+- B1 — fold preflight.mjs into verify.mjs --release
+- A6 — drop unused lifecycle hooks (preversion, version, postversion)
+- A5 — ship subcommand dispatcher (patch, minor, major, check)
+- A4 — store dispatcher (store check, store init, store unpack)
+- A3 — lint dispatcher (lint, lint strict)
+- A2 — test dispatcher + e2e/coverage as top-level verbs
+- A1 — rename build:prod -> build, drop dev one-shot, start:watch -> dev
+
+### Tests
+- palette row data-url/data-title contract for popup modes
+- recent-view freshness specs (B5/B6/B7)
+
+### Other
+- ranking-report triage playbook (maintainer + reporter)
+- update latest quality report [skip ci]
+- indexing skill for the three-tier Recent-view freshness model
+- align ratchet docs with the new tiered model
+- D1 sweep for scripts and npm-script refactor
+- document Manifest Permission Discipline rule and enforcement layers
+- simplify v9.2.0 description to LTS append-only minimal copy-paste
+- finalize v9.2.0 submission — Submitted date + canonical zip path
+- add idle permission justification + restructure v9.2.0 description
+- update latest quality report [skip ci]
+- update latest quality report [skip ci]
+- lower vitest coverage hard floor to 80/80/80/80
+- npm audit fix — resolve 6 dev-dep advisories
+- narrow dependabot to security-only updates
+- add ranking-bug, auto-report, sink, duplicate? labels
+- triage, stale, and dedupe workflows for ranking-bug issues
+
+---
+
+# [9.2.0] — 2026-04-23
 
 ### Features
 - client-side dispatch guard collapses duplicate SEARCH_QUERY sends
