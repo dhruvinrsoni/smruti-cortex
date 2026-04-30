@@ -54,6 +54,7 @@ import {
   formatModelSize,
   buildHintMap,
   shouldRefreshRecentAfterManualIndex,
+  resolvePopupCopyTarget,
 } from './popup-utils';
 import {
   type SearchResult,
@@ -980,6 +981,10 @@ function initializePopup() {
           }
           if (tab.url) {
             li.dataset.tabUrl = tab.url;
+            li.dataset.url = tab.url;
+          }
+          if (tab.title) {
+            li.dataset.title = tab.title;
           }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const popupTabFav = tab.favIconUrl || chrome.runtime.getURL('../assets/icon-favicon-fallback.svg');
@@ -1040,6 +1045,10 @@ function initializePopup() {
           li.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;background:var(--card);';
           if (bm.url) {
             li.dataset.bookmarkUrl = bm.url;
+            li.dataset.url = bm.url;
+          }
+          if (bm.title) {
+            li.dataset.title = bm.title;
           }
           const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           let bmFavUrl = '';
@@ -1154,6 +1163,8 @@ function initializePopup() {
           }
         });
       } else {
+        li.dataset.url = built.url;
+        li.dataset.title = `Search ${engineName} for "${parsed.searchTerms}"`;
         li.innerHTML = `
           <span style="font-size:16px;">🔍</span>
           <span style="flex:1;font-size:13px;font-weight:500;">Search ${esc(engineName)} for "${esc(parsed.searchTerms)}"</span>
@@ -2342,35 +2353,41 @@ function initializePopup() {
       }
     }
 
-    // Copy shortcuts - ONLY when a result is focused (not input)
+    // Copy shortcuts - ONLY when a result is focused (not input).
+    // Resolution is delegated to resolvePopupCopyTarget so palette modes
+    // (#, @, ??) work too — those rows live in the DOM, not in resultsLocal.
     if (e.key.toLowerCase() === 'm' && e.ctrlKey && resultsNode.contains(currentElement)) {
       e.preventDefault();
-      if (resultsLocal.length === 0 || currentIndex === -1) {return;}
-      const item = resultsLocal[currentIndex];
-      if (item) {
-        const markdown = createMarkdownLink(item as SearchResult);
-        navigator.clipboard.writeText(markdown).then(() => {
-          showToast('📋 Copied markdown link!');
-        }).catch(() => {
-          showToast('❌ Copy failed', 'error');
-        });
-        addRecentInteraction(item.url, item.title || '', 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
-      }
+      const target = resolvePopupCopyTarget(
+        (currentElement as HTMLElement).closest?.('li') as HTMLElement | null,
+        resultsLocal,
+        currentIndex,
+      );
+      if (!target) { return; }
+      const markdown = createMarkdownLink({ url: target.url, title: target.title } as SearchResult);
+      navigator.clipboard.writeText(markdown).then(() => {
+        showToast('📋 Copied markdown link!');
+      }).catch(() => {
+        showToast('❌ Copy failed', 'error');
+      });
+      addRecentInteraction(target.url, target.title, 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
       return;
     }
 
     if (e.key.toLowerCase() === 'c' && e.ctrlKey && resultsNode.contains(currentElement)) {
       e.preventDefault();
-      if (resultsLocal.length === 0 || currentIndex === -1) {return;}
-      const item = resultsLocal[currentIndex];
-      if (item) {
-        copyHtmlLinkToClipboard(item as SearchResult).then(() => {
-          showToast('📋 Copied HTML link!');
-        }).catch(() => {
-          showToast('📋 Copied (text only)', 'info');
-        });
-        addRecentInteraction(item.url, item.title || '', 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
-      }
+      const target = resolvePopupCopyTarget(
+        (currentElement as HTMLElement).closest?.('li') as HTMLElement | null,
+        resultsLocal,
+        currentIndex,
+      );
+      if (!target) { return; }
+      copyHtmlLinkToClipboard({ url: target.url, title: target.title } as SearchResult).then(() => {
+        showToast('📋 Copied HTML link!');
+      }).catch(() => {
+        showToast('📋 Copied (text only)', 'info');
+      });
+      addRecentInteraction(target.url, target.title, 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
       return;
     }
   }

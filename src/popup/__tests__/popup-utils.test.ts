@@ -5,6 +5,7 @@ import {
   formatModelSize,
   buildHintMap,
   shouldRefreshRecentAfterManualIndex,
+  resolvePopupCopyTarget,
   type DetectModeSettings,
 } from '../popup-utils';
 
@@ -186,5 +187,155 @@ describe('shouldRefreshRecentAfterManualIndex', () => {
     expect(shouldRefreshRecentAfterManualIndex(null)).toBe(false);
     expect(shouldRefreshRecentAfterManualIndex(undefined)).toBe(false);
     expect(shouldRefreshRecentAfterManualIndex({} as unknown as Parameters<typeof shouldRefreshRecentAfterManualIndex>[0])).toBe(false);
+  });
+});
+
+describe('resolvePopupCopyTarget', () => {
+  const history = [
+    { url: 'https://example.com/0', title: 'Hist 0' },
+    { url: 'https://example.com/1', title: 'Hist 1' },
+  ];
+
+  it('reads url+title off a focused palette row (post-A2 enrichment)', () => {
+    const target = resolvePopupCopyTarget(
+      {
+        className: 'palette-selectable-row',
+        dataset: { url: 'https://news.ycombinator.com/', title: 'Hacker News' },
+      },
+      [],
+      -1,
+    );
+    expect(target).toEqual({ url: 'https://news.ycombinator.com/', title: 'Hacker News' });
+  });
+
+  it('falls back to tabUrl when generic url dataset is empty (pre-A2 tab rows still copy)', () => {
+    const target = resolvePopupCopyTarget(
+      {
+        className: 'palette-selectable-row',
+        dataset: { tabUrl: 'https://tab.example/x', title: 'Open tab' },
+      },
+      [],
+      -1,
+    );
+    expect(target).toEqual({ url: 'https://tab.example/x', title: 'Open tab' });
+  });
+
+  it('falls back to bookmarkUrl when generic url dataset is empty', () => {
+    const target = resolvePopupCopyTarget(
+      {
+        className: 'palette-selectable-row',
+        dataset: { bookmarkUrl: 'https://bm.example', title: 'Bookmark' },
+      },
+      [],
+      -1,
+    );
+    expect(target).toEqual({ url: 'https://bm.example', title: 'Bookmark' });
+  });
+
+  it('returns null for a palette row that has no URL of any flavour (e.g. /command row)', () => {
+    // Critical: must NOT silently fall through to resultsLocal[0] —
+    // that would copy a stale history row when the user pressed Ctrl+C
+    // on a selected command palette entry.
+    const target = resolvePopupCopyTarget(
+      { className: 'palette-selectable-row', dataset: {} },
+      history,
+      0,
+    );
+    expect(target).toBeNull();
+  });
+
+  it('returns null when no row is focused AND currentIndex is unset (Ctrl+C with focus on input or container)', () => {
+    // -1 is the popup's "nothing selected" sentinel for activeIndex.
+    expect(resolvePopupCopyTarget(null, history, -1)).toBeNull();
+  });
+
+  it('null focusedRow with a valid currentIndex still copies the active history row (legacy parity)', () => {
+    // Pre-A2 behaviour: container-level focus on the results <ul> still
+    // copies the active-highlighted history row. We must preserve that so
+    // existing users don't lose Ctrl+C on the default list.
+    expect(resolvePopupCopyTarget(null, history, 0)).toEqual({
+      url: 'https://example.com/0',
+      title: 'Hist 0',
+    });
+  });
+
+  it('falls back to resultsLocal[currentIndex] for history rows (legacy default-list path)', () => {
+    const target = resolvePopupCopyTarget(
+      { className: '', dataset: { index: '1' } },
+      history,
+      1,
+    );
+    expect(target).toEqual({ url: 'https://example.com/1', title: 'Hist 1' });
+  });
+
+  it('returns null when currentIndex is -1 even with a focused non-palette row (no selection state)', () => {
+    expect(
+      resolvePopupCopyTarget({ className: '', dataset: {} }, history, -1),
+    ).toBeNull();
+  });
+
+  it('returns null when currentIndex is out of bounds (defensive against stale state)', () => {
+    expect(
+      resolvePopupCopyTarget({ className: '', dataset: {} }, history, 99),
+    ).toBeNull();
+  });
+
+  it('returns null when the resultsLocal entry at currentIndex has no URL', () => {
+    expect(
+      resolvePopupCopyTarget(
+        { className: '', dataset: {} },
+        [{ title: 'Title only', url: undefined }],
+        0,
+      ),
+    ).toBeNull();
+  });
+
+  it('coerces missing title on a palette row to empty string (no "undefined" in clipboard)', () => {
+    const target = resolvePopupCopyTarget(
+      {
+        className: 'palette-selectable-row',
+        dataset: { url: 'https://example.com' },
+      },
+      [],
+      -1,
+    );
+    expect(target).toEqual({ url: 'https://example.com', title: '' });
+  });
+
+  it('trims whitespace around dataset url + title', () => {
+    const target = resolvePopupCopyTarget(
+      {
+        className: 'palette-selectable-row',
+        dataset: { url: '  https://example.com  ', title: '  Spacey  ' },
+      },
+      [],
+      -1,
+    );
+    expect(target).toEqual({ url: 'https://example.com', title: 'Spacey' });
+  });
+
+  it('treats whitespace-only URL as missing (palette row with no real URL)', () => {
+    expect(
+      resolvePopupCopyTarget(
+        {
+          className: 'palette-selectable-row',
+          dataset: { url: '   ', title: 'X' },
+        },
+        history,
+        0,
+      ),
+    ).toBeNull();
+  });
+
+  it('palette row with URL wins over a stale resultsLocal entry at the same index', () => {
+    const target = resolvePopupCopyTarget(
+      {
+        className: 'palette-selectable-row',
+        dataset: { url: 'https://palette-wins.example', title: 'Palette' },
+      },
+      history,
+      0,
+    );
+    expect(target?.url).toBe('https://palette-wins.example');
   });
 });

@@ -106,3 +106,85 @@ export function shouldRefreshRecentAfterManualIndex(resp: ManualIndexResponse | 
   const total = typeof resp.total === 'number' ? resp.total : 0;
   return added > 0 || updated > 0 || total > 0;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Popup palette copy resolver — mirror of resolvePaletteCopyTarget in
+// quick-search-utils.ts, but adapted for the popup's mixed list (history
+// rows live in `resultsLocal`, palette rows live only in the DOM).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Subset of HTMLElement features we need to read off a focused row, kept
+ * small so unit tests can pass plain object stubs without spinning up jsdom.
+ */
+export interface PopupFocusedRow {
+  /** className substring check used to detect history `<li>` rows. */
+  className?: string;
+  /** Dataset attributes set by renderers (palette rows: url/title/tabUrl/bookmarkUrl). */
+  dataset?: {
+    url?: string;
+    title?: string;
+    tabUrl?: string;
+    bookmarkUrl?: string;
+    /** Index into resultsLocal for history rows; not used for palette rows. */
+    index?: string;
+  };
+}
+
+/** Minimal shape of the per-row entry in popup's resultsLocal cache. */
+export interface PopupHistoryRow {
+  url?: string;
+  title?: string;
+}
+
+export interface ResolvedPopupCopyTarget {
+  url: string;
+  title: string;
+}
+
+/**
+ * Decide what `{url, title}` Ctrl+C / Ctrl+M should act on in the popup.
+ *
+ * Resolution order:
+ *   1. If the focused row carries a `data-url` (palette rows enriched by
+ *      renderPopupPaletteResults), use it. This is the post-A2 path that
+ *      makes the # / @ / ?? prefix modes copyable — they previously
+ *      bailed because `resultsLocal` was empty.
+ *   2. Else, if the focused row is a history `<li>` (matched by
+ *      `palette-selectable-row` *not* being on the className), fall back
+ *      to `resultsLocal[currentIndex]`. This preserves pre-A2 behaviour
+ *      for the default Recent / search results list.
+ *   3. Else (focus on input, on a non-row element, or no row selected),
+ *      return null and let the caller no-op.
+ *
+ * Why both: palette rows render in the same `<ul>` as history rows, but
+ * their data lives in different module-level caches inside popup.ts.
+ * Centralising the dispatch here means popup.ts only needs one Ctrl+C
+ * branch instead of one per palette mode.
+ */
+export function resolvePopupCopyTarget(
+  focusedRow: PopupFocusedRow | null,
+  resultsLocal: ReadonlyArray<PopupHistoryRow>,
+  currentIndex: number,
+): ResolvedPopupCopyTarget | null {
+  if (focusedRow) {
+    const ds = focusedRow.dataset || {};
+    const rowUrl = (ds.url || ds.tabUrl || ds.bookmarkUrl || '').trim();
+    if (rowUrl) {
+      return { url: rowUrl, title: (ds.title || '').trim() };
+    }
+
+    // Recognise palette rows even if they happen to lack a URL (e.g. a
+    // / command row). In that case copy is a no-op — never silently fall
+    // through to resultsLocal[currentIndex], because that would copy
+    // whatever stale history row sits at the same index.
+    const isPaletteRow = (focusedRow.className || '').includes('palette-selectable-row');
+    if (isPaletteRow) { return null; }
+  }
+
+  // History fallback: legacy path used for the default Recent / search list.
+  if (currentIndex < 0 || currentIndex >= resultsLocal.length) { return null; }
+  const item = resultsLocal[currentIndex];
+  if (!item?.url) { return null; }
+  return { url: item.url, title: item.title || '' };
+}
