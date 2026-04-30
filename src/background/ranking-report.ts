@@ -355,7 +355,14 @@ export async function createGitHubIssue(report: RankingReport): Promise<string> 
             body: JSON.stringify({
                 title: report.title,
                 body: report.body,
-                labels: ['ranking-bug', 'auto-report'],
+                // Three labels:
+                //   - ranking-bug    → semantic type, used by the triage workflow
+                //   - auto-report    → tells maintainers this came from the
+                //                      extension button, not a hand-filed issue
+                //   - sink: ranking-reports → silo so the maintainer's main
+                //                             issue queue can filter these out
+                //                             via -label:"sink: ranking-reports"
+                labels: ['ranking-bug', 'auto-report', 'sink: ranking-reports'],
             }),
         }
     );
@@ -418,7 +425,10 @@ export function buildGitHubIssueUrl(report: RankingReport): string {
     const params = new URLSearchParams({
         template: 'ranking-report.yml',
         title: report.title,
-        labels: 'ranking-bug,auto-report',
+        // labels= is a comma-joined list; URLSearchParams handles the
+        // percent-encoding of the space inside 'sink: ranking-reports'
+        // automatically.
+        labels: 'ranking-bug,auto-report,sink: ranking-reports',
         query: report.query,
         'sort-mode': sortByToTemplateLabel(report.sortBy),
         'extension-version': report.version,

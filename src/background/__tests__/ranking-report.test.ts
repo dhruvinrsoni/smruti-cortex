@@ -322,7 +322,10 @@ describe('buildGitHubIssueUrl', () => {
     // it and sending one would put us back in the stub-body world the
     // template was supposed to replace.
     expect(params.get('body')).toBeNull();
-    expect(params.get('labels')).toBe('ranking-bug,auto-report');
+    // Three labels: semantic (ranking-bug) + provenance (auto-report)
+    // + silo (sink: ranking-reports). Maintainer triage filters keyed
+    // off -label:"sink: ranking-reports" depend on the third one.
+    expect(params.get('labels')).toBe('ranking-bug,auto-report,sink: ranking-reports');
   });
 
   it('pre-fills Issue Form fields (query, sort-mode, extension-version)', () => {

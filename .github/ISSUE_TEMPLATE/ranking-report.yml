@@ -1,7 +1,12 @@
 name: Ranking Report
 description: Report a search ranking issue (auto-generated or manual)
 title: "[Ranking]: "
-labels: ["ranking-bug", "needs-triage"]
+# Default labels applied to every issue filed via this form. The
+# extension's Report button overrides these via the labels= URL param
+# (ranking-bug + auto-report + sink: ranking-reports), so keep this
+# list aligned with the spam-control silo strategy in
+# .github/skills/maintenance/SKILL.md.
+labels: ["ranking-bug", "needs-triage", "sink: ranking-reports"]
 body:
   - type: markdown
     attributes:
