@@ -5,7 +5,7 @@
   <p><em>Smruti (स्मृति)</em> — Sanskrit for "memory" · <em>Cortex</em> — The brain's intelligence center</p>
 
   [![Health Check](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/health-check.yml/badge.svg)](https://github.com/dhruvinrsoni/smruti-cortex/actions/workflows/health-check.yml)
-  [![Quality Report](https://img.shields.io/badge/Quality%20Report-live-brightgreen.svg)](https://dhruvinrsoni.github.io/smruti-cortex/quality-report/)
+  [![Privacy Policy](https://img.shields.io/badge/Privacy-policy-blue.svg)](https://dhruvinrsoni.github.io/smruti-cortex/privacy.html)
   [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
   [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/)
   [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-blue.svg)](https://chromewebstore.google.com/detail/ecnkiihcifbfnhjblicfbppplobiicoi)

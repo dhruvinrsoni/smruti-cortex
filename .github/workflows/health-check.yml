@@ -1,14 +1,27 @@
 name: Health Check
 
 # Single CI gate. Wraps `npm run verify` (the perfected local pipeline)
-# so CI inherits every check verify learns. Owns the public Quality Report
-# dashboard (published via Pages Actions API) and upserts the GitHub Release
-# on strict-format tag push.
+# so CI inherits every check verify learns. Upserts the GitHub Release
+# on strict-format tag push. Generates the Quality Report dashboard
+# as part of the run-bundle artifact (NOT published to Pages — see why below).
+#
+# Why the dashboard isn't published to GitHub Pages:
+#   The Pages source is intentionally set to "Deploy from a branch (main / docs/)"
+#   so the marketing site at https://dhruvinrsoni.github.io/smruti-cortex/ and
+#   the CWS-required privacy policy at /privacy.html are served straight from
+#   docs/ on main. No CI involved. If health-check.yml ever breaks, the public
+#   site doesn't notice. The dashboard would have required either committing
+#   back into docs/ ([skip ci] noise we explicitly retired) or assembling docs/
+#   into a Pages-Actions artifact on every run (single-point-of-failure on
+#   privacy.html). Trade-off: the live dashboard URL is gone; download the
+#   `smruti-cortex-health-bundle` artifact and open `dashboard/index.html`
+#   when you want to see it. The PR coverage-delta comment + the rich
+#   GITHUB_STEP_SUMMARY cover the day-to-day need.
 #
 # Trigger matrix:
 #   pull_request main         → verify (default mode) + audit + license + secret grep
-#                               + dashboard build + PR coverage delta comment
-#   push main                 → same as PR, plus Pages publish (refreshes public dashboard)
+#                               + dashboard build (artifact) + PR coverage delta comment
+#   push main                 → same as PR
 #   push tags 'v[0-9]+.[0-9]+.[0-9]+'
 #                             → verify --release + audit + license + secret grep
 #                               + package + GitHub Release upsert with zip attached
@@ -41,25 +54,13 @@ on:
 
 permissions:
   contents: write       # Release upsert on tag push, baseline coverage worktree
-  pages: write          # actions/deploy-pages
-  id-token: write       # OIDC for actions/deploy-pages
   pull-requests: write  # PR coverage delta comment
-
-# One in-flight Pages deployment at a time; cancel queued duplicates.
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   health:
     name: Health Check
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
-    # Pages deployment env (only used when the deploy step actually runs).
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
       - name: Checkout (fetch-depth 0 for baseline coverage delta)
@@ -217,10 +218,14 @@ jobs:
           git worktree remove ../baseline-worktree --force >> nfr-reports/baseline.log 2>&1 || true
           exit 0
 
-      - name: Build dashboard (HTML + summary.json)
+      - name: Build Quality Report dashboard (artifact-only)
         continue-on-error: true
         run: |
-          node scripts/build-dashboard.mjs --out _site --copy-coverage
+          # Writes dashboard/index.html + dashboard/summary.json + dashboard/coverage/.
+          # This is bundled into the smruti-cortex-health-bundle artifact below.
+          # Open dashboard/index.html locally after downloading. Not published
+          # anywhere — see the workflow header comment for the rationale.
+          node scripts/build-dashboard.mjs --out dashboard --copy-coverage
 
       - name: Package extension (tag push only — for Release asset)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -246,10 +251,8 @@ jobs:
             echo ""
             echo "### Details"
             echo ""
-            echo "- See artifact \`smruti-cortex-health-bundle\` for verify.log, audit.json, lint-report.md, coverage HTML."
-            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              echo "- Public dashboard: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/quality-report/"
-            fi
+            echo "- Download artifact \`smruti-cortex-health-bundle\` for verify.log, audit.json, lint-report.md, coverage HTML, and \`dashboard/index.html\` (full Quality Report)."
+            echo "- Public marketing site + privacy policy live at https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/ (served from \`docs/\` on main, NOT this workflow)."
             if [ -s nfr-reports/copyleft.txt ]; then
               echo ""
               echo "### Copyleft licenses detected"
@@ -313,27 +316,11 @@ jobs:
             nfr-reports
             lint-report.json
             lint-report.md
+            dashboard
             dist
             release/zips
           retention-days: 30
           if-no-files-found: ignore
-
-      - name: Upload Pages artifact (push main / cron / dispatch only)
-        if: |
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_dispatch'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages (push main / cron / dispatch only)
-        id: deploy
-        if: |
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_dispatch'
-        uses: actions/deploy-pages@v4
 
       - name: Upsert GitHub Release with zip (tag push only)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

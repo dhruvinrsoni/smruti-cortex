@@ -12,24 +12,38 @@ metadata:
 
 | Workflow | Triggers | Purpose |
 |---|---|---|
-| `health-check.yml` | PR main, push main, push tag `v[0-9]+.[0-9]+.[0-9]+`, monthly cron, manual | The single CI gate. Wraps `npm run verify` + adds explicit `npm audit` / `license-checker` / hardcoded-secret grep. Posts PR coverage delta comment. Publishes the public Quality Report dashboard via `actions/deploy-pages@v4` on push to main. **Upserts the GitHub Release with the zip on strict-format tag push** (CI's `GITHUB_TOKEN` always works — fixes the local `gh release create` work-account auth pain). |
+| `health-check.yml` | PR main, push main, push tag `v[0-9]+.[0-9]+.[0-9]+`, monthly cron, manual | The single CI gate. Wraps `npm run verify` + adds explicit `npm audit` / `license-checker` / hardcoded-secret grep. Posts PR coverage delta comment. Generates the Quality Report dashboard into the run artifact (NOT published anywhere — see "GitHub Pages" section below). **Upserts the GitHub Release with the zip on strict-format tag push** (CI's `GITHUB_TOKEN` always works — fixes the local `gh release create` work-account auth pain). |
 | `lint-report.yml` | manual only (`workflow_dispatch`) | On-demand LLM-friendly lint dump. Runs ESLint with JSON output, builds a Markdown digest grouped by rule + file, uploads as artifact (90d). Zero auto-cost. |
 | `ranking-reports.yml` | `issues: opened/labeled` (gated to `ranking-bug`), Mondays 04:00 UTC cron, manual | Two jobs: `intake` (triage + dedupe combined into one `github-script` call), `gc` (`actions/stale@v9` weekly garbage collection). Replaces three older single-purpose ranking workflows. |
+
+## GitHub Pages — intentionally NOT owned by CI
+
+**Pages source: "Deploy from a branch" → `main` / `/docs`.** Set in repo Settings → Pages and never changed by any workflow. The marketing site at `https://dhruvinrsoni.github.io/smruti-cortex/` and the **CWS-required privacy policy at `/privacy.html`** are served straight out of `docs/` on `main`.
+
+This is deliberate, not a leftover:
+
+- **Reliability priority.** Marketing + privacy must be live regardless of CI health. If `health-check.yml` breaks for any reason — a YAML typo, an action upgrade, a permissions glitch, a quota issue — the public site doesn't notice. `verify.mjs` `--release` mode already asserts HTTP 200 on `https://dhruvinrsoni.github.io/smruti-cortex/privacy.html` (`scripts/verify.mjs` line ~324) so `npm run ship check` catches a broken privacy URL before any release ships.
+- **UI fallback is trivial.** If something does go wrong, push a `docs/` fix → Pages picks it up in ~30s. No CI involvement needed.
+- **No `[skip ci]` commit-back noise.** The old `nfr-report.yml` published the dashboard by committing back to `docs/quality-report/` on every main push. We retired that pattern. The dashboard is now an artifact instead.
+
+**Trade-off accepted:** there is no live dashboard URL. To view the dashboard, download the latest `smruti-cortex-health-bundle` artifact from the Actions tab and open `dashboard/index.html` locally. The PR coverage-delta comment + the rich `GITHUB_STEP_SUMMARY` cover the day-to-day need.
+
+If you ever feel tempted to put the dashboard on Pages: **don't.** It single-points-of-failures the privacy URL on whatever workflow is doing the publishing. We learned this the painful way once.
 
 ## Design Principles
 
 - **CI is a thin wrapper.** All quality logic lives in `scripts/verify.mjs` and friends. When `verify.mjs` learns a new check, CI inherits it for free — no workflow edits.
 - **Reports everything.** Every step uses `continue-on-error: true` so one failure doesn't mask the others. PR authors see ALL the things to fix in one run, not just the first.
 - **Strict tag pattern.** `v[0-9]+.[0-9]+.[0-9]+` matches `v9.3.0`, rejects `v9.3.0-rc1`, `v9.3.0-experiment`, `mark-this-commit`. Playground tags safe.
-- **Push to main does NOT create a Release.** Only strict-format tag push does. Push to main only refreshes the dashboard.
-- **Pages source MUST be set to "GitHub Actions"** (Settings → Pages). The `actions/deploy-pages@v4` step requires this. One-time setup; never changes.
+- **Push to main does NOT create a Release.** Only strict-format tag push does.
+- **CI never deploys anything to a public URL.** GitHub Releases (binary distribution to humans) and the Quality Report artifact (download-and-open) are the only outputs that leave the workflow.
 - **Belt-and-suspenders Release creation.** `release.mjs` continues to call `gh release create` locally. CI's tag-trigger upsert uses `--clobber` so duplication is a no-op. First success wins.
 
 ## Helper Scripts (called from health-check.yml)
 
 | Script | Purpose | Local equivalent |
 |---|---|---|
-| `scripts/build-dashboard.mjs` | Read `coverage/`, `nfr-reports/audit.json`, `lint-report.json`, `dist/` sizes; write `_site/index.html` + `summary.json`. With `--copy-coverage` also copies coverage HTML | `node scripts/build-dashboard.mjs` (preview locally before pushing) |
+| `scripts/build-dashboard.mjs` | Read `coverage/`, `nfr-reports/audit.json`, `lint-report.json`, `dist/` sizes; write `dashboard/index.html` + `summary.json`. With `--copy-coverage` also copies coverage HTML | `node scripts/build-dashboard.mjs --copy-coverage` (preview locally; opens `dashboard/index.html` in your browser) |
 | `scripts/build-lint-report.mjs` | Read `lint-report.json` (ESLint JSON output) → write `lint-report.md` Markdown digest grouped by rule + file | `npm run lint -- --format json --output-file lint-report.json && node scripts/build-lint-report.mjs` |
 | `scripts/extract-changelog.mjs` | Extract one version's `## [X.Y.Z]` section from `CHANGELOG.md`. Used by health-check's tag-trigger Release notes | `node scripts/extract-changelog.mjs v9.3.0` |
 
@@ -37,7 +51,7 @@ metadata:
 
 | Workflow | Needs | Why |
 |---|---|---|
-| `health-check.yml` | `contents: write`, `pages: write`, `id-token: write`, `pull-requests: write` | Release upsert (contents), Pages publish (pages + OIDC), PR coverage comment (pull-requests) |
+| `health-check.yml` | `contents: write`, `pull-requests: write` | Release upsert + baseline coverage worktree (contents), PR coverage comment (pull-requests). **Notably absent:** `pages: write` and `id-token: write` — this workflow does NOT publish to Pages. |
 | `lint-report.yml` | default (read-only) | Just generates artifacts |
 | `ranking-reports.yml` | `issues: write`, `contents: read` | Apply labels, post comments, run actions/stale |
 
@@ -46,7 +60,7 @@ metadata:
 | Event | health-check | lint-report | ranking-reports |
 |---|---|---|---|
 | PR to main | yes (verify default + PR coverage comment) | no | no |
-| Push to main | yes (verify default + Pages publish) | no | no |
+| Push to main | yes (verify default) | no | no |
 | Push tag `v9.3.0` | yes (verify --release + Release upsert) | no | no |
 | Push tag `v9.3.0-rc1` | **no** (strict pattern excludes suffixes) | no | no |
 | Cron (monthly 1st) | yes | no | no |
@@ -73,19 +87,3 @@ git commit -m "chore(ci): revive <name> workflow — <reason>"
 ```
 
 See `.github/workflows/archived/README.md` for the full list of archived files and why each was retired.
-
-## Public Quality Report Dashboard
-
-Published to: `https://dhruvinrsoni.github.io/smruti-cortex/quality-report/`
-
-Generated fresh by `health-check.yml` on push to main + monthly cron + manual dispatch. **No commit-back to main** — uses `actions/upload-pages-artifact@v3` + `actions/deploy-pages@v4`.
-
-To preview locally before pushing:
-
-```bash
-npm run coverage
-node scripts/build-dashboard.mjs --copy-coverage --out _site
-# open _site/index.html in your browser
-```
-
-`_site/` is gitignored.

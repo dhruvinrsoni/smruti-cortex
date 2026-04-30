@@ -28,6 +28,7 @@ docker-output/
 # These are CI-generated for the Pages artifact / health-check artifact bundle.
 # Locally they only exist when previewing — never commit them.
 _site/
+dashboard/
 lint-report.json
 lint-report.md
 nfr-reports/

@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 /**
- * build-dashboard.mjs — Generate the public Quality Report HTML dashboard.
+ * build-dashboard.mjs — Generate the Quality Report HTML dashboard.
  *
- * Used by .github/workflows/health-check.yml to produce the static site that
- * gets uploaded as a Pages artifact and served at:
- *   https://<owner>.github.io/<repo>/quality-report/
+ * Used by .github/workflows/health-check.yml to produce a self-contained
+ * report bundled into the `smruti-cortex-health-bundle` artifact. Download
+ * the artifact and open `dashboard/index.html` to view it.
+ *
+ * NOT published to GitHub Pages. The Pages source is intentionally kept on
+ * "Deploy from a branch (main / docs/)" so the marketing site + the
+ * CWS-required privacy policy at /privacy.html are served straight from
+ * `docs/` on main and never depend on this workflow running successfully.
+ * See the rationale in `.github/workflows/health-check.yml` header comment.
  *
  * Also runnable locally to preview the dashboard before pushing — extracts
  * from coverage/coverage-summary.json, optional nfr-reports/audit.json,
@@ -23,14 +29,21 @@
  *                                       baseline worktree); blank locally
  *   GITHUB_REPOSITORY, GITHUB_REF_NAME, GITHUB_RUN_ID, GITHUB_RUN_NUMBER
  *
- * Outputs (under --out, default: _site/):
+ * Outputs (under --out, default: dashboard/):
  *   index.html          — main dashboard
- *   summary.json        — machine-readable scorecard (CI artifact / API consumers)
+ *   summary.json        — machine-readable scorecard
+ *   coverage/           — vitest HTML coverage (when --copy-coverage passed)
+ *
+ * Local preview:
+ *
+ *   npm run coverage
+ *   node scripts/build-dashboard.mjs --copy-coverage
+ *   # then open dashboard/index.html
  *
  * Usage:
- *   node scripts/build-dashboard.mjs                 # writes _site/
- *   node scripts/build-dashboard.mjs --out site      # writes site/
- *   node scripts/build-dashboard.mjs --copy-coverage # also copies coverage/* HTML
+ *   node scripts/build-dashboard.mjs                  # writes dashboard/
+ *   node scripts/build-dashboard.mjs --out site       # writes site/
+ *   node scripts/build-dashboard.mjs --copy-coverage  # also copies coverage/* HTML
  *   node scripts/build-dashboard.mjs --help
  *
  * Exit codes:
@@ -253,7 +266,7 @@ function buildHtml(data, status, actions) {
 }
 
 function parseArgs(argv) {
-  const out = { outDir: '_site', copyCoverage: false, help: false };
+  const out = { outDir: 'dashboard', copyCoverage: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') out.help = true;
@@ -274,7 +287,7 @@ if (invokedAsMain) {
     console.log(`Usage: node scripts/build-dashboard.mjs [--out <dir>] [--copy-coverage]
 
 Defaults:
-  --out             _site
+  --out             dashboard
   --copy-coverage   off (when on, copies coverage/* into <out>/coverage/)
 
 Auto-discovers inputs from coverage/, nfr-reports/, lint-report.json, dist/.
