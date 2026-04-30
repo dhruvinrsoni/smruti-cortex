@@ -220,6 +220,155 @@ describe('database', () => {
     });
   });
 
+  // ── upsertRecentVisit (fast-path freshness) ──────────────────────────────
+
+  describe('upsertRecentVisit', () => {
+    it('writes a fresh row when the URL is new', async () => {
+      const { upsertRecentVisit } = await importModule();
+      const t = 1_700_000_000_000;
+      await upsertRecentVisit({
+        url: 'https://new.example/page',
+        title: 'New Page',
+        lastVisit: t,
+      });
+
+      const row = store.get('https://new.example/page');
+      expect(row).toBeDefined();
+      expect(row).toMatchObject({
+        url: 'https://new.example/page',
+        title: 'New Page',
+        hostname: 'new.example',
+        lastVisit: t,
+        visitCount: 1,
+      });
+      expect(Array.isArray(row?.tokens)).toBe(true);
+      expect(row?.tokens.length).toBeGreaterThan(0);
+    });
+
+    it('preserves AI / metadata fields and bumps visitCount on existing row', async () => {
+      // Seed an "indexed" row that already has rich fields the bulk
+      // pipeline produced (embedding, keywords, bookmark info). The fast
+      // path must not destroy any of these on a follow-up visit.
+      const url = 'https://existing.example/page';
+      const seedEmbedding = Array.from({ length: 8 }, (_, i) => i * 0.125);
+      store.set(url, makeItem({
+        url,
+        title: 'Existing Page',
+        hostname: 'existing.example',
+        visitCount: 5,
+        lastVisit: 1_000,
+        tokens: ['existing', 'page'],
+        embedding: seedEmbedding,
+        metaKeywords: ['kept'],
+        metaDescription: 'description survives',
+        isBookmark: true,
+        bookmarkFolders: ['/Reading'],
+      }));
+
+      const { upsertRecentVisit } = await importModule();
+      await upsertRecentVisit({
+        url,
+        title: 'Existing Page', // unchanged title -> tokens preserved as-is
+        lastVisit: 2_000,
+      });
+
+      const row = store.get(url);
+      expect(row).toBeDefined();
+      expect(row?.lastVisit).toBe(2_000);
+      expect(row?.visitCount).toBe(6); // 5 + 1
+      expect(row?.embedding).toEqual(seedEmbedding);
+      expect(row?.metaKeywords).toEqual(['kept']);
+      expect(row?.metaDescription).toBe('description survives');
+      expect(row?.isBookmark).toBe(true);
+      expect(row?.bookmarkFolders).toEqual(['/Reading']);
+      expect(row?.tokens).toEqual(['existing', 'page']);
+    });
+
+    it('never moves lastVisit backwards even if a stale visit arrives', async () => {
+      // Browser history listeners can fire out of order in pathological
+      // cases (sleep/wake, sync). Recent ordering must be monotonic.
+      const url = 'https://mono.example/p';
+      store.set(url, makeItem({ url, lastVisit: 5_000, visitCount: 1 }));
+      const { upsertRecentVisit } = await importModule();
+      await upsertRecentVisit({ url, lastVisit: 100, title: 't' });
+      const row = store.get(url);
+      expect(row?.lastVisit).toBe(5_000);
+      expect(row?.visitCount).toBe(2); // visit still counts
+    });
+
+    it('re-tokenises when the title changes, otherwise keeps existing tokens', async () => {
+      const url = 'https://retitle.example/p';
+      store.set(url, makeItem({
+        url,
+        title: 'Old Title',
+        tokens: ['old', 'title'],
+        visitCount: 1,
+      }));
+      const tokenize = vi.fn((text: string) => text.toLowerCase().split(/\s+/).filter(Boolean));
+      const { upsertRecentVisit } = await importModule();
+
+      await upsertRecentVisit({ url, title: 'Brand New Title', tokenize });
+      expect(tokenize).toHaveBeenCalledTimes(1);
+      expect(store.get(url)?.tokens).toEqual(expect.arrayContaining(['brand', 'new', 'title']));
+    });
+
+    it('back-to-back sequential calls accumulate visitCount and advance lastVisit', async () => {
+      // Real-world: a user navigates twice in quick succession. Each
+      // onVisited fires a separate upsertRecentVisit. The two calls await
+      // sequentially in the listener, so each must see the prior put.
+      const url = 'https://race.example/p';
+      const { upsertRecentVisit } = await importModule();
+      await upsertRecentVisit({ url, title: 'A', lastVisit: 1_000 });
+      await upsertRecentVisit({ url, title: 'A', lastVisit: 2_000 });
+      const row = store.get(url);
+      expect(row).toBeDefined();
+      expect(row?.lastVisit).toBe(2_000);
+      expect(row?.visitCount).toBe(2);
+    });
+
+    it('two parallel calls for the same URL leave the row well-formed (no torn write)', async () => {
+      // True concurrent ordering is IndexedDB's job (real readwrite
+      // transactions on the same store serialise). This test asserts the
+      // weaker but mock-checkable invariant: even when both calls
+      // interleave on a non-serialising backend, the final row still has
+      // a valid title, an advanced lastVisit, and visitCount >= 1 -- i.e.
+      // we never produce a torn write that drops fields.
+      const url = 'https://parallel.example/p';
+      const { upsertRecentVisit } = await importModule();
+      await Promise.all([
+        upsertRecentVisit({ url, title: 'A', lastVisit: 1_000 }),
+        upsertRecentVisit({ url, title: 'A', lastVisit: 2_000 }),
+      ]);
+      const row = store.get(url);
+      expect(row).toBeDefined();
+      expect(row?.title).toBe('A');
+      expect(row?.lastVisit).toBe(2_000);
+      expect(row?.visitCount).toBeGreaterThanOrEqual(1);
+      expect(row?.hostname).toBe('parallel.example');
+      expect(Array.isArray(row?.tokens)).toBe(true);
+    });
+
+    it('invalidates the in-memory item cache so subsequent reads see the new row', async () => {
+      const mod = await importModule();
+      store.set('https://seed.example', makeItem({ url: 'https://seed.example' }));
+      const items1 = await mod.getAllIndexedItems();
+      expect(items1).toHaveLength(1);
+
+      await mod.upsertRecentVisit({ url: 'https://fresh.example', title: 'Fresh' });
+
+      const items2 = await mod.getAllIndexedItems();
+      expect(items2).toHaveLength(2);
+      expect(items2.map(i => i.url).sort()).toEqual(['https://fresh.example', 'https://seed.example']);
+    });
+
+    it('silently no-ops on a malformed URL (must never crash the onVisited path)', async () => {
+      const { upsertRecentVisit } = await importModule();
+      await expect(upsertRecentVisit({ url: 'not-a-url' })).resolves.toBeUndefined();
+      await expect(upsertRecentVisit({ url: '' })).resolves.toBeUndefined();
+      expect(store.size).toBe(0);
+    });
+  });
+
   // ── getAllIndexedItems ───────────────────────────────────────────────────
 
   describe('getAllIndexedItems', () => {

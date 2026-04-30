@@ -98,6 +98,103 @@ export const saveIndexedItem = traced('Database', 'saveIndexedItem',
 );
 
 // ------------------------------
+// Fast-path single-row upsert (chrome.history.onVisited path)
+// ------------------------------
+/**
+ * Fast-path single-row upsert for the popup's "Recent" view freshness.
+ *
+ * Why this exists separately from saveIndexedItem / the bulk indexer:
+ * the bulk `ingestHistory()` skips incremental work for 30 minutes after
+ * the previous run. That throttle is fine for the bulk pipeline (re-scoring,
+ * embeddings, batches) but it means a brand-new `chrome.history.onVisited`
+ * doesn't enter IndexedDB for up to 30 minutes -- and the popup's Recent
+ * list, which reads only IDB, looks frozen until the next bulk run.
+ *
+ * This helper writes a single row immediately (no 30-min throttle, no
+ * embedding work, no batch). It is safe to fire on every navigation
+ * because the work is bounded: one read-then-put on a URL-keyed store.
+ *
+ * Behaviour:
+ *   - New URL  -> writes a minimal IndexedItem (title, hostname, lastVisit,
+ *                  visitCount = 1, tokens). No embedding -- the bulk indexer
+ *                  will enrich on its next pass.
+ *   - Existing URL -> preserves all richer fields (embedding, metaKeywords,
+ *                      bookmarkFolders, etc.); updates `lastVisit` if the
+ *                      incoming visit is newer; bumps `visitCount` by 1
+ *                      so the row's sort weight reflects the new visit.
+ *   - Malformed URL  -> resolves silently (we never want to crash the
+ *                       onVisited listener path).
+ *
+ * The single-row IDB transaction is atomic at the store level, so two
+ * back-to-back calls for the same URL serialise correctly: the second
+ * call reads the result of the first (including its bumped visitCount).
+ */
+export async function upsertRecentVisit(visit: {
+    url: string;
+    title?: string;
+    lastVisit?: number;
+    visitCount?: number;
+    tokenize?: (text: string) => string[];
+}): Promise<void> {
+    if (!visit || typeof visit.url !== 'string' || visit.url.length === 0) {return;}
+
+    let hostname = '';
+    try { hostname = new URL(visit.url).hostname; }
+    catch { return; /* malformed URL: silently no-op */ }
+
+    const now = Date.now();
+    const incomingLastVisit = typeof visit.lastVisit === 'number' && Number.isFinite(visit.lastVisit)
+        ? visit.lastVisit : now;
+    const incomingTitle = typeof visit.title === 'string' ? visit.title : '';
+    const incomingVisitInc = typeof visit.visitCount === 'number' && visit.visitCount > 0
+        ? visit.visitCount : 1;
+
+    // Tokeniser is injectable so this helper has no static dependency on
+    // the search subtree -- keeps database.ts free of circular imports.
+    const doTokenize = visit.tokenize
+        ?? ((text: string) => text.toLowerCase().split(/\s+/).filter(Boolean));
+
+    cachedItems = null; // Invalidate cache; row is about to change.
+    const db = dbInstance || await openDatabaseImpl();
+    return new Promise<void>((resolve, reject) => {
+        const txn = db.transaction(STORE_NAME, 'readwrite');
+        const store = txn.objectStore(STORE_NAME);
+        const getReq = store.get(visit.url);
+
+        getReq.onsuccess = () => {
+            const existing = getReq.result as IndexedItem | undefined;
+            const merged: IndexedItem = existing
+                ? {
+                    ...existing,
+                    // Always advance lastVisit if incoming is newer; never go backwards.
+                    lastVisit: Math.max(existing.lastVisit ?? 0, incomingLastVisit),
+                    // Increment visit count by the incoming delta (default 1).
+                    visitCount: (existing.visitCount ?? 0) + incomingVisitInc,
+                    // Refresh title only if a non-empty new one was provided.
+                    title: incomingTitle && incomingTitle !== existing.title ? incomingTitle : existing.title,
+                    // Re-tokenise if the title changed; otherwise keep existing tokens.
+                    tokens: incomingTitle && incomingTitle !== existing.title
+                        ? doTokenize(`${incomingTitle} ${visit.url}`)
+                        : (existing.tokens ?? doTokenize(`${existing.title ?? ''} ${visit.url}`)),
+                }
+                : {
+                    url: visit.url,
+                    title: incomingTitle,
+                    hostname,
+                    visitCount: incomingVisitInc,
+                    lastVisit: incomingLastVisit,
+                    tokens: doTokenize(`${incomingTitle} ${visit.url}`),
+                };
+
+            const putReq = store.put(merged);
+            putReq.onsuccess = () => resolve();
+            putReq.onerror = () => reject(putReq.error);
+        };
+        getReq.onerror = () => reject(getReq.error);
+    });
+}
+
+// ------------------------------
 // Query Pages
 // ------------------------------
 export const getAllIndexedItems = traced('Database', 'getAllIndexedItems',

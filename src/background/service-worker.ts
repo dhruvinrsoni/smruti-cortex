@@ -112,6 +112,37 @@ async function init() {
       let indexingTimeout: ReturnType<typeof setTimeout> | null = null;
       browserAPI.history.onVisited.addListener(async (item) => {
         logger.trace('onVisited', 'New visit detected:', item.url);
+
+        // Fast path (Recent-view freshness fix). The bulk ingestHistory()
+        // path below is debounced 10s + throttled 30 minutes, which means
+        // a brand-new visit can take half an hour to appear in IndexedDB
+        // and therefore in the popup's "Recent" list. The fast path
+        // writes a single row immediately so the next popup open shows
+        // the latest visit at the top without waiting for bulk reconciliation.
+        // Cheap (one IDB read+put + one chrome.storage.session.remove) and
+        // bounded -- safe to fire on every navigation.
+        if (item.url) {
+          try {
+            const { upsertRecentVisit } = await import('./database');
+            const { tokenize } = await import('./search/tokenizer');
+            await upsertRecentVisit({
+              url: item.url,
+              title: item.title ?? '',
+              lastVisit: item.lastVisitTime ?? Date.now(),
+              visitCount: 1,
+              tokenize,
+            });
+            // Invalidate the warm session cache so the next popup paint
+            // hits the freshly-updated IDB row instead of the pre-visit
+            // cached snapshot.
+            const { clearRecentHistoryCache } = await import('../shared/recent-history-cache');
+            void clearRecentHistoryCache();
+          } catch (err) {
+            // Non-fatal: the bulk path below will still reconcile.
+            logger.warn('onVisited', 'Fast-path upsert failed; relying on bulk indexer', errorMeta(err));
+          }
+        }
+
         if (indexingTimeout) {clearTimeout(indexingTimeout);}
         indexingTimeout = setTimeout(async () => {
           try {
