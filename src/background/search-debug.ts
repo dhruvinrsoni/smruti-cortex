@@ -6,6 +6,7 @@
  */
 
 import { Logger, errorMeta } from '../core/logger';
+import { browserAPI } from '../core/helpers';
 
 const logger = Logger.forComponent('SearchDebug');
 
@@ -67,7 +68,7 @@ class SearchDebugService {
 
   constructor() {
     this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    this.loadFromStorage();
+    void this.loadFromStorage();
   }
 
   /**
@@ -228,16 +229,32 @@ class SearchDebugService {
   }
 
   /**
-   * Load history from IndexedDB
+   * Load history from browser storage (prefer `chrome.storage.local`), fall back to `localStorage`.
+   * Non-blocking and resilient so it cannot crash the service worker at module load.
    */
   private async loadFromStorage(): Promise<void> {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-      if (stored) {
-        this.searchHistory = JSON.parse(stored);
-        logger.debug('loadFromStorage',
-          `Loaded ${this.searchHistory.length} debug entries from storage`
-        );
+      const storageLocal = (browserAPI as any).storage?.local;
+      if (storageLocal && typeof storageLocal.get === 'function') {
+        const result = await new Promise<any>((resolve) => {
+          storageLocal.get([this.STORAGE_KEY], (items: any) => {
+            resolve(items?.[this.STORAGE_KEY]);
+          });
+        });
+        if (result && Array.isArray(result)) {
+          this.searchHistory = result;
+          logger.debug('loadFromStorage', `Loaded ${this.searchHistory.length} debug entries from storage`);
+          return;
+        }
+      }
+
+      // Fallback for environments that expose `localStorage` (e.g., tests)
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(this.STORAGE_KEY);
+        if (stored) {
+          this.searchHistory = JSON.parse(stored);
+          logger.debug('loadFromStorage', `Loaded ${this.searchHistory.length} debug entries from storage`);
+        }
       }
     } catch (err) {
       logger.error('loadFromStorage', 'Failed to load search debug history', errorMeta(err));
@@ -245,14 +262,21 @@ class SearchDebugService {
   }
 
   /**
-   * Save history to localStorage
+   * Persist history to browser storage (prefer `chrome.storage.local`), fall back to `localStorage`.
    */
-  private saveToStorage(): void {
+  private async saveToStorage(): Promise<void> {
     try {
-      localStorage.setItem(
-        this.STORAGE_KEY,
-        JSON.stringify(this.searchHistory)
-      );
+      const storageLocal = (browserAPI as any).storage?.local;
+      if (storageLocal && typeof storageLocal.set === 'function') {
+        await new Promise<void>((resolve) => {
+          storageLocal.set({ [this.STORAGE_KEY]: this.searchHistory }, () => resolve());
+        });
+        return;
+      }
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.searchHistory));
+      }
     } catch (err) {
       logger.error('saveToStorage', 'Failed to save search debug history', errorMeta(err));
     }
