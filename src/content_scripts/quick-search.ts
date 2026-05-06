@@ -179,6 +179,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // does not always trigger `onDisconnect` in time.
   let portHeartbeatInterval: number | null = null;
   let portHeartbeatDeadline: number | null = null; // pending PING deadline timer
+  // Timestamp of the outstanding PING (used to match PONGs and ignore stale PONGs)
+  let lastPingT: number | null = null;
   const PORT_HEARTBEAT_INTERVAL_MS = 15_000;
   const PORT_HEARTBEAT_TIMEOUT_MS = 3_000;
   // Exponential reconnect backoff after onDisconnect / stale detection.
@@ -1269,6 +1271,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       clearTimeout(portHeartbeatDeadline);
       portHeartbeatDeadline = null;
     }
+    // Clear any outstanding PING marker as well
+    lastPingT = null;
   }
 
   /**
@@ -1282,9 +1286,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     try { searchPort.disconnect(); } catch { /* already gone */ }
     searchPort = null;
     if (isExtensionContextValid()) {
-      // Don't reset portReconnectAttempts here — onDisconnect fires next
-      // and drives the exponential backoff.
-      openSearchPort();
+      // Centralize reconnect scheduling to avoid races with onDisconnect.
+      scheduleReconnect(reason);
     }
   }
 
@@ -1296,16 +1299,22 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         clearHeartbeatTimers();
         return;
       }
+      // If a PING is still awaiting a PONG, skip sending another PING.
+      if (portHeartbeatDeadline !== null) { return; }
+      const t = Date.now();
+      lastPingT = t;
       try {
-        searchPort.postMessage({ type: 'PING', t: Date.now() });
+        searchPort.postMessage({ type: 'PING', t });
       } catch (err) {
+        // Clear lastPingT — postMessage failed and we'll schedule reconnect
+        lastPingT = null;
         handleStalePort(`postMessage threw: ${(err as Error).message}`);
         return;
       }
       // Arm a per-PING deadline — if PONG doesn't arrive, treat as stale.
-      if (portHeartbeatDeadline !== null) {clearTimeout(portHeartbeatDeadline);}
       portHeartbeatDeadline = window.setTimeout(() => {
         portHeartbeatDeadline = null;
+        lastPingT = null;
         handleStalePort('no PONG within 3s');
       }, PORT_HEARTBEAT_TIMEOUT_MS) as unknown as number;
     }, PORT_HEARTBEAT_INTERVAL_MS) as unknown as number;
@@ -1338,12 +1347,30 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       startHeartbeat();
 
       searchPort.onMessage.addListener((response) => {
-        // Heartbeat: any PONG clears the per-PING deadline.
+        // Heartbeat: PONG handling. Only clear the deadline for the
+        // matching PONG (by timestamp) to avoid late/stale PONGs clearing
+        // the current outstanding deadline.
         if (response?.type === 'PONG') {
+          const pongT = (response as any)?.t;
+          // Backwards-compatible: if no timestamp present, clear any deadline.
+          if (pongT === undefined || pongT === null) {
+            if (portHeartbeatDeadline !== null) {
+              clearTimeout(portHeartbeatDeadline);
+              portHeartbeatDeadline = null;
+            }
+            lastPingT = null;
+            return;
+          }
+          // If this PONG doesn't match the outstanding PING, ignore it.
+          if (lastPingT !== null && pongT !== lastPingT) {
+            log.debug('port', `Ignoring stale PONG (t=${pongT}, expected=${lastPingT})`);
+            return;
+          }
           if (portHeartbeatDeadline !== null) {
             clearTimeout(portHeartbeatDeadline);
             portHeartbeatDeadline = null;
           }
+          lastPingT = null;
           return;
         }
 
@@ -1472,23 +1499,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         clearHeartbeatTimers();
         searchPort = null;
 
-        // Exponential backoff reconnect: 300/600/1200 ms (cap 1200). Prevents
-        // thrash when the SW is being repeatedly evicted, while still
-        // recovering quickly from a single eviction.
+        // Centralize reconnect scheduling to avoid races between callers.
         if (isExtensionContextValid()) {
-          const delay = Math.min(
-            PORT_RECONNECT_BASE_MS * Math.pow(2, portReconnectAttempts),
-            PORT_RECONNECT_CAP_MS,
-          );
-          portReconnectAttempts++;
-          if (portReconnectTimer !== null) {clearTimeout(portReconnectTimer);}
-          portReconnectTimer = window.setTimeout(() => {
-            portReconnectTimer = null;
-            if (!searchPort && isExtensionContextValid()) {
-              log.debug('port', `Auto-reconnecting search port (attempt ${portReconnectAttempts}, delay ${delay}ms)`);
-              openSearchPort();
-            }
-          }, delay) as unknown as number;
+          scheduleReconnect('disconnect');
         }
       });
     } catch (e) {
@@ -1496,6 +1509,30 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       searchPort = null;
       clearHeartbeatTimers();
     }
+  }
+
+  /**
+   * Centralized reconnect scheduler with exponential backoff.
+   * Ensures only one reconnect timer is active and avoids races
+   * between multiple callers (onDisconnect, stale-detect, etc.).
+   */
+  function scheduleReconnect(reason?: string, immediate = false): void {
+    if (!isExtensionContextValid()) { return; }
+    if (portReconnectTimer !== null) {
+      log.debug('port', `scheduleReconnect: already scheduled (reason=${reason})`);
+      return;
+    }
+    const attempt = portReconnectAttempts;
+    const delay = immediate ? 0 : Math.min(PORT_RECONNECT_BASE_MS * Math.pow(2, attempt), PORT_RECONNECT_CAP_MS);
+    portReconnectAttempts++;
+    if (portReconnectTimer !== null) { clearTimeout(portReconnectTimer); }
+    portReconnectTimer = window.setTimeout(() => {
+      portReconnectTimer = null;
+      if (!searchPort && isExtensionContextValid()) {
+        log.debug('port', `Auto-reconnecting search port (attempt ${portReconnectAttempts}, delay ${delay}ms)`);
+        openSearchPort();
+      }
+    }, delay) as unknown as number;
   }
 
   function closeSearchPort(): void {
@@ -5519,3 +5556,5 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // Run immediately
   init();
 }
+
+  
