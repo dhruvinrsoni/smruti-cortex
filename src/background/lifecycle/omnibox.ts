@@ -6,11 +6,26 @@ import { SettingsManager } from '../../core/settings';
 const logger = Logger.forComponent('Omnibox');
 
 export function setupOmnibox(isInitialized: () => boolean): void {
-  browserAPI.omnibox.setDefaultSuggestion({
-    description: 'Search history, or use / for commands, @ for tabs, # for bookmarks',
-  });
+  // Guard against `browserAPI.omnibox` being transiently undefined post-hibernation
+  // (Firefox/Edge variants, or Chrome's brief unavailability after wake). A throw
+  // here at module-load time surfaces as the MV3 "Failed to load the script
+  // unexpectedly" error and may prevent listener registrations elsewhere in the
+  // boot chain from sticking.
+  const omnibox = browserAPI.omnibox;
+  if (!omnibox?.setDefaultSuggestion || !omnibox?.onInputChanged?.addListener) {
+    logger.warn('setupOmnibox', 'omnibox API unavailable; skipping setup');
+    return;
+  }
 
-  browserAPI.omnibox.onInputChanged.addListener(async (text, suggest) => {
+  try {
+    omnibox.setDefaultSuggestion({
+      description: 'Search history, or use / for commands, @ for tabs, # for bookmarks',
+    });
+  } catch (err) {
+    logger.warn('setupOmnibox', 'setDefaultSuggestion failed; continuing', errorMeta(err));
+  }
+
+  omnibox.onInputChanged.addListener(async (text, suggest) => {
     try {
       if (!isInitialized()) { suggest([]); return; }
       const trimmed = text.trim();
@@ -66,7 +81,7 @@ export function setupOmnibox(isInitialized: () => boolean): void {
     }
   });
 
-  browserAPI.omnibox.onInputEntered.addListener(async (text, disposition) => {
+  omnibox.onInputEntered.addListener(async (text, disposition) => {
     try {
       const trimmed = text.trim();
 

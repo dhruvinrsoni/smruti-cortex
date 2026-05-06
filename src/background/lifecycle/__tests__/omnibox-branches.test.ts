@@ -180,4 +180,59 @@ describe('Omnibox — branch gaps', () => {
       expect.objectContaining({ description: expect.stringContaining('Untitled') }),
     ]);
   });
+
+  it('setDefaultSuggestion throwing does not propagate or block listener registration', async () => {
+    const helpers = await import('../../../core/helpers');
+    const original = (helpers.browserAPI as any).omnibox.setDefaultSuggestion;
+    (helpers.browserAPI as any).omnibox.setDefaultSuggestion = vi.fn(() => {
+      throw new Error('omnibox boom');
+    });
+    inputChangedListeners.length = 0;
+    inputEnteredListeners.length = 0;
+    expect(() => setupOmnibox(() => true)).not.toThrow();
+    expect(inputChangedListeners).toHaveLength(1);
+    expect(inputEnteredListeners).toHaveLength(1);
+    (helpers.browserAPI as any).omnibox.setDefaultSuggestion = original;
+  });
+});
+
+describe('Omnibox — API unavailable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('setupOmnibox returns gracefully when browserAPI.omnibox is undefined', async () => {
+    vi.doMock('../../../core/helpers', () => ({
+      browserAPI: {
+        omnibox: undefined,
+        tabs: {}, windows: {}, bookmarks: {}, runtime: { sendMessage: vi.fn(), lastError: null },
+      },
+    }));
+    vi.doMock('../../../core/logger', () => ({
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      errorMeta: (e: unknown) => e,
+    }));
+    vi.doMock('../../../core/settings', () => ({ SettingsManager: { getSettings: vi.fn(() => ({})) } }));
+    vi.doMock('../../search/search-engine', () => ({ runSearch: vi.fn(async () => []) }));
+    const { setupOmnibox: setupOmniboxFresh } = await import('../omnibox');
+    expect(() => setupOmniboxFresh(() => true)).not.toThrow();
+  });
+
+  it('setupOmnibox returns gracefully when omnibox lacks setDefaultSuggestion', async () => {
+    vi.doMock('../../../core/helpers', () => ({
+      browserAPI: {
+        omnibox: { onInputChanged: { addListener: vi.fn() }, onInputEntered: { addListener: vi.fn() } },
+        tabs: {}, windows: {}, bookmarks: {}, runtime: { sendMessage: vi.fn(), lastError: null },
+      },
+    }));
+    vi.doMock('../../../core/logger', () => ({
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      errorMeta: (e: unknown) => e,
+    }));
+    vi.doMock('../../../core/settings', () => ({ SettingsManager: { getSettings: vi.fn(() => ({})) } }));
+    vi.doMock('../../search/search-engine', () => ({ runSearch: vi.fn(async () => []) }));
+    const { setupOmnibox: setupOmniboxFresh } = await import('../omnibox');
+    expect(() => setupOmniboxFresh(() => true)).not.toThrow();
+  });
 });
