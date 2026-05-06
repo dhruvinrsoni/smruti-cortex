@@ -131,3 +131,52 @@ export function sendMessageWithRetry<T = unknown>(
 
   return attempt(0);
 }
+
+/**
+ * Minimal chrome.runtime.Port shape used by `safePortPost`. Defined locally so
+ * the helper module doesn't need to depend on the @types/chrome global.
+ */
+interface PortLike {
+  postMessage(msg: unknown): void;
+}
+
+/**
+ * Send a message on a long-lived port, swallowing the synchronous throws
+ * Chrome can produce when the receiver disconnected mid-flight (bfcache,
+ * page navigation, SW eviction). Returns whether the post succeeded.
+ *
+ * Use this in place of bare `port.postMessage(...)` everywhere — even when
+ * the call appears to be wrapped in an `if (port)` check, because the port
+ * can become invalid between the check and the call.
+ */
+export function safePortPost(port: PortLike | null | undefined, message: unknown): boolean {
+  if (!port) {return false;}
+  try {
+    port.postMessage(message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Send a one-shot message to the service worker without waiting for a
+ * response. Always passes a callback that consumes `chrome.runtime.lastError`
+ * — that's what prevents Chrome's "Unchecked runtime.lastError" log when the
+ * receiver disappeared (bfcache mid-flight, SW eviction, extension reload).
+ *
+ * Use this in place of bare `chrome.runtime.sendMessage(msg)` (no-callback
+ * form) everywhere. For request/response calls, use `sendMessageWithRetry`.
+ */
+export function fireAndForgetMessage(message: unknown): void {
+  const runtime = getRuntime();
+  if (!runtime) {return;}
+  try {
+    runtime.sendMessage(message, () => {
+      // Read lastError to mark it consumed — value itself doesn't matter.
+      void runtime.lastError;
+    });
+  } catch {
+    // Runtime gone (extension context invalidated). Nothing to do.
+  }
+}

@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getRuntime, sendMessageWithRetry } from '../runtime-messaging';
+import { fireAndForgetMessage, getRuntime, safePortPost, sendMessageWithRetry } from '../runtime-messaging';
 
 interface TestRuntime {
   sendMessage: ReturnType<typeof vi.fn>;
@@ -207,6 +207,58 @@ describe('runtime-messaging', () => {
       installChrome(r);
       await expect(sendMessageWithRetry({ type: 'PING' })).rejects.toThrow('boom');
       expect(r.sendMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('safePortPost', () => {
+    it('returns false when port is null', () => {
+      expect(safePortPost(null, { type: 'PING' })).toBe(false);
+    });
+
+    it('returns false when port is undefined', () => {
+      expect(safePortPost(undefined, { type: 'PING' })).toBe(false);
+    });
+
+    it('returns true and forwards the message on success', () => {
+      const postMessage = vi.fn();
+      const port = { postMessage };
+      expect(safePortPost(port, { type: 'PING', t: 42 })).toBe(true);
+      expect(postMessage).toHaveBeenCalledWith({ type: 'PING', t: 42 });
+    });
+
+    it('returns false (does not throw) when postMessage throws', () => {
+      const port = { postMessage: vi.fn(() => { throw new Error('disconnected'); }) };
+      expect(() => safePortPost(port, { type: 'PING' })).not.toThrow();
+      expect(safePortPost(port, { type: 'PING' })).toBe(false);
+    });
+  });
+
+  describe('fireAndForgetMessage', () => {
+    it('no-ops when no runtime is available', () => {
+      // No chrome / browser installed.
+      expect(() => fireAndForgetMessage({ type: 'PING' })).not.toThrow();
+    });
+
+    it('passes a callback that consumes lastError', () => {
+      const r = createRuntime();
+      r.sendMessage.mockImplementation((_msg, cb) => {
+        r.lastError = { message: 'bfcache' };
+        cb(undefined);
+      });
+      installChrome(r);
+      // Must not throw or rethrow lastError to the caller.
+      expect(() => fireAndForgetMessage({ type: 'PING' })).not.toThrow();
+      expect(r.sendMessage).toHaveBeenCalledTimes(1);
+      // The callback was invoked with a function (consumes lastError).
+      const cbArg = r.sendMessage.mock.calls[0][1];
+      expect(typeof cbArg).toBe('function');
+    });
+
+    it('swallows synchronous throws from sendMessage', () => {
+      const r = createRuntime();
+      r.sendMessage.mockImplementation(() => { throw new Error('runtime gone'); });
+      installChrome(r);
+      expect(() => fireAndForgetMessage({ type: 'PING' })).not.toThrow();
     });
   });
 });
