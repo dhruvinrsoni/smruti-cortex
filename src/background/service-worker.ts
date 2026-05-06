@@ -280,4 +280,13 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
-setupOmnibox(() => initialized);
+// Boot-safety rule: any non-listener call at SW module scope must not throw,
+// or Chrome reports "Failed to load the script unexpectedly" and listener
+// registrations above may not stick. setupOmnibox already early-returns when
+// the API is missing, but this catch is defense in depth — covers any future
+// regression that reintroduces a synchronous throwing path.
+try {
+  setupOmnibox(() => initialized);
+} catch (err) {
+  logger.warn('boot', 'setupOmnibox threw at module load — continuing', errorMeta(err));
+}
