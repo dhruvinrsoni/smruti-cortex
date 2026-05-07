@@ -1,6 +1,7 @@
 import { runSearch } from '../search/search-engine';
 import { browserAPI } from '../../core/helpers';
 import { Logger, errorMeta } from '../../core/logger';
+import { safePortPost } from '../../shared/runtime-messaging';
 
 const logger = Logger.forComponent('PortMessaging');
 
@@ -48,7 +49,7 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
         // script can measure round-trip health (and force a wake) while the
         // SW is still booting. Must never do any heavy work.
         if (msg?.type === 'PING') {
-          try { port.postMessage({ type: 'PONG', t: msg.t }); } catch { /* port closed */ }
+          safePortPost(port, { type: 'PONG', t: msg.t });
           return;
         }
 
@@ -63,7 +64,7 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
               portRateStreakStart = now;
             }
             portRateStreakDropped++;
-            try { port.postMessage({ error: 'Rate limited', query: msg.query }); } catch { /* port closed */ }
+            safePortPost(port, { error: 'Rate limited', query: msg.query });
             return;
           }
           if (portRateStreakStart !== null) {
@@ -84,7 +85,7 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
               try { await initPromise; } catch {
                 const healed = await deps.ensureReady();
                 if (!healed) {
-                  try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
+                  safePortPost(port, { error: 'Service worker not ready' });
                   return;
                 }
               }
@@ -95,7 +96,7 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
               // self-heal a half-stuck SW.
               const healed = await deps.ensureReady();
               if (!healed) {
-                try { port.postMessage({ error: 'Service worker not ready' }); } catch { /* port closed */ }
+                safePortPost(port, { error: 'Service worker not ready' });
                 return;
               }
             }
@@ -106,12 +107,12 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
             const aiStatus = getLastAIStatus();
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
             if (!portDisconnected) {
-              try { port.postMessage({ results, aiStatus, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed */ }
+              safePortPost(port, { results, aiStatus, query: portQuery, skipAI: !!msg.skipAI });
             }
           } catch (error) {
             logger.error('portMessage', 'Search error:', errorMeta(error));
             if (!portDisconnected) {
-              try { port.postMessage({ error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI }); } catch { /* port closed */ }
+              safePortPost(port, { error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI });
             }
           }
         }
