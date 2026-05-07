@@ -14,6 +14,7 @@ import {
   clearInflight,
   createDispatchGuardState,
   resolvePaletteCopyTarget,
+  decideBfcacheAction,
   DEFAULT_INFLIGHT_MAX_MS,
   RAPID_REPEAT_WINDOW_MS,
   type DetectModeSettings,
@@ -563,5 +564,27 @@ describe('resolvePaletteCopyTarget', () => {
       // keeps us honest if someone adds a new mode without thinking through copy.
       expect(resolvePaletteCopyTarget('help', { textTitle: 'Help' }, null)).toBeNull();
     });
+  });
+});
+
+describe('decideBfcacheAction', () => {
+  it('pagehide with persisted=false → full cleanup (real navigation)', () => {
+    expect(decideBfcacheAction('pagehide', false)).toBe('full-cleanup');
+  });
+
+  it('pagehide with persisted=true → port-only cleanup (entering bfcache)', () => {
+    // Closing the port pre-bfcache prevents in-flight postMessage from
+    // surfacing as "Unchecked runtime.lastError" while the page is cached.
+    expect(decideBfcacheAction('pagehide', true)).toBe('port-only-cleanup');
+  });
+
+  it('pageshow with persisted=true → immediate reconnect (restored from bfcache)', () => {
+    // Old port is dead the moment we leave bfcache. Without proactive
+    // reconnect, the heartbeat path takes up to 18s to detect this.
+    expect(decideBfcacheAction('pageshow', true)).toBe('reconnect-immediate');
+  });
+
+  it('pageshow with persisted=false → noop (first paint)', () => {
+    expect(decideBfcacheAction('pageshow', false)).toBe('noop');
   });
 });

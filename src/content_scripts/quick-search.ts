@@ -90,6 +90,7 @@ import {
   markDispatched,
   clearInflight,
   resolvePaletteCopyTarget,
+  decideBfcacheAction,
 } from './quick-search-utils';
 
 // Extend window interface for our extension
@@ -5538,9 +5539,55 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       log.warn('init', 'chrome.runtime.onMessage not available');
     }
     
-    // Cleanup on page unload/navigation
+    // Cleanup on real navigation/unload.
     window.addEventListener('beforeunload', cleanup, { once: true, passive: true });
-    window.addEventListener('pagehide', cleanup, { once: true, passive: true });
+
+    // bfcache lifecycle. Decision logic is extracted to decideBfcacheAction in
+    // quick-search-utils.ts so the four cases are unit-testable without the
+    // DOM/port machinery. The handlers here are just dispatch.
+    function handleBfcacheTransition(eventName: 'pagehide' | 'pageshow', persisted: boolean): void {
+      const action = decideBfcacheAction(eventName, persisted);
+      switch (action) {
+        case 'full-cleanup':
+          cleanup();
+          return;
+        case 'port-only-cleanup':
+          // Going INTO bfcache: close the port now so any in-flight
+          // postMessage doesn't surface as "Unchecked runtime.lastError".
+          // Keep page state (shadow DOM, listeners) so we come back fast.
+          log.debug('bfcache', 'pagehide persisted=true — closing port pre-bfcache');
+          closeSearchPort();
+          return;
+        case 'reconnect-immediate':
+          // Restored from bfcache: old port is dead. Force immediate
+          // reconnect instead of waiting up to 18s for the heartbeat
+          // backup path.
+          log.info('bfcache', 'pageshow persisted=true — forcing port reconnect');
+          if (searchPort) {
+            try { searchPort.disconnect(); } catch { /* already gone */ }
+            searchPort = null;
+          }
+          clearHeartbeatTimers();
+          // Fresh start, not a flapping retry — reset the backoff budget.
+          portReconnectAttempts = 0;
+          if (portReconnectTimer !== null) {
+            clearTimeout(portReconnectTimer);
+            portReconnectTimer = null;
+          }
+          if (isExtensionContextValid()) {
+            scheduleReconnect('bfcache-restore', /* immediate */ true);
+          }
+          return;
+        case 'noop':
+          return;
+      }
+    }
+    window.addEventListener('pagehide', (event: PageTransitionEvent) => {
+      handleBfcacheTransition('pagehide', event.persisted);
+    }, { passive: true });
+    window.addEventListener('pageshow', (event: PageTransitionEvent) => {
+      handleBfcacheTransition('pageshow', event.persisted);
+    }, { passive: true });
     
     // Pre-create overlay earlier for faster first show
     // Use requestIdleCallback if available, otherwise setTimeout

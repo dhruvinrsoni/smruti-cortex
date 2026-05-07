@@ -310,3 +310,32 @@ export function clearInflight(state: DispatchGuardState, key: string | null): vo
     state.inflightKey = null;
   }
 }
+
+// ===== bfcache lifecycle decision =====
+
+/**
+ * What the page transition handler should do in response to a pagehide /
+ * pageshow event. Pulled out as a pure function so the decision is unit-tested
+ * independently of the DOM/port machinery in quick-search.ts.
+ *
+ * - `full-cleanup`        → real navigation: tear down shadow DOM, listeners, port.
+ * - `port-only-cleanup`   → entering bfcache: close the port now (so any
+ *                            in-flight postMessage doesn't surface as
+ *                            "Unchecked runtime.lastError"), keep page state
+ *                            so we can come back fast.
+ * - `reconnect-immediate` → restored from bfcache: old port is dead, force an
+ *                            immediate reconnect (otherwise the heartbeat
+ *                            backup path can take up to 18s to detect this).
+ * - `noop`                → first paint of pageshow: no action needed.
+ */
+export type BfcacheAction = 'full-cleanup' | 'port-only-cleanup' | 'reconnect-immediate' | 'noop';
+
+export function decideBfcacheAction(
+  eventName: 'pagehide' | 'pageshow',
+  persisted: boolean,
+): BfcacheAction {
+  if (eventName === 'pagehide') {
+    return persisted ? 'port-only-cleanup' : 'full-cleanup';
+  }
+  return persisted ? 'reconnect-immediate' : 'noop';
+}
