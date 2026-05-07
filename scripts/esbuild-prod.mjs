@@ -23,6 +23,13 @@ const common = {
     const results = [];
     
     // service worker
+    //
+    // Bundle format is IIFE while manifest.json declares `"type": "module"`.
+    // These coexist intentionally: the IIFE has no top-level import/export
+    // statements, so Chrome parses it as a valid (if trivial) module. Do NOT
+    // switch to format:"esm" without first verifying the SW boot chain works
+    // under strict-mode-ESM rules — esbuild's ESM output also disallows
+    // `splitting:false` for service workers in some Chrome versions.
     const swResult = await build({
       ...common,
       entryPoints: [resolve(cwd, "src/background/service-worker.ts")],

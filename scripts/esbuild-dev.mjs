@@ -16,6 +16,11 @@ const common = {
 (async () => {
   try {
     // service worker
+    //
+    // Bundle format is IIFE while manifest.json declares `"type": "module"`.
+    // These coexist intentionally: the IIFE has no top-level import/export
+    // statements, so Chrome parses it as a valid (if trivial) module. See
+    // esbuild-prod.mjs for the full rationale before changing this.
     await build({
       ...common,
       entryPoints: [resolve(cwd, "src/background/service-worker.ts")],
