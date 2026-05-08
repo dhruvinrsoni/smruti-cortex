@@ -537,18 +537,29 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
        mirroring popup's #recent-sections-container (popup.css:217-218,239). */
     .recent-sections-container { max-height: 150px; overflow-y: auto; flex-shrink: 0; }
     .recent-sections-container:empty { display: none; }
-    /* Unified scroll: .container becomes the scroll point so search input,
-       toolbar, recent and results all flow together — mirrors popup's
-       .main.unified-scroll behavior (popup.css:239-241). Footer sticks to
-       the visible bottom; resize handles hide (they're a split-mode
-       affordance and break when the container scrolls). */
-    .container.unified-scroll { overflow-y: auto; }
+    /* Inner scroll region: takes remaining space above the footer and
+       hosts the vertical scroll in unified mode. Keeping the scroll inside
+       .container (which stays overflow:hidden) means rounded corners clip
+       cleanly and the absolute resize handles remain anchored to .container's
+       visible bottom edge. */
+    .scroll-region {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      scrollbar-width: thin;
+    }
+    .scroll-region::-webkit-scrollbar { width: 8px; }
+    .scroll-region::-webkit-scrollbar-track { background: transparent; }
+    .scroll-region::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
+    .scroll-region::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+    /* Unified scroll: the inner region scrolls; everything inside it (search
+       input, toolbar, recent, results) flows together, mirroring popup's
+       .main.unified-scroll semantics (popup.css:239-241). */
+    .container.unified-scroll .scroll-region { overflow-y: auto; }
     .container.unified-scroll .recent-sections-container { max-height: none; overflow-y: visible; }
     .container.unified-scroll .results { flex: none; min-height: 0; max-height: none; }
     .container.unified-scroll .results.list { overflow-y: visible; }
-    .container.unified-scroll .footer { position: sticky; bottom: 0; z-index: 2; }
-    .container.unified-scroll .resize-handle-bottom,
-    .container.unified-scroll .resize-handle-corner { display: none; }
     .results.cards .result-card {
       display: flex;
       flex-direction: column;
@@ -2005,12 +2016,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     recentSectionsEl = document.createElement('div');
     recentSectionsEl.className = 'recent-sections-container';
 
-    container.appendChild(header);
-    container.appendChild(toggleBarEl);
-    container.appendChild(resultCountEl);
-    container.appendChild(aiStatusBarEl);
-    container.appendChild(recentSectionsEl);
-    container.appendChild(resultsEl);
+    // Inner scroll region: holds everything above the footer. In unified
+    // mode this region (not .container) owns the vertical scroll, so the
+    // container's border-radius + overflow:hidden continue to clip the
+    // scrollbar cleanly inside the rounded box, and the absolute-positioned
+    // resize handles still pin to .container's visible bottom edge.
+    const scrollRegion = document.createElement('div');
+    scrollRegion.className = 'scroll-region';
+    scrollRegion.appendChild(header);
+    scrollRegion.appendChild(toggleBarEl);
+    scrollRegion.appendChild(resultCountEl);
+    scrollRegion.appendChild(aiStatusBarEl);
+    scrollRegion.appendChild(recentSectionsEl);
+    scrollRegion.appendChild(resultsEl);
+
+    container.appendChild(scrollRegion);
     container.appendChild(footer);
     setupResizeHandles(container, resultsEl);
     restoreSavedSize(container);
