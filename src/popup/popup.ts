@@ -64,6 +64,7 @@ import {
   type AIStatus,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
+  copyUrlToClipboard,
   handleCyclicTabNavigation,
   openUrl,
   parseKeyboardAction, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -2395,11 +2396,23 @@ function initializePopup() {
         currentIndex,
       );
       if (!target) { return; }
-      copyHtmlLinkToClipboard({ url: target.url, title: target.title } as SearchResult).then(() => {
-        showToast('📋 Copied HTML link!');
-      }).catch(() => {
-        showToast('📋 Copied (text only)', 'info');
-      });
+      // Ctrl+Shift+C copies plain URL only (omnibox-friendly, no rich anchor).
+      // Ctrl+C copies the rich HTML link; text/plain is the URL too (see
+      // src/shared/search-ui-base.ts createHtmlLink) so omnibox paste works
+      // either way.
+      if (e.shiftKey) {
+        copyUrlToClipboard({ url: target.url, title: target.title } as SearchResult).then(() => {
+          showToast('📋 Copied URL!');
+        }).catch(() => {
+          showToast('❌ Copy failed', 'error');
+        });
+      } else {
+        copyHtmlLinkToClipboard({ url: target.url, title: target.title } as SearchResult).then(() => {
+          showToast('📋 Copied HTML link!');
+        }).catch(() => {
+          showToast('📋 Copied (text only)', 'info');
+        });
+      }
       addRecentInteraction(target.url, target.title, 'copy').catch(e2 => logger.debug('handleKeydown', 'Failed to record copy interaction', errorMeta(e2)));
       return;
     }
@@ -4570,7 +4583,7 @@ function initializePopup() {
       const hintsContainer = document.getElementById('hints-container');
       if (hintsContainer && !hintsContainer.innerHTML.trim()) {
         hintsContainer.innerHTML = `
-          <span>Enter: open in new tab · Shift+Enter: background tab · Ctrl+C: copy HTML · Ctrl+M: copy markdown</span>
+          <span>Enter: open in new tab · Shift+Enter: background tab · Ctrl+C: copy link · Ctrl+Shift+C: copy URL · Ctrl+M: copy markdown</span>
           <span>↑↓: navigate · ←→: move columns (cards) · Esc: clear · Ctrl+Shift+S: quick open · Type "sc " in address bar</span>
         `;
       }

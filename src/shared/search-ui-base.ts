@@ -48,6 +48,7 @@ export enum KeyboardAction {
   OPEN_BACKGROUND_TAB = 'open_background_tab',
   COPY_MARKDOWN = 'copy_markdown',
   COPY_HTML = 'copy_html',
+  COPY_URL = 'copy_url',
   NAVIGATE_UP = 'navigate_up',
   NAVIGATE_DOWN = 'navigate_down',
   TAB_FORWARD = 'tab_forward',
@@ -305,13 +306,19 @@ export function createMarkdownLink(result: SearchResult): string {
 }
 
 /**
- * Shared utility: Create HTML link from result (rich text format)
- * Returns an object with both HTML and plain text for clipboard
+ * Shared utility: Create HTML link from result (rich text format).
+ * Returns both an HTML anchor and a plain-text fallback for the clipboard.
+ *
+ * The plain-text fallback is the URL (NOT the title) because Chrome's omnibox
+ * and other plain-text inputs read only `text/plain` from the clipboard — they
+ * do not parse the HTML anchor. Using the URL here makes Ctrl+V into the
+ * omnibox produce the URL while rich-text editors (Google Docs, Notion, etc.)
+ * still see the HTML anchor and render the title-as-link as expected.
  */
 export function createHtmlLink(result: SearchResult): { html: string; text: string } {
   const title = result.title || result.url;
   const html = `<a href="${result.url}">${title}</a>`;
-  return { html, text: title };
+  return { html, text: result.url };
 }
 
 /**
@@ -343,7 +350,13 @@ export function parseKeyboardAction(e: KeyboardEvent): KeyboardAction | null {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
     return KeyboardAction.COPY_MARKDOWN;
   }
-  
+
+  // Copy plain URL only: Ctrl/Cmd + Shift + C — must be checked before the
+  // plain Ctrl+C branch below, otherwise the latter would intercept it.
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+    return KeyboardAction.COPY_URL;
+  }
+
   // Copy HTML (rich text): Ctrl/Cmd + C
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
     return KeyboardAction.COPY_HTML;
@@ -495,6 +508,16 @@ export async function copyHtmlLinkToClipboard(result: SearchResult): Promise<voi
     await navigator.clipboard.writeText(text);
     throw err; // Re-throw so caller knows rich text failed
   }
+}
+
+/**
+ * Shared utility: Copy plain URL to clipboard (text/plain only).
+ * Used by Ctrl+Shift+C for users who want a bare URL — pasting into a
+ * rich-text editor will NOT auto-create a hyperlink (vs copyHtmlLinkToClipboard
+ * which writes both text/html + text/plain).
+ */
+export async function copyUrlToClipboard(result: SearchResult): Promise<void> {
+  await navigator.clipboard.writeText(result.url);
 }
 
 /**

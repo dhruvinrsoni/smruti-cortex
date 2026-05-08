@@ -22,6 +22,7 @@ import {
   renderResults,
   renderAIStatus,
   copyHtmlLinkToClipboard,
+  copyUrlToClipboard,
   type SearchResult,
   type FocusableGroup,
 } from '../search-ui-base';
@@ -209,13 +210,15 @@ describe('createMarkdownLink', () => {
 // createHtmlLink
 // ---------------------------------------------------------------------------
 describe('createHtmlLink', () => {
-  it('should create HTML anchor tag', () => {
+  it('should create HTML anchor tag and use URL as the plain-text fallback (omnibox-friendly)', () => {
     const { html, text } = createHtmlLink(makeResult({ title: 'GitHub', url: 'https://github.com' }));
     expect(html).toBe('<a href="https://github.com">GitHub</a>');
-    expect(text).toBe('GitHub');
+    // text/plain must be the URL so Chrome omnibox paste yields the URL,
+    // not the title — the HTML anchor is read separately by rich-text editors.
+    expect(text).toBe('https://github.com');
   });
 
-  it('should use URL as title when title is missing', () => {
+  it('should use URL as title when title is missing (and still URL as plain text)', () => {
     const { html, text } = createHtmlLink(makeResult({ title: '', url: 'https://github.com' }));
     expect(html).toBe('<a href="https://github.com">https://github.com</a>');
     expect(text).toBe('https://github.com');
@@ -341,6 +344,16 @@ describe('parseKeyboardAction', () => {
 
   it('should return COPY_HTML for Ctrl+C', () => {
     expect(parseKeyboardAction(createKeyboardEvent('c', { ctrlKey: true }))).toBe(KeyboardAction.COPY_HTML);
+  });
+
+  it('should return COPY_URL for Ctrl+Shift+C (plain URL only)', () => {
+    expect(parseKeyboardAction(createKeyboardEvent('C', { ctrlKey: true, shiftKey: true })))
+      .toBe(KeyboardAction.COPY_URL);
+  });
+
+  it('should return COPY_URL for Cmd+Shift+C on Mac', () => {
+    expect(parseKeyboardAction(createKeyboardEvent('C', { metaKey: true, shiftKey: true })))
+      .toBe(KeyboardAction.COPY_URL);
   });
 
   it('should return null for unrecognized keys', () => {
@@ -805,7 +818,22 @@ describe('copyHtmlLinkToClipboard', () => {
     });
 
     await expect(copyHtmlLinkToClipboard(makeResult({ title: 'Test', url: 'https://test.com' }))).rejects.toThrow('not supported');
-    expect(writeTextFn).toHaveBeenCalledWith('Test');
+    // Plain-text fallback is the URL (omnibox-friendly), not the title.
+    expect(writeTextFn).toHaveBeenCalledWith('https://test.com');
     vi.unstubAllGlobals();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// copyUrlToClipboard (Ctrl+Shift+C path)
+// ---------------------------------------------------------------------------
+describe('copyUrlToClipboard', () => {
+  it('writes only the URL via writeText (no rich HTML format)', async () => {
+    const writeTextFn = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: writeTextFn, write: vi.fn() } });
+
+    await copyUrlToClipboard(makeResult({ title: 'Test Page', url: 'https://test.com/path' }));
+    expect(writeTextFn).toHaveBeenCalledWith('https://test.com/path');
+    expect(writeTextFn).toHaveBeenCalledOnce();
   });
 });

@@ -28,6 +28,7 @@ import {
   KeyboardAction,
   createMarkdownLink,
   copyHtmlLinkToClipboard,
+  copyUrlToClipboard,
   escapeHtml,
   handleCyclicTabNavigation,
   parseKeyboardAction,
@@ -1997,8 +1998,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       ['↑↓', 'Navigate'],
       ['Enter', 'Open'],
       ['→', 'New tab'],
-      ['Ctrl+M', 'Copy'],
-      ['Ctrl+C', 'Copy HTML'],
+      ['Ctrl+C', 'Copy link'],
+      ['Ctrl+Shift+C', 'Copy URL'],
+      ['Ctrl+M', 'Copy markdown'],
       ['ESC', 'Close']
     ];
     
@@ -3074,7 +3076,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         }
         break;
       case 'shortcuts':
-        showToast('Enter: open · Shift+Enter: background · Ctrl+C: copy · ↑↓: navigate · Esc: close');
+        showToast('Enter: open · Shift+Enter: background · Ctrl+C: copy link · Ctrl+Shift+C: copy URL · ↑↓: navigate · Esc: close');
         break;
       case 'shortcut-toggle-bookmarks-bar':
         showToast('Toggle Bookmarks / Favorites Bar\n\nCtrl + Shift + B\n\nWorks in Chrome, Edge & Firefox.\nShortcuts may vary by browser version.', 'info', 8000);
@@ -4699,6 +4701,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     addRecentInteraction(target.url, target.title, 'copy').catch(e => log.debug('copyHtml', 'Failed to record interaction', e));
   }
 
+  function copyUrlOnly(index: number): void {
+    const target = resolveOverlayCopyTarget(index);
+    if (!target) {
+      if (currentMode !== 'history') { showToast('Nothing to copy in this mode', 'info'); }
+      return;
+    }
+
+    copyUrlToClipboard({ url: target.url, title: target.title } as SearchResult).then(() => {
+      showToast('📋 Copied URL!');
+    }).catch(() => {
+      showToast('❌ Copy failed', 'error');
+    });
+    addRecentInteraction(target.url, target.title, 'copy').catch(e => log.debug('copyUrl', 'Failed to record interaction', e));
+  }
+
   // ===== TAB NAVIGATION =====
   // Generic, extensible, fully cyclic tab navigation using shared utility
   function handleTabNavigation(backward: boolean): void {
@@ -4946,7 +4963,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         if (idx >= 0) { copyHtmlLink(idx); }
         break;
       }
-      
+
+      case KeyboardAction.COPY_URL: {
+        const idx = focusedIndex !== null ? focusedIndex : selectedIndex;
+        if (idx >= 0) { copyUrlOnly(idx); }
+        break;
+      }
+
       case KeyboardAction.TAB_FORWARD:
         handleTabNavigation(false); // Forward tab
         break;
@@ -5156,11 +5179,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         return;
       }
 
-      // Ctrl+C => Copy selection (or HTML link if nothing selected)
+      // Ctrl+C / Ctrl+Shift+C => Copy selection (any text in the input wins)
+      // or, with no selection, copy the focused result row.
+      // Ctrl+Shift+C copies plain URL only (omnibox-friendly, no rich anchor).
+      // Ctrl+C copies the rich HTML link (text/plain still = URL after the
+      // search-ui-base.ts fix, so omnibox paste also works for plain Ctrl+C).
       if (lk === 'c') {
         const sel = val.substring(start, end);
         if (sel.length > 0) {
           try { navigator.clipboard.writeText(sel); showToast('📋 Copied'); } catch { showToast('Copy failed', 'error'); }
+        } else if (e.shiftKey) {
+          copyUrlOnly(selectedIndex >= 0 ? selectedIndex : 0);
         } else {
           // Palette modes (#, @, /, >, ??) leave currentResults empty —
           // copyHtmlLink resolves the row from the visible DOM in those modes.
