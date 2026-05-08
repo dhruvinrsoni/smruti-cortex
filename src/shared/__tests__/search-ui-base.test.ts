@@ -5,7 +5,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { makeResult } from '../../__test-utils__';
 import {
-  truncateUrl,
   escapeRegex,
   highlightText,
   createMarkdownLink,
@@ -33,44 +32,6 @@ import {
 const createKeyboardEvent = (key: string, modifiers: Partial<KeyboardEvent> = {}): KeyboardEvent => {
   return { key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...modifiers } as KeyboardEvent;
 };
-
-// ---------------------------------------------------------------------------
-// truncateUrl
-// ---------------------------------------------------------------------------
-describe('truncateUrl', () => {
-  it('should return host + path for valid URLs', () => {
-    expect(truncateUrl('https://github.com/user/repo')).toBe('github.com/user/repo');
-  });
-
-  it('should preserve non-default port in display', () => {
-    expect(truncateUrl('http://localhost:3000/api/data')).toBe('localhost:3000/api/data');
-    expect(truncateUrl('https://dev.local:8443/dashboard')).toBe('dev.local:8443/dashboard');
-  });
-
-  it('should not show port for standard ports (443, 80)', () => {
-    expect(truncateUrl('https://example.com/path')).toBe('example.com/path');
-    expect(truncateUrl('http://example.com/path')).toBe('example.com/path');
-  });
-
-  it('should truncate long URLs with ellipsis', () => {
-    const longPath = '/very/long/path/that/exceeds/sixty/characters/and/needs/truncation';
-    const result = truncateUrl(`https://example.com${longPath}`, 30);
-    expect(result.length).toBeLessThanOrEqual(30);
-    expect(result).toContain('...');
-  });
-
-  it('should handle URLs without path', () => {
-    expect(truncateUrl('https://github.com')).toBe('github.com/');
-  });
-
-  it('should handle invalid URLs gracefully', () => {
-    expect(truncateUrl('not-a-url', 20)).toBe('not-a-url');
-  });
-
-  it('should respect custom maxLength', () => {
-    expect(truncateUrl('https://example.com/path', 15).length).toBeLessThanOrEqual(15);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // escapeRegex

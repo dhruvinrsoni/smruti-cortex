@@ -151,22 +151,6 @@ function focusGroup(group: FocusableGroup): void {
 }
 
 /**
- * Shared utility: Truncate URL for display
- */
-export function truncateUrl(url: string, maxLength: number = 60): string {
-  try {
-    const urlObj = new URL(url);
-    let display = urlObj.host + urlObj.pathname;
-    if (display.length > maxLength) {
-      display = display.substring(0, maxLength - 3) + '...';
-    }
-    return display;
-  } catch {
-    return url.substring(0, maxLength);
-  }
-}
-
-/**
  * Options for sortResults — kept as an object so the call site reads
  * intentionally ("trust the engine") rather than as a positional boolean.
  */
@@ -463,7 +447,11 @@ export function renderResults(
     // URL
     const urlDiv = document.createElement('div');
     urlDiv.className = options.urlClassName;
-    appendHighlightedTextToDOM(urlDiv, truncateUrl(result.url), tokens, options.highlightClassName, aiTokens, aiHighlightClassName);
+    // Pass the full URL — CSS handles fluid truncation via text-overflow:
+    // ellipsis on .result-url, so the visible length adapts to the actual
+    // row width (popup ~800px / quick-search resizable). JS-level pre-trim
+    // would prevent that and force a fixed cut-off regardless of dialog width.
+    appendHighlightedTextToDOM(urlDiv, result.url, tokens, options.highlightClassName, aiTokens, aiHighlightClassName);
     
     // Add bookmark folder path if available
     if (result.isBookmark && result.bookmarkFolders && result.bookmarkFolders.length > 0) {
