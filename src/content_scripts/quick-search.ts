@@ -44,7 +44,8 @@ import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
-import { getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
+import { DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
+import { renderToolbarToggles, syncToolbarToggles, TOOLBAR_TOGGLE_CSS, type SettingsPort } from '../shared/toolbar-renderer';
 import type { MaskingLevel } from '../shared/data-masker';
 import { STAGE_TIMINGS, waitRemaining, ensureReportButton } from '../shared/report-chooser-utils';
 import { checkAndRecord as checkAndRecordReportRateLimit, formatRetryAfter } from '../shared/report-rate-limit';
@@ -210,6 +211,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let aiStatusBarEl: HTMLDivElement | null = null;
   let footerEl: HTMLDivElement | null = null;
   let toggleBarEl: HTMLDivElement | null = null;
+  let recentSectionsEl: HTMLDivElement | null = null;
   let currentAIExpandedTokens: string[] = [];
   let spinnerTimeoutTimer: number | null = null; // Safety timeout to prevent stuck spinner
   let visibilityChangeHandler: (() => void) | null = null;
@@ -322,6 +324,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       --highlight-text: #664d03;
       --highlight-ai-bg: #dcfce7;
       --highlight-ai-text: #14532d;
+      /* Aliases consumed by the shared .toggle-chip CSS in toolbar-renderer.ts */
+      --toolbar-accent: var(--accent-color);
+      --toolbar-border: var(--bg-hover);
+      --toolbar-muted: var(--text-secondary);
+      --toolbar-active-shadow: rgba(13, 110, 253, 0.4);
     }
 
     @media (prefers-color-scheme: dark) {
@@ -384,6 +391,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       flex-direction: column;
       width: 680px;
       max-width: 92vw;
+      /* Overlay reserves 8vh padding-top; 88vh dialog cap leaves ~4vh
+         bottom breathing room so the dialog never overflows the viewport. */
+      max-height: 88vh;
       background: var(--bg-container);
       border-radius: 12px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -523,6 +533,22 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       padding: 8px;
       contain: layout style;
     }
+    /* Recent-sections wrapper: single shared scroll for both recent panes,
+       mirroring popup's #recent-sections-container (popup.css:217-218,239). */
+    .recent-sections-container { max-height: 150px; overflow-y: auto; flex-shrink: 0; }
+    .recent-sections-container:empty { display: none; }
+    /* Unified scroll: .container becomes the scroll point so search input,
+       toolbar, recent and results all flow together — mirrors popup's
+       .main.unified-scroll behavior (popup.css:239-241). Footer sticks to
+       the visible bottom; resize handles hide (they're a split-mode
+       affordance and break when the container scrolls). */
+    .container.unified-scroll { overflow-y: auto; }
+    .container.unified-scroll .recent-sections-container { max-height: none; overflow-y: visible; }
+    .container.unified-scroll .results { flex: none; min-height: 0; max-height: none; }
+    .container.unified-scroll .results.list { overflow-y: visible; }
+    .container.unified-scroll .footer { position: sticky; bottom: 0; z-index: 2; }
+    .container.unified-scroll .resize-handle-bottom,
+    .container.unified-scroll .resize-handle-corner { display: none; }
     .results.cards .result-card {
       display: flex;
       flex-direction: column;
@@ -810,61 +836,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       margin-left: auto;
       opacity: 0.7;
     }
-    /* Toggle chip bar */
-    .toggle-bar {
-      display: flex;
-      gap: 6px;
-      padding: 4px 16px;
-      align-items: center;
-      flex-wrap: wrap;
-      min-height: 0;
-    }
-    .toggle-bar:empty {
-      display: none;
-    }
-    .toggle-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      border: 1px solid var(--bg-hover);
-      background: transparent;
-      color: var(--text-secondary);
-      transition: all 0.18s ease;
-      user-select: none;
-      white-space: nowrap;
-      font-family: inherit;
-      line-height: 1.5;
-      opacity: 0.5;
-    }
-    .toggle-chip:hover {
-      opacity: 0.75;
-    }
-    .toggle-chip.active {
-      background: var(--accent-color);
-      color: #fff;
-      border-color: var(--accent-color);
-      opacity: 1;
-      box-shadow: 0 0 8px rgba(13, 110, 253, 0.4);
-    }
-    .toggle-chip.disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-      box-shadow: none;
-      background: transparent;
-      color: var(--text-secondary);
-      border-color: var(--bg-hover);
-    }
-    .toggle-chip.disabled:hover {
-      opacity: 0.45;
-    }
-    .toggle-chip .chip-icon {
-      font-size: 12px;
-    }
+    /* Shared .toggle-bar / .toggle-chip rules — single source of truth in
+       src/shared/toolbar-renderer.ts. Quick-search-specific layout overrides
+       (flex-shrink) are below in the .container chrome section. */
+    ${TOOLBAR_TOGGLE_CSS}
+    /* Quick-search column-flex pinning: lock chrome heights so only .results
+       can flex-shrink under pressure. Without these, .toggle-bar's flex-shrink:1
+       (default) lets it collapse — visible as a "smaller chip strip" when the
+       container has any height pressure (resized, tall results, unified-scroll
+       expanding recent sections). */
+    .header, .toggle-bar, .ai-status-bar, .result-count, .footer { flex-shrink: 0; }
     .recent-searches-section {
       margin-bottom: 8px;
       border-bottom: 1px solid var(--bg-hover);
@@ -2018,10 +1999,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     toggleBarEl = document.createElement('div');
     toggleBarEl.className = 'toggle-bar';
 
+    // Wrapper for both recent panes (Recent Searches + Recently Visited).
+    // Mirrors popup's #recent-sections-container so the two panes share a
+    // single max-height + scrollbar instead of having their own.
+    recentSectionsEl = document.createElement('div');
+    recentSectionsEl.className = 'recent-sections-container';
+
     container.appendChild(header);
     container.appendChild(toggleBarEl);
     container.appendChild(resultCountEl);
     container.appendChild(aiStatusBarEl);
+    container.appendChild(recentSectionsEl);
     container.appendChild(resultsEl);
     container.appendChild(footer);
     setupResizeHandles(container, resultsEl);
@@ -2179,6 +2167,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Await fresh settings before loading defaults so toggles are respected
     fetchSettings().then(() => {
       renderQSToggleBar();
+      const container = shadowRoot?.querySelector('.container');
+      if (container && cachedSettings?.unifiedScroll) {
+        container.classList.add('unified-scroll');
+      }
       loadRecentHistory();
       showFirstUseHint();
     }).catch(() => loadRecentHistory());
@@ -2697,6 +2689,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (key === 'maxResults' || key === 'defaultResultCount') {
       if (currentMode === 'history' && !(inputEl?.value?.trim())) {
         loadRecentHistory();
+      }
+    }
+    if (key === 'unifiedScroll') {
+      const container = shadowRoot?.querySelector('.container');
+      if (container) {
+        container.classList.toggle('unified-scroll', !!cachedSettings?.unifiedScroll);
       }
     }
   }
@@ -3991,96 +3989,39 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // --- Toggle Chip Bar for Quick-Search ---
+  // Render + sync delegate to the shared `src/shared/toolbar-renderer.ts`.
+  // Local wrappers preserve the existing `renderQSToggleBar()` /
+  // `syncQSToggleBar()` names used at the few call sites in this file.
+  const qsPort: SettingsPort = {
+    get: <K extends keyof AppSettings>(k: K) => (cachedSettings as AppSettings | null)?.[k],
+    set: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => {
+      if (cachedSettings) { (cachedSettings as AppSettings)[k] = v; }
+      try {
+        chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [k]: v } }, ack);
+      } catch { /* context invalidated */ }
+    },
+    showToast: (message, type) => showToast(message, type),
+    onAfterToggle: (key) => {
+      applySettingSideEffects(key);
+      if (key !== 'displayMode' && key !== 'highlightMatches') {
+        if (inputEl?.value?.trim()) {
+          handleInput();
+        } else {
+          loadRecentHistory();
+        }
+      }
+    },
+  };
+
   function renderQSToggleBar() {
     if (!toggleBarEl) {return;}
-    toggleBarEl.innerHTML = '';
-    const visibleKeys = cachedSettings?.toolbarToggles ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
-    for (const key of visibleKeys) {
-      const def = getToggleDef(key);
-      if (!def) {continue;}
-
-      const chip = document.createElement('button');
-      chip.className = 'toggle-chip';
-      chip.dataset.toggleKey = key;
-      chip.type = 'button';
-
-      chip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const s = cachedSettings as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        // Prerequisite gate: chips declaring `requires` (e.g. Semantic needs
-        // Ollama) are inert until the prerequisite is satisfied. Surface a
-        // toast so the user understands why nothing changed.
-        if (def.requires) {
-          const prereq = s?.[def.requires];
-          if (!prereq) {
-            if (def.disabledToast) {
-              showToast(def.disabledToast, 'warning');
-            }
-            return;
-          }
-        }
-        if (def.type === 'boolean') {
-          const cur = s?.[def.key] as boolean ?? false;
-          const next = !cur;
-          if (s) { s[def.key] = next; }
-          try {
-            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } }, ack);
-          } catch { /* context invalidated */ }
-        } else if (def.type === 'cycle') {
-          const cur = s?.[def.key];
-          const next = getNextCycleValue(def, cur);
-          if (s) { s[def.key] = next; }
-          try {
-            chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED', settings: { [def.key]: next } }, ack);
-          } catch { /* context invalidated */ }
-        }
-        applySettingSideEffects(def.key);
-        if (def.key !== 'displayMode' && def.key !== 'highlightMatches') {
-          if (inputEl?.value?.trim()) {
-            handleInput();
-          } else {
-            loadRecentHistory();
-          }
-        }
-      });
-
-      toggleBarEl.appendChild(chip);
-    }
-    syncQSToggleBar();
+    const visibleKeys = cachedSettings?.toolbarToggles ?? DEFAULT_TOOLBAR_TOGGLES;
+    renderToolbarToggles(toggleBarEl, qsPort, visibleKeys);
   }
 
   function syncQSToggleBar() {
     if (!toggleBarEl) {return;}
-    const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
-    chips.forEach(chip => {
-      const key = chip.dataset.toggleKey;
-      if (!key) {return;}
-      const def = getToggleDef(key);
-      if (!def) {return;}
-
-      const val = (cachedSettings as any)?.[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
-      const isDisabled = def.requires
-        ? evaluateChipDisabled(def, cachedSettings as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-        : false;
-      chip.classList.toggle('disabled', isDisabled);
-      chip.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
-
-      if (def.type === 'boolean') {
-        const isActive = Boolean(val);
-        chip.classList.toggle('active', isActive && !isDisabled);
-        chip.title = isDisabled
-          ? (def.disabledTooltip ?? def.tooltipOff)
-          : (isActive ? def.tooltipOn : def.tooltipOff);
-        chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
-      } else if (def.type === 'cycle') {
-        const cs = getCycleState(def, val);
-        chip.classList.toggle('active', !isDisabled);
-        chip.title = isDisabled
-          ? (def.disabledTooltip ?? def.tooltipOff)
-          : `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
-        chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
-      }
-    });
+    syncToolbarToggles(toggleBarEl, qsPort);
   }
 
   // Load recent history (smart default results when query is empty)
@@ -4196,23 +4137,29 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       selectedIndex = -1;
       renderResults(currentResults);
 
-      // "⚡ Recently Visited" section — gated by showRecentHistory toggle
-      if (showRecentlyVisited && resultsEl) {
-        getRecentInteractions().then(entries => {
-          if (entries.length > 0 && resultsEl) {
-            const section = buildRecentInteractionsSection(entries.slice(0, 5));
-            resultsEl.insertBefore(section, resultsEl.firstChild);
-          }
-        }).catch(e => log.debug('loadRecent', 'Failed to load recent interactions', e));
-      }
-
-      if (showSearches && resultsEl) {
-        getRecentSearches().then(entries => {
-          if (entries.length > 0 && resultsEl) {
-            const section = buildRecentSearchesSection(entries.slice(0, 5));
-            resultsEl.insertBefore(section, resultsEl.firstChild);
-          }
-        }).catch(e => log.debug('loadRecent', 'Failed to load recent searches', e));
+      // Recent panes (🔎 Searches + ⚡ Visited) populate the shared wrapper so
+      // a single 150px scroll covers both — mirroring popup's
+      // #recent-sections-container. Promise.all keeps append order
+      // deterministic (Searches above, Visited below) and the token guard
+      // drops stale paints from older loadRecentHistory calls.
+      if (recentSectionsEl) {
+        recentSectionsEl.innerHTML = '';
+        const searchesP: Promise<HTMLElement | null> = showSearches
+          ? getRecentSearches().then(entries =>
+              entries.length > 0 ? buildRecentSearchesSection(entries.slice(0, 5)) : null
+            ).catch(e => { log.debug('loadRecent', 'Failed to load recent searches', e); return null; })
+          : Promise.resolve(null);
+        const visitedP: Promise<HTMLElement | null> = showRecentlyVisited
+          ? getRecentInteractions().then(entries =>
+              entries.length > 0 ? buildRecentInteractionsSection(entries.slice(0, 5)) : null
+            ).catch(e => { log.debug('loadRecent', 'Failed to load recent interactions', e); return null; })
+          : Promise.resolve(null);
+        Promise.all([searchesP, visitedP]).then(([searches, visited]) => {
+          if (myToken !== loadRecentHistoryToken) {return;}
+          if (!recentSectionsEl) {return;}
+          if (searches) {recentSectionsEl.appendChild(searches);}
+          if (visited)  {recentSectionsEl.appendChild(visited);}
+        });
       }
       
       perfLog('loadRecentHistory completed', t0);

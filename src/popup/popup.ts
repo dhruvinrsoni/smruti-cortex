@@ -13,7 +13,8 @@ import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
-import { TOOLBAR_TOGGLE_DEFS, getToggleDef, getCycleState, getNextCycleValue, evaluateChipDisabled } from '../shared/toolbar-toggles';
+import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
+import { renderToolbarToggles, syncToolbarToggles, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
   type PaletteCommand,
   ALL_COMMANDS,
@@ -639,89 +640,39 @@ function initializePopup() {
   }
 
   // --- Toggle Chip Bar ---
+  // Render + sync delegate to the shared `src/shared/toolbar-renderer.ts` so
+  // popup and quick-search stay in lockstep. Local wrappers preserve the
+  // `renderToggleBar()` / `syncToggleBar()` names already used at ~20 call
+  // sites in this file.
   const toggleBarEl = $local('toggle-bar') as HTMLDivElement | null;
+  injectToolbarToggleCss(document);
+
+  const popupPort: SettingsPort = {
+    get: <K extends keyof AppSettings>(k: K) => SettingsManager.getSetting(k) as AppSettings[K] | undefined,
+    set: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) =>
+      SettingsManager.setSetting(k, v).catch(e => logger.debug('toggleBar', `Failed to save ${k}`, errorMeta(e))),
+    showToast,
+    onAfterToggle: (key) => {
+      applyPopupSettingSideEffects(key);
+      if (key !== 'displayMode' && key !== 'highlightMatches' && key !== 'loadFavicons') {
+        if (currentQuery?.trim()) {
+          debounceSearch(currentQuery);
+        } else if (key !== 'showRecentHistory' && key !== 'showRecentSearches') {
+          loadRecentHistory();
+        }
+      }
+    },
+  };
 
   function renderToggleBar() {
     if (!toggleBarEl) {return;}
-    toggleBarEl.innerHTML = '';
-    const visibleKeys = SettingsManager.getSetting('toolbarToggles') ?? ['ollamaEnabled', 'indexBookmarks', 'showDuplicateUrls'];
-    for (const key of visibleKeys) {
-      const def = getToggleDef(key);
-      if (!def) {continue;}
-
-      const chip = document.createElement('button');
-      chip.className = 'toggle-chip';
-      chip.dataset.toggleKey = key;
-      chip.type = 'button';
-
-      chip.addEventListener('click', () => {
-        // Prerequisite gate: a chip declaring `requires` (e.g. Semantic needs
-        // Ollama) is a no-op while its prerequisite is off. We surface a
-        // toast so the user understands why their click did nothing.
-        if (def.requires) {
-          const prereq = SettingsManager.getSetting(def.requires);
-          if (!prereq) {
-            if (def.disabledToast) {
-              showToast(def.disabledToast, 'warning');
-            }
-            return;
-          }
-        }
-        if (def.type === 'boolean') {
-          const cur = SettingsManager.getSetting(def.key) as boolean;
-          SettingsManager.setSetting(def.key, !cur as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, errorMeta(e)));
-        } else if (def.type === 'cycle') {
-          const cur = SettingsManager.getSetting(def.key);
-          const next = getNextCycleValue(def, cur);
-          SettingsManager.setSetting(def.key, next as AppSettings[typeof def.key]).catch(e => logger.debug('toggleBar', `Failed to save ${def.key}`, errorMeta(e)));
-        }
-        applyPopupSettingSideEffects(def.key);
-        if (def.key !== 'displayMode' && def.key !== 'highlightMatches' && def.key !== 'loadFavicons') {
-          if (currentQuery?.trim()) {
-            debounceSearch(currentQuery);
-          } else if (def.key !== 'showRecentHistory' && def.key !== 'showRecentSearches') {
-            loadRecentHistory();
-          }
-        }
-      });
-
-      toggleBarEl.appendChild(chip);
-    }
-    syncToggleBar();
+    const visibleKeys = SettingsManager.getSetting('toolbarToggles') ?? DEFAULT_TOOLBAR_TOGGLES;
+    renderToolbarToggles(toggleBarEl, popupPort, visibleKeys);
   }
 
   function syncToggleBar() {
     if (!toggleBarEl) {return;}
-    const chips = toggleBarEl.querySelectorAll<HTMLButtonElement>('.toggle-chip');
-    chips.forEach(chip => {
-      const key = chip.dataset.toggleKey as keyof AppSettings;
-      if (!key) {return;}
-      const def = getToggleDef(key);
-      if (!def) {return;}
-
-      const val = SettingsManager.getSetting(key);
-      const isDisabled = def.requires
-        ? evaluateChipDisabled(def, { [def.requires]: SettingsManager.getSetting(def.requires) } as Partial<AppSettings>)
-        : false;
-      chip.classList.toggle('disabled', isDisabled);
-      chip.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
-
-      if (def.type === 'boolean') {
-        const isActive = Boolean(val);
-        chip.classList.toggle('active', isActive && !isDisabled);
-        chip.title = isDisabled
-          ? (def.disabledTooltip ?? def.tooltipOff)
-          : (isActive ? def.tooltipOn : def.tooltipOff);
-        chip.innerHTML = `<span class="chip-icon">${def.icon}</span>${def.label}`;
-      } else if (def.type === 'cycle') {
-        const cs = getCycleState(def, val);
-        chip.classList.toggle('active', !isDisabled);
-        chip.title = isDisabled
-          ? (def.disabledTooltip ?? def.tooltipOff)
-          : `${def.tooltipOn.replace(/:.+$/, '')}: ${cs?.label ?? String(val)}`;
-        chip.innerHTML = `<span class="chip-icon">${cs?.icon ?? def.icon}</span>${cs?.label ?? def.label}`;
-      }
-    });
+    syncToolbarToggles(toggleBarEl, popupPort);
   }
 
   // Pre-render empty state immediately
