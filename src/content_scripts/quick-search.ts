@@ -177,14 +177,30 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let overlayFocusTimeouts: ReturnType<typeof setTimeout>[] = [];         // Tracked backup timeouts
   let searchPort: chrome.runtime.Port | null = null;
   // Heartbeat: periodic PING on the port, stale if no PONG within deadline.
-  // Protects against silent port death after SW eviction (post-hibernate) that
-  // does not always trigger `onDisconnect` in time.
+  // Heartbeat invariants:
+  //   - Sends a PING every 15s and expects a PONG within 8s.
+  //   - Catches *silent* SW eviction (post-hibernate) that does not always
+  //     fire `onDisconnect` in time, so the next user search reconnects fast.
+  //   - Paused while the tab is hidden — Chrome throttles background-tab
+  //     timers + IPC dispatch, which would otherwise false-trip the deadline.
+  //   - One stale detection per 30s window (cool-down). If a heavy page burst
+  //     does push us past 8s, we tear down once and let the next user activity
+  //     (`prewarmServiceWorker` on visibility/keydown) refresh the port if
+  //     it's actually dead, instead of thrashing reconnects.
+  //   - DO NOT lower PORT_HEARTBEAT_TIMEOUT_MS without considering main-thread
+  //     blocking on heavy host pages (game loops, video editors, etc.); 3s was
+  //     too tight and surfaced as "Errors" on chrome://extensions.
   let portHeartbeatInterval: number | null = null;
   let portHeartbeatDeadline: number | null = null; // pending PING deadline timer
   // Timestamp of the outstanding PING (used to match PONGs and ignore stale PONGs)
   let lastPingT: number | null = null;
+  // Wall-clock of the last successful PONG; powers diagnostics + cool-down.
+  let lastPongAt: number | null = null;
+  // Wall-clock of the last stale-detection that triggered a reconnect.
+  let lastStalePortAt: number | null = null;
   const PORT_HEARTBEAT_INTERVAL_MS = 15_000;
-  const PORT_HEARTBEAT_TIMEOUT_MS = 3_000;
+  const PORT_HEARTBEAT_TIMEOUT_MS = 8_000;
+  const STALE_RECONNECT_COOLDOWN_MS = 30_000;
   // Exponential reconnect backoff after onDisconnect / stale detection.
   let portReconnectAttempts = 0;
   let portReconnectTimer: number | null = null;
@@ -1271,10 +1287,31 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   /**
    * Mark the current port stale and trigger a reconnect.
    * Idempotent: safe to call from both try/catch throws and heartbeat timeouts.
+   *
+   * Cool-down: if a stale was already raised in the last 30s, downgrade this
+   * one to a debug log and skip the reconnect. The next user activity
+   * (prewarmServiceWorker on keydown / visibility) refreshes the port when
+   * actually needed, avoiding reconnect storms on pathologically heavy pages.
    */
   function handleStalePort(reason: string): void {
     if (!searchPort) {return;}
-    log.warn('port', `Stale port detected (${reason}) — reconnecting`);
+    const now = Date.now();
+    const inCooldown = lastStalePortAt !== null && (now - lastStalePortAt) < STALE_RECONNECT_COOLDOWN_MS;
+    const ctx = {
+      reason,
+      visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+      sinceLastPongMs: lastPongAt !== null ? now - lastPongAt : null,
+      deadlineMs: PORT_HEARTBEAT_TIMEOUT_MS,
+      host: (typeof location !== 'undefined' && location.hostname) || 'unknown',
+    };
+    if (inCooldown) {
+      // Don't surface as warn (would re-appear on chrome://extensions Errors).
+      log.debug('port', 'Stale port suppressed (within cool-down)', ctx);
+      clearHeartbeatTimers();
+      return;
+    }
+    lastStalePortAt = now;
+    log.warn('port', 'Stale port detected — reconnecting', ctx);
     clearHeartbeatTimers();
     try { searchPort.disconnect(); } catch { /* already gone */ }
     searchPort = null;
@@ -1308,7 +1345,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       portHeartbeatDeadline = window.setTimeout(() => {
         portHeartbeatDeadline = null;
         lastPingT = null;
-        handleStalePort('no PONG within 3s');
+        handleStalePort(`no PONG within ${PORT_HEARTBEAT_TIMEOUT_MS}ms`);
       }, PORT_HEARTBEAT_TIMEOUT_MS) as unknown as number;
     }, PORT_HEARTBEAT_INTERVAL_MS) as unknown as number;
   }
@@ -1352,6 +1389,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               portHeartbeatDeadline = null;
             }
             lastPingT = null;
+            lastPongAt = Date.now();
             return;
           }
           // If this PONG doesn't match the outstanding PING, ignore it.
@@ -1364,6 +1402,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             portHeartbeatDeadline = null;
           }
           lastPingT = null;
+          lastPongAt = Date.now();
           return;
         }
 
@@ -5488,11 +5527,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Pre-warm service worker on first keyboard activity
     document.addEventListener('keydown', prewarmServiceWorker, { once: true, passive: true, capture: true });
     
-    // Pre-warm on visibility change (tab becomes active)
+    // Pre-warm on visibility change (tab becomes active). Also pause/resume
+    // the port heartbeat: while the tab is hidden, Chrome aggressively
+    // throttles background-tab JS, which would otherwise push the PONG past
+    // the deadline and false-trip handleStalePort.
     visibilityChangeHandler = () => {
       if (document.visibilityState === 'visible') {
         prewarmServiceWorker();
         fetchLogLevel();
+        if (searchPort) {startHeartbeat();}
+      } else {
+        clearHeartbeatTimers();
       }
     };
     document.addEventListener('visibilitychange', visibilityChangeHandler, { passive: true });
