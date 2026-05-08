@@ -2016,15 +2016,18 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     recentSectionsEl = document.createElement('div');
     recentSectionsEl.className = 'recent-sections-container';
 
-    // Inner scroll region: holds everything above the footer. In unified
-    // mode this region (not .container) owns the vertical scroll, so the
-    // container's border-radius + overflow:hidden continue to clip the
-    // scrollbar cleanly inside the rounded box, and the absolute-positioned
-    // resize handles still pin to .container's visible bottom edge.
+    // Inner scroll region: holds the dynamic content (counts, AI status,
+    // recent panes, results) so it can scroll independently in unified
+    // mode. The header (search input) and toggle bar stay outside this
+    // region as direct children of .container, so they remain pinned at
+    // the top even when the user scrolls inside the dialog. Footer + resize
+    // handles also stay on .container so .container's rounded corners and
+    // overflow:hidden continue to clip the inner scrollbar cleanly.
+    container.appendChild(header);
+    container.appendChild(toggleBarEl);
+
     const scrollRegion = document.createElement('div');
     scrollRegion.className = 'scroll-region';
-    scrollRegion.appendChild(header);
-    scrollRegion.appendChild(toggleBarEl);
     scrollRegion.appendChild(resultCountEl);
     scrollRegion.appendChild(aiStatusBarEl);
     scrollRegion.appendChild(recentSectionsEl);
