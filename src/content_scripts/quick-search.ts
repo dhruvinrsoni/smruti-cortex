@@ -1307,12 +1307,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     };
     if (inCooldown) {
       // Don't surface as warn (would re-appear on chrome://extensions Errors).
-      log.debug('port', 'Stale port suppressed (within cool-down)', ctx);
+      log.debug('port', `Stale port suppressed within cool-down ${JSON.stringify(ctx)}`);
       clearHeartbeatTimers();
       return;
     }
     lastStalePortAt = now;
-    log.warn('port', 'Stale port detected — reconnecting', ctx);
+    // Pre-stringify ctx: chrome://extensions Errors panel and crash logs
+    // call String() on extra args, producing "[object Object]" otherwise.
+    log.warn('port', `Stale port detected — reconnecting ${JSON.stringify(ctx)}`);
     clearHeartbeatTimers();
     try { searchPort.disconnect(); } catch { /* already gone */ }
     searchPort = null;
@@ -1336,6 +1338,10 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       lastPingT = t;
       try {
         searchPort.postMessage({ type: 'PING', t });
+        // Consume any port-level runtime error so Chrome doesn't emit
+        // "Unchecked runtime.lastError" when the page is bfcached between
+        // our PING and the next tick. Mirrors performSearch:4286 / :4305.
+        void chrome.runtime.lastError;
       } catch (err) {
         // Clear lastPingT — postMessage failed and we'll schedule reconnect
         lastPingT = null;
