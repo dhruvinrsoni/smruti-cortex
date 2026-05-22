@@ -289,6 +289,94 @@ describe('search-engine', () => {
       // (cache is skipped when AI is explicitly requested)
       expect(mockCache.get).not.toHaveBeenCalled();
     });
+
+    it('Phase 1 (skipAI: true) must NEVER invoke Ollama, even when only semantic is enabled', async () => {
+      // Reproduces the user's exact config from the 2026-05-21 bug report:
+      // ollamaEnabled=false (keyword AI off), embeddingsEnabled=true (semantic on).
+      // Pre-fix, this configuration caused Phase 1 to await generateEmbedding,
+      // producing the 17-second wait + empty results in the user's logs.
+      settingsMap.ollamaEnabled = false;
+      settingsMap.embeddingsEnabled = true;
+      indexedItems.push(makeItem({ url: 'https://example.com', title: 'Example', hostname: 'example.com' }));
+
+      const generateEmbeddingSpy = vi.fn(async () => ({ success: true, embedding: [0.1, 0.2, 0.3], error: '' }));
+      vi.resetModules();
+      // Re-mock ollama with the spy so we can assert it was never called.
+      vi.doMock('../../ollama-service', () => ({
+        isCircuitBreakerOpen: vi.fn(() => false),
+        checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
+        getOllamaConfigFromSettings: vi.fn(async () => ({})),
+        getOllamaService: vi.fn(() => ({ generateEmbedding: generateEmbeddingSpy })),
+        acquireOllamaSlot: vi.fn(() => true),
+        releaseOllamaSlot: vi.fn(),
+      }));
+
+      const loadEmbeddingsSpy = vi.fn(async () => 0);
+      vi.doMock('../../database', () => ({
+        getAllIndexedItems: vi.fn(async () => indexedItems),
+        loadEmbeddingsInto: loadEmbeddingsSpy,
+        saveIndexedItem: vi.fn(),
+      }));
+
+      // Re-mock everything else the same way importModule does (vi.resetModules cleared them).
+      vi.doMock('../../../core/logger', () => ({
+        Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+        errorMeta: (err: unknown) => err instanceof Error ? { name: err.name, message: err.message } : { name: 'non-Error', message: String(err) },
+      }));
+      vi.doMock('../../../core/settings', () => ({
+        SettingsManager: { getSetting: vi.fn((key: string) => settingsMap[key]), init: vi.fn() },
+      }));
+      vi.doMock('../scorer-manager', () => ({
+        getAllScorers: vi.fn(() => [{
+          name: 'test-scorer', weight: 1.0,
+          score: vi.fn((_item: IndexedItem, query: string) => {
+            const haystack = (_item.title + ' ' + _item.url).toLowerCase();
+            return haystack.includes(query) ? 1.0 : 0.0;
+          }),
+        }]),
+      }));
+      vi.doMock('../tokenizer', () => ({
+        tokenize: vi.fn((text: string) => text.split(/\s+/).filter((t: string) => t.length > 0)),
+        classifyTokenMatches: vi.fn((_tokens: string[], _text: string) => _tokens.map((t: string) => (_text.includes(t) ? 1 : 0))),
+        graduatedMatchScore: vi.fn(() => 0.5),
+        countConsecutiveMatches: vi.fn(() => 0),
+        classifyMatch: vi.fn((tok: string, text: string) => (text.includes(tok) ? 1 : 0)),
+        MatchType: { NONE: 0, EXACT: 1, PREFIX: 2, SUBSTRING: 3 },
+        MATCH_WEIGHTS: { 0: 0, 1: 1.0, 2: 0.75, 3: 0.5 },
+      }));
+      vi.doMock('../../../core/helpers', () => ({
+        browserAPI: { history: { search: vi.fn((_q: unknown, cb: (r: unknown[]) => void) => cb([])) } },
+      }));
+      vi.doMock('../../ai-keyword-expander', () => ({
+        expandQueryKeywords: vi.fn(async (q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+        getLastExpansionSource: vi.fn(() => 'disabled'),
+      }));
+      vi.doMock('../diversity-filter', () => ({
+        applyDiversityFilter: vi.fn((items: unknown[]) => items),
+        applyTitleHostDedup: vi.fn((items: unknown[]) => items),
+        normalizeTitleForDedup: vi.fn((t: string) => (t || '').toLowerCase().trim()),
+      }));
+      vi.doMock('../../performance-monitor', () => ({ performanceTracker: { recordSearch: vi.fn() } }));
+      vi.doMock('../query-expansion', () => ({
+        getExpandedTerms: vi.fn((q: string) => q.split(/\s+/).filter((t: string) => t.length > 0)),
+      }));
+      vi.doMock('../../diagnostics', () => ({ recordSearchDebug: vi.fn(), recordSearchSnapshot: vi.fn() }));
+      vi.doMock('../search-cache', () => ({ getSearchCache: vi.fn(() => mockCache) }));
+      vi.doMock('../../embedding-processor', () => ({ embeddingProcessor: { setSearchActive: vi.fn() } }));
+      vi.doMock('../../embedding-text', () => ({ buildEmbeddingText: vi.fn(() => 'test') }));
+      vi.doMock('../../../core/scorer-types', () => ({}));
+
+      const { runSearch } = await import('../search-engine');
+      const start = performance.now();
+      await runSearch('example', { skipAI: true });
+      const elapsed = performance.now() - start;
+
+      // Core invariant: Phase 1 must not touch Ollama or load embeddings.
+      expect(generateEmbeddingSpy).not.toHaveBeenCalled();
+      expect(loadEmbeddingsSpy).not.toHaveBeenCalled();
+      // Sanity: completes fast (no Ollama means no network wait).
+      expect(elapsed).toBeLessThan(500);
+    });
   });
 
   describe('getLastAIStatus', () => {

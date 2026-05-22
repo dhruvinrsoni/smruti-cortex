@@ -80,6 +80,22 @@ export function getLastAIStatus(): AISearchStatus | null { return lastAIStatus; 
 // Allows cancelling a previous search when a new one starts
 let activeSearchAbort: AbortController | null = null;
 
+/**
+ * Cancel the currently-active in-flight search (if any). Called by the port-messaging
+ * layer when a UI host sends a `CANCEL_SEARCH` frame — e.g. when the user toggles
+ * the AI/Semantic chip OFF and we want to immediately free the Ollama slot rather
+ * than letting the in-flight Phase 2 run to completion.
+ *
+ * Idempotent: no-op when no search is active. Reuses the existing
+ * `activeSearchAbort` machinery; the next `runSearchInner` call recreates it.
+ */
+export function abortActiveSearch(): void {
+    if (activeSearchAbort) {
+        activeSearchAbort.abort();
+        activeSearchAbort = null;
+    }
+}
+
 export const runSearch = traced('SearchEngine', 'runSearch',
     async function runSearch(query: string, options?: { skipAI?: boolean }): Promise<IndexedItem[]> {
         // Signal to embedding processor: search is active → yield Ollama slot
@@ -195,13 +211,11 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     let queryEmbedding: number[] | undefined;
 
-    // Generate query embedding for semantic search if enabled.
-    // Skip in Phase 1 (skipAI: true) when keyword AI is also enabled — Phase 2 will run the
-    // embedding properly after keyword expansion completes. Avoids Ollama slot contention.
-    // Exception: if only semantic is enabled (no keyword AI), Phase 2 never fires, so
-    // embedding must run in Phase 1.
-    const keywordAIEnabled = SettingsManager.getSetting('ollamaEnabled') ?? false;
-    const skipEmbeddingThisPhase = (options?.skipAI === true) && keywordAIEnabled;
+    // Phase 1 (skipAI: true) must NEVER await Ollama. The caller has signalled they want
+    // fast keyword-only results NOW. Phase 2 (skipAI: false) does the embedding work.
+    // Previously this gate also required `keywordAIEnabled` — which meant users with only
+    // semantic enabled (no keyword AI) still blocked Phase 1 on Ollama, causing 17s+ waits.
+    const skipEmbeddingThisPhase = options?.skipAI === true;
     if (embeddingsEnabled && !skipEmbeddingThisPhase) {
         aiStatus.semantic = 'active';
         // Check abort and circuit breaker BEFORE expensive Ollama calls
