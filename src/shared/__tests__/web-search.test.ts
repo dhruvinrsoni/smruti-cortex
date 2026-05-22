@@ -105,18 +105,76 @@ describe('web-search buildWebSearchUrl', () => {
     expect('url' in r).toBe(true);
     if ('url' in r) {
       expect(r.url).toBe(SEARCH_ENGINES.gcp + encodeURIComponent('bigquery'));
+      expect(r.mode).toBe('static-engine');
     }
   });
 
-  it('requires tracker site URL for tracker engine', () => {
-    const p = parseWebSearchQuery('j PROJ-1', 'google');
+  it('requires tracker site URL for tracker engine (jql path)', () => {
+    const p = parseWebSearchQuery('j open status', 'google');
     expect(buildWebSearchUrl(p, {})).toEqual({ error: NO_TRACKER_SITE_ERR });
     const ok = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
     expect('url' in ok).toBe(true);
     if ('url' in ok) {
       expect(ok.url).toBe(
-        TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "PROJ-1"'),
+        TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "open status"'),
       );
+      expect(ok.mode).toBe('jira-jql');
+    }
+  });
+
+  it('requires tracker site URL for tracker engine (ticket path)', () => {
+    const p = parseWebSearchQuery('j PROJ-1', 'google');
+    expect(buildWebSearchUrl(p, {})).toEqual({ error: NO_TRACKER_SITE_ERR });
+  });
+
+  it('opens tracker /browse/<KEY> for a ticket-shaped query', () => {
+    const p = parseWebSearchQuery('j PROJ-1234', 'google');
+    const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
+    expect('url' in r).toBe(true);
+    if ('url' in r) {
+      expect(r.url).toBe(TRACKER_SITE_URL + '/browse/PROJ-1234');
+      expect(r.mode).toBe('jira-ticket');
+    }
+  });
+
+  it('uppercases the project key in the browse URL', () => {
+    const p = parseWebSearchQuery('j abc-123', 'google');
+    const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
+    expect('url' in r).toBe(true);
+    if ('url' in r) {
+      expect(r.url).toBe(TRACKER_SITE_URL + '/browse/ABC-123');
+      expect(r.mode).toBe('jira-ticket');
+    }
+  });
+
+  it.each([
+    ['A-1',         'A-1'],
+    ['ABCDE-1',     'ABCDE-1'],
+    ['XY-1000000',  'XY-1000000'],
+  ])('routes ticket-shaped %s to /browse/%s', (input, expectedKey) => {
+    const p = parseWebSearchQuery(`j ${input}`, 'google');
+    const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
+    expect('url' in r).toBe(true);
+    if ('url' in r) {
+      expect(r.url).toBe(TRACKER_SITE_URL + '/browse/' + expectedKey);
+      expect(r.mode).toBe('jira-ticket');
+    }
+  });
+
+  it.each([
+    'PROJ-1 needs fix',  // trailing text breaks strict whole-string match
+    'PROJ-',             // no digits
+    '123',               // no letters before dash
+    '-123',              // no project prefix
+    'PROJ_1',            // underscore, not dash
+    'PROJ-1a',           // trailing letters after digits
+  ])('falls back to JQL for non-ticket query %s', (terms) => {
+    const p = parseWebSearchQuery(`j ${terms}`, 'google');
+    const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
+    expect('url' in r).toBe(true);
+    if ('url' in r) {
+      expect(r.mode).toBe('jira-jql');
+      expect(r.url.startsWith(TRACKER_SITE_URL + '/issues?jql=')).toBe(true);
     }
   });
 
@@ -128,6 +186,7 @@ describe('web-search buildWebSearchUrl', () => {
       expect(r.url).toBe(
         TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "open source"'),
       );
+      expect(r.mode).toBe('jira-jql');
     }
   });
 
@@ -147,6 +206,7 @@ describe('web-search buildWebSearchUrl', () => {
         WIKI_SITE_URL + '/dosearchsite.action?cql='
           + encodeURIComponent('siteSearch ~ "runbook"'),
       );
+      expect(r.mode).toBe('confluence');
     }
   });
 
@@ -159,6 +219,7 @@ describe('web-search buildWebSearchUrl', () => {
         WIKI_SITE_URL + '/dosearchsite.action?cql='
           + encodeURIComponent('siteSearch ~ "open source"'),
       );
+      expect(r.mode).toBe('confluence');
     }
   });
 
@@ -271,6 +332,7 @@ describe('buildWebSearchUrl edge cases', () => {
     expect('url' in result).toBe(true);
     if ('url' in result) {
       expect(result.url).toBe(SEARCH_ENGINES.google + encodeURIComponent('hello'));
+      expect(result.mode).toBe('static-engine');
     }
   });
 });

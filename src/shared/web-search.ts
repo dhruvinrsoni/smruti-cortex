@@ -118,9 +118,13 @@ export function parseWebSearchQuery(query: string, defaultEngineKey: string): Pa
 
 export type WebSearchSiteError = 'no-jira-site' | 'no-confluence-site';
 
+export type WebSearchMode = 'static-engine' | 'jira-ticket' | 'jira-jql' | 'confluence';
+
 export type WebSearchUrlResult =
-    | { url: string }
+    | { url: string; mode: WebSearchMode }
     | { error: 'no-terms' | WebSearchSiteError };
+
+const JIRA_TICKET_RE = /^[A-Za-z]+-\d+$/;
 
 /** Toast copy when Enter / click with missing Jira or Confluence origin. */
 export function webSearchSiteUrlToastMessage(error: WebSearchSiteError): string {
@@ -156,10 +160,18 @@ export function buildWebSearchUrl(
         if (!origin) {
             return { error: 'no-jira-site' };
         }
-        const q = escapeAtlassianSearchQuotedFragment(searchTerms);
+        const trimmed = searchTerms.trim();
+        if (JIRA_TICKET_RE.test(trimmed)) {
+            return {
+                url: `${origin}/browse/${trimmed.toUpperCase()}`,
+                mode: 'jira-ticket',
+            };
+        }
+        const q = escapeAtlassianSearchQuotedFragment(trimmed);
         const jql = `text ~ "${q}"`;
         return {
             url: `${origin}/issues?jql=${encodeURIComponent(jql)}`,
+            mode: 'jira-jql',
         };
     }
     if (engineKey === 'confluence') {
@@ -171,6 +183,7 @@ export function buildWebSearchUrl(
         const cql = `siteSearch ~ "${q}"`;
         return {
             url: `${origin}/dosearchsite.action?cql=${encodeURIComponent(cql)}`,
+            mode: 'confluence',
         };
     }
 
@@ -179,5 +192,5 @@ export function buildWebSearchUrl(
         return { error: 'no-terms' };
     }
 
-    return { url: base + encodeURIComponent(searchTerms) };
+    return { url: base + encodeURIComponent(searchTerms), mode: 'static-engine' };
 }
