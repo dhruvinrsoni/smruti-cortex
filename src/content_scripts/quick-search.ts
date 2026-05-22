@@ -3589,12 +3589,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     if (currentMode === 'websearch') {
       const raw = inputEl?.value ?? '';
+      log.trace('WebSearch', `enter raw="${raw.slice(0, 500)}"`);
       const { query } = detectMode(raw.trim());
       if (query) {
         const defaultKey = cachedSettings?.webSearchEngine ?? 'google';
         const parsed = parseWebSearchQuery(query, defaultKey);
+        const safeTerms = parsed.searchTerms.slice(0, 500);
         const built = buildWebSearchUrl(parsed, cachedSettings ?? {});
         if ('error' in built) {
+          log.warn('WebSearch', `enter blocked: engine=${parsed.engineKey} reason=${built.error} terms="${safeTerms}"`);
           if (built.error === 'no-terms') {
             showToast('Add search text after the prefix.', 'info');
           } else if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
@@ -3602,6 +3605,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           }
           return;
         }
+        log.info('WebSearch', `?? fired: engine=${parsed.engineKey} mode=${built.mode} terms="${safeTerms}"`);
+        log.debug('WebSearch', `enter url=${built.url}`);
         window.open(built.url, '_blank');
         hideOverlay();
       }
@@ -3702,6 +3707,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   function renderWebSearchPreview(query: string): void {
     if (!resultsEl) {return;}
 
+    log.trace('WebSearch', `preview render query="${query.slice(0, 500)}"`);
     selectedIndex = 0;
     resultsEl.innerHTML = '';
     resultsEl.className = 'results list';
@@ -3741,6 +3747,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       (parsed.engineKey === 'jira' && !jiraOrigin)
       || (parsed.engineKey === 'confluence' && !confluenceOrigin);
     const built = buildWebSearchUrl(parsed, cachedSettings ?? {});
+    log.debug(
+      'WebSearch',
+      'error' in built
+        ? `preview parsed: engine=${parsed.engineKey} error=${built.error}`
+        : `preview parsed: engine=${parsed.engineKey} mode=${built.mode} terms="${parsed.searchTerms.slice(0, 500)}"`,
+    );
 
     const li = document.createElement('li');
     li.className = 'command-row selected';
@@ -3757,6 +3769,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           <span class="cmd-shortcut">Enter: n/a</span>
         `;
         li.addEventListener('click', () => {
+          log.warn('WebSearch', `preview click blocked (missing site): engine=${parsed.engineKey}`);
           showToast(
             webSearchSiteUrlToastMessage(parsed.engineKey === 'jira' ? 'no-jira-site' : 'no-confluence-site'),
             'warning',
@@ -3784,6 +3797,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       `;
       li.addEventListener('click', () => {
         if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+          log.warn('WebSearch', `preview click blocked (error row): engine=${parsed.engineKey} reason=${built.error}`);
           showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
         } else {
           showToast('Add search text after the prefix.', 'info');
@@ -3796,6 +3810,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         <span class="cmd-shortcut">Enter to search</span>
       `;
       li.addEventListener('click', () => {
+        log.info('WebSearch', `?? fired via preview click: engine=${parsed.engineKey} mode=${built.mode} terms="${parsed.searchTerms.slice(0, 500)}"`);
+        log.debug('WebSearch', `preview click url=${built.url}`);
         window.open(built.url, '_blank');
         hideOverlay();
       });

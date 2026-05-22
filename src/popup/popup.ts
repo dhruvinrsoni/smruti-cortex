@@ -1145,6 +1145,12 @@ function initializePopup() {
         (parsed.engineKey === 'jira' && !jiraOrigin)
         || (parsed.engineKey === 'confluence' && !confluenceOrigin);
       const built = buildWebSearchUrl(parsed, settings);
+      logger.debug(
+        'webSearchPreview',
+        'error' in built
+          ? `parsed: engine=${parsed.engineKey} error=${built.error}`
+          : `parsed: engine=${parsed.engineKey} mode=${built.mode} terms="${parsed.searchTerms.slice(0, 500)}"`,
+      );
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       const li = document.createElement('li');
@@ -1162,6 +1168,7 @@ function initializePopup() {
             <span style="font-size:10px;color:var(--muted);">Enter: n/a</span>
           `;
           li.addEventListener('click', () => {
+            logger.warn('webSearchPreview', `click blocked (missing site): engine=${parsed.engineKey}`);
             showToast(
               webSearchSiteUrlToastMessage(parsed.engineKey === 'jira' ? 'no-jira-site' : 'no-confluence-site'),
               'warning',
@@ -1189,6 +1196,7 @@ function initializePopup() {
         `;
         li.addEventListener('click', () => {
           if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+            logger.warn('webSearchPreview', `click blocked (error row): engine=${parsed.engineKey} reason=${built.error}`);
             showToast(webSearchSiteUrlToastMessage(built.error), 'warning');
           } else {
             showToast('Add search text after the prefix.', 'info');
@@ -1204,6 +1212,8 @@ function initializePopup() {
         `;
         li.addEventListener('click', (ev) => {
           const sk = (ev as MouseEvent).shiftKey;
+          logger.info('webSearchPreview', `?? fired via click: engine=${parsed.engineKey} mode=${built.mode} terms="${parsed.searchTerms.slice(0, 500)}"`);
+          logger.debug('webSearchPreview', `click url=${built.url}`);
           chrome.tabs.create({ url: built.url, active: !sk });
         });
       }
@@ -1525,12 +1535,16 @@ function initializePopup() {
     const input = $('search-input') as HTMLInputElement;
 
     if (popupPaletteMode === 'websearch') {
-      const { query } = detectPopupMode((input?.value ?? '').trim());
+      const raw = (input?.value ?? '').trim();
+      logger.trace('webSearchEnter', `raw="${raw.slice(0, 500)}"`);
+      const { query } = detectPopupMode(raw);
       if (query) {
         const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
         const parsed = parseWebSearchQuery(query, defaultKey);
+        const safeTerms = parsed.searchTerms.slice(0, 500);
         const built = buildWebSearchUrl(parsed, SettingsManager.getSettings());
         if ('error' in built) {
+          logger.warn('webSearchEnter', `blocked: engine=${parsed.engineKey} reason=${built.error} terms="${safeTerms}"`);
           if (built.error === 'no-terms') {
             showToast('Add search text after the prefix.', 'info');
           } else if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
@@ -1538,6 +1552,8 @@ function initializePopup() {
           }
           return;
         }
+        logger.info('webSearchEnter', `?? fired: engine=${parsed.engineKey} mode=${built.mode} terms="${safeTerms}"`);
+        logger.debug('webSearchEnter', `url=${built.url}`);
         chrome.tabs.create({ url: built.url, active: !shiftKey });
       }
       return;
