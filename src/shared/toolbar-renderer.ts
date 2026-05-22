@@ -80,6 +80,20 @@ export function renderToolbarToggles(
 }
 
 /**
+ * Layer 5: subtly indicate that the chip's feature is doing background work
+ * (e.g. AI chip pulses while Phase 2 embedding is in flight). Idempotent — no-op
+ * when the requested state already matches.
+ *
+ * The actual pulse is a CSS animation triggered by the `.busy` class on
+ * `.toggle-chip` (see `TOOLBAR_TOGGLE_CSS` below). No JS animation frames involved.
+ */
+export function setChipBusy(parent: HTMLElement, key: keyof AppSettings, busy: boolean): void {
+    const chip = parent.querySelector<HTMLButtonElement>(`.toggle-chip[data-toggle-key="${key}"]`);
+    if (!chip) {return;}
+    chip.classList.toggle('busy', busy);
+}
+
+/**
  * Refresh existing chip class/title/innerHTML to match `port.get` state.
  * Safe to call repeatedly; does not rebuild the DOM or rebind handlers.
  */
@@ -177,6 +191,20 @@ export const TOOLBAR_TOGGLE_CSS = `
 }
 .toggle-chip .chip-icon {
   font-size: 12px;
+}
+/* Layer 5: subtle pulse while the chip's feature is doing background work
+   (e.g. AI Phase 2 embedding in flight). Pure CSS animation — zero JS cost
+   beyond toggling the .busy class. The animation tweaks box-shadow only,
+   so a busy chip can also be .active (the brighter blue stays visible). */
+.toggle-chip.busy {
+  animation: toggle-chip-busy-pulse 1.2s ease-in-out infinite;
+}
+@keyframes toggle-chip-busy-pulse {
+  0%, 100% { box-shadow: 0 0 6px var(--toolbar-active-shadow, rgba(59, 130, 246, 0.35)); }
+  50%      { box-shadow: 0 0 14px var(--toolbar-active-shadow, rgba(59, 130, 246, 0.7)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toggle-chip.busy { animation: none; }
 }
 `;
 
