@@ -116,7 +116,7 @@ describe('web-search buildWebSearchUrl', () => {
     expect('url' in ok).toBe(true);
     if ('url' in ok) {
       expect(ok.url).toBe(
-        TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "open status"'),
+        TRACKER_SITE_URL + '/issues/?jql=' + encodeURIComponent('text~"open status"'),
       );
       expect(ok.mode).toBe('jira-jql');
     }
@@ -174,17 +174,27 @@ describe('web-search buildWebSearchUrl', () => {
     expect('url' in r).toBe(true);
     if ('url' in r) {
       expect(r.mode).toBe('jira-jql');
-      expect(r.url.startsWith(TRACKER_SITE_URL + '/issues?jql=')).toBe(true);
+      expect(r.url.startsWith(TRACKER_SITE_URL + '/issues/?jql=')).toBe(true);
     }
   });
 
-  it('builds tracker issues URL with text ~ query (encoding)', () => {
+  it('accepts lowercase ticket keys (case-insensitive) — abcd-1234 example', () => {
+    const p = parseWebSearchQuery('j abcd-1234', 'google');
+    const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
+    expect('url' in r).toBe(true);
+    if ('url' in r) {
+      expect(r.url).toBe(TRACKER_SITE_URL + '/browse/ABCD-1234');
+      expect(r.mode).toBe('jira-ticket');
+    }
+  });
+
+  it('builds tracker issues URL with text~"..." (encoded)', () => {
     const p = parseWebSearchQuery('j open source', 'google');
     const r = buildWebSearchUrl(p, { [TRACKER_SITE_OPT]: TRACKER_SITE_URL });
     expect('url' in r).toBe(true);
     if ('url' in r) {
       expect(r.url).toBe(
-        TRACKER_SITE_URL + '/issues?jql=' + encodeURIComponent('text ~ "open source"'),
+        TRACKER_SITE_URL + '/issues/?jql=' + encodeURIComponent('text~"open source"'),
       );
       expect(r.mode).toBe('jira-jql');
     }

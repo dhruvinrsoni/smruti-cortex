@@ -168,9 +168,9 @@ export function buildWebSearchUrl(
             };
         }
         const q = escapeAtlassianSearchQuotedFragment(trimmed);
-        const jql = `text ~ "${q}"`;
+        const jql = `text~"${q}"`;
         return {
-            url: `${origin}/issues?jql=${encodeURIComponent(jql)}`,
+            url: `${origin}/issues/?jql=${encodeURIComponent(jql)}`,
             mode: 'jira-jql',
         };
     }
