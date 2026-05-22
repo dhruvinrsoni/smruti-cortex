@@ -14,7 +14,7 @@ import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shar
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
-import { renderToolbarToggles, syncToolbarToggles, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
+import { renderToolbarToggles, syncToolbarToggles, setChipBusy, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
   type PaletteCommand,
   ALL_COMMANDS,
@@ -422,6 +422,20 @@ function initializePopup() {
   let currentAIExpandedKeywords: string[] = [];
   let aiDebounceTimer: number | undefined;
   let aiSearchPending = false; // True from debounceSearch until Phase 2 response arrives
+  // Layer 2: monotonic epoch bumped whenever AI/Semantic settings flip. Echoed back
+  // by the SW in every reply so we can drop stale replies that were generated for an
+  // older AI/Semantic state (e.g. a Phase 2 that was running when the user toggled AI off).
+  let searchEpoch = 0;
+
+  // Layer 4: settings whose change must cancel any in-flight search and reissue
+  // (matches the set in src/content_scripts/quick-search.ts for parity).
+  const SEARCH_AFFECTING_TOGGLES: ReadonlySet<keyof AppSettings> = new Set([
+    'ollamaEnabled',
+    'embeddingsEnabled',
+    'indexBookmarks',
+    'showDuplicateUrls',
+    'showNonMatchingResults',
+  ] as Array<keyof AppSettings>);
 
   // Assign global results
   results = resultsLocal;
@@ -655,12 +669,25 @@ function initializePopup() {
     showToast,
     onAfterToggle: (key) => {
       applyPopupSettingSideEffects(key);
-      if (key !== 'displayMode' && key !== 'highlightMatches' && key !== 'loadFavicons') {
+
+      // Layer 4: search-affecting toggles cancel any in-flight search and reissue
+      // with the new flags. Display-only toggles repaint in place (handled above).
+      // Empty-input toggles (showRecentHistory / showRecentSearches) only refresh
+      // recent sections — never the result list.
+      if (SEARCH_AFFECTING_TOGGLES.has(key as keyof AppSettings)) {
         if (currentQuery?.trim()) {
+          cancelInflightSearch();
           debounceSearch(currentQuery);
-        } else if (key !== 'showRecentHistory' && key !== 'showRecentSearches') {
-          loadRecentHistory();
         }
+        return;
+      }
+      if (key === 'displayMode' || key === 'highlightMatches' || key === 'loadFavicons') {
+        return;
+      }
+      if (currentQuery?.trim()) {
+        debounceSearch(currentQuery);
+      } else if (key !== 'showRecentHistory' && key !== 'showRecentSearches') {
+        loadRecentHistory();
       }
     },
   };
@@ -1592,9 +1619,14 @@ function initializePopup() {
     aiSearchPending = aiEnabled;
 
     if (popupSpinner) {popupSpinner.classList.add('active');}
+    // Layer 5: pulse the AI chip while Phase 2 is in flight so the user has a
+    // signal that AI is enhancing in the background even though the list is
+    // already populated by Phase 1.
+    if (toggleBarEl && aiEnabled) { setChipBusy(toggleBarEl, 'ollamaEnabled', true); }
     resultCountNode.textContent = 'Searching...';
 
-    debounceTimer = window.setTimeout(() => doSearch(q, true), 150);
+    // Phase 1 (lexical) debounce kept tight (30ms) — same rationale as quick-search.ts DEBOUNCE_MS.
+    debounceTimer = window.setTimeout(() => doSearch(q, true), 30);
 
     if (aiEnabled) {
       const aiDelayMs = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
@@ -1802,6 +1834,25 @@ function initializePopup() {
     }
   }
 
+  /**
+   * Layer 2: bump the epoch so any in-flight reply is dropped client-side and
+   * fire a fire-and-forget CANCEL_SEARCH to the SW so it can abort the
+   * in-flight runSearch and free the Ollama slot immediately. Called when the
+   * user toggles AI/Semantic mid-search.
+   */
+  function cancelInflightSearch(): void {
+    searchEpoch++;
+    aiSearchPending = false;
+    if (aiDebounceTimer) { clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined; }
+    if (toggleBarEl) { setChipBusy(toggleBarEl, 'ollamaEnabled', false); }
+    try {
+      chrome.runtime.sendMessage({ type: 'CANCEL_SEARCH' }, () => {
+        // Swallow lastError — cancel is fire-and-forget.
+        void chrome.runtime.lastError;
+      });
+    } catch { /* context invalidated */ }
+  }
+
   // Fast search (skipAI=true for Phase 1, false for Phase 2 with AI)
   async function doSearch(q: string, skipAI: boolean = false) {
     currentQuery = q;
@@ -1827,11 +1878,33 @@ function initializePopup() {
       return;
     }
 
+    const epochAtDispatch = searchEpoch;
     try {
-      const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q, skipAI });
+      const resp = await sendMessage({ type: 'SEARCH_QUERY', query: q, skipAI, epoch: epochAtDispatch });
       // Guard against stale responses from slower earlier queries
       if (q !== currentQuery) {return;}
-      resultsLocal = (resp && resp.results) ? resp.results : [];
+      // Layer 2: drop replies whose epoch is older than the current one
+      // (the epoch was bumped by an intervening AI/Semantic toggle).
+      const respEpoch = typeof resp?.epoch === 'number' ? resp.epoch : 0;
+      if (respEpoch !== 0 && respEpoch < searchEpoch) {
+        return;
+      }
+
+      // Layer 1: capture the focused URL BEFORE mutating resultsLocal so we can
+      // restore selection after the Phase 2 swap (or any re-render) — prevents
+      // the keyboard focus from snapping back to the top when AI results land.
+      const prevFocusUrl = activeIndex >= 0 ? resultsLocal[activeIndex]?.url : undefined;
+
+      const newResults = (resp && resp.results) ? resp.results : [];
+
+      // Layer 1: never blank the visible list with an empty stale Phase 1 reply
+      // when AI Phase 2 is still in flight. The prior list stays put until
+      // Phase 2 lands.
+      if (newResults.length === 0 && aiSearchPending && skipAI) {
+        return;
+      }
+
+      resultsLocal = newResults;
       currentAIExpandedKeywords = resp?.aiStatus?.aiExpandedKeywords ?? [];
 
       // Trust engine order: the search engine has already applied its
@@ -1843,18 +1916,24 @@ function initializePopup() {
       sortResults(resultsLocal, sortBy, { trustEngineOrder: true });
 
       activeIndex = resultsLocal.length ? 0 : -1;
+      if (prevFocusUrl) {
+        const matchIdx = resultsLocal.findIndex(r => r.url === prevFocusUrl);
+        if (matchIdx >= 0) { activeIndex = matchIdx; }
+      }
       renderResults();
       renderAIStatus(resp?.aiStatus);
 
       // Loading state: Phase 1 + AI pending → keep spinner, show "AI expanding..."
       // Phase 2 response (or non-AI) → hide spinner, show final count
       if (skipAI && aiSearchPending) {
-        // Phase 1 done, AI still in flight — keep spinner, update count with hint
+        // Phase 1 done, AI still in flight — keep spinner, update count with hint.
+        // AI chip pulse was set in debounceSearchLocal and stays on until Phase 2 lands.
         resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'} · AI expanding...`;
       } else {
         // Final response
         aiSearchPending = false;
         if (popupSpinner) {popupSpinner.classList.remove('active');}
+        if (toggleBarEl) { setChipBusy(toggleBarEl, 'ollamaEnabled', false); }
         resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
       }
 
@@ -1883,19 +1962,34 @@ function initializePopup() {
       activeIndex = -1;
       aiSearchPending = false;
       if (popupSpinner) {popupSpinner.classList.remove('active');}
+      if (toggleBarEl) { setChipBusy(toggleBarEl, 'ollamaEnabled', false); }
       renderResults();
       renderAIStatus(null);
     }
   }
 
   // Fast rendering
-  function renderResults() {
+  /**
+   * Render the popup's result list from the module-scoped `resultsLocal` + `activeIndex`.
+   *
+   * `opts.preserveOnEmpty` — when true and `resultsLocal.length === 0`, do nothing.
+   *   Used by the Phase 1 / Phase 2 search-response handler so an empty stale reply
+   *   (e.g. after a toggle change with AI Phase 2 still pending) doesn't blank the visible list.
+   *
+   * Focus preservation across Phase 1 → Phase 2 is handled by the caller (doSearch),
+   * which captures the prior focused URL before reassigning `resultsLocal` and restores
+   * `activeIndex` to the matching row in the new list.
+   */
+  function renderResults(opts?: { preserveOnEmpty?: boolean }) {
+    if (opts?.preserveOnEmpty && resultsLocal.length === 0) {
+      return;
+    }
     try {
     const displayMode = SettingsManager.getSetting('displayMode') || DisplayMode.LIST;
     const loadFavicons = SettingsManager.getSetting('loadFavicons') ?? true;
     resultsNode.className = displayMode === DisplayMode.CARDS ? 'results cards' : 'results list';
 
-    resultsNode.innerHTML = '';
+    resultsNode.replaceChildren();
     resultCountNode.textContent = `${resultsLocal.length} result${resultsLocal.length === 1 ? '' : 's'}`;
     // Kill switch: when reportButtonEnabled is flipped to false (maintainer
     // can do this remotely via debug page) the button is hidden as if there
