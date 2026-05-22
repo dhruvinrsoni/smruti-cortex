@@ -46,7 +46,7 @@ import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shar
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { runTour, type TourStep } from '../shared/tour';
 import { DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
-import { renderToolbarToggles, syncToolbarToggles, TOOLBAR_TOGGLE_CSS, type SettingsPort } from '../shared/toolbar-renderer';
+import { renderToolbarToggles, syncToolbarToggles, setChipBusy, TOOLBAR_TOGGLE_CSS, type SettingsPort } from '../shared/toolbar-renderer';
 import type { MaskingLevel } from '../shared/data-masker';
 import { STAGE_TIMINGS, waitRemaining, ensureReportButton } from '../shared/report-chooser-utils';
 import { checkAndRecord as checkAndRecordReportRateLimit, formatRetryAfter } from '../shared/report-rate-limit';
@@ -118,7 +118,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // an extension update — remove it so the new overlay initializes cleanly.
   const staleOverlay = document.getElementById(OVERLAY_ID);
   if (staleOverlay) { staleOverlay.remove(); }
-  const DEBOUNCE_MS = 150; // Wait for user to pause typing before searching (prevents flicker)
+  const DEBOUNCE_MS = 30; // Phase 1 (lexical) must feel instant. The in-flight dedup at
+                          // performSearch already collapses bursts; this just bundles same-frame keystrokes.
   const MAX_RESULTS = 15;
   
   // Log level constants (matches Logger.LogLevel)
@@ -172,6 +173,21 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let settingsBtn: HTMLButtonElement | null = null;
   let selectedIndex = 0;
   let currentResults: SearchResult[] = [];
+  // Layer 2: monotonic epoch bumped whenever AI/Semantic settings flip. Echoed back
+  // by the SW in every reply so we can drop stale replies that were generated for an
+  // older AI/Semantic state (e.g. a Phase 2 that was running when the user toggled AI off).
+  let searchEpoch = 0;
+
+  // Layer 4: the set of settings whose change must cancel any in-flight search and
+  // reissue with the new flags. Display-only toggles (displayMode, highlightMatches,
+  // theme, etc.) repaint in place and are NOT in this set.
+  const SEARCH_AFFECTING_TOGGLES: ReadonlySet<keyof AppSettings> = new Set([
+    'ollamaEnabled',
+    'embeddingsEnabled',
+    'indexBookmarks',
+    'showDuplicateUrls',
+    'showNonMatchingResults',
+  ] as Array<keyof AppSettings>);
   let debounceTimer: number | null = null;
   let qsFocusTimer: number | null = null;  // Delayed focus to results (cancelled on new typing)
   let overlayFocusInterval: ReturnType<typeof setInterval> | null = null; // Tracked to prevent leaks
@@ -1483,21 +1499,43 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             return;
           }
 
+          // Layer 2: drop replies whose epoch is older than the current one.
+          // The epoch is bumped on AI/Semantic toggle, so a slow Phase 2 from
+          // a prior toggle-state can no longer overwrite the current list.
+          const respEpoch = typeof response.epoch === 'number' ? response.epoch : 0;
+          if (respEpoch !== 0 && respEpoch < searchEpoch) {
+            log.debug('port', `Ignoring stale-epoch response (${respEpoch} < ${searchEpoch})`);
+            return;
+          }
+
           const isPhase1 = response.skipAI === true;
           log.debug('port', `Search results received (${isPhase1 ? 'Phase 1 LEXICAL' : 'Phase 2 AI'}): ${response.results.length} results`);
 
-          currentResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
+          // Layer 1: never blank the visible list with an empty stale Phase 1 reply
+          // when AI Phase 2 is still in flight. The prior list stays put until
+          // Phase 2 lands (or errors). Without this, a slow Phase 1 that returned
+          // 0 hits would wipe the screen seconds before Phase 2 brings them back.
+          if (isPhase1 && response.results.length === 0 && aiSearchPending) {
+            log.debug('port', 'Empty Phase 1 reply suppressed — AI Phase 2 still pending');
+            return;
+          }
+
+          const newResults = response.results.slice(0, cachedSettings?.maxResults ?? MAX_RESULTS);
 
           // Trust engine order: tier-aware sort is already applied SW-side.
           // See A3 in the all-eight pass for why a UI-side resort here was
           // breaking ranking for short queries (the "service-now random
           // results" #9 symptom).
           const currentSort = cachedSettings?.sortBy || 'best-match';
-          sortResults(currentResults, currentSort, { trustEngineOrder: true });
+          sortResults(newResults, currentSort, { trustEngineOrder: true });
 
+          currentResults = newResults;
           currentAIExpandedTokens = response.aiStatus?.aiExpandedKeywords ?? [];
+          // Default-init selectedIndex; renderResults({ preserveFocusByUrl: true }) will
+          // override this with the URL-anchored index when the previously-focused row
+          // is still present in the new list (so Phase 2 swap doesn't steal keyboard focus).
           selectedIndex = currentResults.length > 0 ? 0 : -1;
-          renderResults(currentResults);
+          renderResults(currentResults, { preserveFocusByUrl: true });
 
           // Loading state logic:
           // - Phase 1 response + AI still pending → keep spinner, skip AI status
@@ -3770,6 +3808,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // ===== LOADING SPINNER & AI STATUS =====
   function showSpinner(): void {
     if (spinnerEl) {spinnerEl.classList.add('active');}
+    // Layer 5: also pulse the AI chip while Phase 2 is in flight. Visual signal
+    // that AI is enhancing results in the background — list itself never blinks.
+    if (toggleBarEl) { setChipBusy(toggleBarEl, 'ollamaEnabled', true); }
     log.trace('spinner', 'Spinner shown');
     // Start safety timeout — hides spinner if no response arrives
     clearSpinnerTimeout();
@@ -3782,6 +3823,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   function hideSpinner(): void {
     if (spinnerEl) {spinnerEl.classList.remove('active');}
+    if (toggleBarEl) { setChipBusy(toggleBarEl, 'ollamaEnabled', false); }
     clearSpinnerTimeout();
     log.trace('spinner', 'Spinner hidden');
   }
@@ -4073,12 +4115,29 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     showToast: (message, type) => showToast(message, type),
     onAfterToggle: (key) => {
       applySettingSideEffects(key);
-      if (key !== 'displayMode' && key !== 'highlightMatches') {
+
+      // Layer 4: classify the toggle.
+      // - SEARCH_AFFECTING keys: cancel any in-flight search (so a stale Phase 2 can't overwrite
+      //   the visible list with old-AI-state results) and reissue with the new flags.
+      //   When the input is empty, do nothing — recent history is unaffected by AI/Semantic.
+      // - Display-only keys (displayMode / highlightMatches): applySettingSideEffects already
+      //   repaints in place, no search round-trip needed.
+      // - Everything else: legacy fallback path (handleInput / loadRecentHistory). Kept so
+      //   unrelated toggles (e.g. indexBookmarks, showDuplicateUrls) continue to refresh.
+      if (SEARCH_AFFECTING_TOGGLES.has(key as keyof AppSettings)) {
         if (inputEl?.value?.trim()) {
+          cancelInflightSearch();
           handleInput();
-        } else {
-          loadRecentHistory();
         }
+        return;
+      }
+      if (key === 'displayMode' || key === 'highlightMatches') {
+        return;
+      }
+      if (inputEl?.value?.trim()) {
+        handleInput();
+      } else {
+        loadRecentHistory();
       }
     },
   };
@@ -4241,6 +4300,24 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
   }
 
+  /**
+   * Layer 2: tell the SW to abort the currently in-flight search, and bump the
+   * epoch so any reply still in flight (or generated after this point but
+   * before the cancel reaches the engine) is dropped client-side.
+   *
+   * Called when the user flips a search-affecting setting mid-flight. Pairs
+   * with a subsequent `performSearch()` that re-runs the query with the new flags.
+   */
+  function cancelInflightSearch(): void {
+    searchEpoch++;
+    aiSearchPending = false;
+    if (aiDebounceTimer) { clearTimeout(aiDebounceTimer); aiDebounceTimer = null; }
+    if (searchPort) {
+      try { searchPort.postMessage({ type: 'CANCEL_SEARCH' }); }
+      catch (err) { log.debug('cancelInflightSearch', 'Port post failed (ignored)', err); }
+    }
+  }
+
   function performSearch(query: string, skipAI: boolean = false): void {
     log.debug('performSearch', `query="${query}" skipAI=${skipAI}`);
 
@@ -4285,7 +4362,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     // Use port if available (faster), otherwise fallback to sendMessage
     if (searchPort) {
       try {
-        searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
+        searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI, epoch: searchEpoch });
         markDispatched(dispatchGuard, dispatchKey, Date.now());
         log.debug('performSearch', `Query sent via port: "${sanitizedQuery}" (skipAI=${skipAI})`);
         // Check for runtime errors after async operation
@@ -4304,7 +4381,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         // Try once more with new port
         if (searchPort) {
           try {
-            searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI });
+            searchPort.postMessage({ type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI, epoch: searchEpoch });
             markDispatched(dispatchGuard, dispatchKey, Date.now());
             log.debug('performSearch', 'Query sent via reconnected port');
             // Check for runtime errors after async operation
@@ -4330,7 +4407,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       // Attempt one-shot sendMessage and handle errors
       try {
         chrome.runtime.sendMessage(
-          { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI },
+          { type: 'SEARCH_QUERY', query: sanitizedQuery, source: 'inline', skipAI, epoch: searchEpoch },
           (response) => {
             if (chrome.runtime.lastError) {
               aiSearchPending = false;
@@ -4361,6 +4438,13 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
               const responseQuery = (response.query || '').toLowerCase();
               if (responseQuery && responseQuery !== currentInputQuery) {
                 log.debug('sendMessage', `Ignoring stale response for "${responseQuery}" (current: "${currentInputQuery}")`);
+                return;
+              }
+
+              // Layer 2: drop stale-epoch replies (same rationale as port path).
+              const respEpoch = typeof response.epoch === 'number' ? response.epoch : 0;
+              if (respEpoch !== 0 && respEpoch < searchEpoch) {
+                log.debug('sendMessage', `Ignoring stale-epoch response (${respEpoch} < ${searchEpoch})`);
                 return;
               }
 
@@ -4422,18 +4506,45 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   }
 
   // ===== RENDER RESULTS (card + list mode, mirrors popup.ts renderResults) =====
-  function renderResults(results: SearchResult[]): void {
+  /**
+   * Render the result list.
+   *
+   * `opts.preserveOnEmpty` — when true and `results.length === 0`, this is a no-op.
+   *   The DOM keeps whatever was rendered last. Used by Phase 1 / Phase 2 port replies
+   *   so an empty stale reply (e.g. after a toggle change) doesn't blank the visible list.
+   *
+   * `opts.preserveFocusByUrl` — when true, capture the URL of the currently-selected
+   *   row before re-rendering, and after the new rows are in place, set `selectedIndex`
+   *   to the index of that URL in the new list (or 0 if the URL is gone). Stops keyboard
+   *   focus from snapping to the top when Phase 2 swaps results in.
+   */
+  function renderResults(
+    results: SearchResult[],
+    opts?: { preserveOnEmpty?: boolean; preserveFocusByUrl?: boolean }
+  ): void {
     if (!resultsEl) {return;}
+
+    // Layer 1: never blank the list with a stale empty reply.
+    if (opts?.preserveOnEmpty && results.length === 0) {
+      perfLog('renderResults (skipped — preserveOnEmpty)', performance.now());
+      return;
+    }
+
+    // Layer 1: capture the focused row's URL before wiping so we can restore selection.
+    let focusUrlSnapshot: string | undefined;
+    if (opts?.preserveFocusByUrl && selectedIndex >= 0) {
+      focusUrlSnapshot = currentResults[selectedIndex]?.url;
+    }
+
     try {
     const t0 = performance.now();
 
     const isCards = cachedSettings?.displayMode === DisplayMode.CARDS;
     resultsEl.className = isCards ? 'results cards' : 'results';
 
-    // Clear existing results
-    while (resultsEl.firstChild) {
-      resultsEl.removeChild(resultsEl.firstChild);
-    }
+    // Atomic clear — replaceChildren() is a single reflow vs. the per-child loop.
+    // The actual children will be appended below; `replaceChildren()` with no args wipes.
+    resultsEl.replaceChildren();
 
     const query = inputEl?.value?.trim() || '';
     const tokens = tokenizeQuery(query);
@@ -4448,6 +4559,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       resultsEl.appendChild(emptyDiv);
       perfLog('renderResults (empty)', t0);
       return;
+    }
+
+    // Layer 1: restore selection by URL when caller asked for it.
+    if (focusUrlSnapshot) {
+      const matchIdx = results.findIndex(r => r.url === focusUrlSnapshot);
+      if (matchIdx >= 0) {
+        selectedIndex = matchIdx;
+      } // else: keep whatever the caller set; common case is `0` which is fine.
     }
 
     if (isCards) {
