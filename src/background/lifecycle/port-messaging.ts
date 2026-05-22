@@ -1,4 +1,5 @@
-import { runSearch } from '../search/search-engine';
+import { runSearch, abortActiveSearch } from '../search/search-engine';
+import { embeddingProcessor } from '../embedding-processor';
 import { browserAPI } from '../../core/helpers';
 import { Logger, errorMeta } from '../../core/logger';
 import { safePortPost } from '../../shared/runtime-messaging';
@@ -53,7 +54,18 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
           return;
         }
 
+        // Cancel the currently in-flight search. Used by the UI when the user
+        // toggles AI/Semantic OFF mid-search so the Ollama slot is freed
+        // immediately rather than waiting for the existing Phase 2 to time out.
+        // Idempotent; never replies.
+        if (msg?.type === 'CANCEL_SEARCH') {
+          embeddingProcessor.noteUserActivity();
+          abortActiveSearch();
+          return;
+        }
+
         if (msg.type === 'SEARCH_QUERY') {
+          embeddingProcessor.noteUserActivity();
           const now = Date.now();
           const cutoff = now - PORT_RATE_WINDOW_MS;
           while (portRecentTimestamps.length > 0 && portRecentTimestamps[0] <= cutoff) {
@@ -101,18 +113,22 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
               }
             }
           }
+          // Layer 2: echo back the client-supplied epoch so a slow Phase 2
+          // for an earlier toggle/setting state can be dropped client-side
+          // (the client bumps the epoch on AI/Semantic flip).
+          const requestEpoch = typeof msg.epoch === 'number' ? msg.epoch : 0;
           try {
             const { getLastAIStatus } = await import('../search/search-engine');
             const results = await runSearch(portQuery, { skipAI: !!msg.skipAI });
             const aiStatus = getLastAIStatus();
             logger.debug('portMessage', `Search completed in ${(performance.now() - t0).toFixed(2)}ms, results: ${results.length}`);
             if (!portDisconnected) {
-              safePortPost(port, { results, aiStatus, query: portQuery, skipAI: !!msg.skipAI });
+              safePortPost(port, { results, aiStatus, query: portQuery, skipAI: !!msg.skipAI, epoch: requestEpoch });
             }
           } catch (error) {
             logger.error('portMessage', 'Search error:', errorMeta(error));
             if (!portDisconnected) {
-              safePortPost(port, { error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI });
+              safePortPost(port, { error: (error as Error).message, query: portQuery, skipAI: !!msg.skipAI, epoch: requestEpoch });
             }
           }
         }

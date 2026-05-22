@@ -137,6 +137,7 @@ vi.mock('../embedding-processor', () => ({
     pause: vi.fn(),
     resume: vi.fn(),
     setSearchActive: vi.fn(),
+    noteUserActivity: vi.fn(),
     getProgress: vi.fn(() => ({ state: 'idle', processed: 0, total: 0, withEmbeddings: 0, remaining: 0, speed: 0, estimatedMinutes: 0 })),
   },
 }));

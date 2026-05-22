@@ -31,10 +31,20 @@ const SPEED_WINDOW_SIZE = 20;
 // network faster than the availability cache allows.
 const INITIAL_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 2 * 60_000;
+// Layer 7: how recently the user must have searched for the processor to keep
+// yielding. 3s covers normal typing bursts (most users hit Enter or pause to
+// read results within that window). Resumes immediately after the guard expires.
+const USER_IDLE_GUARD_MS = 3000;
 
 class EmbeddingProcessorImpl {
     private state: ProcessorState = 'idle';
     private searchActive = false;
+    // Layer 7: timestamp of the last user-initiated search activity. The runLoop
+    // yields while this is within `USER_IDLE_GUARD_MS` so the background
+    // processor never steals the Ollama slot from an actively-typing user.
+    // Set from port-messaging.ts on every SEARCH_QUERY / CANCEL_SEARCH frame
+    // and from search-handlers.ts on the popup's request/response equivalent.
+    private lastUserQueryAt = 0;
     private processed = 0;
     private total = 0;
     private withEmbeddings = 0;
@@ -175,6 +185,18 @@ class EmbeddingProcessorImpl {
                 logger.trace('setSearchActive', 'Search ended — resuming processing');
             }
         }
+    }
+
+    /**
+     * Layer 7: marker called every time a user-initiated search frame arrives at
+     * the SW (SEARCH_QUERY via port or runtime.sendMessage, plus CANCEL_SEARCH).
+     * The runLoop yields while `Date.now() - lastUserQueryAt < USER_IDLE_GUARD_MS`
+     * so the background processor never competes for the single Ollama slot while
+     * the user is actively typing. The user pausing for the guard window resumes
+     * processing automatically.
+     */
+    noteUserActivity(): void {
+        this.lastUserQueryAt = Date.now();
     }
 
     /**
@@ -381,8 +403,13 @@ class EmbeddingProcessorImpl {
                 for (const item of batch) {
                     if (this.state !== 'running') {break;}
 
-                    // Yield to search when active
-                    while (this.searchActive && this.state === 'running') {
+                    // Yield to search when active, OR while the user has touched the search
+                    // recently (Layer 7). The latter avoids the "user types 'cu' → processor
+                    // grabs slot for 200ms → user types 'cur' → query embedding aborts" pattern.
+                    while (
+                        this.state === 'running' &&
+                        (this.searchActive || (Date.now() - this.lastUserQueryAt) < USER_IDLE_GUARD_MS)
+                    ) {
                         await this.sleep(300);
                     }
                     if (this.state !== 'running') {break;}

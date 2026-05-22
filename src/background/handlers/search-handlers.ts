@@ -1,6 +1,7 @@
 import { MessageHandlerRegistry } from './registry';
 import { Logger, errorMeta } from '../../core/logger';
-import { runSearch } from '../search/search-engine';
+import { runSearch, abortActiveSearch } from '../search/search-engine';
+import { embeddingProcessor } from '../embedding-processor';
 import { getStorageQuotaInfo, getAllIndexedItems, saveIndexedItem } from '../database';
 import { performFullRebuild, mergeMetadata } from '../indexing';
 import { clearAndRebuild, checkHealth, selfHeal, recoverFromCorruption, handleQuotaExceeded } from '../resilience';
@@ -14,12 +15,23 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
     SEARCH_QUERY: async (msg, _sender, sendResponse) => {
       const MAX_QUERY_LEN = 500;
       const safeQuery = typeof msg.query === 'string' ? msg.query.slice(0, MAX_QUERY_LEN) : '';
+      const requestEpoch = typeof msg.epoch === 'number' ? msg.epoch : 0;
+      embeddingProcessor.noteUserActivity();
       log.info('SEARCH_QUERY', `Popup search: "${safeQuery}" (skipAI: ${!!msg.skipAI})`);
       const { getLastAIStatus } = await import('../search/search-engine');
       const results = await runSearch(safeQuery, { skipAI: !!msg.skipAI });
       const aiStatus = getLastAIStatus();
       log.debug('SEARCH_QUERY', 'Search completed, results:', results.length);
-      sendResponse({ results, aiStatus, query: safeQuery, skipAI: !!msg.skipAI });
+      sendResponse({ results, aiStatus, query: safeQuery, skipAI: !!msg.skipAI, epoch: requestEpoch });
+    },
+
+    // Layer 2: popup analogue of the port's CANCEL_SEARCH frame. Freezes the in-flight
+    // search so an AI/Semantic toggle-off doesn't have to wait for Ollama to finish.
+    // Fire-and-forget: the client doesn't need an ack.
+    CANCEL_SEARCH: async (_msg, _sender, sendResponse) => {
+      embeddingProcessor.noteUserActivity();
+      abortActiveSearch();
+      sendResponse({ status: 'OK' });
     },
 
     GET_RECENT_HISTORY: async (msg, _sender, sendResponse) => {
