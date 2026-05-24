@@ -65,7 +65,7 @@ test.describe('Keyboard > Results Navigation', () => {
   test('ArrowDown moves focus to first result', async ({
     extPage: page, extensionId, extensionContext,
   }) => {
-    if (indexReady === null) indexReady = await ensureIndexHasData(extensionContext, extensionId);
+    if (indexReady === null) {indexReady = await ensureIndexHasData(extensionContext, extensionId);}
     if (!indexReady) { test.skip(); return; }
 
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
@@ -86,7 +86,7 @@ test.describe('Keyboard > Results Navigation', () => {
   test('ArrowUp from first result returns focus to input', async ({
     extPage: page, extensionId, extensionContext,
   }) => {
-    if (indexReady === null) indexReady = await ensureIndexHasData(extensionContext, extensionId);
+    if (indexReady === null) {indexReady = await ensureIndexHasData(extensionContext, extensionId);}
     if (!indexReady) { test.skip(); return; }
 
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
@@ -96,11 +96,9 @@ test.describe('Keyboard > Results Navigation', () => {
     await input.fill('google');
 
     const results = page.locator('#results li');
-    await expect(results.first()).toBeVisible({ timeout: 5000 });
-
-    // Move down to first result, then back up
-    await page.keyboard.press('ArrowDown');
-    await expect(results.first()).toHaveClass(/active/, { timeout: 2000 });
+    // Wait for the popup's auto-focus timer (focusDelayMs ≤ 500ms) to move
+    // focus to the first result — same pattern as the Esc test.
+    await expect(results.first()).toBeFocused({ timeout: 3000 });
 
     await page.keyboard.press('ArrowUp');
 
@@ -112,7 +110,7 @@ test.describe('Keyboard > Results Navigation', () => {
   test('Esc from results clears input and returns focus', async ({
     extPage: page, extensionId, extensionContext,
   }) => {
-    if (indexReady === null) indexReady = await ensureIndexHasData(extensionContext, extensionId);
+    if (indexReady === null) {indexReady = await ensureIndexHasData(extensionContext, extensionId);}
     if (!indexReady) { test.skip(); return; }
 
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
@@ -122,11 +120,10 @@ test.describe('Keyboard > Results Navigation', () => {
     await input.fill('google');
 
     const results = page.locator('#results li');
-    await expect(results.first()).toBeVisible({ timeout: 5000 });
-
-    // Navigate to a result
-    await page.keyboard.press('ArrowDown');
-    await expect(results.first()).toHaveClass(/active/, { timeout: 2000 });
+    // Wait for the popup's auto-focus timer (focusDelayMs ≤ 500ms) to fire
+    // and move focus to the first result. This is deterministic — no ArrowDown
+    // or Tab race with the activeIndex state.
+    await expect(results.first()).toBeFocused({ timeout: 3000 });
 
     // Escape should clear the query and return focus to input
     await page.keyboard.press('Escape');
