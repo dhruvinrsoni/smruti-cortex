@@ -52,7 +52,7 @@ const RESET = '\x1b[0m';
 // one-line change — just append to KNOWN_SUBCOMMANDS or KNOWN_FLAGS.
 // ─────────────────────────────────────────────────────────────────────────
 const KNOWN_SUBCOMMANDS = new Set(['patch', 'minor', 'major', 'check', 'resume']);
-const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run', '--json', '--strict']);
+const KNOWN_FLAGS = new Set(['--skip-e2e', '--dry-run', '--json', '--strict', '--no-network']);
 
 function printUsage(toStderr = true) {
   const out = toStderr ? console.error : console.log;
@@ -66,6 +66,7 @@ function printUsage(toStderr = true) {
   out('  --dry-run    preview without pushing or tagging (release modes only)');
   out('  --json       emit NDJSON events on stdout (pretty output -> stderr)');
   out('  --strict     promote verify WARNs to FAILs (always on for real releases)');
+  out('  --no-network skip network-dependent phases (privacy URL + CWS listing fetch)');
 }
 
 function parseArgv(rawArgs) {
@@ -102,6 +103,7 @@ const DRY_RUN = flags.has('--dry-run');
 const SKIP_E2E = flags.has('--skip-e2e');
 const JSON_MODE = flags.has('--json');
 const STRICT = flags.has('--strict');
+const NO_NETWORK = flags.has('--no-network');
 const BUMP_TYPE = ['patch', 'minor', 'major'].includes(SUBCOMMAND) ? SUBCOMMAND : null;
 const CHECK_ONLY = SUBCOMMAND === 'check';
 const RESUME = SUBCOMMAND === 'resume';
@@ -541,6 +543,7 @@ if (SKIP_E2E) {
 const verifyArgs = [];
 verifyArgs.push('--release');
 if (SKIP_E2E) verifyArgs.push('--no-e2e');
+if (NO_NETWORK) verifyArgs.push('--no-network');
 if (JSON_MODE) verifyArgs.push('--json');
 // Real releases (patch/minor/major) always run strict. Standalone `ship
 // check` only runs strict if the operator explicitly asked for it.
