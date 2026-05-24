@@ -1,4 +1,62 @@
-## [9.3.0] — 2026-04-30
+### [9.4.0] — 2026-05-24
+
+### Features
+- add --no-network flag to ship check/minor/major — forwards to verify.mjs
+- tighten ?? j JQL URL to /issues/?jql=text~"..."
+- log ?? web-search flow at trace/debug/info/warn
+- route ?? j ticket-shaped queries to /browse/<KEY>
+- setChipBusy helper for chip pulse indicator
+- share renderer; honor unifiedScroll in quick-search
+- proactively reconnect port on bfcache pageshow
+- add safePortPost and fireAndForgetMessage helpers
+- revive quality-report snapshot at docs/quality-report/
+- add health-check.yml and ranking-reports.yml
+- add build-dashboard, build-lint-report, extract-changelog helpers
+
+### Bug Fixes
+- stabilize keyboard nav tests — wait for auto-focus timer instead of racing ArrowDown
+- never blank list on toggle; instant lexical; chip pulse
+- never blank list on toggle; instant lexical; chip pulse
+- CANCEL_SEARCH plumbing, epoch echo, processor user-idle gate
+- Phase 1 must never await Ollama; expose abortActiveSearch()
+- stop "[object Object]" + bfcache lastError warnings
+- Ctrl+C now pastes the URL in Chrome omnibox; add Ctrl+Shift+C
+- stop false-positive stale-port reconnects on heavy pages
+- show full URLs in results; let CSS handle truncation
+- pin header + chip strip when scrolling in unified mode
+- move unified-scroll to inner region so corners + resize work
+- wrap setupOmnibox call site in try/catch (defense in depth)
+- guard omnibox setup against undefined API at module load
+- centralize port reconnect and strict heartbeat matching
+- make SearchDebug storage async to avoid localStorage in service worker
+- stop deploying to GitHub Pages — privacy URL must not depend on CI
+- replace heredoc with printf in triage workflow to satisfy YAML parser
+
+### Refactoring
+- route SW port writes through safePortPost
+
+### Tests
+- toggle-preserves-results spec covering all four scenarios
+
+### Other
+- clarify IIFE bundle coexistence with manifest type:module
+- align CLAUDE.md, README.md, and skills with new 3-workflow setup
+- retire static quality-report snapshot — superseded by Pages Actions
+- update latest quality report [skip ci]
+- record v9.3.0 Chrome Web Store submission date
+- fix v9.3.0 heading depth (## not ###)
+- archive stale-ranking-reports.yml — relocated to ranking-reports.yml gc job
+- archive dedupe-ranking-reports.yml — merged into ranking-reports.yml
+- archive triage-ranking-reports.yml — merged into ranking-reports.yml
+- archive staging.yml — develop branch dormant since v8.0.0
+- archive security.yml — folded into health-check.yml
+- archive e2e.yml — replaced by health-check.yml
+- archive build.yml — replaced by health-check.yml
+- archive nfr-report.yml — replaced by health-check.yml
+
+---
+
+# [9.3.0] — 2026-04-30
 
 ### Features
 - report-button kill switch + 5/24h client-side rate limit

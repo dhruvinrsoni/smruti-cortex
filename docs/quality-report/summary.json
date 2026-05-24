@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-04-30T21:02:39.463Z",
+  "generatedAt": "2026-05-24T08:21:33.866Z",
   "data": {
-    "generatedAt": "2026-04-30T21:02:39.463Z",
+    "generatedAt": "2026-05-24T08:21:33.866Z",
     "repository": "local",
     "ref": "local",
     "runId": "",
     "runNumber": "",
-    "coverageLinesPct": "96.15",
+    "coverageLinesPct": "95.82",
     "coverageSource": "summary",
     "coverageDelta": "n/a",
     "coverageBaseline": "n/a",
@@ -17,11 +17,11 @@
     "auditHigh": 0,
     "auditModerate": 0,
     "auditLow": 0,
-    "swKb": 210,
-    "popupKb": 173,
-    "qsKb": 176,
-    "totalJsKb": 1162,
-    "snapshotVersion": "v9.3.0"
+    "swKb": 212,
+    "popupKb": 177,
+    "qsKb": 184,
+    "totalJsKb": 1191,
+    "snapshotVersion": "v9.4.0"
   },
   "status": {
     "lint": "unknown",
@@ -31,6 +31,6 @@
     "performance": "pass"
   },
   "actions": [
-    "Reduce bundle size (current total 1162 KB)."
+    "Reduce bundle size (current total 1191 KB)."
   ]
 }
