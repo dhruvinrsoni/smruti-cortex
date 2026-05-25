@@ -97,7 +97,7 @@ describe('toolbar-renderer', () => {
       expect(setCalls[2].value).toBe('auto');
     });
 
-    it('disabled chip (prereq off) does NOT call port.set, fires showToast with disabledToast', () => {
+    it('Semantic chip click calls port.set even when AI chip is OFF — fully independent', () => {
       const { port, setCalls, toastCalls, afterToggleCalls } = makePort({
         ollamaEnabled: false,
         embeddingsEnabled: false,
@@ -106,16 +106,16 @@ describe('toolbar-renderer', () => {
       const chip = parent.querySelector('.toggle-chip') as HTMLButtonElement;
       chip.click();
 
-      expect(setCalls).toEqual([]);
-      expect(afterToggleCalls).toEqual([]);
-      expect(toastCalls.length).toBe(1);
-      expect(toastCalls[0].type).toBe('warning');
-      expect(toastCalls[0].message.length).toBeGreaterThan(0);
+      // Semantic is independent of AI — click goes through without any toast
+      expect(setCalls).toEqual([{ key: 'embeddingsEnabled', value: true }]);
+      expect(afterToggleCalls).toEqual(['embeddingsEnabled']);
+      expect(toastCalls).toEqual([]);
     });
 
-    it('chip works once prerequisite is satisfied', () => {
+    it('Semantic chip click works regardless of AI chip state (AI ON or OFF)', () => {
+      // Verify it works with AI off (the critical independence case)
       const { port, setCalls } = makePort({
-        ollamaEnabled: true,
+        ollamaEnabled: false,
         embeddingsEnabled: false,
       });
       renderToolbarToggles(parent, port, ['embeddingsEnabled']);
@@ -165,18 +165,20 @@ describe('toolbar-renderer', () => {
       expect(chip.classList.contains('active')).toBe(false);
     });
 
-    it('updates disabled class based on prerequisite state', () => {
+    it('Semantic chip is never disabled by AI chip state — disabled class absent in all combinations', () => {
       const { port, state } = makePort({
         ollamaEnabled: false,
         embeddingsEnabled: false,
       });
       renderToolbarToggles(parent, port, ['embeddingsEnabled']);
       const chip = parent.querySelector('.toggle-chip') as HTMLButtonElement;
-      expect(chip.classList.contains('disabled')).toBe(true);
-      expect(chip.getAttribute('aria-disabled')).toBe('true');
+      // AI off: Semantic chip must NOT be greyed
+      expect(chip.classList.contains('disabled')).toBe(false);
+      expect(chip.getAttribute('aria-disabled')).toBe('false');
 
       state.ollamaEnabled = true;
       syncToolbarToggles(parent, port);
+      // AI on: still not disabled (independent)
       expect(chip.classList.contains('disabled')).toBe(false);
       expect(chip.getAttribute('aria-disabled')).toBe('false');
     });
@@ -194,14 +196,21 @@ describe('toolbar-renderer', () => {
       expect(tooltipOn).not.toBe(tooltipOff);
     });
 
-    it('uses disabledTooltip when prerequisite is unmet', () => {
-      const { port } = makePort({
+    it('Semantic chip uses tooltipOn/tooltipOff based on its own state, not AI state', () => {
+      const { port, state } = makePort({
         ollamaEnabled: false,
         embeddingsEnabled: false,
       });
       renderToolbarToggles(parent, port, ['embeddingsEnabled']);
       const chip = parent.querySelector('.toggle-chip') as HTMLButtonElement;
-      expect(chip.title.length).toBeGreaterThan(0);
+      const tooltipWhenOff = chip.title;
+      expect(tooltipWhenOff).toMatch(/semantic/i);  // tooltipOff reflects Semantic state
+
+      state.embeddingsEnabled = true;
+      syncToolbarToggles(parent, port);
+      const tooltipWhenOn = chip.title;
+      expect(tooltipWhenOn).not.toBe(tooltipWhenOff);  // switched to tooltipOn
+      expect(tooltipWhenOn).toMatch(/semantic/i);       // still about Semantic, not AI
     });
 
     it('updates cycle chip label/icon based on current cycle value', () => {

@@ -89,7 +89,7 @@ describe('toolbar-toggles', () => {
   });
 
   describe('Semantic chip registry entry', () => {
-    it('has expected shape with requires/disabledTooltip/disabledToast', () => {
+    it('has expected shape — independent of AI chip, no requires gate', () => {
       const def = getToggleDef('embeddingsEnabled');
       expect(def).toBeDefined();
       expect(def?.icon).toBe('🧠');
@@ -97,9 +97,10 @@ describe('toolbar-toggles', () => {
       expect(def?.type).toBe('boolean');
       expect(def?.tooltipOn).toMatch(/semantic/i);
       expect(def?.tooltipOff).toMatch(/semantic/i);
-      expect(def?.requires).toBe('ollamaEnabled');
-      expect(def?.disabledTooltip).toMatch(/ollama|AI/i);
-      expect(def?.disabledToast).toMatch(/enable.*ai/i);
+      // Semantic and AI are fully independent settings — no gate between them.
+      expect(def?.requires).toBeUndefined();
+      expect(def?.disabledTooltip).toBeUndefined();
+      expect(def?.disabledToast).toBeUndefined();
     });
 
     it('is NOT included in DEFAULT_TOOLBAR_TOGGLES (opt-in)', () => {
