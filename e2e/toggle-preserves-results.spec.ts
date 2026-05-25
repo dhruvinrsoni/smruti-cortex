@@ -192,10 +192,9 @@ test.describe('Toggle preserves results (Layer 1-5)', () => {
   }) => {
     // The exact configuration from the user's 2026-05-21 bug report follow-up:
     // BOTH AI keyword-expansion AND semantic-embedding chips are ON, results
-    // are visible, then user clicks the AI chip off. The Semantic chip becomes
-    // visually disabled via the `requires: 'ollamaEnabled'` cascade — but the
-    // underlying `embeddingsEnabled` setting stays true. The visible result
-    // list MUST stay populated through the toggle.
+    // are visible, then user clicks the AI chip off. Semantic chip is independent
+    // (no requires gate) — it stays active. The visible result list MUST stay
+    // populated through the toggle.
     await seedSettings(extensionContext, {
       toolbarToggles: ['ollamaEnabled', 'embeddingsEnabled'],
       ollamaEnabled: true,
@@ -223,8 +222,7 @@ test.describe('Toggle preserves results (Layer 1-5)', () => {
     await expect(aiChip).toHaveClass(/active/);
     await expect(semChip).toHaveClass(/active/);
 
-    // Toggle AI off. Semantic chip will cascade to visually-disabled because
-    // its `requires: 'ollamaEnabled'` gate now fails.
+    // Toggle AI off. Semantic chip stays enabled (independent — no requires gate).
     await aiChip.click();
 
     // Through the entire reissue window: rendered list must NEVER be empty.
@@ -235,11 +233,12 @@ test.describe('Toggle preserves results (Layer 1-5)', () => {
       await page.waitForTimeout(20);
     }
 
-    // After the dust settles: AI chip is off (no `active`), Semantic chip is
-    // now visually disabled (the `requires` cascade), but the list is still
-    // populated with lexical-only results.
+    // After the dust settles: AI chip is off (no `active`), Semantic chip
+    // remains active and enabled (independent — not gated on AI), and the
+    // list is still populated with lexical-only results.
     await expect(aiChip).not.toHaveClass(/active/);
-    await expect(semChip).toHaveClass(/disabled/);
+    await expect(semChip).not.toHaveClass(/disabled/);
+    await expect(semChip).toHaveClass(/active/);
     await expect.poll(async () => resultItems.count(), { timeout: 3000 }).toBeGreaterThan(0);
 
     // Input value preserved end-to-end.
