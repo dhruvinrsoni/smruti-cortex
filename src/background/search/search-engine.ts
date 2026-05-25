@@ -257,6 +257,14 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         items = [];
     }
 
+    // Fast-path abort: a newer query arrived while we awaited IDB.
+    // Skip the expensive synchronous scoring loop so the event loop is free
+    // for the current (non-stale) search to run immediately.
+    if (searchAbort.signal.aborted) {
+        logger.debug('runSearch', 'Search aborted post-IDB — skipping scoring for stale query');
+        return [];
+    }
+
     // Hydrate pre-computed embeddings from IndexedDB when semantic search is active
     if (items.length > 0 && embeddingsEnabled && !skipEmbeddingThisPhase) {
         try {
