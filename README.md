@@ -196,62 +196,60 @@ src/
 └── shared/          # Command registry, web search, UI abstractions
 ```
 
-### 🤖 AI Search (Optional)
+### 🤖 🧠 AI Search (Optional)
 
-**Two AI features for maximum search power:**
+Two independent AI modes. Use one, both, or neither — each has its own setting and its own toolbar chip.
 
-#### 1. AI Keyword Expansion (Fast)
-**Local AI keyword expansion** via [Ollama](https://ollama.ai). 100% local, no cloud.
+#### How they differ
 
-**How:** Type "war" → AI expands to `["war", "battle", "combat", "conflict"]` → keyword-matches URLs containing any of these.
+| | 🤖 AI Keyword Expansion | 🧠 Semantic Search |
+|---|---|---|
+| **What it does** | Sends your query to a local LLM, which returns synonyms and related terms; the full expanded set is keyword-matched against your history | Converts every indexed page and your query to embedding vectors; ranks results by cosine similarity — meaning beats words |
+| **Example** | `war` → LLM adds `battle · combat · conflict · warfare` → keyword-matches pages containing any of them | `how to fix memory leak` finds `garbage collection tuning guide` with **zero shared words** |
+| **Ollama model** | Generation model (default: `llama3.2:3b`) | Embedding model (default: `mxbai-embed-large`) |
+| **Speed** | ~5–15s per unique query (per-keyword cache; prefix-matched — gets faster with every search) | Background pre-computes all page embeddings; ~2–4s per query embedding at search time |
+| **Result type** | Still keyword-based — just with a richer, AI-broadened query | Meaning-based — finds conceptually related pages even with no word overlap |
+| **Enable** | Settings → AI Integration → Enable AI Search | Settings → AI Integration → Enable Semantic Search |
 
-**Dual-phase:** Keyword results appear instantly (~150ms). AI expansion runs in parallel — you see results before AI is done thinking.
+Both use the same Ollama server (`http://localhost:11434`) but different models — pull both if you want both. Either works independently of the other.
 
-**Per-keyword cache:** Each word is cached independently. Type "github issues tracker" → `github` reuses cached expansion, only `tracker` calls Ollama. Gets faster with every search.
+#### Setup — 🤖 AI Keyword Expansion
 
 <!-- Defaults sourced from src/shared/ollama-models.ts -->
 
-**Setup:**
 ```bash
 # 1. Install Ollama: https://ollama.ai
-# 2. Pull model
+# 2. Pull generation model
 ollama pull llama3.2:3b
 
-# 3. Enable CORS (REQUIRED)
-# Windows: setx OLLAMA_ORIGINS "*" (restart Ollama)
-# Linux/Mac: export OLLAMA_ORIGINS="*"
+# 3. Enable CORS (REQUIRED for browser extensions)
+# Windows:  setx OLLAMA_ORIGINS "*"   (restart Ollama after)
+# Mac/Linux: export OLLAMA_ORIGINS="*"
 ```
 
-**Enable:** Settings → AI Integration → Enable AI search
+**Enable:** Settings → AI Integration → Enable AI Search  
 **Timeout:** Default 30s, set -1 for infinite (Settings → AI Integration)
 
-#### 2. Semantic Search with Embeddings (NEW)
-**Find pages by meaning**, not just keywords. Uses AI to understand content.
+**Dual-phase:** Keyword results appear instantly (~150ms). AI expansion runs in parallel and silently updates results — you never wait on AI.
 
-**Example:** Search "ML tutorials" → finds "machine learning guides", "neural network courses"
+**Per-keyword cache:** Searching `github issues tracker` → `github` reuses cached expansion, only `tracker` calls Ollama.
 
-**Setup:**
+#### Setup — 🧠 Semantic Search
+
 ```bash
-# 1. Install Ollama + keyword expansion setup above
-# 2. Pull embedding model
+# Pull embedding model (separate from generation model)
 ollama pull mxbai-embed-large
-
-# 3. Enable in Settings → Semantic Search
 ```
 
-**Quick toggle (opt-in chip):** Settings → Toolbar lets you pin a `🧠 Semantic` chip next to the AI chip. It renders greyed out while AI (Ollama) is off — clicking it then surfaces a toast explaining that Ollama is required for embeddings. Flip AI on and the chip lights up, letting you toggle semantic scoring per search without opening Settings.
+**Enable:** Settings → AI Integration → Enable Semantic Search
 
-**How it works:**
-- Background processor generates embeddings for all indexed pages automatically
-- Pause/resume controls in Settings → AI → Embedding Management
-- Compares meaning using vector similarity
-- Finds conceptually related pages, not just keyword matches
-- Search always gets priority — embedding generation pauses during search
+Background processor generates embeddings for all indexed pages automatically. Pause/resume in Settings → AI → Embedding Management. Search always gets priority — embedding generation yields during active searches.
 
-**Performance:**
-- Background embedding: ~1-3 items/second (depends on hardware)
-- Search with cached embeddings: ~50ms
-- Storage: ~4KB per page
+**Performance:** ~1–3 items/second background throughput · ~4KB storage per page · ~50ms retrieval with cached embeddings.
+
+#### Toolbar Chips
+
+Pin `🤖 AI` and/or `🧠 Semantic` chips from **Settings → Toolbar**. Each chip directly reflects and toggles its own setting — they are fully independent of each other.
 
 ### 🛡️ AI Safety Architecture
 
