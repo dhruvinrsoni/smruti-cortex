@@ -55,12 +55,6 @@ export const TOOLBAR_TOGGLE_DEFS: readonly ToolbarToggleDef[] = [
         label: 'Semantic',
         tooltipOn: 'Semantic search ON (embeddings boost ranking)',
         tooltipOff: 'Semantic search OFF',
-        // Semantic scoring needs the embedding pipeline, which is Ollama-backed.
-        // If Ollama is off, toggling `embeddingsEnabled` on would persist a flag
-        // that cannot produce embeddings — so we gate the chip on `ollamaEnabled`.
-        requires: 'ollamaEnabled',
-        disabledTooltip: 'Turn on AI (Ollama) first to use Semantic search',
-        disabledToast: 'Enable AI first — Semantic needs Ollama for embeddings.',
     },
     {
         key: 'indexBookmarks',
