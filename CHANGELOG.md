@@ -1,5 +1,26 @@
 ## [9.4.0] — 2026-05-24
 
+## [9.4.1] — 2026-05-25
+
+### Bug Fixes
+- remove requires gate — AI and Semantic chips are independent
+- use focusDelayMs as Phase 1 debounce; cancel stale searches on keypress
+- skip scoring loop for searches aborted post-IDB
+
+### Tests
+- update toggle-preserves-results — Semantic stays active when AI toggles off
+- rewrite semantic-chip spec — independent chip, not gated on AI
+- update tests — Semantic chip no longer gated on AI chip
+
+### Other
+- fix CHANGELOG heading, rewrite DEVELOPMENT.md quick-ref, fix CHROME_WEB_STORE.md
+- add AI vs Semantic comparison row to features section
+- rewrite AI section — AI vs Semantic comparison table + independent chips
+- record v9.4.0 Chrome Web Store submission date
+- fill v9.4.0 submission doc — Section 7 prose + submission checklist
+
+---
+
 ### Features
 - add --no-network flag to ship check/minor/major — forwards to verify.mjs
 - tighten ?? j JQL URL to /issues/?jql=text~"..."
