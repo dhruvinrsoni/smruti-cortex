@@ -1,4 +1,4 @@
-### [9.4.0] — 2026-05-24
+## [9.4.0] — 2026-05-24
 
 ### Features
 - add --no-network flag to ship check/minor/major — forwards to verify.mjs

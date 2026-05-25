@@ -326,25 +326,25 @@ Everything serves ONE goal: Find pages in your history faster.
 
 ## 📦 Upload Checklist
 
-### Before Upload:
-1. Build production package: `npm run package`
-2. Verify zip file: `release/zips/smruti-cortex-vX.Y.Z.zip`
-3. Test in Chrome/Edge incognito mode
-4. Prepare 128x128 store icon PNG
-5. Create 3-5 screenshots (1280x800px)
-6. Write promotional copy (optional)
+### Step 1 — Ship the Release
 
-### Chrome Upload Steps:
-1. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devcenter/dashboard)
-2. Click "New Item"
-3. Upload `release/zips/smruti-cortex-vX.Y.Z.zip`
-4. Fill in store listing (copy from this doc)
-5. Upload icons and screenshots
-6. Add privacy policy URL
-7. Select category: **Productivity**
-8. Set pricing: **Free**
-9. Choose visibility: **Public**
-10. Submit for review
+```bash
+npm run ship check            # full gate: lint + build + tests + coverage + E2E + store audit
+npm run ship patch            # (or minor / major) — bumps version, builds, tags, pushes, creates GitHub Release + zip
+npm run store check           # final parity audit — run this one more time before uploading
+```
+
+`ship` is fully automated. It produces `release/zips/smruti-cortex-vX.Y.Z.zip` and creates the GitHub Release. No manual `git tag` or `npm run package` needed.
+
+### Step 2 — Upload to Chrome Web Store
+
+1. Open [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devcenter/dashboard)
+2. Find **SmrutiCortex** → click **Edit** (the extension is already live — do NOT click "New Item")
+3. Click **Upload Updated Package** → upload `release/zips/smruti-cortex-vX.Y.Z.zip`
+4. Fill **"Changes in this version"** — 3 bullets max, user-facing language (not commit messages)
+5. Submit for review
+
+### Review Timeline:
 
 ### Review Timeline:
 - **Initial review:** 1-3 business days

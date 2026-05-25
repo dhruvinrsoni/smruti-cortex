@@ -1,52 +1,74 @@
 # Development Guide
 
-A colleague asked: "There's a bug / I have an idea — what do I do?"
-This document walks you through every step, from first thought to Chrome Web Store.
-
-> For quick commands and file map, see `CLAUDE.md`.
+> For the complete file map and all npm commands, see `CLAUDE.md` in the repo root.
 
 ---
 
-## Development Lifecycle
+## ⚡ Quick Reference
 
-### 1. Ideation & Scope
+Everything you need for day-to-day work and releases, in one place.
 
-Before writing any code, answer these questions:
-
-**What kind of change is it?**
-- **Bug fix** → semver patch (e.g. 8.0.0 → 8.0.1)
-- **New feature, backward-compatible** → semver minor (e.g. 8.0.0 → 8.1.0)
-- **Breaking change** (removes a setting, changes behavior) → semver major (e.g. 8.0.0 → 9.0.0)
-
-Rule of thumb: if a user who never reads changelogs would be surprised or broken, it's a major. If they get something new without losing anything, it's a minor. If they wouldn't notice except the bug is gone, it's a patch.
-
----
-
-### 2. Design (with Claude Code)
-
-For any non-trivial change, open Claude Code and plan before coding:
+### Daily Development
 
 ```bash
-claude          # opens interactive session
-# describe your feature/bug
-# Claude enters plan mode, explores the codebase, proposes an approach
-# you approve the plan before any code is written
+npm run dev           # watch mode — rebuilds on save (load dist/ in chrome://extensions)
+npm test              # run all 2,500+ unit tests (~60s)
+npm run lint          # ESLint check (errors block; warnings are advisory)
+npm run build         # production build (~30s)
 ```
 
-Key architecture references:
-- `.github/skills/ai-ollama/SKILL.md` — AI search pipeline
-- `.github/skills/settings/SKILL.md` — how settings flow through the extension
-- `src/background/service-worker.ts` — message handler hub (all background logic)
-- `src/core/` — shared utilities (helpers, logger, settings, scorer types)
+### Before Every Commit
 
-Existing patterns to follow:
-- All browser API access goes through `browserAPI` from `src/core/helpers.ts`
-- Settings changes → `SettingsManager` in `src/core/settings.ts`
-- Background ↔ UI messages use typed message objects (see service-worker.ts for examples)
+```bash
+npm run coverage      # unit tests + coverage report (must stay above tiered floors)
+```
+
+### Release Pipeline
+
+```bash
+# 1. Verify everything is green
+npm run ship check            # full gate: lint + build + tests + coverage + E2E + store audit
+
+# 2. Ship (pick one — bumps version, builds, tags, pushes, creates GitHub Release + zip)
+npm run ship patch            # bug fixes          9.4.0 → 9.4.1
+npm run ship minor            # new features       9.4.0 → 9.5.0
+npm run ship major            # breaking changes   9.4.0 → 10.0.0
+
+# 3. Final audit before Chrome upload
+npm run store check           # manifest ↔ Section 4 parity, zip exists, CHANGELOG entry
+
+# Dry-run any ship without actually pushing:
+npm run ship patch -- --dry-run
+```
+
+### One-off Utilities
+
+```bash
+npm run e2e                   # Playwright E2E (45 tests, 7 specs) — builds first
+npm run verify                # lint + build + unit tests + coverage + E2E
+npm run store init            # scaffold new store submission doc for next version
+npm run dashboard preview     # build quality dashboard locally
+```
 
 ---
 
-### 3. Implementation
+## Semver Rules
+
+| Change type | Version bump | Example |
+|---|---|---|
+| Bug fix, no API change | `patch` | 9.4.0 → 9.4.1 |
+| New feature, backward-compatible | `minor` | 9.4.0 → 9.5.0 |
+| Breaking change (removed setting, manifest perm change) | `major` | 9.4.0 → 10.0.0 |
+
+**Rule of thumb:** if a user who never reads changelogs would be surprised or broken → major. If they get something new without losing anything → minor. If they wouldn't notice except a bug is gone → patch.
+
+`docs:`, `chore:`, `test:`, `refactor:` commits do **not** bump the version.
+
+---
+
+## Full Lifecycle
+
+### 1. Code the Change
 
 Work on `main` for small fixes. For large features, use a branch:
 
@@ -54,100 +76,73 @@ Work on `main` for small fixes. For large features, use a branch:
 git checkout -b feat/my-feature
 ```
 
-Rules:
-- TypeScript only — no plain JS in `src/`
-- No `console.log` in production code (use `Logger` from `src/core/logger.ts`)
-- Lint clean before committing — run `npm run lint` and fix any issues
+Conventions:
+- TypeScript only — no plain `.js` in `src/`
+- Use `Logger.forComponent('Name')` — never raw `console.log`
+- Settings → always through `SettingsManager` in `src/core/settings.ts`
+- Browser APIs → always through `browserAPI` from `src/core/helpers.ts`
+- Commit prefixes: `fix:` `feat:` `docs:` `chore:` `refactor:` `test:` (used by the release script for CHANGELOG)
 
----
-
-### 4. Verification
-
-Before any release, all of these must pass:
+### 2. Verify
 
 ```bash
-npm test              # all test suites green
-npm run lint          # 0 issues
-npm run build         # no TypeScript errors
+npm test && npm run lint && npm run build
 ```
+
+The pre-commit hook runs build + tests automatically on every `git commit`. Override with `FORCE_PRE_COMMIT=1` when needed (e.g. docs-only commit).
 
 **Smoke test checklist:**
 
-| Scenario | Expected Result |
-|----------|----------------|
-| Ctrl+Shift+S opens overlay | Overlay appears, input focused |
-| Type a search query | Results appear instantly |
-| AI disabled in settings | No spinner, no AI bar |
-| AI enabled + Ollama running | Spinner while processing → AI badge appears |
-| Same query twice in a session | `cache-hit` badge on second search |
-| Toggle AI off → on → search | Fresh AI call (not cached from before toggle) |
-| Ctrl+Enter on result | Opens in new tab |
-| Esc key | Clears/closes overlay |
+| Scenario | Expected |
+|---|---|
+| `Ctrl+Shift+S` opens overlay | Overlay appears, input focused |
+| Type query, pause | Results appear after focus-delay |
+| AI + Ollama running | Spinner → AI badge |
+| Same query twice | `cache-hit` badge on second search |
+| `Ctrl+Enter` on result | Opens in new tab |
+| `Esc` | Closes overlay |
+| 🧠 Semantic chip with 🤖 AI chip OFF | Semantic chip fully clickable (independent) |
+| `/` prefix in overlay | Command palette opens |
 
----
+### 3. Commit
 
-### 5. Versioning
-
-Update the version in `package.json` — `manifest.json` syncs automatically on every build via `scripts/sync-version.mjs`.
-
-```json
-// package.json
-"version": "8.0.1"   ← change this only
-```
-
-Then document the change in `CHANGELOG.md`:
-```markdown
-## [8.0.1] — YYYY-MM-DD
-### Bug Fixes
-- Fixed: [description of the fix]
-```
-
----
-
-### 6. Release Package
+One logical change per commit. Always `git diff --staged` before committing.
 
 ```bash
-npm run package
-# Builds production bundle, then creates:
-# release/zips/smruti-cortex-vX.Y.Z.zip
+git add <specific-files>
+git commit -m "fix: concise description of what and why"
 ```
 
-Then tag and push:
+### 4. Release
 
 ```bash
-git commit -m "chore: release vX.Y.Z"
-git tag vX.Y.Z
-git push && git push --tags
+npm run ship check            # run this first — full gate
+npm run ship patch            # (or minor / major)
 ```
+
+`ship` does everything: bumps `package.json`, syncs `manifest.json`, regenerates CHANGELOG, scaffolds the store submission doc, builds, packages zip, creates git commit + tag, pushes, creates GitHub Release with zip attached. No manual steps needed.
+
+### 5. Chrome Web Store
+
+See `CHROME_WEB_STORE.md` for the full submission guide.
+
+Quick steps after `ship`:
+1. Open the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devcenter/dashboard)
+2. Find SmrutiCortex → click **Edit** (not "New Item" — it's already live)
+3. Upload `release/zips/smruti-cortex-vX.Y.Z.zip`
+4. Fill "Changes in this version" from the CHANGELOG (user-facing language, 3 bullets max)
+5. Submit for review — updates take a few hours to 1 day
 
 ---
 
-### 7. Chrome Web Store Submission
+## Key Files
 
-Full guide: `CHROME_WEB_STORE.md`
-
-Quick steps:
-1. Go to Chrome Developer Dashboard → find SmrutiCortex → click **Edit**
-2. Upload `release/zips/smruti-cortex-vX.Y.Z.zip`
-3. Fill "What's New" (copy highlights from CHANGELOG.md)
-4. Submit for review
-
-Review times:
-- **Update to existing extension**: a few hours to 1 day
-- **New features with broader permissions**: 3-7 business days
-- **Initial submission**: 1-3 business days
-
----
-
-## Semver Quick Reference
-
-```
-MAJOR.MINOR.PATCH
-
-8.0.0   ← current
-8.0.1   ← bug fix (patch)
-8.1.0   ← new feature, no breakage (minor)
-9.0.0   ← breaking change (major)
-```
-
-When in doubt: use patch for fixes, minor for additions. Reserve major for genuine breaking changes (e.g., removing a setting, changing a permission).
+| What | Where |
+|---|---|
+| All npm commands | `CLAUDE.md` (repo root) |
+| Search algorithm deep-dive | `docs/VIVEK_SEARCH_ALGORITHM.md` |
+| AI / Ollama pipeline | `.github/skills/ai-ollama/SKILL.md` |
+| Settings schema | `src/core/settings.ts` |
+| Service worker entry | `src/background/service-worker.ts` |
+| Test patterns & mocks | `.github/skills/testing/SKILL.md` |
+| Store submission guide | `CHROME_WEB_STORE.md` |
