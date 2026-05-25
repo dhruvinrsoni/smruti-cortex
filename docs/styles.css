@@ -424,6 +424,52 @@ body {
     transform: scale(1.02);
 }
 
+/* AI vs Semantic comparison card */
+.ai-compare-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    font-size: 0.88rem;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.compare-query {
+    font-size: 0.92rem;
+    color: var(--text-secondary);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+.compare-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.compare-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.compare-value {
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+.ai-kw {
+    color: #3fb950;
+    font-style: italic;
+}
+.compare-note {
+    margin-top: 4px;
+    font-size: 0.80rem;
+    color: var(--text-secondary);
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-style: italic;
+}
+
 /* Architecture diagram (Engineering category) */
 .architecture-diagram {
     display: grid;
