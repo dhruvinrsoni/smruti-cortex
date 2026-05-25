@@ -1,5 +1,3 @@
-## [9.4.0] — 2026-05-24
-
 ## [9.4.1] — 2026-05-25
 
 ### Bug Fixes
@@ -20,6 +18,8 @@
 - fill v9.4.0 submission doc — Section 7 prose + submission checklist
 
 ---
+
+## [9.4.0] — 2026-05-24
 
 ### Features
 - add --no-network flag to ship check/minor/major — forwards to verify.mjs
