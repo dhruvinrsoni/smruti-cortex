@@ -1,21 +1,11 @@
 import { test, expect } from './fixtures/extension';
 
 /**
- * Semantic toolbar chip — prerequisite-gated chip behaviour.
+ * Semantic toolbar chip — independent chip behaviour.
  *
- * The Semantic chip (`embeddingsEnabled`) is opt-in and declares
- * `requires: 'ollamaEnabled'`, because semantic scoring is backed by Ollama
- * embeddings. When Ollama is OFF the chip must render disabled, and clicking
- * it must be a no-op that surfaces a toast — never a silent setting flip
- * that would persist an unreachable configuration.
- *
- * These tests exercise the full wiring end-to-end:
- *   1. Seed `toolbarToggles` to include both `ollamaEnabled` and
- *      `embeddingsEnabled` (the Semantic chip is opt-in, so we have to add
- *      it explicitly — mirrors what the user would do via Settings).
- *   2. Open the popup and check the rendered chip markup + classes.
- *   3. Click-and-assert-no-op, then flip `ollamaEnabled` and assert the
- *      click now toggles `embeddingsEnabled`.
+ * The Semantic chip (`embeddingsEnabled`) and the AI chip (`ollamaEnabled`)
+ * are fully independent. Each reflects and toggles only its own setting.
+ * Semantic must never be disabled or blocked by AI chip state.
  */
 
 const SETTINGS_KEY = 'smrutiCortexSettings';
@@ -60,12 +50,12 @@ test.describe('Semantic toolbar chip', () => {
     await clearSettings(extensionContext);
   });
 
-  test('renders in disabled state when Ollama is off', async ({
+  test('renders as enabled regardless of Ollama state', async ({
     extPage: page, extensionContext, extensionId,
   }) => {
     await seedSettings(extensionContext, {
       toolbarToggles: ['ollamaEnabled', 'embeddingsEnabled'],
-      ollamaEnabled: false,
+      ollamaEnabled: false,      // AI off
       embeddingsEnabled: false,
     });
 
@@ -75,27 +65,23 @@ test.describe('Semantic toolbar chip', () => {
     const chip = page.locator('.toggle-chip[data-toggle-key="embeddingsEnabled"]');
     await expect(chip).toBeAttached({ timeout: 5000 });
 
-    // Wait for syncToggleBar() to run (it fires from SettingsManager.init()).
-    await expect(chip).toHaveClass(/disabled/, { timeout: 5000 });
-    // The chip should not also report as active when disabled.
-    await expect(chip).not.toHaveClass(/\bactive\b/);
+    // Semantic is independent — must NOT be disabled when AI is off
+    await expect(chip).not.toHaveClass(/disabled/, { timeout: 5000 });
 
     const iconText = await chip.locator('.chip-icon').textContent();
     expect(iconText).toContain('🧠');
 
-    const title = await chip.getAttribute('title');
-    expect(title ?? '').toMatch(/ollama|AI/i);
-
+    // aria-disabled must be false (fully interactive)
     const aria = await chip.getAttribute('aria-disabled');
-    expect(aria).toBe('true');
+    expect(aria).toBe('false');
   });
 
-  test('click while disabled is a no-op and surfaces a toast', async ({
+  test('click toggles embeddingsEnabled even when Ollama is off', async ({
     extPage: page, extensionContext, extensionId,
   }) => {
     await seedSettings(extensionContext, {
       toolbarToggles: ['ollamaEnabled', 'embeddingsEnabled'],
-      ollamaEnabled: false,
+      ollamaEnabled: false,      // AI off — must not block Semantic
       embeddingsEnabled: false,
     });
 
@@ -103,27 +89,17 @@ test.describe('Semantic toolbar chip', () => {
     await page.waitForLoadState('load');
 
     const chip = page.locator('.toggle-chip[data-toggle-key="embeddingsEnabled"]');
-    await expect(chip).toHaveClass(/disabled/, { timeout: 5000 });
+    await expect(chip).not.toHaveClass(/disabled/, { timeout: 5000 });
 
-    // Force the click — Playwright would otherwise refuse to click a
-    // visually disabled element if we used { trial: true }. The chip is
-    // a <button> with CSS `cursor: not-allowed`, not the HTML disabled
-    // attribute, so a real user click must still reach our handler.
-    await chip.click({ force: true });
+    // Click must go through and flip the setting
+    await chip.click();
+    await expect(chip).toHaveClass(/active/, { timeout: 5000 });
 
-    // Toast is a plain <div> appended to document.body with the disabled
-    // copy. It lingers for ~5s so this poll has plenty of runway.
-    const toast = page.locator('body > div', {
-      hasText: /enable ai first/i,
-    });
-    await expect(toast).toBeVisible({ timeout: 3000 });
-
-    // Setting must not have flipped.
     const persisted = await readSetting<boolean>(extensionContext, 'embeddingsEnabled');
-    expect(persisted ?? false).toBe(false);
+    expect(persisted).toBe(true);
   });
 
-  test('enabling Ollama enables the chip and click toggles embeddings', async ({
+  test('chip state tracks embeddingsEnabled independently of ollamaEnabled', async ({
     extPage: page, extensionContext, extensionId,
   }) => {
     await seedSettings(extensionContext, {
@@ -136,26 +112,35 @@ test.describe('Semantic toolbar chip', () => {
     await page.waitForLoadState('load');
 
     const semChip = page.locator('.toggle-chip[data-toggle-key="embeddingsEnabled"]');
-    await expect(semChip).toHaveClass(/disabled/, { timeout: 5000 });
+    const aiChip  = page.locator('.toggle-chip[data-toggle-key="ollamaEnabled"]');
+    await expect(semChip).toBeAttached({ timeout: 5000 });
 
-    // Flip Ollama on via the AI chip — exercises the same SettingsManager
-    // path as any other UI toggle, and proves applyPopupSettingSideEffects
-    // syncs the Semantic chip's disabled state.
-    const aiChip = page.locator('.toggle-chip[data-toggle-key="ollamaEnabled"]');
-    await expect(aiChip).toBeAttached({ timeout: 5000 });
-    await aiChip.click();
+    // Both chips start inactive and enabled (not disabled)
+    await expect(semChip).not.toHaveClass(/disabled/, { timeout: 3000 });
+    await expect(semChip).not.toHaveClass(/active/);
 
-    // The Semantic chip loses its `disabled` class once Ollama is on.
-    await expect(semChip).not.toHaveClass(/disabled/, { timeout: 5000 });
-    const aria = await semChip.getAttribute('aria-disabled');
-    expect(aria).toBe('false');
-
-    // Click now actually toggles `embeddingsEnabled`.
+    // Toggle Semantic ON — AI stays off
     await semChip.click();
-    await expect(semChip).toHaveClass(/active/, { timeout: 5000 });
+    await expect(semChip).toHaveClass(/active/, { timeout: 3000 });
+    await expect(aiChip).not.toHaveClass(/active/);
 
+    // Toggle AI ON — Semantic must remain active (independent)
+    await aiChip.click();
+    await expect(aiChip).toHaveClass(/active/, { timeout: 3000 });
+    await expect(semChip).toHaveClass(/active/);
+
+    // Toggle Semantic OFF — AI must remain active (independent)
+    await semChip.click();
+    await expect(semChip).not.toHaveClass(/active/, { timeout: 3000 });
+    await expect(aiChip).toHaveClass(/active/);
+
+    // Final persisted state: semantic OFF, AI ON
     await expect.poll(
       async () => readSetting<boolean>(extensionContext, 'embeddingsEnabled'),
+      { timeout: 3000, intervals: [100, 200, 400] },
+    ).toBe(false);
+    await expect.poll(
+      async () => readSetting<boolean>(extensionContext, 'ollamaEnabled'),
       { timeout: 3000, intervals: [100, 200, 400] },
     ).toBe(true);
   });
