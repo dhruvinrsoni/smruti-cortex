@@ -118,8 +118,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   // an extension update — remove it so the new overlay initializes cleanly.
   const staleOverlay = document.getElementById(OVERLAY_ID);
   if (staleOverlay) { staleOverlay.remove(); }
-  const DEBOUNCE_MS = 30; // Phase 1 (lexical) must feel instant. The in-flight dedup at
-                          // performSearch already collapses bursts; this just bundles same-frame keystrokes.
   const MAX_RESULTS = 15;
   
   // Log level constants (matches Logger.LogLevel)
@@ -235,7 +233,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   const dispatchGuard = createDispatchGuardState();
   let prewarmed = false;
   let cachedSettings: AppSettings | null = null;
-  let searchDebounceMs = DEBOUNCE_MS;
   let aiDebounceTimer: number | null = null; // Separate longer debounce for AI expansion
   let aiSearchPending = false; // True from handleInput until Phase 2 response arrives (or AI disabled)
   let hidePortCloseTimer: number | null = null;
@@ -1224,9 +1221,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
             try {
               if (shadowHost) { shadowHost.dataset.selectAll = String(Boolean(settings?.selectAllOnFocus)); }
             } catch { /* ignore */ }
-            searchDebounceMs = DEBOUNCE_MS;
             applyQSTheme(settings?.theme);
-            log.debug('settings', 'Fetched settings, searchDebounceMs=', searchDebounceMs);
             if (currentResults.length > 0) {
               try { renderResults(currentResults); } catch { /* ignore */ }
             }
@@ -2469,6 +2464,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
     if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;}
 
+    // Cancel any in-flight SW search immediately so a stale scoring loop doesn't
+    // block the queue while the user is still typing.
+    if (searchPort) {
+      try { searchPort.postMessage({ type: 'CANCEL_SEARCH' }); } catch { /* port may be closed */ }
+    }
+
     // Non-history modes: route to command palette handlers
     if (mode !== 'history') {
       dismissFirstUseHint();
@@ -2493,6 +2494,11 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     renderAIStatus(null);
 
+    // Phase 1 debounce: use focusDelayMs so the user's configured pause governs when
+    // keyword results fire. Floor at 150ms so focusDelayMs=0 (auto-focus disabled)
+    // still provides a useful burst-collapse window.
+    const debounceMs = Math.max(150, cachedSettings?.focusDelayMs ?? 450);
+
     debounceTimer = window.setTimeout(() => {
       const q = inputEl?.value?.trim() || '';
       if (q.length === 0) {
@@ -2504,7 +2510,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       }
       log.debug('handleInput', `Phase 1 (LEXICAL) firing for "${q}"`);
       performSearch(q, true);
-    }, searchDebounceMs);
+    }, debounceMs);
 
     if (aiEnabled) {
       const aiDelayMs = cachedSettings?.aiSearchDelayMs ?? 500;
@@ -5598,7 +5604,6 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       try {
         const changedKeys = Object.keys(message.settings) as (keyof AppSettings)[];
         cachedSettings = { ...(cachedSettings || {}), ...message.settings };
-        searchDebounceMs = DEBOUNCE_MS;
 
         // Apply visual side effects for each changed key
         for (const key of changedKeys) {

@@ -1621,6 +1621,10 @@ function initializePopup() {
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = undefined;}
     if (focusTimer) {clearTimeout(focusTimer); focusTimer = undefined;}
 
+    // Cancel any in-flight SW search immediately so a stale scoring loop doesn't
+    // block the queue while the user is still typing.
+    chrome.runtime.sendMessage({ type: 'CANCEL_SEARCH' }, () => { void chrome.runtime.lastError; });
+
     // Non-history modes: route to palette rendering
     if (mode !== 'history') {
       resultsLocal = [];
@@ -1641,8 +1645,11 @@ function initializePopup() {
     if (toggleBarEl && aiEnabled) { setChipBusy(toggleBarEl, 'ollamaEnabled', true); }
     resultCountNode.textContent = 'Searching...';
 
-    // Phase 1 (lexical) debounce kept tight (30ms) — same rationale as quick-search.ts DEBOUNCE_MS.
-    debounceTimer = window.setTimeout(() => doSearch(q, true), 30);
+    // Phase 1 debounce: use focusDelayMs so the user's configured pause governs when
+    // keyword results fire. Floor at 150ms so focusDelayMs=0 (auto-focus disabled)
+    // still provides a useful burst-collapse window.
+    const phase1DebounceMs = Math.max(150, SettingsManager.getSetting('focusDelayMs') ?? 450);
+    debounceTimer = window.setTimeout(() => doSearch(q, true), phase1DebounceMs);
 
     if (aiEnabled) {
       const aiDelayMs = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
