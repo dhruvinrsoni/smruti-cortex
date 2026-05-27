@@ -3824,7 +3824,7 @@ function initializePopup() {
           showToast('Bookmarks indexing enabled. Rebuilding index...', 'info');
           chrome.runtime.sendMessage({ type: 'INDEX_BOOKMARKS' }, () => void chrome.runtime.lastError);
         } else {
-          showToast('Bookmarks indexing disabled. Bookmark flags will be cleared on next rebuild.', 'info');
+          showToast('Bookmarks excluded from search.', 'info');
         }
       });
     }
