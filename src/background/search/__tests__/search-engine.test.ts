@@ -1562,6 +1562,53 @@ describe('search-engine', () => {
     });
   });
 
+  describe('indexBookmarks=false excludes bookmark-flagged items', () => {
+    it('should exclude item with isBookmark=true when indexBookmarks is false', async () => {
+      settingsMap.indexBookmarks = false;
+      setupCoverageMocks({
+        items: [makeItem({
+          url: 'https://github.com',
+          title: 'GitHub',
+          hostname: 'github.com',
+          isBookmark: true,
+        })],
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('github');
+      expect(results.length).toBe(0);
+    });
+
+    it('should still include item with isBookmark=false (history item) when indexBookmarks is false', async () => {
+      settingsMap.indexBookmarks = false;
+      setupCoverageMocks({
+        items: [makeItem({
+          url: 'https://github.com',
+          title: 'GitHub',
+          hostname: 'github.com',
+          isBookmark: false,
+        })],
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('github');
+      expect(results.length).toBe(1);
+    });
+
+    it('should include item with isBookmark=true when indexBookmarks is true (regression guard)', async () => {
+      settingsMap.indexBookmarks = true;
+      setupCoverageMocks({
+        items: [makeItem({
+          url: 'https://github.com',
+          title: 'GitHub',
+          hostname: 'github.com',
+          isBookmark: true,
+        })],
+      });
+      const { runSearch } = await import('../search-engine');
+      const results = await runSearch('github');
+      expect(results.length).toBe(1);
+    });
+  });
+
   describe('browser history fallback format', () => {
     it('should convert history items to IndexedItem format with hostname', async () => {
       setupCoverageMocks({

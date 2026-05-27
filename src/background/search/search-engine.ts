@@ -326,6 +326,8 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     // Check if strict matching is enabled (default: true = only show matching results)
     const showNonMatchingResults = SettingsManager.getSetting('showNonMatchingResults') ?? false;
 
+    const indexBookmarks = SettingsManager.getSetting('indexBookmarks') ?? true;
+
     // === EMBEDDING GENERATION GUARDRAILS ===
     // These caps prevent the catastrophic memory leak that caused 14GB RAM usage.
     // Without caps, every search generates embeddings for ALL ~10k+ items.
@@ -434,6 +436,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         // BOOKMARK STRICT MATCHING: Only show bookmarks when there's a strong match
         // This prevents bookmark flooding when typing partial words like "github"
         const isBookmark = !!item.isBookmark;
+        if (isBookmark && !indexBookmarks) {continue;}
         let bookmarkStrictMatch = true; // Default: non-bookmarks pass through
         
         if (isBookmark) {
