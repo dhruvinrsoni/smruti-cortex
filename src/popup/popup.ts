@@ -4734,6 +4734,12 @@ function initializePopup() {
       } else if (message.type === 'SETTINGS_CHANGED') {
         applyRemoteSettingsChanges(message.settings);
         sendResponse({ status: 'ok' });
+      } else if (message.type === 'DATA_CHANGED') {
+        if (currentQuery?.trim()) {
+          cancelInflightSearch();
+          debounceSearch(currentQuery);
+        }
+        sendResponse({ status: 'ok' });
       }
     });
   } else if (typeof browser !== 'undefined' && browser.runtime) {

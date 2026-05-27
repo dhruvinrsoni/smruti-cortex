@@ -1424,6 +1424,15 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           return;
         }
 
+        // Data-change push from background: background data changed, re-run active query.
+        if (response?.type === 'DATA_CHANGED') {
+          if (inputEl?.value?.trim()) {
+            cancelInflightSearch();
+            handleInput();
+          }
+          return;
+        }
+
         // Handle error responses from service worker
         if (response?.error) {
           // Any terminal response (including errors) clears the inflight
@@ -5600,6 +5609,14 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       return true;
     }
     // Update cached settings when background notifies of changes
+    if (message?.type === 'DATA_CHANGED') {
+      if (inputEl?.value?.trim()) {
+        cancelInflightSearch();
+        handleInput();
+      }
+      sendResponse({ success: true });
+      return true;
+    }
     if (message?.type === 'SETTINGS_CHANGED' && message?.settings) {
       try {
         const changedKeys = Object.keys(message.settings) as (keyof AppSettings)[];
