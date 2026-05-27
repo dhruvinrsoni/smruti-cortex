@@ -13,7 +13,8 @@ import { SettingsManager } from '../core/settings';
 import { startHealthMonitoring, ensureReady } from './resilience';
 import { createRegistries } from './composition-root';
 import { registerCommandsListenerEarly, keepServiceWorkerAlive, reinjectContentScript } from './lifecycle/commands-listener';
-import { setupPortBasedMessaging } from './lifecycle/port-messaging';
+import { setupPortBasedMessaging, broadcastToActivePorts } from './lifecycle/port-messaging';
+import { setupDataChangeListeners, type DataChangeSource } from './lifecycle/data-change-listeners';
 import { setupOmnibox } from './lifecycle/omnibox';
 
 let initialized = false;
@@ -28,6 +29,13 @@ setupPortBasedMessaging({
   getInitPromise: () => initializationPromise,
   ensureReady,
 });
+
+function broadcastDataChange(source: DataChangeSource): void {
+  broadcastToActivePorts({ type: 'DATA_CHANGED', source });
+  // Fire-and-forget to popup (if open); popup may not be open — silence the error.
+  void browserAPI.runtime.sendMessage({ type: 'DATA_CHANGED', source }).catch(() => {});
+}
+setupDataChangeListeners(broadcastDataChange);
 
 // Chrome MV3 requires synchronous listener registration at module load.
 browserAPI.runtime.onMessage.addListener((msg, sender, sendResponse) => {

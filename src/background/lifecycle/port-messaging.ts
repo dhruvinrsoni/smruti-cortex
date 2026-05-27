@@ -6,6 +6,15 @@ import { safePortPost } from '../../shared/runtime-messaging';
 
 const logger = Logger.forComponent('PortMessaging');
 
+const activePorts = new Set<chrome.runtime.Port>();
+
+/** Push a message to every currently-connected quick-search port. */
+export function broadcastToActivePorts(message: object): void {
+    for (const port of activePorts) {
+        safePortPost(port, message);
+    }
+}
+
 export interface PortMessagingDeps {
   isInitialized: () => boolean;
   getInitPromise: () => Promise<void> | null;
@@ -23,6 +32,7 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
   browserAPI.runtime.onConnect.addListener((port) => {
     if (port.name === 'quick-search') {
       logger.debug('onConnect', 'Quick-search port connected');
+      activePorts.add(port);
       let portDisconnected = false;
       // Sliding-window rate limit. A fixed window with a hard boundary can be
       // exploited to submit 2 * PORT_RATE_LIMIT in a tiny slice straddling the
@@ -135,6 +145,7 @@ export function setupPortBasedMessaging(deps: PortMessagingDeps): void {
       });
       port.onDisconnect.addListener(() => {
         portDisconnected = true;
+        activePorts.delete(port);
         logger.debug('onDisconnect', 'Quick-search port disconnected');
       });
     }
