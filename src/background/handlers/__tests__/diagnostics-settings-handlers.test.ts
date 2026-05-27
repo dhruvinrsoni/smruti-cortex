@@ -93,6 +93,10 @@ vi.mock('../../resilience', () => ({
   clearAndRebuild: vi.fn(),
 }));
 
+vi.mock('../../indexing', () => ({
+  clearBookmarkFlags: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../favicon-cache', () => ({
   getFaviconCacheStats: vi.fn(),
   clearExpiredFavicons: vi.fn(),
@@ -1012,6 +1016,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(undefined) // wasIndexingBookmarks
         .mockReturnValueOnce(undefined) // wasEmbeddingsEnabled → ?? false
         .mockReturnValueOnce(undefined) // oldEmbeddingModel → || 'nomic-embed-text'
         .mockReturnValueOnce(undefined) // nowEmbeddingsEnabled → ?? false
@@ -1032,6 +1037,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(false)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -1052,6 +1058,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(false)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -1074,6 +1081,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(false)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -1096,6 +1104,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(true)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(false)
@@ -1115,6 +1124,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)               // wasIndexingBookmarks
         .mockReturnValueOnce(true)               // wasEmbeddingsEnabled
         .mockReturnValueOnce('nomic-embed-text')  // oldEmbeddingModel
         .mockReturnValueOnce(true)                // nowEmbeddingsEnabled
@@ -1134,6 +1144,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(true)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -1153,6 +1164,7 @@ describe('settings-handlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)               // wasIndexingBookmarks
         .mockReturnValueOnce(true)
         .mockReturnValueOnce('Nomic-Embed-Text ')  // before: extra whitespace + caps
         .mockReturnValueOnce(true)

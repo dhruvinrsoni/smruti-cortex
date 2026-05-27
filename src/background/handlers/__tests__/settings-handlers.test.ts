@@ -64,6 +64,10 @@ vi.mock('../../resilience', () => ({
   clearAndRebuild: vi.fn(),
 }));
 
+vi.mock('../../indexing', () => ({
+  clearBookmarkFlags: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../../shared/recent-history-cache', () => ({
   clearRecentHistoryCache: vi.fn().mockResolvedValue(undefined),
 }));
@@ -187,6 +191,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(undefined) // wasIndexingBookmarks
         .mockReturnValueOnce(undefined) // wasEmbeddingsEnabled
         .mockReturnValueOnce(undefined) // oldEmbeddingModel → fallback
         .mockReturnValueOnce(undefined) // nowEmbeddingsEnabled → still falsy
@@ -207,6 +212,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(false)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -227,6 +233,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(false)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -249,6 +256,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(false)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -271,6 +279,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(true)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(false)
@@ -290,6 +299,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(true)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -309,6 +319,7 @@ describe('registerSettingsHandlers', () => {
       const { SettingsManager } = await import('../../../core/settings');
       const { embeddingProcessor } = await import('../../embedding-processor');
       (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)              // wasIndexingBookmarks
         .mockReturnValueOnce(true)
         .mockReturnValueOnce('nomic-embed-text')
         .mockReturnValueOnce(true)
@@ -322,6 +333,68 @@ describe('registerSettingsHandlers', () => {
       expect(res).toEqual({ status: 'ok' });
       expect(embeddingProcessor.start).not.toHaveBeenCalled();
       expect(embeddingProcessor.stop).not.toHaveBeenCalled();
+    });
+
+    it('calls clearBookmarkFlags when indexBookmarks flips from true → false', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { clearBookmarkFlags } = await import('../../indexing');
+      (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)   // wasIndexingBookmarks — was ON
+        .mockReturnValueOnce(false)  // wasEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // oldEmbeddingModel
+        .mockReturnValueOnce(false)  // nowEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // nowEmbeddingModel
+        .mockReturnValueOnce(false); // nowIndexingBookmarks — now OFF
+
+      const res = await dispatch(preInit, {
+        type: 'SETTINGS_CHANGED',
+        settings: { indexBookmarks: false },
+      });
+
+      expect(res).toEqual({ status: 'ok' });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(clearBookmarkFlags).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call clearBookmarkFlags when indexBookmarks flips from false → true', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { clearBookmarkFlags } = await import('../../indexing');
+      (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(false)  // wasIndexingBookmarks — was OFF
+        .mockReturnValueOnce(false)  // wasEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // oldEmbeddingModel
+        .mockReturnValueOnce(false)  // nowEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // nowEmbeddingModel
+        .mockReturnValueOnce(true);  // nowIndexingBookmarks — now ON
+
+      const res = await dispatch(preInit, {
+        type: 'SETTINGS_CHANGED',
+        settings: { indexBookmarks: true },
+      });
+
+      expect(res).toEqual({ status: 'ok' });
+      expect(clearBookmarkFlags).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call clearBookmarkFlags when indexBookmarks stays true', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { clearBookmarkFlags } = await import('../../indexing');
+      (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(true)   // wasIndexingBookmarks — was ON
+        .mockReturnValueOnce(false)  // wasEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // oldEmbeddingModel
+        .mockReturnValueOnce(false)  // nowEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // nowEmbeddingModel
+        .mockReturnValueOnce(true);  // nowIndexingBookmarks — still ON
+
+      const res = await dispatch(preInit, {
+        type: 'SETTINGS_CHANGED',
+        settings: { theme: 'dark' },
+      });
+
+      expect(res).toEqual({ status: 'ok' });
+      expect(clearBookmarkFlags).not.toHaveBeenCalled();
     });
   });
 

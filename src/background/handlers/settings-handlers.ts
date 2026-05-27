@@ -42,6 +42,7 @@ export function registerSettingsHandlers(
   preInit.register('SETTINGS_CHANGED', async (msg, _sender, sendResponse) => {
     log.debug('SETTINGS_CHANGED', 'Handling SETTINGS_CHANGED', { settings: msg.settings });
     if (msg.settings) {
+      const wasIndexingBookmarks = SettingsManager.getSetting('indexBookmarks') ?? true;
       const wasEmbeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
       const oldEmbeddingModel = SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL;
 
@@ -73,6 +74,13 @@ export function registerSettingsHandlers(
       ) {
         log.info('SETTINGS_CHANGED', `🧠 Embedding model changed (${oldEmbeddingModel} → ${nowEmbeddingModel}) — stopping processor`);
         embeddingProcessor.stop();
+      }
+
+      const nowIndexingBookmarks = SettingsManager.getSetting('indexBookmarks') ?? true;
+      if (wasIndexingBookmarks && !nowIndexingBookmarks) {
+        log.info('SETTINGS_CHANGED', '📚 Bookmark indexing disabled — clearing bookmark flags');
+        const { clearBookmarkFlags } = await import('../indexing');
+        void clearBookmarkFlags();
       }
     }
     sendResponse({ status: 'ok' });

@@ -107,6 +107,7 @@ vi.mock('../indexing', () => ({
   mergeMetadata: vi.fn(async () => {}),
   performBookmarksIndex: vi.fn(async () => ({ indexed: 0, updated: 0 })),
   performIncrementalHistoryIndexManual: vi.fn(async () => ({ added: 0, updated: 0 })),
+  clearBookmarkFlags: vi.fn(async () => {}),
 }));
 
 vi.mock('../search/search-engine', () => ({
@@ -1847,6 +1848,7 @@ describe('SETTINGS_CHANGED branches', () => {
   it('embeddings on→off stops processor', async () => {
     const { SettingsManager } = await import('../../core/settings');
     (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(true)              // wasIndexingBookmarks
       .mockReturnValueOnce(true)
       .mockReturnValueOnce('nomic-embed-text')
       .mockReturnValueOnce(false)
@@ -1860,6 +1862,7 @@ describe('SETTINGS_CHANGED branches', () => {
   it('embeddings off→on starts processor', async () => {
     const { SettingsManager } = await import('../../core/settings');
     (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(true)              // wasIndexingBookmarks
       .mockReturnValueOnce(false)
       .mockReturnValueOnce('nomic-embed-text')
       .mockReturnValueOnce(true)
