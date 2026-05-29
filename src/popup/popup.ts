@@ -18,6 +18,7 @@ import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones
 import { buildCheatsheetSections } from '../shared/onboarding/cheatsheet';
 import { runWithUndo } from './safety-utils';
 import { confirmDestructive, showUndoToast } from './confirm-undo';
+import { FRESH_INSTALL_PROFILE } from '../core/fresh-install-profile';
 import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
 import { renderToolbarToggles, syncToolbarToggles, setChipBusy, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
@@ -4137,6 +4138,29 @@ function initializePopup() {
           closeSettingsModal();
           renderResults();
           showToast('Settings reset to defaults', 'info');
+        }
+      });
+    }
+
+    // Reset to Safe Defaults — the recommended fresh-install setup (keeps the index).
+    // Applies the schema baseline first, then the opinionated FRESH_INSTALL_PROFILE,
+    // so the result matches exactly what a brand-new install would start with.
+    const resetSafeBtn = modal.querySelector('#modal-reset-safe') as HTMLButtonElement;
+    if (resetSafeBtn) {
+      resetSafeBtn.addEventListener('click', async () => {
+        if (!confirm('Reset to safe defaults?\n\nThis restores the recommended setup (command palette, bookmark indexing and onboarding on; advanced/AI features stay off).\n\nYour browsing history index will NOT be affected.')) {
+          return;
+        }
+        try {
+          await SettingsManager.resetToDefaults();
+          await SettingsManager.updateSettings(FRESH_INSTALL_PROFILE);
+          await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
+          closeSettingsModal();
+          renderResults();
+          showToast('✅ Restored safe defaults', 'info');
+        } catch (e) {
+          showToast('❌ Could not reset to safe defaults', 'error');
+          logger.error('settingsModal', 'Reset to safe defaults failed', errorMeta(e));
         }
       });
     }

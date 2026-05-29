@@ -2762,6 +2762,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     updateResultCount(`${displayList.length} command${displayList.length !== 1 ? 's' : ''}`);
 
+    // Power-tier safety warning — these commands change browser/extension state.
+    if (tier === 'power') {
+      const warn = document.createElement('li');
+      warn.className = 'palette-discovery-tip';
+      warn.setAttribute('role', 'presentation');
+      warn.style.color = 'var(--accent-color)';
+      warn.textContent = '⚠️ Power commands change browser/extension state — read each one before running.';
+      resultsEl.appendChild(warn);
+    }
+
     const emptyQuery = !query.trim();
     const showCategoryHeaders = emptyQuery;
     let lastCategory = '';
