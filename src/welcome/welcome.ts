@@ -8,6 +8,7 @@ import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
 import { getWelcomePageModel, type WelcomePageModel } from './welcome-content';
 import type { CheatsheetSection } from '../shared/onboarding/cheatsheet';
+import { mountDemos } from '../shared/onboarding/demos';
 
 const log = Logger.forComponent('Welcome');
 
@@ -83,10 +84,11 @@ function render(model: WelcomePageModel): void {
   // Cheatsheet sections
   for (const section of model.cheatsheet) { root.appendChild(renderCheatsheet(section)); }
 
-  // Demos mount point (filled by Silo D in a later phase; empty/ignored if absent)
+  // Demos mount point (Silo D) — heading now; the grid is mounted in main() when enabled.
   const demos = el('section', { className: 'w-card' });
   demos.id = 'w-demos-card';
   demos.hidden = true;
+  demos.appendChild(el('h2', { className: 'w-card__heading', text: 'See it in action' }));
   root.appendChild(demos);
 
   // Privacy
@@ -148,15 +150,25 @@ function wireCtas(): void {
 
 async function main(): Promise<void> {
   let enabledModes: string[] | undefined;
+  let demosEnabled = true;
   try {
     await SettingsManager.init();
     const modes = SettingsManager.getSetting('commandPaletteModes');
     if (Array.isArray(modes)) { enabledModes = modes; }
+    demosEnabled =
+      SettingsManager.getSetting('onboardingEnabled') !== false &&
+      SettingsManager.getSetting('onboardingDemosEnabled') !== false;
   } catch (err) {
     log.warn('main', 'Could not load settings; showing all modes as enabled', errorMeta(err));
   }
   render(getWelcomePageModel(enabledModes));
   wireCtas();
+
+  const demosCard = document.getElementById('w-demos-card');
+  if (demosCard) {
+    const mounted = mountDemos(demosCard, { enabled: demosEnabled });
+    demosCard.hidden = !mounted;
+  }
 }
 
 void main();

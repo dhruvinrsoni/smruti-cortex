@@ -91,12 +91,16 @@ body {
   background: var(--elevated); border: 1px solid var(--border);
   border-radius: 12px; padding: 16px; overflow: hidden;
 }
+.w-demo { animation: w-slide-in .4s ease both; }
 .w-demo__title { font-weight: 600; font-size: 14px; margin: 0 0 10px; }
 .w-demo__stage {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px; color: var(--text); min-height: 44px;
+  font-size: 13px; color: var(--text); min-height: 32px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  animation: w-type-fade 1.2s ease both;
 }
 .w-demo__caret { color: var(--accent); animation: w-blink 1s step-end infinite; }
+.w-demo__caption { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 
 @keyframes w-blink { 50% { opacity: 0; } }
 @keyframes w-type-fade { from { opacity: .25; } to { opacity: 1; } }
