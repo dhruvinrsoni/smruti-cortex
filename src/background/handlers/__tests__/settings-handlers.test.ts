@@ -41,7 +41,10 @@ const helperMocks = vi.hoisted(() => ({
 vi.mock('../../../core/helpers', () => ({
   browserAPI: {
     tabs: { create: helperMocks.tabsCreate },
-    runtime: { getURL: helperMocks.runtimeGetURL },
+    runtime: {
+      getURL: helperMocks.runtimeGetURL,
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+    },
   },
 }));
 
@@ -66,6 +69,11 @@ vi.mock('../../resilience', () => ({
 
 vi.mock('../../indexing', () => ({
   clearBookmarkFlags: vi.fn().mockResolvedValue(undefined),
+  performBookmarksIndex: vi.fn().mockResolvedValue({ indexed: 5, updated: 0 }),
+}));
+
+vi.mock('../../lifecycle/port-messaging', () => ({
+  broadcastToActivePorts: vi.fn(),
 }));
 
 vi.mock('../../../shared/recent-history-cache', () => ({
@@ -375,6 +383,63 @@ describe('registerSettingsHandlers', () => {
 
       expect(res).toEqual({ status: 'ok' });
       expect(clearBookmarkFlags).not.toHaveBeenCalled();
+    });
+
+    it('calls performBookmarksIndex when indexBookmarks flips from false → true', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { performBookmarksIndex } = await import('../../indexing');
+      (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(false)  // wasIndexingBookmarks — was OFF
+        .mockReturnValueOnce(false)  // wasEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // oldEmbeddingModel
+        .mockReturnValueOnce(false)  // nowEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // nowEmbeddingModel
+        .mockReturnValueOnce(true);  // nowIndexingBookmarks — now ON
+
+      await dispatch(preInit, {
+        type: 'SETTINGS_CHANGED',
+        settings: { indexBookmarks: true },
+      });
+
+      expect(performBookmarksIndex).toHaveBeenCalledWith(true);
+    });
+
+    it('broadcasts DATA_CHANGED to ports after re-index when indexBookmarks re-enabled', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { broadcastToActivePorts } = await import('../../lifecycle/port-messaging');
+      (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(false)  // wasIndexingBookmarks — was OFF
+        .mockReturnValueOnce(false)  // wasEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // oldEmbeddingModel
+        .mockReturnValueOnce(false)  // nowEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // nowEmbeddingModel
+        .mockReturnValueOnce(true);  // nowIndexingBookmarks — now ON
+
+      await dispatch(preInit, {
+        type: 'SETTINGS_CHANGED',
+        settings: { indexBookmarks: true },
+      });
+
+      expect(broadcastToActivePorts).toHaveBeenCalledWith({ type: 'DATA_CHANGED', source: 'bookmarks' });
+    });
+
+    it('does NOT call performBookmarksIndex when indexBookmarks stays false', async () => {
+      const { SettingsManager } = await import('../../../core/settings');
+      const { performBookmarksIndex } = await import('../../indexing');
+      (SettingsManager.getSetting as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce(false)  // wasIndexingBookmarks — was OFF
+        .mockReturnValueOnce(false)  // wasEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // oldEmbeddingModel
+        .mockReturnValueOnce(false)  // nowEmbeddingsEnabled
+        .mockReturnValueOnce('nomic-embed-text') // nowEmbeddingModel
+        .mockReturnValueOnce(false); // nowIndexingBookmarks — still OFF
+
+      await dispatch(preInit, {
+        type: 'SETTINGS_CHANGED',
+        settings: { indexBookmarks: false },
+      });
+
+      expect(performBookmarksIndex).not.toHaveBeenCalled();
     });
 
     it('does NOT call clearBookmarkFlags when indexBookmarks stays true', async () => {

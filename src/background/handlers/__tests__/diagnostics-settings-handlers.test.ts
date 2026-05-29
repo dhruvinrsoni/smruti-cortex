@@ -95,6 +95,7 @@ vi.mock('../../resilience', () => ({
 
 vi.mock('../../indexing', () => ({
   clearBookmarkFlags: vi.fn().mockResolvedValue(undefined),
+  performBookmarksIndex: vi.fn().mockResolvedValue({ indexed: 0, updated: 0 }),
 }));
 
 vi.mock('../../favicon-cache', () => ({

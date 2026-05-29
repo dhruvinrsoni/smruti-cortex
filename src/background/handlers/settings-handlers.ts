@@ -81,6 +81,22 @@ export function registerSettingsHandlers(
         log.info('SETTINGS_CHANGED', '📚 Bookmark indexing disabled — clearing bookmark flags');
         const { clearBookmarkFlags } = await import('../indexing');
         void clearBookmarkFlags();
+      } else if (!wasIndexingBookmarks && nowIndexingBookmarks) {
+        log.info('SETTINGS_CHANGED', '📚 Bookmark indexing re-enabled — re-indexing bookmarks');
+        try {
+          const { performBookmarksIndex } = await import('../indexing');
+          await performBookmarksIndex(true);
+          const { clearSearchCache: clearCacheAfterReindex } = await import('../search/search-cache');
+          clearCacheAfterReindex();
+          const { broadcastToActivePorts } = await import('../lifecycle/port-messaging');
+          broadcastToActivePorts({ type: 'DATA_CHANGED', source: 'bookmarks' });
+          try {
+            await browserAPI.runtime.sendMessage({ type: 'DATA_CHANGED', source: 'bookmarks' });
+          } catch { /* popup may not be open */ }
+          log.info('SETTINGS_CHANGED', '📚 Bookmark re-index on re-enable completed');
+        } catch (err) {
+          log.warn('SETTINGS_CHANGED', 'Bookmark re-index on re-enable failed', errorMeta(err));
+        }
       }
     }
     sendResponse({ status: 'ok' });
