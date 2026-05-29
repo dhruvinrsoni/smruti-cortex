@@ -16,6 +16,8 @@ import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import { initChecklist } from '../shared/onboarding/checklist';
 import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
 import { buildCheatsheetSections } from '../shared/onboarding/cheatsheet';
+import { runWithUndo } from './safety-utils';
+import { confirmDestructive, showUndoToast } from './confirm-undo';
 import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
 import { renderToolbarToggles, syncToolbarToggles, setChipBusy, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
@@ -4344,32 +4346,81 @@ function initializePopup() {
       });
     }
 
+    // ── Destructive-op safety helpers (shared by Clear & Factory Reset) ──
+    // Snapshot the index via EXPORT_INDEX so a destructive op can be undone (or a
+    // backup downloaded). Restore re-imports via IMPORT_INDEX.
+    type IndexSnapshot = { version?: string; exportDate?: string; itemCount?: number; items: unknown[] };
+
+    async function captureIndexSnapshot(): Promise<IndexSnapshot | null> {
+      try {
+        const resp = await sendMessage({ type: 'EXPORT_INDEX' });
+        if (resp?.status === 'OK' && resp.data && Array.isArray(resp.data.items)) {
+          return resp.data as IndexSnapshot;
+        }
+      } catch (e) {
+        logger.debug('snapshot', 'EXPORT_INDEX failed; undo/backup unavailable', errorMeta(e));
+      }
+      return null;
+    }
+
+    function downloadIndexBackup(snap: IndexSnapshot): void {
+      try {
+        const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `smruti-cortex-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        logger.warn('backup', 'Backup download failed', errorMeta(e));
+      }
+    }
+
+    async function restoreIndexSnapshot(snap: IndexSnapshot): Promise<void> {
+      try {
+        await sendMessage({ type: 'IMPORT_INDEX', items: snap.items });
+        await fetchStorageQuotaInfo();
+        showToast('↩️ Restored your previous index.', 'info');
+      } catch (e) {
+        showToast('❌ Could not restore the backup', 'error');
+        logger.error('restore', 'IMPORT_INDEX failed', errorMeta(e));
+      }
+    }
+
     // Clear data button
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('Clear index and rebuild?\n\nThis will:\n• Delete your browsing history index\n• Immediately rebuild from browser history\n\nSettings will NOT be changed. This takes a few seconds.')) {
-          return;
-        }
-        
+        const choice = await confirmDestructive('clear', { offerBackup: true });
+        if (!choice.confirmed) { return; }
+
         clearBtn.disabled = true;
         clearBtn.textContent = '⏳ Clearing & Rebuilding...';
+        const snap = await captureIndexSnapshot();           // capture once: backup + undo
+        if (choice.backup && snap) { downloadIndexBackup(snap); }
         showToast('🔄 Clearing data and rebuilding index...', 'info');
-        
+
         try {
-          const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
-          if (resp && resp.status === 'OK') {
-            const itemCount = resp.itemCount || 0;
-            showToast(`✅ Done! ${itemCount} items re-indexed.`);
-            // Refresh storage quota display
-            await fetchStorageQuotaInfo();
-            // Clear local results
-            resultsLocal = [];
-            activeIndex = -1;
-            renderResults();
-          } else {
-            showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), 'error');
-          }
+          await runWithUndo<IndexSnapshot>({
+            snapshot: async () => snap,
+            run: async () => {
+              const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+              if (resp && resp.status === 'OK') {
+                const itemCount = resp.itemCount || 0;
+                showToast(`✅ Done! ${itemCount} items re-indexed.`);
+                await fetchStorageQuotaInfo();
+                resultsLocal = [];
+                activeIndex = -1;
+                renderResults();
+                return true;
+              }
+              showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), 'error');
+              return false;
+            },
+            restore: restoreIndexSnapshot,
+            offerUndo: (undo) => showUndoToast('Index cleared.', undo),
+          });
         } catch (error) {
           showToast('❌ Failed to clear data', 'error');
           logger.error('settingsModal', 'Clear all data failed', errorMeta(error));
@@ -4384,36 +4435,45 @@ function initializePopup() {
     const factoryResetBtn = modal.querySelector('#modal-factory-reset') as HTMLButtonElement;
     if (factoryResetBtn) {
       factoryResetBtn.addEventListener('click', async () => {
-        if (!confirm('Factory reset the extension?\n\nThis will:\n• Reset ALL settings to defaults\n• Clear ALL indexed data and caches\n• Rebuild the index from your browser history\n\nThis is a complete fresh start. It takes a few seconds.')) {
-          return;
-        }
+        const choice = await confirmDestructive('factoryReset', { offerBackup: true });
+        if (!choice.confirmed) { return; }
 
         factoryResetBtn.disabled = true;
         factoryResetBtn.textContent = '⏳ Resetting...';
+        const snap = await captureIndexSnapshot();           // capture once: backup + undo
+        if (choice.backup && snap) { downloadIndexBackup(snap); }
         showToast('⚙️ Factory resetting...', 'info');
 
         try {
-          // Reset settings first
-          await SettingsManager.resetToDefaults();
-          await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
-          // Clear caches in parallel
-          await Promise.allSettled([
-            sendMessage({ type: 'CLEAR_FAVICON_CACHE' }),
-            sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }),
-          ]);
-          // Clear all data and rebuild
-          const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
-          if (resp && resp.status === 'OK') {
-            const itemCount = resp.itemCount || 0;
-            showToast(`✅ Factory reset complete! ${itemCount} items indexed.`);
-            await fetchStorageQuotaInfo();
-            resultsLocal = [];
-            activeIndex = -1;
-            renderResults();
-            closeSettingsModal();
-          } else {
-            showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), 'error');
-          }
+          await runWithUndo<IndexSnapshot>({
+            snapshot: async () => snap,
+            run: async () => {
+              // Reset settings first
+              await SettingsManager.resetToDefaults();
+              await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
+              // Clear caches in parallel
+              await Promise.allSettled([
+                sendMessage({ type: 'CLEAR_FAVICON_CACHE' }),
+                sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }),
+              ]);
+              // Clear all data and rebuild
+              const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+              if (resp && resp.status === 'OK') {
+                const itemCount = resp.itemCount || 0;
+                showToast(`✅ Factory reset complete! ${itemCount} items indexed.`);
+                await fetchStorageQuotaInfo();
+                resultsLocal = [];
+                activeIndex = -1;
+                renderResults();
+                closeSettingsModal();
+                return true;
+              }
+              showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), 'error');
+              return false;
+            },
+            restore: restoreIndexSnapshot,
+            offerUndo: (undo) => showUndoToast('Index cleared by factory reset.', undo),
+          });
         } catch (error) {
           showToast('❌ Factory reset failed', 'error');
           logger.error('settingsModal', 'Factory reset failed', errorMeta(error));
