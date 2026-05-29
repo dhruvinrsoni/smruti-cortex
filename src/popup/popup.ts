@@ -13,6 +13,8 @@ import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
+import { initChecklist } from '../shared/onboarding/checklist';
+import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
 import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
 import { renderToolbarToggles, syncToolbarToggles, setChipBusy, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
@@ -75,6 +77,15 @@ import {
   highlightHtml,
   renderAIStatus as renderAIStatusShared,
 } from '../shared/search-ui-base';
+
+// Onboarding checklist (Silo A): mark a milestone at most once per popup session so
+// we never hit chrome.storage on every keystroke. markMilestone is itself idempotent.
+const _markedMilestones = new Set<MilestoneId>();
+function markMilestoneOnce(id: MilestoneId): void {
+  if (_markedMilestones.has(id)) { return; }
+  _markedMilestones.add(id);
+  void markMilestone(id);
+}
 
 // Lazy-loaded imports for non-critical features
 let tokenize: ((query: string) => string[]) | null = null;
@@ -303,7 +314,11 @@ function setupEventListeners() {
   // Removed - individual result items should be focusable instead
 
   if (input) {
-    input.addEventListener('input', (ev) => debounceSearch((ev.target as HTMLInputElement).value));
+    input.addEventListener('input', (ev) => {
+      const val = (ev.target as HTMLInputElement).value;
+      if (val.trim().length > 0) { markMilestoneOnce('firstSearch'); }
+      debounceSearch(val);
+    });
     input.addEventListener('keydown', handleKeydown);
   }
 
@@ -361,6 +376,9 @@ function setupEventListeners() {
       setTimeout(() => runTour(POPUP_TOUR_STEPS, document), 150);
     }
   });
+
+  // Onboarding checklist (Silo A) — renders only if enabled, not dismissed, not done.
+  void initChecklist(document.getElementById('onboarding-checklist'));
 
   // Settings modal tour link
   const settingsTourLink = document.getElementById('settings-tour-link');
@@ -2175,6 +2193,8 @@ function initializePopup() {
   function openResult(index: number, event?: MouseEvent | KeyboardEvent) {
     const item = resultsLocal[index];
     if (!item) {return;}
+
+    markMilestoneOnce('firstResultOpen');
 
     // Record recent search (fire-and-forget)
     if (currentQuery?.trim()) {

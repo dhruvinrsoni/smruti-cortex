@@ -74,6 +74,7 @@ import {
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
+import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
 import {
   type PaletteMode,
   type PaletteRowAttrs,
@@ -94,6 +95,15 @@ import {
   resolvePaletteCopyTarget,
   decideBfcacheAction,
 } from './quick-search-utils';
+
+// Onboarding milestones (Silo A): mark once per page so we never hit chrome.storage
+// repeatedly. markMilestone is itself idempotent; this just avoids redundant reads.
+const _markedMilestones = new Set<MilestoneId>();
+function markMilestoneOnce(id: MilestoneId): void {
+  if (_markedMilestones.has(id)) { return; }
+  _markedMilestones.add(id);
+  void markMilestone(id);
+}
 
 // Extend window interface for our extension
 declare global {
@@ -2232,6 +2242,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const t0 = performance.now();
     log.debug('overlay', 'showOverlay called');
 
+    markMilestoneOnce('firstOverlayOpen');
+
     if (!shadowHost) {
       const t1 = performance.now();
       createOverlay();
@@ -2462,6 +2474,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       updateModeBadge(mode);
       cachedTabs = null;
       cachedBookmarks = null;
+      // Onboarding checklist milestones (fire on mode entry, not every keystroke).
+      if (mode === 'commands') { markMilestoneOnce('firstSlashCommand'); }
+      else if (mode === 'websearch') { markMilestoneOnce('firstWebSearch'); }
     }
 
     if (mode === 'help') {
