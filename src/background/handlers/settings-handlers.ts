@@ -28,6 +28,17 @@ export function registerSettingsHandlers(
     sendResponse({ status: 'ok' });
   });
 
+  preInit.register('OPEN_WELCOME', async (_msg, _sender, sendResponse) => {
+    log.debug('OPEN_WELCOME', 'Handling OPEN_WELCOME');
+    void browserAPI.tabs
+      .create({ url: browserAPI.runtime.getURL('welcome/welcome.html') })
+      .catch(
+        (err: unknown) =>
+          log.error('OPEN_WELCOME', 'Failed to open welcome tab', errorMeta(err)),
+      );
+    sendResponse({ status: 'ok' });
+  });
+
   preInit.register('GET_LOG_LEVEL', async (_msg, _sender, sendResponse) => {
     sendResponse({ logLevel: Logger.getLevel() });
   });

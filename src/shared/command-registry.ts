@@ -508,6 +508,16 @@ const EVERYDAY_COMMANDS: PaletteCommand[] = [
         messageType: 'OPEN_SETTINGS',
     },
     {
+        id: 'welcome',
+        label: 'Open Welcome / Onboarding',
+        icon: '👋',
+        tier: 'everyday',
+        category: 'navigation',
+        keywords: ['welcome', 'onboarding', 'guide', 'getting started', 'intro', 'learn', 'help'],
+        action: 'message',
+        messageType: 'OPEN_WELCOME',
+    },
+    {
         id: 'tour',
         label: 'Open Feature Tour',
         icon: '📖',

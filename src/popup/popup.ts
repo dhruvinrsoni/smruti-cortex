@@ -345,6 +345,23 @@ function setupEventListeners() {
     });
   }
 
+  // Welcome / onboarding button — opens the replayable welcome page
+  const welcomeButton = $('welcome-button') as HTMLButtonElement | null;
+  if (welcomeButton) {
+    welcomeButton.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'OPEN_WELCOME' });
+    });
+  }
+
+  // Replay the spotlight tour if the welcome page asked for it (flag set there).
+  // One-shot: clear the flag immediately so it only fires for this open.
+  chrome.storage.local.get('replayTourOnNextOpen', (res) => {
+    if (res?.replayTourOnNextOpen) {
+      chrome.storage.local.remove('replayTourOnNextOpen');
+      setTimeout(() => runTour(POPUP_TOUR_STEPS, document), 150);
+    }
+  });
+
   // Settings modal tour link
   const settingsTourLink = document.getElementById('settings-tour-link');
   if (settingsTourLink) {

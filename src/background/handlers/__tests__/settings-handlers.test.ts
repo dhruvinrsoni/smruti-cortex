@@ -109,6 +109,7 @@ describe('registerSettingsHandlers', () => {
     expect(preInit.registeredTypes).toEqual(expect.arrayContaining([
       'PING',
       'OPEN_SETTINGS',
+      'OPEN_WELCOME',
       'GET_LOG_LEVEL',
       'SET_LOG_LEVEL',
       'SETTINGS_CHANGED',
@@ -181,6 +182,26 @@ describe('registerSettingsHandlers', () => {
     it('accepts a non-Error rejection via the String(err) fallback in the .catch', async () => {
       helperMocks.tabsCreate.mockRejectedValueOnce('plain-string-error');
       const res = await dispatch(preInit, { type: 'OPEN_SETTINGS' });
+      expect(res).toEqual({ status: 'ok' });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  describe('OPEN_WELCOME', () => {
+    it('responds ok and requests the welcome page URL', async () => {
+      const res = await dispatch(preInit, { type: 'OPEN_WELCOME' });
+
+      expect(res).toEqual({ status: 'ok' });
+      expect(helperMocks.runtimeGetURL).toHaveBeenCalledWith('welcome/welcome.html');
+      expect(helperMocks.tabsCreate).toHaveBeenCalledWith({
+        url: 'chrome-extension://mock/welcome/welcome.html',
+      });
+    });
+
+    it('suppresses tabs.create rejection via .catch branch without rejecting the handler', async () => {
+      helperMocks.tabsCreate.mockRejectedValueOnce(new Error('tab create fail'));
+      const res = await dispatch(preInit, { type: 'OPEN_WELCOME' });
       expect(res).toEqual({ status: 'ok' });
       await Promise.resolve();
       await Promise.resolve();

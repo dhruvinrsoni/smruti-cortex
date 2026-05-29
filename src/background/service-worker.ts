@@ -272,9 +272,18 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
     if (!initialized) {await init();}
     // Apply the opinionated "fully set-up gift" on a brand-new install only.
-    // No-op on upgrades — existing users keep their settings. (Phase 2 will also
-    // open the welcome page here when reason === 'install'.)
+    // No-op on upgrades — existing users keep their settings.
     await applyFreshInstallProfile(details.reason);
+    // Greet brand-new users with the replayable welcome page (unless onboarding is
+    // disabled). Fire-and-forget — never block boot. No extra permission: this is an
+    // extension-internal page opened via chrome.tabs.create.
+    if (details.reason === 'install' && SettingsManager.getSetting('onboardingEnabled') !== false) {
+      const version = chrome.runtime.getManifest().version;
+      void browserAPI.tabs
+        .create({ url: browserAPI.runtime.getURL('welcome/welcome.html') })
+        .then(() => SettingsManager.setSetting('welcomeShownVersion', version))
+        .catch((e) => logger.warn('onInstalled', 'Welcome page open failed', errorMeta(e)));
+    }
     if (details.reason === 'update' || details.reason === 'install') {
       try {
         const tabs = await browserAPI.tabs.query({ url: ['http://*/*', 'https://*/*'] });
