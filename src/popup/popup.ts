@@ -15,6 +15,7 @@ import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } 
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
 import { initChecklist } from '../shared/onboarding/checklist';
 import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
+import { buildCheatsheetSections } from '../shared/onboarding/cheatsheet';
 import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
 import { renderToolbarToggles, syncToolbarToggles, setChipBusy, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
@@ -885,6 +886,16 @@ function initializePopup() {
     resultsList.innerHTML = '';
     resultsList.className = 'results list';
 
+    // Silo C: rich cheatsheet (shared source) when enabled; minimal help as fallback.
+    const cheatsheetOn =
+      SettingsManager.getSetting('onboardingEnabled') !== false &&
+      SettingsManager.getSetting('onboardingCheatsheetEnabled') !== false;
+    if (cheatsheetOn) {
+      renderPopupRichCheatsheet(resultsList);
+      resultCountNode.textContent = '';
+      return;
+    }
+
     const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
 
     const modes = [
@@ -940,6 +951,57 @@ function initializePopup() {
     });
 
     resultCountNode.textContent = '';
+  }
+
+  // Silo C: data-driven cheatsheet for the popup `?` help (shares buildCheatsheetSections
+  // with the overlay and welcome page). Palette-mode rows stay clickable to prefix input.
+  function renderPopupRichCheatsheet(resultsList: HTMLUListElement): void {
+    const enabledModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+    const muted = 'font-size:10px;color:var(--muted);';
+    for (const section of buildCheatsheetSections({ enabledModes })) {
+      const divider = document.createElement('li');
+      divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);cursor:default;border-top:1px solid var(--border,#e5e7eb);margin-top:4px;';
+      divider.textContent = section.title;
+      resultsList.appendChild(divider);
+
+      for (const entry of section.entries) {
+        const disabled = entry.enabled === false;
+        const clickable = section.id === 'palette' && !disabled && entry.keys !== '?';
+        const li = document.createElement('li');
+        li.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:var(--card);${disabled ? 'opacity:0.4;' : ''}${clickable ? 'cursor:pointer;' : 'cursor:default;'}`;
+
+        const keys = document.createElement('span');
+        keys.style.cssText = 'font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;color:var(--accent,#3b82f6);min-width:42px;text-align:center;';
+        keys.textContent = entry.keys;
+
+        const label = document.createElement('span');
+        label.style.cssText = 'flex:1;font-size:13px;font-weight:500;';
+        label.textContent = entry.label;
+        if (entry.advanced) {
+          const b = document.createElement('span'); b.style.cssText = muted; b.textContent = ' [advanced]'; label.appendChild(b);
+        }
+        if (disabled) {
+          const b = document.createElement('span'); b.style.cssText = muted; b.textContent = ' [disabled]'; label.appendChild(b);
+        }
+        li.append(keys, label);
+
+        if (clickable) {
+          li.addEventListener('click', () => {
+            const input = $('search-input') as HTMLInputElement;
+            if (input) { input.value = entry.keys; input.dispatchEvent(new Event('input')); input.focus(); }
+          });
+        }
+        resultsList.appendChild(li);
+      }
+    }
+
+    const tourLi = document.createElement('li');
+    tourLi.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:var(--card);cursor:default;';
+    const ti = document.createElement('span'); ti.style.cssText = 'font-size:16px;width:24px;text-align:center;'; ti.textContent = '🎯';
+    const tl = document.createElement('span'); tl.style.cssText = 'flex:1;font-size:13px;font-weight:500;'; tl.textContent = 'Guided Tour';
+    const tc = document.createElement('span'); tc.style.cssText = muted; tc.textContent = 'Type /tour to start the interactive tour';
+    tourLi.append(ti, tl, tc);
+    resultsList.appendChild(tourLi);
   }
 
   function renderPopupPaletteResults(mode: PopupPaletteMode, query: string): void {

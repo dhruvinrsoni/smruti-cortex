@@ -83,6 +83,7 @@ import {
   getTipState,
   recordTipShown,
 } from '../shared/onboarding/tips';
+import { buildCheatsheetSections } from '../shared/onboarding/cheatsheet';
 import {
   type PaletteMode,
   type PaletteRowAttrs,
@@ -2570,6 +2571,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     resultsEl.innerHTML = '';
     resultsEl.className = 'results list';
 
+    // Silo C: rich cheatsheet (every prefix + shortcut + web engine, one shared source)
+    // when enabled; otherwise the original minimal help below as a safe fallback.
+    const cheatsheetOn =
+      cachedSettings?.onboardingEnabled !== false &&
+      cachedSettings?.onboardingCheatsheetEnabled !== false;
+    if (cheatsheetOn) {
+      renderRichCheatsheet();
+      updateResultCount('');
+      return;
+    }
+
     const modes = [
       { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
       { prefix: '>',  label: 'Power / Admin',  desc: 'Index, diagnostics, tuning presets, AI copy, data tools' },
@@ -2625,6 +2637,78 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     });
 
     updateResultCount('');
+  }
+
+  // Silo C: rich, data-driven cheatsheet built from the shared single source
+  // (buildCheatsheetSections). Palette-mode rows stay clickable to prefix the input.
+  function renderRichCheatsheet(): void {
+    if (!resultsEl) {return;}
+    const enabledModes = cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'];
+    const sections = buildCheatsheetSections({ enabledModes });
+
+    for (const section of sections) {
+      const divider = document.createElement('li');
+      divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);cursor:default;border-top:1px solid var(--border-color);margin-top:4px;';
+      divider.textContent = section.title;
+      resultsEl.appendChild(divider);
+
+      for (const entry of section.entries) {
+        const li = document.createElement('li');
+        li.className = 'command-row';
+        const disabled = entry.enabled === false;
+        if (disabled) {li.style.opacity = '0.4';}
+
+        const keys = document.createElement('span');
+        keys.className = 'cmd-icon';
+        keys.style.cssText = 'font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;color:var(--accent-color);min-width:42px;text-align:center;';
+        keys.textContent = entry.keys;
+
+        const label = document.createElement('span');
+        label.className = 'cmd-label';
+        label.textContent = entry.label;
+        if (entry.advanced) {
+          const badge = document.createElement('span');
+          badge.className = 'cmd-current';
+          badge.textContent = ' [advanced]';
+          label.appendChild(badge);
+        }
+        if (disabled) {
+          const badge = document.createElement('span');
+          badge.className = 'cmd-current';
+          badge.textContent = ' [disabled]';
+          label.appendChild(badge);
+        }
+
+        li.append(keys, label);
+
+        // Palette-mode rows remain clickable (prefix the input); `?` help is meta-only.
+        if (section.id === 'palette' && !disabled && entry.keys !== '?') {
+          li.addEventListener('click', () => {
+            if (inputEl) {
+              inputEl.value = entry.keys;
+              inputEl.dispatchEvent(new Event('input'));
+              inputEl.focus();
+            }
+          });
+        }
+        resultsEl.appendChild(li);
+      }
+    }
+
+    // Guided-tour pointer (not part of the data-driven cheatsheet).
+    const tourLi = document.createElement('li');
+    tourLi.className = 'command-row';
+    const tourIcon = document.createElement('span');
+    tourIcon.className = 'cmd-icon';
+    tourIcon.textContent = '🎯';
+    const tourLabel = document.createElement('span');
+    tourLabel.className = 'cmd-label';
+    tourLabel.textContent = 'Guided Tour';
+    const tourCat = document.createElement('span');
+    tourCat.className = 'cmd-category';
+    tourCat.textContent = 'Type /tour to start the interactive tour';
+    tourLi.append(tourIcon, tourLabel, tourCat);
+    resultsEl.appendChild(tourLi);
   }
 
   // ===== COMMAND PALETTE: PALETTE MODE HANDLER =====
