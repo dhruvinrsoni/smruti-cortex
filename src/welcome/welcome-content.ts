@@ -10,7 +10,7 @@ export const WELCOME_HERO = {
   title: 'Welcome to SmrutiCortex',
   tagline: 'Your private memory for every page you have ever visited.',
   blurb:
-    "Forgot where you read something last week? Just start typing. SmrutiCortex searches your history and bookmarks instantly — and everything stays on your own computer.",
+    'Forgot where you read something last week? Just start typing. SmrutiCortex searches your history and bookmarks instantly — and everything stays on your own computer.',
 };
 
 export const WELCOME_BIG_TIP = {
