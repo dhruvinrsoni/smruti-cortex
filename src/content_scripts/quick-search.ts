@@ -76,6 +76,14 @@ import {
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
 import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
 import {
+  PALETTE_TIP_ID,
+  TIP_DEFINITIONS,
+  areTipsEnabled,
+  shouldShowTip,
+  getTipState,
+  recordTipShown,
+} from '../shared/onboarding/tips';
+import {
   type PaletteMode,
   type PaletteRowAttrs,
   type ResolvedCopyTarget,
@@ -2296,7 +2304,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         container.classList.add('unified-scroll');
       }
       loadRecentHistory();
-      showFirstUseHint();
+      void showFirstUseHint();
     }).catch(() => loadRecentHistory());
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
@@ -3579,18 +3587,31 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== COMMAND PALETTE: WEB SEARCH =====
 
-  function showFirstUseHint(): void {
+  // Silo B: replayable just-in-time tip. Replaces the old permanent
+  // commandPaletteOnboarded latch with a max-shows + cooldown policy, so the hint
+  // can resurface for users who never noticed it (gated by onboardingTipsEnabled).
+  async function showFirstUseHint(): Promise<void> {
     if (!resultsEl || !cachedSettings) {return;}
     if (!cachedSettings.commandPaletteEnabled) {return;}
-    if (cachedSettings.commandPaletteOnboarded) {return;}
-
+    if (!areTipsEnabled(cachedSettings)) {return;}
     if (firstUseHintEl) {return;}
+
+    const tip = TIP_DEFINITIONS[PALETTE_TIP_ID];
+    if (!tip) {return;}
+
+    const state = await getTipState();
+    if (!shouldShowTip(state[PALETTE_TIP_ID], Date.now())) {return;}
+
+    // Re-check guards after the await — settings/DOM may have changed meanwhile.
+    if (!resultsEl || firstUseHintEl) {return;}
 
     firstUseHintEl = document.createElement('div');
     firstUseHintEl.className = 'first-use-hint';
-    firstUseHintEl.textContent = 'New: Type / for commands, @ for tabs, # for bookmarks';
+    firstUseHintEl.textContent = tip.message;
 
     resultsEl.parentElement?.insertBefore(firstUseHintEl, resultsEl);
+
+    void recordTipShown(PALETTE_TIP_ID);
 
     firstUseHintTimer = window.setTimeout(() => {
       dismissFirstUseHint();
