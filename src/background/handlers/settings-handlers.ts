@@ -77,26 +77,37 @@ export function registerSettingsHandlers(
       }
 
       const nowIndexingBookmarks = SettingsManager.getSetting('indexBookmarks') ?? true;
+      const bookmarkTransition = wasIndexingBookmarks !== nowIndexingBookmarks;
+
       if (wasIndexingBookmarks && !nowIndexingBookmarks) {
         log.info('SETTINGS_CHANGED', '📚 Bookmark indexing disabled — clearing bookmark flags');
-        const { clearBookmarkFlags } = await import('../indexing');
-        void clearBookmarkFlags();
+        try {
+          const { clearBookmarkFlags } = await import('../indexing');
+          await clearBookmarkFlags();
+        } catch (err) {
+          log.warn('SETTINGS_CHANGED', 'clearBookmarkFlags failed', errorMeta(err));
+        }
       } else if (!wasIndexingBookmarks && nowIndexingBookmarks) {
         log.info('SETTINGS_CHANGED', '📚 Bookmark indexing re-enabled — re-indexing bookmarks');
         try {
           const { performBookmarksIndex } = await import('../indexing');
           await performBookmarksIndex(true);
-          const { clearSearchCache: clearCacheAfterReindex } = await import('../search/search-cache');
-          clearCacheAfterReindex();
-          const { broadcastToActivePorts } = await import('../lifecycle/port-messaging');
-          broadcastToActivePorts({ type: 'DATA_CHANGED', source: 'bookmarks' });
-          try {
-            await browserAPI.runtime.sendMessage({ type: 'DATA_CHANGED', source: 'bookmarks' });
-          } catch { /* popup may not be open */ }
           log.info('SETTINGS_CHANGED', '📚 Bookmark re-index on re-enable completed');
         } catch (err) {
           log.warn('SETTINGS_CHANGED', 'Bookmark re-index on re-enable failed', errorMeta(err));
         }
+      }
+
+      // Broadcast DATA_CHANGED after any bookmark indexing transition so the
+      // UI reflects updated ★ flags — even if indexing failed (cache is stale).
+      if (bookmarkTransition) {
+        const { clearSearchCache: clearBookmarkCache } = await import('../search/search-cache');
+        clearBookmarkCache();
+        const { broadcastToActivePorts } = await import('../lifecycle/port-messaging');
+        broadcastToActivePorts({ type: 'DATA_CHANGED', source: 'bookmarks' });
+        try {
+          await browserAPI.runtime.sendMessage({ type: 'DATA_CHANGED', source: 'bookmarks' });
+        } catch { /* popup may not be open */ }
       }
     }
     sendResponse({ status: 'ok' });

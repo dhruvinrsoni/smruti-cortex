@@ -4738,6 +4738,8 @@ function initializePopup() {
         if (currentQuery?.trim()) {
           cancelInflightSearch();
           debounceSearch(currentQuery);
+        } else {
+          void loadRecentHistory();
         }
         sendResponse({ status: 'ok' });
       }

@@ -1424,12 +1424,12 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
           return;
         }
 
-        // Data-change push from background: background data changed, re-run active query.
+        // Data-change push from background: re-run active query or refresh recent results.
         if (response?.type === 'DATA_CHANGED') {
           if (inputEl?.value?.trim()) {
             cancelInflightSearch();
-            handleInput();
           }
+          handleInput();
           return;
         }
 
@@ -5612,8 +5612,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (message?.type === 'DATA_CHANGED') {
       if (inputEl?.value?.trim()) {
         cancelInflightSearch();
-        handleInput();
       }
+      handleInput();
       sendResponse({ success: true });
       return true;
     }
