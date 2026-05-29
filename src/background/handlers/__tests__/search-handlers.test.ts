@@ -66,6 +66,18 @@ vi.mock('../../../shared/recent-history-cache', () => ({
   clearRecentHistoryCache: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../lifecycle/port-messaging', () => ({
+  broadcastToActivePorts: vi.fn(),
+}));
+
+vi.mock('../../../core/helpers', () => ({
+  browserAPI: {
+    runtime: {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
+
 function dispatch(
   registry: MessageHandlerRegistry,
   msg: { type: string; [k: string]: unknown },
@@ -321,6 +333,56 @@ describe('registerSearchHandlers', () => {
 
       expect(res).toMatchObject({ status: 'ERROR' });
       expect(clearRecentHistoryCache).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('INDEX_BOOKMARKS post-indexing invalidation', () => {
+    it('clears the search cache after performBookmarksIndex completes', async () => {
+      const { performBookmarksIndex } = await import('../../indexing');
+      (performBookmarksIndex as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ indexed: 3, updated: 1 });
+      const { clearSearchCache } = await import('../../search/search-cache');
+
+      const res = await dispatch(registry, { type: 'INDEX_BOOKMARKS' });
+      await flushMicrotasks();
+
+      expect(res).toMatchObject({ status: 'OK', indexed: 3, updated: 1 });
+      expect(clearSearchCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('broadcasts DATA_CHANGED to active ports so open overlays re-run their query', async () => {
+      const { broadcastToActivePorts } = await import('../../lifecycle/port-messaging');
+
+      await dispatch(registry, { type: 'INDEX_BOOKMARKS' });
+      await flushMicrotasks();
+
+      expect(broadcastToActivePorts).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'DATA_CHANGED', source: 'bookmarks' }),
+      );
+    });
+
+    it('sends DATA_CHANGED via runtime.sendMessage so the popup re-runs its query', async () => {
+      const { browserAPI } = await import('../../../core/helpers');
+
+      await dispatch(registry, { type: 'INDEX_BOOKMARKS' });
+      await flushMicrotasks();
+
+      expect(browserAPI.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'DATA_CHANGED', source: 'bookmarks' }),
+      );
+    });
+
+    it('does NOT broadcast DATA_CHANGED when performBookmarksIndex throws', async () => {
+      const { performBookmarksIndex } = await import('../../indexing');
+      (performBookmarksIndex as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('IDB full'));
+      const { broadcastToActivePorts } = await import('../../lifecycle/port-messaging');
+      const { clearSearchCache } = await import('../../search/search-cache');
+
+      const res = await dispatch(registry, { type: 'INDEX_BOOKMARKS' });
+      await flushMicrotasks();
+
+      expect(res).toMatchObject({ status: 'ERROR' });
+      expect(broadcastToActivePorts).not.toHaveBeenCalled();
+      expect(clearSearchCache).not.toHaveBeenCalled();
     });
   });
 });

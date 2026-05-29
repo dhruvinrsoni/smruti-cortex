@@ -83,7 +83,7 @@ const swOmniboxMocks = vi.hoisted(() => {
     (text: string, disposition: string) => void | Promise<void>
   > = [];
   const bookmarksSearch = vi.fn(async () => [] as chrome.bookmarks.BookmarkTreeNode[]);
-  const runtimeSendMessage = vi.fn();
+  const runtimeSendMessage = vi.fn().mockResolvedValue(undefined);
   return { omniboxOnInputChanged, omniboxOnInputEntered, bookmarksSearch, runtimeSendMessage };
 });
 

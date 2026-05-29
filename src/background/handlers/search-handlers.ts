@@ -128,6 +128,20 @@ export function registerSearchHandlers(registry: MessageHandlerRegistry): void {
         const { performBookmarksIndex } = await import('../indexing');
         const result = await performBookmarksIndex(true);
         log.info('INDEX_BOOKMARKS', '✅ Completed', result);
+
+        // Re-indexing wrote fresh isBookmark flags to IDB. Clear the search
+        // cache so the next query reads from IDB instead of a stale snapshot,
+        // then push DATA_CHANGED so any open popup/quick-search re-runs its
+        // active query and shows the star icon on newly-flagged results.
+        const { clearSearchCache } = await import('../search/search-cache');
+        clearSearchCache();
+        const { broadcastToActivePorts } = await import('../lifecycle/port-messaging');
+        const { browserAPI } = await import('../../core/helpers');
+        broadcastToActivePorts({ type: 'DATA_CHANGED', source: 'bookmarks' });
+        try {
+          await browserAPI.runtime.sendMessage({ type: 'DATA_CHANGED', source: 'bookmarks' });
+        } catch { /* popup may not be open — expected */ }
+
         sendResponse({ status: 'OK', ...result });
       } catch (error) {
         log.error('INDEX_BOOKMARKS', '❌ Failed:', errorMeta(error));
