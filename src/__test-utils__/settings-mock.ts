@@ -34,6 +34,12 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   commandPaletteEnabled: true,
   webSearchEngine: 'google',
   developerGithubPat: '',
+  onboardingEnabled: true,
+  onboardingChecklistEnabled: true,
+  onboardingTipsEnabled: true,
+  onboardingCheatsheetEnabled: true,
+  onboardingDemosEnabled: true,
+  welcomeShownVersion: '',
 };
 
 /**

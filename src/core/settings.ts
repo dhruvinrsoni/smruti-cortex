@@ -75,6 +75,20 @@ export interface AppSettings {
      * SETTINGS_CHANGED tick.
      */
     reportButtonEnabled?: boolean;
+    // --- Onboarding / user education (each silo independently toggleable) ---
+    // Master kill-switch for the whole onboarding system: welcome page + all four
+    // teaching silos. Flip to false to disable everything at once. Default true.
+    onboardingEnabled?: boolean;
+    // Silo A — learn-by-doing checklist card in the popup. Default true.
+    onboardingChecklistEnabled?: boolean;
+    // Silo B — replayable "Did you know?" just-in-time tips (NOT a one-shot). Default true.
+    onboardingTipsEnabled?: boolean;
+    // Silo C — rich `?` cheatsheet / reference panel (prefixes, shortcuts, engines). Default true.
+    onboardingCheatsheetEnabled?: boolean;
+    // Silo D — animated demos embedded in the welcome page. Default true.
+    onboardingDemosEnabled?: boolean;
+    // Last extension version whose welcome page auto-opened — gates re-show on upgrade. Default ''.
+    welcomeShownVersion?: string;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -325,6 +339,35 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
     reportButtonEnabled: {
         default: true,
         validate: (val) => typeof val === 'boolean',
+    },
+
+    // --- Onboarding / user education ---
+    // Each silo gets its own flag so any one can be disabled independently if it
+    // misbehaves; onboardingEnabled is the master kill-switch over all of them.
+    // All default ON — teaching is harmless, revisitable, and individually toggleable.
+    onboardingEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingChecklistEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingTipsEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingCheatsheetEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingDemosEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    welcomeShownVersion: {
+        default: '',
+        validate: (val) => typeof val === 'string',
     },
 
     // Future settings (placeholders)

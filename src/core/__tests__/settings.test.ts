@@ -960,6 +960,11 @@ describe('SettingsManager', () => {
         'showDuplicateUrls',
         'showNonMatchingResults',
         'selectAllOnFocus',
+        'onboardingEnabled',
+        'onboardingChecklistEnabled',
+        'onboardingTipsEnabled',
+        'onboardingCheatsheetEnabled',
+        'onboardingDemosEnabled',
       ] as const;
 
       for (const key of booleanKeys) {
@@ -988,6 +993,11 @@ describe('SettingsManager', () => {
             showDuplicateUrls: false,
             showNonMatchingResults: false,
             selectAllOnFocus: false,
+            onboardingEnabled: true,
+            onboardingChecklistEnabled: true,
+            onboardingTipsEnabled: true,
+            onboardingCheatsheetEnabled: true,
+            onboardingDemosEnabled: true,
           };
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
@@ -1021,6 +1031,32 @@ describe('SettingsManager', () => {
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
       }
+    });
+
+    describe('welcomeShownVersion', () => {
+      it('should default to empty string', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({});
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('');
+      });
+
+      it('should accept a version string', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({ welcomeShownVersion: '9.5.0' });
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('9.5.0');
+      });
+
+      it('should accept empty string (unlike length-required string keys)', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({ welcomeShownVersion: '' });
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('');
+      });
+
+      it('should reject non-string and fall back to default', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({ welcomeShownVersion: 123 });
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('');
+      });
     });
   });
 
