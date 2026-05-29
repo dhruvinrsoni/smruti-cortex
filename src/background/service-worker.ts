@@ -16,6 +16,7 @@ import { registerCommandsListenerEarly, keepServiceWorkerAlive, reinjectContentS
 import { setupPortBasedMessaging, broadcastToActivePorts } from './lifecycle/port-messaging';
 import { setupDataChangeListeners, type DataChangeSource } from './lifecycle/data-change-listeners';
 import { setupOmnibox } from './lifecycle/omnibox';
+import { applyFreshInstallProfile } from './lifecycle/fresh-install';
 
 let initialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -270,6 +271,10 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
     if (!initialized) {await init();}
+    // Apply the opinionated "fully set-up gift" on a brand-new install only.
+    // No-op on upgrades — existing users keep their settings. (Phase 2 will also
+    // open the welcome page here when reason === 'install'.)
+    await applyFreshInstallProfile(details.reason);
     if (details.reason === 'update' || details.reason === 'install') {
       try {
         const tabs = await browserAPI.tabs.query({ url: ['http://*/*', 'https://*/*'] });

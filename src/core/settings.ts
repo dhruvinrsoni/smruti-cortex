@@ -107,8 +107,12 @@ interface SettingSchema<T> {
 /**
  * SINGLE SOURCE OF TRUTH for all settings
  * Adding a new setting = ONE entry here. That's it!
+ *
+ * Exported read-only so tooling (e.g. fresh-install-profile validation tests) can
+ * verify keys/values against the schema. This is still the ONE schema — exporting
+ * it does not create a second source of truth.
  */
-const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSettings[K]> } = {
+export const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSettings[K]> } = {
     // Display settings
     displayMode: {
         default: DisplayMode.LIST,
