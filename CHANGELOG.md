@@ -1,5 +1,45 @@
 ## [9.4.1] — 2026-05-25
 
+## [9.5.0] — 2026-05-30
+
+### Features
+- case-insensitive ?? web-search prefixes (J/GH/Y -> jira/github/youtube)
+- reset-to-safe-defaults + power-tier (>) warnings
+- in-popup confirm + 10s undo for destructive data ops
+- animated demos silo embedded in welcome page
+- rich cheatsheet silo enhancing the ? help panel
+- replayable just-in-time tips silo; fix one-shot hint latch
+- learn-by-doing onboarding checklist silo (popup)
+- auto-open welcome on install + OPEN_WELCOME handler + palette/header reopen
+- add welcome/onboarding page (HTML/CSS/TS) and build wiring
+- apply fresh-install profile once on install (schema-typed overlay)
+- add onboarding silo + master settings flags to schema
+- handle DATA_CHANGED push — popup and quick-search re-run active query
+- wire data-change broadcast — port registry + service-worker bootstrap
+- data-change listener framework for live result invalidation
+
+### Bug Fixes
+- DATA_CHANGED no longer clobbers palette-mode rows
+- use !== in welcome el() helper to satisfy eqeqeq lint rule
+- prevent fresh-install profile from clobbering concurrently-written settings
+- reliable ★ visibility when bookmarks toggled on/off
+- re-index bookmarks when indexBookmarks chip is re-enabled
+- clear bookmark flags from IndexedDB when indexBookmarks is toggled off
+- update bookmark-disabled toast to reflect immediate exclusion
+- clear bookmark flags from IndexedDB when indexBookmarks is toggled off
+- exclude bookmark items from search when indexBookmarks is disabled
+
+### Tests
+- exclude welcome.ts DOM entry-point from coverage
+
+### Other
+- fix CHANGELOG structure — restore ## [9.4.0] heading above orphaned body
+- fill v9.4.1 submission doc — Section 7 prose + submitted date
+- bump bundle-size baseline for onboarding feature growth
+- normalize quote style in welcome-content (eslint auto-fix)
+
+---
+
 ### Bug Fixes
 - remove requires gate — AI and Semantic chips are independent
 - use focusDelayMs as Phase 1 debounce; cancel stale searches on keypress
