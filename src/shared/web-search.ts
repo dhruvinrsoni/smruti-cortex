@@ -96,15 +96,16 @@ export function parseWebSearchQuery(query: string, defaultEngineKey: string): Pa
     if (!q) {
         return { engineKey: defaultEngineKey, searchTerms: '', usedPrefix: false };
     }
+    const qLower = q.toLowerCase();
     for (const prefix of sortedWebSearchPrefixKeys()) {
         const engineKey = SEARCH_ENGINE_PREFIXES[prefix];
         if (!engineKey) {
             continue;
         }
-        if (q === prefix) {
+        if (qLower === prefix) {
             return { engineKey, searchTerms: '', usedPrefix: true, matchedPrefix: prefix };
         }
-        if (q.startsWith(`${prefix} `)) {
+        if (qLower.startsWith(`${prefix} `)) {
             return {
                 engineKey,
                 searchTerms: q.slice(prefix.length + 1).trim(),
