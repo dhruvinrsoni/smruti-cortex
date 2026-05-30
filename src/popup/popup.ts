@@ -62,6 +62,7 @@ import {
   formatModelSize,
   buildHintMap,
   shouldRefreshRecentAfterManualIndex,
+  shouldRerunOnDataChange,
   resolvePopupCopyTarget,
 } from './popup-utils';
 import {
@@ -4918,11 +4919,16 @@ function initializePopup() {
         applyRemoteSettingsChanges(message.settings);
         sendResponse({ status: 'ok' });
       } else if (message.type === 'DATA_CHANGED') {
-        if (currentQuery?.trim()) {
-          cancelInflightSearch();
-          debounceSearch(currentQuery);
-        } else {
-          void loadRecentHistory();
+        // Only re-run when the history view is active. Palette modes source their
+        // rows from chrome.* APIs / static data, so re-running a history search here
+        // would blow away the palette rows. See shouldRerunOnDataChange().
+        if (shouldRerunOnDataChange(popupPaletteMode)) {
+          if (currentQuery?.trim()) {
+            cancelInflightSearch();
+            debounceSearch(currentQuery);
+          } else {
+            void loadRecentHistory();
+          }
         }
         sendResponse({ status: 'ok' });
       }

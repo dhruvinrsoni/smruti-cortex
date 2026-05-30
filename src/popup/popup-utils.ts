@@ -107,6 +107,22 @@ export function shouldRefreshRecentAfterManualIndex(resp: ManualIndexResponse | 
   return added > 0 || updated > 0 || total > 0;
 }
 
+/**
+ * Whether a background DATA_CHANGED push should re-run the popup's active view.
+ *
+ * Only the history view reflects the IndexedDB history index. Palette modes
+ * (bookmarks / tabs / commands / web / power / help) source their rows from
+ * chrome.* APIs or static data, so a history-index change must NOT re-run them —
+ * a history re-search would blow away the palette's `.palette-selectable-row`s.
+ *
+ * Bug history: a DATA_CHANGED arriving while the popup was in `#` bookmarks mode
+ * (e.g. right after a bookmark was created) re-ran a history search and wiped the
+ * bookmark rows — the "# bookmarks loses its rows after the index updates" failure.
+ */
+export function shouldRerunOnDataChange(mode: PopupPaletteMode): boolean {
+  return mode === 'history';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Popup palette copy resolver — mirror of resolvePaletteCopyTarget in
 // quick-search-utils.ts, but adapted for the popup's mixed list (history

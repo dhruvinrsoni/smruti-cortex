@@ -5,8 +5,10 @@ import {
   formatModelSize,
   buildHintMap,
   shouldRefreshRecentAfterManualIndex,
+  shouldRerunOnDataChange,
   resolvePopupCopyTarget,
   type DetectModeSettings,
+  type PopupPaletteMode,
 } from '../popup-utils';
 
 const allModes: DetectModeSettings = {
@@ -187,6 +189,19 @@ describe('shouldRefreshRecentAfterManualIndex', () => {
     expect(shouldRefreshRecentAfterManualIndex(null)).toBe(false);
     expect(shouldRefreshRecentAfterManualIndex(undefined)).toBe(false);
     expect(shouldRefreshRecentAfterManualIndex({} as unknown as Parameters<typeof shouldRefreshRecentAfterManualIndex>[0])).toBe(false);
+  });
+});
+
+describe('shouldRerunOnDataChange', () => {
+  it('re-runs only in history mode', () => {
+    expect(shouldRerunOnDataChange('history')).toBe(true);
+  });
+
+  it('does NOT re-run in any palette mode (would clobber palette rows)', () => {
+    const paletteModes: PopupPaletteMode[] = ['commands', 'power', 'tabs', 'bookmarks', 'websearch', 'help'];
+    for (const mode of paletteModes) {
+      expect(shouldRerunOnDataChange(mode), `${mode} must not re-run on DATA_CHANGED`).toBe(false);
+    }
   });
 });
 
