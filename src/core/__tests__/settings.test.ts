@@ -590,6 +590,33 @@ describe('SettingsManager', () => {
   });
 
   // -----------------------------------------------------------------------
+  // reloadFromStorage()
+  // -----------------------------------------------------------------------
+  describe('reloadFromStorage', () => {
+    it('merges the latest persisted settings into the in-memory cache', async () => {
+      const { SettingsManager } = await getManagerWithStoredSettings({
+        commandPaletteInPopup: true,
+        logLevel: 4,
+      });
+
+      // Before reload, in-memory is schema defaults.
+      expect(SettingsManager.getSetting('commandPaletteInPopup')).toBe(false);
+
+      await SettingsManager.reloadFromStorage();
+
+      // After reload, the persisted values are reflected (the fix that prevents the
+      // fresh-install profile from clobbering a concurrently-written setting).
+      expect(SettingsManager.getSetting('commandPaletteInPopup')).toBe(true);
+      expect(SettingsManager.getSetting('logLevel')).toBe(4);
+    });
+
+    it('is a no-op when storage has no settings', async () => {
+      const { SettingsManager } = await getManagerWithNoStorage();
+      await expect(SettingsManager.reloadFromStorage()).resolves.toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // resetToDefaults()
   // -----------------------------------------------------------------------
   describe('resetToDefaults', () => {

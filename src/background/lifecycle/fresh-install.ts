@@ -10,8 +10,9 @@ import { Logger, errorMeta } from '../../core/logger';
 
 const log = Logger.forComponent('FreshInstall');
 
-/** Minimal port: anything that can persist a settings overlay. */
+/** Minimal port: re-sync from storage, then persist a settings overlay. */
 export interface SettingsWriter {
+  reloadFromStorage(): Promise<void>;
   updateSettings(updates: Partial<AppSettings>): Promise<void>;
 }
 
@@ -30,6 +31,12 @@ export async function applyFreshInstallProfile(
     return false; // upgrades & module updates: never touch existing settings
   }
   try {
+    // Re-sync from storage first so the profile merges OVER the latest persisted
+    // settings. This prevents the whole-object save in updateSettings from
+    // clobbering a value another context wrote during startup (the profile only
+    // overrides schema defaults — it never reverts a concurrently-persisted setting
+    // that isn't part of the profile).
+    await writer.reloadFromStorage();
     await writer.updateSettings(FRESH_INSTALL_PROFILE);
     log.info('applyFreshInstallProfile', '🎁 Fresh-install profile applied', {
       keys: Object.keys(FRESH_INSTALL_PROFILE).length,

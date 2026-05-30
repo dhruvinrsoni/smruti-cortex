@@ -56,6 +56,7 @@ export function mockSettings(overrides: Record<string, unknown> = {}) {
       setSetting: vi.fn(),
       updateSettings: vi.fn(),
       applyRemoteSettings: vi.fn(),
+      reloadFromStorage: vi.fn().mockResolvedValue(undefined),
     },
     SETTINGS_SCHEMA: {},
     DisplayMode: { List: 'list', Card: 'card' },

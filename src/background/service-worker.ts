@@ -270,7 +270,12 @@ setupIdleWakeListener(
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
-    if (!initialized) {await init();}
+    // Settings/onboarding work runs FIRST — it's fast and must land before the slow
+    // DB+history init() below. Doing it early means a brand-new install's profile is
+    // applied within milliseconds of load, so it can't race a settings write that
+    // arrives during init's multi-second indexing pass. SettingsManager.init() is
+    // idempotent (cached) and only reads storage.
+    await SettingsManager.init();
     // Apply the opinionated "fully set-up gift" on a brand-new install only.
     // No-op on upgrades — existing users keep their settings.
     await applyFreshInstallProfile(details.reason);
@@ -284,6 +289,8 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
         .then(() => SettingsManager.setSetting('welcomeShownVersion', version))
         .catch((e) => logger.warn('onInstalled', 'Welcome page open failed', errorMeta(e)));
     }
+    // Now the heavy initialization (DB open + history ingest).
+    if (!initialized) {await init();}
     if (details.reason === 'update' || details.reason === 'install') {
       try {
         const tabs = await browserAPI.tabs.query({ url: ['http://*/*', 'https://*/*'] });

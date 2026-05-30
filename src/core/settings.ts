@@ -522,6 +522,24 @@ export class SettingsManager {
     }
 
     /**
+     * Re-read persisted settings from storage into the in-memory cache, merging
+     * over current values. Picks up writes made by another context after init()
+     * (e.g. an early SETTINGS_CHANGED, a synced device, or a test harness). Used
+     * before applying the fresh-install profile so profile application merges over
+     * the LATEST persisted state and never clobbers a concurrently-written setting.
+     */
+    static async reloadFromStorage(): Promise<void> {
+        try {
+            const stored = await this.loadFromStorage();
+            if (stored) {
+                this.settings = { ...this.settings, ...stored };
+            }
+        } catch (error) {
+            this.logger.warn('reloadFromStorage', 'Failed to reload settings from storage', errorMeta(error));
+        }
+    }
+
+    /**
      * Get specific setting value
      */
     static getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] {
