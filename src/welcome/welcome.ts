@@ -21,7 +21,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (opts.className) { node.className = opts.className; }
-  if (opts.text != null) { node.textContent = opts.text; }
+  if (opts.text !== undefined) { node.textContent = opts.text; }
   return node;
 }
 
