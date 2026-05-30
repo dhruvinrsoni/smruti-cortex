@@ -13,6 +13,12 @@ import { getRecentHistoryCache } from '../shared/recent-history-cache';
 import { addRecentSearch, getRecentSearches, clearRecentSearches } from '../shared/recent-searches';
 import { addRecentInteraction, getRecentInteractions, clearRecentInteractions } from '../shared/recent-interactions';
 import { POPUP_TOUR_STEPS, runTour, isTourCompleted } from '../shared/tour';
+import { initChecklist } from '../shared/onboarding/checklist';
+import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
+import { buildCheatsheetSections } from '../shared/onboarding/cheatsheet';
+import { runWithUndo } from './safety-utils';
+import { confirmDestructive, showUndoToast } from './confirm-undo';
+import { FRESH_INSTALL_PROFILE } from '../core/fresh-install-profile';
 import { TOOLBAR_TOGGLE_DEFS, DEFAULT_TOOLBAR_TOGGLES } from '../shared/toolbar-toggles';
 import { renderToolbarToggles, syncToolbarToggles, setChipBusy, injectToolbarToggleCss, type SettingsPort } from '../shared/toolbar-renderer';
 import {
@@ -75,6 +81,15 @@ import {
   highlightHtml,
   renderAIStatus as renderAIStatusShared,
 } from '../shared/search-ui-base';
+
+// Onboarding checklist (Silo A): mark a milestone at most once per popup session so
+// we never hit chrome.storage on every keystroke. markMilestone is itself idempotent.
+const _markedMilestones = new Set<MilestoneId>();
+function markMilestoneOnce(id: MilestoneId): void {
+  if (_markedMilestones.has(id)) { return; }
+  _markedMilestones.add(id);
+  void markMilestone(id);
+}
 
 // Lazy-loaded imports for non-critical features
 let tokenize: ((query: string) => string[]) | null = null;
@@ -303,7 +318,11 @@ function setupEventListeners() {
   // Removed - individual result items should be focusable instead
 
   if (input) {
-    input.addEventListener('input', (ev) => debounceSearch((ev.target as HTMLInputElement).value));
+    input.addEventListener('input', (ev) => {
+      const val = (ev.target as HTMLInputElement).value;
+      if (val.trim().length > 0) { markMilestoneOnce('firstSearch'); }
+      debounceSearch(val);
+    });
     input.addEventListener('keydown', handleKeydown);
   }
 
@@ -344,6 +363,26 @@ function setupEventListeners() {
       runTour(POPUP_TOUR_STEPS, document);
     });
   }
+
+  // Welcome / onboarding button — opens the replayable welcome page
+  const welcomeButton = $('welcome-button') as HTMLButtonElement | null;
+  if (welcomeButton) {
+    welcomeButton.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'OPEN_WELCOME' });
+    });
+  }
+
+  // Replay the spotlight tour if the welcome page asked for it (flag set there).
+  // One-shot: clear the flag immediately so it only fires for this open.
+  chrome.storage.local.get('replayTourOnNextOpen', (res) => {
+    if (res?.replayTourOnNextOpen) {
+      chrome.storage.local.remove('replayTourOnNextOpen');
+      setTimeout(() => runTour(POPUP_TOUR_STEPS, document), 150);
+    }
+  });
+
+  // Onboarding checklist (Silo A) — renders only if enabled, not dismissed, not done.
+  void initChecklist(document.getElementById('onboarding-checklist'));
 
   // Settings modal tour link
   const settingsTourLink = document.getElementById('settings-tour-link');
@@ -850,6 +889,16 @@ function initializePopup() {
     resultsList.innerHTML = '';
     resultsList.className = 'results list';
 
+    // Silo C: rich cheatsheet (shared source) when enabled; minimal help as fallback.
+    const cheatsheetOn =
+      SettingsManager.getSetting('onboardingEnabled') !== false &&
+      SettingsManager.getSetting('onboardingCheatsheetEnabled') !== false;
+    if (cheatsheetOn) {
+      renderPopupRichCheatsheet(resultsList);
+      resultCountNode.textContent = '';
+      return;
+    }
+
     const cpModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
 
     const modes = [
@@ -905,6 +954,57 @@ function initializePopup() {
     });
 
     resultCountNode.textContent = '';
+  }
+
+  // Silo C: data-driven cheatsheet for the popup `?` help (shares buildCheatsheetSections
+  // with the overlay and welcome page). Palette-mode rows stay clickable to prefix input.
+  function renderPopupRichCheatsheet(resultsList: HTMLUListElement): void {
+    const enabledModes = SettingsManager.getSetting('commandPaletteModes') ?? ['/', '>', '@', '#', '??'];
+    const muted = 'font-size:10px;color:var(--muted);';
+    for (const section of buildCheatsheetSections({ enabledModes })) {
+      const divider = document.createElement('li');
+      divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);cursor:default;border-top:1px solid var(--border,#e5e7eb);margin-top:4px;';
+      divider.textContent = section.title;
+      resultsList.appendChild(divider);
+
+      for (const entry of section.entries) {
+        const disabled = entry.enabled === false;
+        const clickable = section.id === 'palette' && !disabled && entry.keys !== '?';
+        const li = document.createElement('li');
+        li.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:var(--card);${disabled ? 'opacity:0.4;' : ''}${clickable ? 'cursor:pointer;' : 'cursor:default;'}`;
+
+        const keys = document.createElement('span');
+        keys.style.cssText = 'font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;color:var(--accent,#3b82f6);min-width:42px;text-align:center;';
+        keys.textContent = entry.keys;
+
+        const label = document.createElement('span');
+        label.style.cssText = 'flex:1;font-size:13px;font-weight:500;';
+        label.textContent = entry.label;
+        if (entry.advanced) {
+          const b = document.createElement('span'); b.style.cssText = muted; b.textContent = ' [advanced]'; label.appendChild(b);
+        }
+        if (disabled) {
+          const b = document.createElement('span'); b.style.cssText = muted; b.textContent = ' [disabled]'; label.appendChild(b);
+        }
+        li.append(keys, label);
+
+        if (clickable) {
+          li.addEventListener('click', () => {
+            const input = $('search-input') as HTMLInputElement;
+            if (input) { input.value = entry.keys; input.dispatchEvent(new Event('input')); input.focus(); }
+          });
+        }
+        resultsList.appendChild(li);
+      }
+    }
+
+    const tourLi = document.createElement('li');
+    tourLi.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:var(--card);cursor:default;';
+    const ti = document.createElement('span'); ti.style.cssText = 'font-size:16px;width:24px;text-align:center;'; ti.textContent = '🎯';
+    const tl = document.createElement('span'); tl.style.cssText = 'flex:1;font-size:13px;font-weight:500;'; tl.textContent = 'Guided Tour';
+    const tc = document.createElement('span'); tc.style.cssText = muted; tc.textContent = 'Type /tour to start the interactive tour';
+    tourLi.append(ti, tl, tc);
+    resultsList.appendChild(tourLi);
   }
 
   function renderPopupPaletteResults(mode: PopupPaletteMode, query: string): void {
@@ -2158,6 +2258,8 @@ function initializePopup() {
   function openResult(index: number, event?: MouseEvent | KeyboardEvent) {
     const item = resultsLocal[index];
     if (!item) {return;}
+
+    markMilestoneOnce('firstResultOpen');
 
     // Record recent search (fire-and-forget)
     if (currentQuery?.trim()) {
@@ -4040,6 +4142,29 @@ function initializePopup() {
       });
     }
 
+    // Reset to Safe Defaults — the recommended fresh-install setup (keeps the index).
+    // Applies the schema baseline first, then the opinionated FRESH_INSTALL_PROFILE,
+    // so the result matches exactly what a brand-new install would start with.
+    const resetSafeBtn = modal.querySelector('#modal-reset-safe') as HTMLButtonElement;
+    if (resetSafeBtn) {
+      resetSafeBtn.addEventListener('click', async () => {
+        if (!confirm('Reset to safe defaults?\n\nThis restores the recommended setup (command palette, bookmark indexing and onboarding on; advanced/AI features stay off).\n\nYour browsing history index will NOT be affected.')) {
+          return;
+        }
+        try {
+          await SettingsManager.resetToDefaults();
+          await SettingsManager.updateSettings(FRESH_INSTALL_PROFILE);
+          await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
+          closeSettingsModal();
+          renderResults();
+          showToast('✅ Restored safe defaults', 'info');
+        } catch (e) {
+          showToast('❌ Could not reset to safe defaults', 'error');
+          logger.error('settingsModal', 'Reset to safe defaults failed', errorMeta(e));
+        }
+      });
+    }
+
     // Rebuild Index button
     const rebuildBtn = modal.querySelector('#modal-rebuild') as HTMLButtonElement;
     if (rebuildBtn) {
@@ -4245,32 +4370,81 @@ function initializePopup() {
       });
     }
 
+    // ── Destructive-op safety helpers (shared by Clear & Factory Reset) ──
+    // Snapshot the index via EXPORT_INDEX so a destructive op can be undone (or a
+    // backup downloaded). Restore re-imports via IMPORT_INDEX.
+    type IndexSnapshot = { version?: string; exportDate?: string; itemCount?: number; items: unknown[] };
+
+    async function captureIndexSnapshot(): Promise<IndexSnapshot | null> {
+      try {
+        const resp = await sendMessage({ type: 'EXPORT_INDEX' });
+        if (resp?.status === 'OK' && resp.data && Array.isArray(resp.data.items)) {
+          return resp.data as IndexSnapshot;
+        }
+      } catch (e) {
+        logger.debug('snapshot', 'EXPORT_INDEX failed; undo/backup unavailable', errorMeta(e));
+      }
+      return null;
+    }
+
+    function downloadIndexBackup(snap: IndexSnapshot): void {
+      try {
+        const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `smruti-cortex-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        logger.warn('backup', 'Backup download failed', errorMeta(e));
+      }
+    }
+
+    async function restoreIndexSnapshot(snap: IndexSnapshot): Promise<void> {
+      try {
+        await sendMessage({ type: 'IMPORT_INDEX', items: snap.items });
+        await fetchStorageQuotaInfo();
+        showToast('↩️ Restored your previous index.', 'info');
+      } catch (e) {
+        showToast('❌ Could not restore the backup', 'error');
+        logger.error('restore', 'IMPORT_INDEX failed', errorMeta(e));
+      }
+    }
+
     // Clear data button
     const clearBtn = modal.querySelector('#modal-clear') as HTMLButtonElement;
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('Clear index and rebuild?\n\nThis will:\n• Delete your browsing history index\n• Immediately rebuild from browser history\n\nSettings will NOT be changed. This takes a few seconds.')) {
-          return;
-        }
-        
+        const choice = await confirmDestructive('clear', { offerBackup: true });
+        if (!choice.confirmed) { return; }
+
         clearBtn.disabled = true;
         clearBtn.textContent = '⏳ Clearing & Rebuilding...';
+        const snap = await captureIndexSnapshot();           // capture once: backup + undo
+        if (choice.backup && snap) { downloadIndexBackup(snap); }
         showToast('🔄 Clearing data and rebuilding index...', 'info');
-        
+
         try {
-          const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
-          if (resp && resp.status === 'OK') {
-            const itemCount = resp.itemCount || 0;
-            showToast(`✅ Done! ${itemCount} items re-indexed.`);
-            // Refresh storage quota display
-            await fetchStorageQuotaInfo();
-            // Clear local results
-            resultsLocal = [];
-            activeIndex = -1;
-            renderResults();
-          } else {
-            showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), 'error');
-          }
+          await runWithUndo<IndexSnapshot>({
+            snapshot: async () => snap,
+            run: async () => {
+              const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+              if (resp && resp.status === 'OK') {
+                const itemCount = resp.itemCount || 0;
+                showToast(`✅ Done! ${itemCount} items re-indexed.`);
+                await fetchStorageQuotaInfo();
+                resultsLocal = [];
+                activeIndex = -1;
+                renderResults();
+                return true;
+              }
+              showToast('❌ Operation failed: ' + (resp?.message || 'Unknown error'), 'error');
+              return false;
+            },
+            restore: restoreIndexSnapshot,
+            offerUndo: (undo) => showUndoToast('Index cleared.', undo),
+          });
         } catch (error) {
           showToast('❌ Failed to clear data', 'error');
           logger.error('settingsModal', 'Clear all data failed', errorMeta(error));
@@ -4285,36 +4459,45 @@ function initializePopup() {
     const factoryResetBtn = modal.querySelector('#modal-factory-reset') as HTMLButtonElement;
     if (factoryResetBtn) {
       factoryResetBtn.addEventListener('click', async () => {
-        if (!confirm('Factory reset the extension?\n\nThis will:\n• Reset ALL settings to defaults\n• Clear ALL indexed data and caches\n• Rebuild the index from your browser history\n\nThis is a complete fresh start. It takes a few seconds.')) {
-          return;
-        }
+        const choice = await confirmDestructive('factoryReset', { offerBackup: true });
+        if (!choice.confirmed) { return; }
 
         factoryResetBtn.disabled = true;
         factoryResetBtn.textContent = '⏳ Resetting...';
+        const snap = await captureIndexSnapshot();           // capture once: backup + undo
+        if (choice.backup && snap) { downloadIndexBackup(snap); }
         showToast('⚙️ Factory resetting...', 'info');
 
         try {
-          // Reset settings first
-          await SettingsManager.resetToDefaults();
-          await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
-          // Clear caches in parallel
-          await Promise.allSettled([
-            sendMessage({ type: 'CLEAR_FAVICON_CACHE' }),
-            sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }),
-          ]);
-          // Clear all data and rebuild
-          const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
-          if (resp && resp.status === 'OK') {
-            const itemCount = resp.itemCount || 0;
-            showToast(`✅ Factory reset complete! ${itemCount} items indexed.`);
-            await fetchStorageQuotaInfo();
-            resultsLocal = [];
-            activeIndex = -1;
-            renderResults();
-            closeSettingsModal();
-          } else {
-            showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), 'error');
-          }
+          await runWithUndo<IndexSnapshot>({
+            snapshot: async () => snap,
+            run: async () => {
+              // Reset settings first
+              await SettingsManager.resetToDefaults();
+              await Logger.setLevel(SettingsManager.getSetting('logLevel') ?? 2);
+              // Clear caches in parallel
+              await Promise.allSettled([
+                sendMessage({ type: 'CLEAR_FAVICON_CACHE' }),
+                sendMessage({ type: 'CLEAR_SEARCH_DEBUG' }),
+              ]);
+              // Clear all data and rebuild
+              const resp = await sendMessage({ type: 'CLEAR_ALL_DATA' });
+              if (resp && resp.status === 'OK') {
+                const itemCount = resp.itemCount || 0;
+                showToast(`✅ Factory reset complete! ${itemCount} items indexed.`);
+                await fetchStorageQuotaInfo();
+                resultsLocal = [];
+                activeIndex = -1;
+                renderResults();
+                closeSettingsModal();
+                return true;
+              }
+              showToast('❌ Factory reset failed: ' + (resp?.message || 'Unknown error'), 'error');
+              return false;
+            },
+            restore: restoreIndexSnapshot,
+            offerUndo: (undo) => showUndoToast('Index cleared by factory reset.', undo),
+          });
         } catch (error) {
           showToast('❌ Factory reset failed', 'error');
           logger.error('settingsModal', 'Factory reset failed', errorMeta(error));

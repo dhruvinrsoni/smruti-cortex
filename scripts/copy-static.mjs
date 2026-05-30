@@ -11,6 +11,7 @@ mkdirSync(outputDir, { recursive: true });
 mkdirSync(resolve(outputDir, "background"), { recursive: true });
 mkdirSync(resolve(outputDir, "content_scripts"), { recursive: true });
 mkdirSync(resolve(outputDir, "popup"), { recursive: true });
+mkdirSync(resolve(outputDir, "welcome"), { recursive: true });
 mkdirSync(resolve(outputDir, "assets"), { recursive: true });
 
 // copy manifest.json (root -> dist)
@@ -24,6 +25,10 @@ try { copyFileSync(resolve(root, "src/popup/popup.css"), resolve(outputDir, "pop
 
 // copy error-guard.js (CSP-safe global error handler, must load before popup.js)
 try { copyFileSync(resolve(root, "src/popup/error-guard.js"), resolve(outputDir, "popup/error-guard.js")); } catch(e) { /* ignore */ }
+
+// copy welcome / onboarding page (html + css; welcome.js is bundled by esbuild)
+try { copyFileSync(resolve(root, "src/welcome/welcome.html"), resolve(outputDir, "welcome/welcome.html")); } catch(e) { /* ignore */ }
+try { copyFileSync(resolve(root, "src/welcome/welcome.css"), resolve(outputDir, "welcome/welcome.css")); } catch(e) { /* ignore */ }
 
 // copy assets
 try {

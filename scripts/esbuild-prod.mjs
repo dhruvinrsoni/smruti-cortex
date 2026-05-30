@@ -65,6 +65,15 @@ const common = {
     });
     results.push({ name: "popup", result: popupResult });
 
+    // welcome / onboarding page (lazy — only loads when the welcome tab is open)
+    const welcomeResult = await build({
+      ...common,
+      entryPoints: [resolve(cwd, "src/welcome/welcome.ts")],
+      outfile: resolve(outdir, "welcome/welcome.js"),
+      format: "iife"
+    });
+    results.push({ name: "welcome", result: welcomeResult });
+
     console.log("\n✅ esbuild-prod: Bundles written to dist/");
     
     // Bundle size analysis

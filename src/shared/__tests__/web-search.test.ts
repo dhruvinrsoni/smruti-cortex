@@ -91,6 +91,33 @@ describe('web-search parseWebSearchQuery', () => {
       matchedPrefix: 'gc',
     });
   });
+
+  it('matches uppercase prefix case-insensitively (J → jira)', () => {
+    expect(parseWebSearchQuery('J PROJ-1', 'google')).toEqual({
+      engineKey: 'jira',
+      searchTerms: 'PROJ-1',
+      usedPrefix: true,
+      matchedPrefix: 'j',
+    });
+  });
+
+  it('matches mixed-case multi-char prefix (GH) and preserves term case', () => {
+    expect(parseWebSearchQuery('GH MyRepo', 'google')).toEqual({
+      engineKey: 'github',
+      searchTerms: 'MyRepo',
+      usedPrefix: true,
+      matchedPrefix: 'gh',
+    });
+  });
+
+  it('matches prefix-only uppercase Y as YouTube', () => {
+    expect(parseWebSearchQuery('Y', 'google')).toEqual({
+      engineKey: 'youtube',
+      searchTerms: '',
+      usedPrefix: true,
+      matchedPrefix: 'y',
+    });
+  });
 });
 
 describe('web-search buildWebSearchUrl', () => {

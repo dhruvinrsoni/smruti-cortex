@@ -74,6 +74,16 @@ import {
   PALETTE_DIAGNOSTIC_TOAST_MS,
 } from '../shared/palette-messages';
 import { wireHideImgOnError } from '../shared/hide-img-on-error';
+import { markMilestone, type MilestoneId } from '../shared/onboarding/milestones';
+import {
+  PALETTE_TIP_ID,
+  TIP_DEFINITIONS,
+  areTipsEnabled,
+  shouldShowTip,
+  getTipState,
+  recordTipShown,
+} from '../shared/onboarding/tips';
+import { buildCheatsheetSections } from '../shared/onboarding/cheatsheet';
 import {
   type PaletteMode,
   type PaletteRowAttrs,
@@ -94,6 +104,15 @@ import {
   resolvePaletteCopyTarget,
   decideBfcacheAction,
 } from './quick-search-utils';
+
+// Onboarding milestones (Silo A): mark once per page so we never hit chrome.storage
+// repeatedly. markMilestone is itself idempotent; this just avoids redundant reads.
+const _markedMilestones = new Set<MilestoneId>();
+function markMilestoneOnce(id: MilestoneId): void {
+  if (_markedMilestones.has(id)) { return; }
+  _markedMilestones.add(id);
+  void markMilestone(id);
+}
 
 // Extend window interface for our extension
 declare global {
@@ -2232,6 +2251,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     const t0 = performance.now();
     log.debug('overlay', 'showOverlay called');
 
+    markMilestoneOnce('firstOverlayOpen');
+
     if (!shadowHost) {
       const t1 = performance.now();
       createOverlay();
@@ -2284,7 +2305,7 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         container.classList.add('unified-scroll');
       }
       loadRecentHistory();
-      showFirstUseHint();
+      void showFirstUseHint();
     }).catch(() => loadRecentHistory());
     
     // NUCLEAR OPTION: Force blur current element (omnibox) then focus aggressively
@@ -2462,6 +2483,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
       updateModeBadge(mode);
       cachedTabs = null;
       cachedBookmarks = null;
+      // Onboarding checklist milestones (fire on mode entry, not every keystroke).
+      if (mode === 'commands') { markMilestoneOnce('firstSlashCommand'); }
+      else if (mode === 'websearch') { markMilestoneOnce('firstWebSearch'); }
     }
 
     if (mode === 'help') {
@@ -2547,6 +2571,17 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     resultsEl.innerHTML = '';
     resultsEl.className = 'results list';
 
+    // Silo C: rich cheatsheet (every prefix + shortcut + web engine, one shared source)
+    // when enabled; otherwise the original minimal help below as a safe fallback.
+    const cheatsheetOn =
+      cachedSettings?.onboardingEnabled !== false &&
+      cachedSettings?.onboardingCheatsheetEnabled !== false;
+    if (cheatsheetOn) {
+      renderRichCheatsheet();
+      updateResultCount('');
+      return;
+    }
+
     const modes = [
       { prefix: '/',  label: 'Commands',      desc: 'Toggle settings, page actions, navigation' },
       { prefix: '>',  label: 'Power / Admin',  desc: 'Index, diagnostics, tuning presets, AI copy, data tools' },
@@ -2604,6 +2639,78 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     updateResultCount('');
   }
 
+  // Silo C: rich, data-driven cheatsheet built from the shared single source
+  // (buildCheatsheetSections). Palette-mode rows stay clickable to prefix the input.
+  function renderRichCheatsheet(): void {
+    if (!resultsEl) {return;}
+    const enabledModes = cachedSettings?.commandPaletteModes ?? ['/', '>', '@', '#', '??'];
+    const sections = buildCheatsheetSections({ enabledModes });
+
+    for (const section of sections) {
+      const divider = document.createElement('li');
+      divider.style.cssText = 'padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);cursor:default;border-top:1px solid var(--border-color);margin-top:4px;';
+      divider.textContent = section.title;
+      resultsEl.appendChild(divider);
+
+      for (const entry of section.entries) {
+        const li = document.createElement('li');
+        li.className = 'command-row';
+        const disabled = entry.enabled === false;
+        if (disabled) {li.style.opacity = '0.4';}
+
+        const keys = document.createElement('span');
+        keys.className = 'cmd-icon';
+        keys.style.cssText = 'font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;font-weight:700;color:var(--accent-color);min-width:42px;text-align:center;';
+        keys.textContent = entry.keys;
+
+        const label = document.createElement('span');
+        label.className = 'cmd-label';
+        label.textContent = entry.label;
+        if (entry.advanced) {
+          const badge = document.createElement('span');
+          badge.className = 'cmd-current';
+          badge.textContent = ' [advanced]';
+          label.appendChild(badge);
+        }
+        if (disabled) {
+          const badge = document.createElement('span');
+          badge.className = 'cmd-current';
+          badge.textContent = ' [disabled]';
+          label.appendChild(badge);
+        }
+
+        li.append(keys, label);
+
+        // Palette-mode rows remain clickable (prefix the input); `?` help is meta-only.
+        if (section.id === 'palette' && !disabled && entry.keys !== '?') {
+          li.addEventListener('click', () => {
+            if (inputEl) {
+              inputEl.value = entry.keys;
+              inputEl.dispatchEvent(new Event('input'));
+              inputEl.focus();
+            }
+          });
+        }
+        resultsEl.appendChild(li);
+      }
+    }
+
+    // Guided-tour pointer (not part of the data-driven cheatsheet).
+    const tourLi = document.createElement('li');
+    tourLi.className = 'command-row';
+    const tourIcon = document.createElement('span');
+    tourIcon.className = 'cmd-icon';
+    tourIcon.textContent = '🎯';
+    const tourLabel = document.createElement('span');
+    tourLabel.className = 'cmd-label';
+    tourLabel.textContent = 'Guided Tour';
+    const tourCat = document.createElement('span');
+    tourCat.className = 'cmd-category';
+    tourCat.textContent = 'Type /tour to start the interactive tour';
+    tourLi.append(tourIcon, tourLabel, tourCat);
+    resultsEl.appendChild(tourLi);
+  }
+
   // ===== COMMAND PALETTE: PALETTE MODE HANDLER =====
 
   function handlePaletteMode(mode: PaletteMode, query: string): void {
@@ -2654,6 +2761,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     }
 
     updateResultCount(`${displayList.length} command${displayList.length !== 1 ? 's' : ''}`);
+
+    // Power-tier safety warning — these commands change browser/extension state.
+    if (tier === 'power') {
+      const warn = document.createElement('li');
+      warn.className = 'palette-discovery-tip';
+      warn.setAttribute('role', 'presentation');
+      warn.style.color = 'var(--accent-color)';
+      warn.textContent = '⚠️ Power commands change browser/extension state — read each one before running.';
+      resultsEl.appendChild(warn);
+    }
 
     const emptyQuery = !query.trim();
     const showCategoryHeaders = emptyQuery;
@@ -3564,18 +3681,31 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
   // ===== COMMAND PALETTE: WEB SEARCH =====
 
-  function showFirstUseHint(): void {
+  // Silo B: replayable just-in-time tip. Replaces the old permanent
+  // commandPaletteOnboarded latch with a max-shows + cooldown policy, so the hint
+  // can resurface for users who never noticed it (gated by onboardingTipsEnabled).
+  async function showFirstUseHint(): Promise<void> {
     if (!resultsEl || !cachedSettings) {return;}
     if (!cachedSettings.commandPaletteEnabled) {return;}
-    if (cachedSettings.commandPaletteOnboarded) {return;}
-
+    if (!areTipsEnabled(cachedSettings)) {return;}
     if (firstUseHintEl) {return;}
+
+    const tip = TIP_DEFINITIONS[PALETTE_TIP_ID];
+    if (!tip) {return;}
+
+    const state = await getTipState();
+    if (!shouldShowTip(state[PALETTE_TIP_ID], Date.now())) {return;}
+
+    // Re-check guards after the await — settings/DOM may have changed meanwhile.
+    if (!resultsEl || firstUseHintEl) {return;}
 
     firstUseHintEl = document.createElement('div');
     firstUseHintEl.className = 'first-use-hint';
-    firstUseHintEl.textContent = 'New: Type / for commands, @ for tabs, # for bookmarks';
+    firstUseHintEl.textContent = tip.message;
 
     resultsEl.parentElement?.insertBefore(firstUseHintEl, resultsEl);
+
+    void recordTipShown(PALETTE_TIP_ID);
 
     firstUseHintTimer = window.setTimeout(() => {
       dismissFirstUseHint();

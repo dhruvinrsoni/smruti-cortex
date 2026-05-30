@@ -16,6 +16,7 @@ import { registerCommandsListenerEarly, keepServiceWorkerAlive, reinjectContentS
 import { setupPortBasedMessaging, broadcastToActivePorts } from './lifecycle/port-messaging';
 import { setupDataChangeListeners, type DataChangeSource } from './lifecycle/data-change-listeners';
 import { setupOmnibox } from './lifecycle/omnibox';
+import { applyFreshInstallProfile } from './lifecycle/fresh-install';
 
 let initialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -269,6 +270,26 @@ setupIdleWakeListener(
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     logger.info('onInstalled', `📦 Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
+    // Settings/onboarding work runs FIRST — it's fast and must land before the slow
+    // DB+history init() below. Doing it early means a brand-new install's profile is
+    // applied within milliseconds of load, so it can't race a settings write that
+    // arrives during init's multi-second indexing pass. SettingsManager.init() is
+    // idempotent (cached) and only reads storage.
+    await SettingsManager.init();
+    // Apply the opinionated "fully set-up gift" on a brand-new install only.
+    // No-op on upgrades — existing users keep their settings.
+    await applyFreshInstallProfile(details.reason);
+    // Greet brand-new users with the replayable welcome page (unless onboarding is
+    // disabled). Fire-and-forget — never block boot. No extra permission: this is an
+    // extension-internal page opened via chrome.tabs.create.
+    if (details.reason === 'install' && SettingsManager.getSetting('onboardingEnabled') !== false) {
+      const version = chrome.runtime.getManifest().version;
+      void browserAPI.tabs
+        .create({ url: browserAPI.runtime.getURL('welcome/welcome.html') })
+        .then(() => SettingsManager.setSetting('welcomeShownVersion', version))
+        .catch((e) => logger.warn('onInstalled', 'Welcome page open failed', errorMeta(e)));
+    }
+    // Now the heavy initialization (DB open + history ingest).
     if (!initialized) {await init();}
     if (details.reason === 'update' || details.reason === 'install') {
       try {

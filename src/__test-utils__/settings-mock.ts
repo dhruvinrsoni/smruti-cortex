@@ -34,6 +34,12 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   commandPaletteEnabled: true,
   webSearchEngine: 'google',
   developerGithubPat: '',
+  onboardingEnabled: true,
+  onboardingChecklistEnabled: true,
+  onboardingTipsEnabled: true,
+  onboardingCheatsheetEnabled: true,
+  onboardingDemosEnabled: true,
+  welcomeShownVersion: '',
 };
 
 /**
@@ -50,6 +56,7 @@ export function mockSettings(overrides: Record<string, unknown> = {}) {
       setSetting: vi.fn(),
       updateSettings: vi.fn(),
       applyRemoteSettings: vi.fn(),
+      reloadFromStorage: vi.fn().mockResolvedValue(undefined),
     },
     SETTINGS_SCHEMA: {},
     DisplayMode: { List: 'list', Card: 'card' },

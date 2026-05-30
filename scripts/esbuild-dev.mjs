@@ -52,6 +52,14 @@ const common = {
       format: "iife"
     });
 
+    // welcome / onboarding page
+    await build({
+      ...common,
+      entryPoints: [resolve(cwd, "src/welcome/welcome.ts")],
+      outfile: resolve(outdir, "welcome/welcome.js"),
+      format: "iife"
+    });
+
     console.log("esbuild-dev: Bundles written to dist/");
   } catch (err) {
     console.error("esbuild-dev error:", err);

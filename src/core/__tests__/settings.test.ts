@@ -590,6 +590,33 @@ describe('SettingsManager', () => {
   });
 
   // -----------------------------------------------------------------------
+  // reloadFromStorage()
+  // -----------------------------------------------------------------------
+  describe('reloadFromStorage', () => {
+    it('merges the latest persisted settings into the in-memory cache', async () => {
+      const { SettingsManager } = await getManagerWithStoredSettings({
+        commandPaletteInPopup: true,
+        logLevel: 4,
+      });
+
+      // Before reload, in-memory is schema defaults.
+      expect(SettingsManager.getSetting('commandPaletteInPopup')).toBe(false);
+
+      await SettingsManager.reloadFromStorage();
+
+      // After reload, the persisted values are reflected (the fix that prevents the
+      // fresh-install profile from clobbering a concurrently-written setting).
+      expect(SettingsManager.getSetting('commandPaletteInPopup')).toBe(true);
+      expect(SettingsManager.getSetting('logLevel')).toBe(4);
+    });
+
+    it('is a no-op when storage has no settings', async () => {
+      const { SettingsManager } = await getManagerWithNoStorage();
+      await expect(SettingsManager.reloadFromStorage()).resolves.toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // resetToDefaults()
   // -----------------------------------------------------------------------
   describe('resetToDefaults', () => {
@@ -960,6 +987,11 @@ describe('SettingsManager', () => {
         'showDuplicateUrls',
         'showNonMatchingResults',
         'selectAllOnFocus',
+        'onboardingEnabled',
+        'onboardingChecklistEnabled',
+        'onboardingTipsEnabled',
+        'onboardingCheatsheetEnabled',
+        'onboardingDemosEnabled',
       ] as const;
 
       for (const key of booleanKeys) {
@@ -988,6 +1020,11 @@ describe('SettingsManager', () => {
             showDuplicateUrls: false,
             showNonMatchingResults: false,
             selectAllOnFocus: false,
+            onboardingEnabled: true,
+            onboardingChecklistEnabled: true,
+            onboardingTipsEnabled: true,
+            onboardingCheatsheetEnabled: true,
+            onboardingDemosEnabled: true,
           };
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
@@ -1021,6 +1058,32 @@ describe('SettingsManager', () => {
           expect(SettingsManager.getSetting(key)).toBe(defaults[key]);
         });
       }
+    });
+
+    describe('welcomeShownVersion', () => {
+      it('should default to empty string', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({});
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('');
+      });
+
+      it('should accept a version string', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({ welcomeShownVersion: '9.5.0' });
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('9.5.0');
+      });
+
+      it('should accept empty string (unlike length-required string keys)', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({ welcomeShownVersion: '' });
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('');
+      });
+
+      it('should reject non-string and fall back to default', async () => {
+        const { SettingsManager } = await getManagerWithStoredSettings({ welcomeShownVersion: 123 });
+        await SettingsManager.init();
+        expect(SettingsManager.getSetting('welcomeShownVersion')).toBe('');
+      });
     });
   });
 

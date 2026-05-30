@@ -75,6 +75,20 @@ export interface AppSettings {
      * SETTINGS_CHANGED tick.
      */
     reportButtonEnabled?: boolean;
+    // --- Onboarding / user education (each silo independently toggleable) ---
+    // Master kill-switch for the whole onboarding system: welcome page + all four
+    // teaching silos. Flip to false to disable everything at once. Default true.
+    onboardingEnabled?: boolean;
+    // Silo A — learn-by-doing checklist card in the popup. Default true.
+    onboardingChecklistEnabled?: boolean;
+    // Silo B — replayable "Did you know?" just-in-time tips (NOT a one-shot). Default true.
+    onboardingTipsEnabled?: boolean;
+    // Silo C — rich `?` cheatsheet / reference panel (prefixes, shortcuts, engines). Default true.
+    onboardingCheatsheetEnabled?: boolean;
+    // Silo D — animated demos embedded in the welcome page. Default true.
+    onboardingDemosEnabled?: boolean;
+    // Last extension version whose welcome page auto-opened — gates re-show on upgrade. Default ''.
+    welcomeShownVersion?: string;
     // Future settings can be added here
     theme?: 'light' | 'dark' | 'auto';
     maxResults?: number;
@@ -93,8 +107,12 @@ interface SettingSchema<T> {
 /**
  * SINGLE SOURCE OF TRUTH for all settings
  * Adding a new setting = ONE entry here. That's it!
+ *
+ * Exported read-only so tooling (e.g. fresh-install-profile validation tests) can
+ * verify keys/values against the schema. This is still the ONE schema — exporting
+ * it does not create a second source of truth.
  */
-const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSettings[K]> } = {
+export const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSettings[K]> } = {
     // Display settings
     displayMode: {
         default: DisplayMode.LIST,
@@ -327,6 +345,35 @@ const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchema<AppSe
         validate: (val) => typeof val === 'boolean',
     },
 
+    // --- Onboarding / user education ---
+    // Each silo gets its own flag so any one can be disabled independently if it
+    // misbehaves; onboardingEnabled is the master kill-switch over all of them.
+    // All default ON — teaching is harmless, revisitable, and individually toggleable.
+    onboardingEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingChecklistEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingTipsEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingCheatsheetEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    onboardingDemosEnabled: {
+        default: true,
+        validate: (val) => typeof val === 'boolean',
+    },
+    welcomeShownVersion: {
+        default: '',
+        validate: (val) => typeof val === 'string',
+    },
+
     // Future settings (placeholders)
     theme: {
         default: 'auto' as const,
@@ -471,6 +518,24 @@ export class SettingsManager {
             this.logger.debug('applyRemoteSettings', '✅ Remote settings applied (no re-broadcast)');
         } catch (error) {
             this.logger.error('applyRemoteSettings', '❌ Failed to apply remote settings:', errorMeta(error));
+        }
+    }
+
+    /**
+     * Re-read persisted settings from storage into the in-memory cache, merging
+     * over current values. Picks up writes made by another context after init()
+     * (e.g. an early SETTINGS_CHANGED, a synced device, or a test harness). Used
+     * before applying the fresh-install profile so profile application merges over
+     * the LATEST persisted state and never clobbers a concurrently-written setting.
+     */
+    static async reloadFromStorage(): Promise<void> {
+        try {
+            const stored = await this.loadFromStorage();
+            if (stored) {
+                this.settings = { ...this.settings, ...stored };
+            }
+        } catch (error) {
+            this.logger.warn('reloadFromStorage', 'Failed to reload settings from storage', errorMeta(error));
         }
     }
 

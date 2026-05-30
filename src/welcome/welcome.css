@@ -1,0 +1,117 @@
+/* welcome.css — styling for the onboarding / knowledge-transfer page.
+   Palette matches the cross-site design tokens (dark-first). */
+
+:root {
+  --bg: #0d1117;
+  --elevated: #11161d;
+  --card: #161b22;
+  --accent: #58a6ff;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --border: #2a313c;
+  --good: #3fb950;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+#welcome-root { max-width: 860px; margin: 0 auto; padding: 40px 20px 72px; }
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+.w-hero { text-align: center; margin-bottom: 40px; }
+.w-hero__emoji { font-size: 56px; line-height: 1; }
+.w-hero__title { font-size: 32px; font-weight: 800; margin: 12px 0 4px; }
+.w-hero__tagline { font-size: 18px; color: var(--accent); margin: 0 0 12px; }
+.w-hero__blurb { font-size: 16px; color: var(--muted); max-width: 620px; margin: 0 auto; }
+
+/* ── CTA buttons ─────────────────────────────────────────────────────── */
+.w-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 24px 0 8px; }
+.w-btn {
+  font: inherit; font-weight: 600; cursor: pointer;
+  padding: 11px 20px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); transition: transform .08s ease, border-color .15s ease;
+}
+.w-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+.w-btn--primary { background: var(--accent); border-color: var(--accent); color: #0b1220; }
+.w-cta__hint { text-align: center; color: var(--muted); font-size: 13px; min-height: 18px; margin-top: 6px; }
+
+/* ── Generic card ────────────────────────────────────────────────────── */
+.w-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 22px 24px; margin: 18px 0;
+}
+.w-card__heading { font-size: 18px; font-weight: 700; margin: 0 0 14px; }
+
+/* ── Big "one thing to remember" tip ─────────────────────────────────── */
+.w-bigtip { text-align: center; border-color: var(--accent); }
+.w-bigtip__keys {
+  display: inline-block; font-size: 26px; font-weight: 800; letter-spacing: .5px;
+  padding: 10px 18px; margin: 4px 0 10px; border-radius: 12px;
+  background: var(--elevated); border: 1px solid var(--accent); color: var(--accent);
+}
+.w-bigtip__text { color: var(--muted); margin: 0; }
+
+/* ── Lists ───────────────────────────────────────────────────────────── */
+.w-list { margin: 0; padding-left: 20px; }
+.w-list li { margin: 6px 0; }
+
+/* ── Cheatsheet ──────────────────────────────────────────────────────── */
+.w-sheet { display: grid; gap: 8px; }
+.w-row { display: grid; grid-template-columns: 130px 1fr; gap: 14px; align-items: baseline; padding: 4px 0; }
+.w-row--off { opacity: .45; }
+.w-keys {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  background: var(--elevated); border: 1px solid var(--border);
+  border-radius: 7px; padding: 3px 8px; text-align: center; white-space: nowrap;
+}
+.w-label { color: var(--text); }
+.w-badge {
+  font-size: 11px; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 1px 6px; margin-left: 8px;
+}
+
+/* ── Privacy ─────────────────────────────────────────────────────────── */
+.w-privacy { border-color: var(--good); }
+.w-privacy .w-card__heading::before { content: "🔒 "; }
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.w-footer { text-align: center; color: var(--muted); font-size: 14px; margin-top: 28px; }
+.w-footer a { color: var(--accent); text-decoration: none; }
+.w-footer a:hover { text-decoration: underline; }
+.w-footer__links { margin-top: 10px; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+
+/* ── Animated demos (Silo D — mount target; populated by demos.ts) ───── */
+.w-demos { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.w-demo {
+  background: var(--elevated); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px; overflow: hidden;
+}
+.w-demo { animation: w-slide-in .4s ease both; }
+.w-demo__title { font-weight: 600; font-size: 14px; margin: 0 0 10px; }
+.w-demo__stage {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; color: var(--text); min-height: 32px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  animation: w-type-fade 1.2s ease both;
+}
+.w-demo__caret { color: var(--accent); animation: w-blink 1s step-end infinite; }
+.w-demo__caption { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+
+@keyframes w-blink { 50% { opacity: 0; } }
+@keyframes w-type-fade { from { opacity: .25; } to { opacity: 1; } }
+@keyframes w-slide-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .w-demo__caret { animation: none; }
+  .w-btn { transition: none; }
+}
+
+@media (max-width: 540px) {
+  .w-row { grid-template-columns: 100px 1fr; }
+  .w-hero__title { font-size: 26px; }
+}
