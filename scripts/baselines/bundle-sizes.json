@@ -1,6 +1,6 @@
 {
-  "background/service-worker.js": 206.29,
-  "content_scripts/quick-search.js": 173.48,
+  "background/service-worker.js": 220.09,
+  "content_scripts/quick-search.js": 189.63,
   "content_scripts/extractor.js": 1.78,
-  "popup/popup.js": 170.43
+  "popup/popup.js": 190.11
 }
