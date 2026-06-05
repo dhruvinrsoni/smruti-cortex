@@ -164,6 +164,7 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | `workflows-ci` | Modifying GitHub Actions (3 active workflows: health-check, lint-report, ranking-reports) |
 | `test-generation` | Generating new test files (full rules + mock patterns) |
 | `maintenance` | Bug fixes, releases, Chrome Web Store submissions |
+| `store-policy` | **Before editing any store listing copy** — description, "Changes in this version", summary, title, screenshots; keyword-spam / single-purpose / affiliation rules (see also `docs/CWS_POLICY_CHECKLIST.md`) |
 | `coverage-policy` | **MANDATORY** before any test/coverage work — thresholds, ratchet, exclusion rules |
 | `solid-design` | **MANDATORY** before any refactor — ports, Result type, bounded contexts |
 | `atomic-commits` | **MANDATORY** before committing — verified, one-logical-change commits |
