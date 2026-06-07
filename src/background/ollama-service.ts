@@ -24,6 +24,12 @@ const logger = Logger.forComponent(COMPONENT);
 // or malicious endpoint from allocating multi-GB strings in memory.
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
 
+// Generous default timeout for inline ?? answers — long enough that a cold
+// model load (Ollama reloading an unloaded model) keeps the UI's waiting
+// animation up instead of aborting. The connection itself, not this timer, is
+// what tells us Ollama is actually down.
+const ANSWER_TIMEOUT_MS = 120_000;
+
 async function readResponseWithLimit(response: Response, limitBytes: number = MAX_RESPONSE_BYTES): Promise<string> {
   // Prefer streaming reader when available; falls back to .text() for
   // environments without ReadableStream (e.g. test mocks).
@@ -541,13 +547,18 @@ export class OllamaService {
 
       const model = opts.model || this.config.model;
       try {
-        const status = await this.checkAvailability();
-        if (!status.available) {
-          return fail(status.error || 'Ollama not available');
-        }
-
+        // NO pre-flight /api/tags probe here. When Ollama unloads a model on
+        // idle, the next request triggers a cold load — the probe (1s) would
+        // miss and we'd wrongly say "Ollama is down" while it's actually warming
+        // up. Instead the /api/chat request below IS the reachability signal: a
+        // dead port refuses the connection instantly ("Failed to fetch") =>
+        // genuinely down; a warming model just keeps the request (and the UI
+        // loader) pending until it streams. We only ever declare "down" on a
+        // real connection failure — never on slowness.
         const { signal } = useTimeoutAbort(scope, {
-          timeoutMs: opts.timeoutMs ?? this.config.timeout,
+          // Generous timeout so a cold model load keeps showing the waiting
+          // animation rather than aborting; the user opted to "let it run".
+          timeoutMs: opts.timeoutMs ?? ANSWER_TIMEOUT_MS,
           externalSignal: opts.abortSignal,
         });
 

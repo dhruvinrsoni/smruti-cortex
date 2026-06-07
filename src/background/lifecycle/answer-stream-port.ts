@@ -25,7 +25,7 @@ const logger = Logger.forComponent('AnswerStreamPort');
 export const AI_ANSWER_PORT = 'ai-answer';
 
 export type AnswerErrorReason =
-    | 'unavailable' | 'model-missing' | 'circuit-open' | 'busy' | 'timeout' | 'empty' | 'aborted';
+    | 'unavailable' | 'model-missing' | 'circuit-open' | 'busy' | 'warming' | 'timeout' | 'empty' | 'aborted';
 
 /** Map a provider error string to a stable UI reason code. */
 export function mapAnswerError(error: string | undefined): AnswerErrorReason {
@@ -89,9 +89,13 @@ export function handleAnswerPort(port: chrome.runtime.Port, provider: AnswerProv
             if (result.success) {
                 safePortPost(port, { type: 'ANSWER_DONE', requestId });
             } else if (result.aborted) {
-                // An internal abort that wasn't a user cancel means the timeout fired.
-                safePortPost(port, { type: 'ANSWER_ERROR', requestId, reason: 'timeout' });
+                // An internal abort that wasn't a user cancel means the generous
+                // timeout fired — the model was (very) slow to warm up, NOT that
+                // Ollama is down. Surface a reassuring "warming" hint, never "down".
+                safePortPost(port, { type: 'ANSWER_ERROR', requestId, reason: 'warming' });
             } else {
+                // Connection failure ("Failed to fetch") => genuinely unreachable;
+                // "not found" => model-missing. mapAnswerError handles both.
                 safePortPost(port, { type: 'ANSWER_ERROR', requestId, reason: mapAnswerError(result.error) });
             }
         }).catch(() => {

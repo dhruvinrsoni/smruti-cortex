@@ -68,7 +68,7 @@ describe('handleAnswerPort', () => {
     expect(errs[0]).toMatchObject({ requestId: 7, reason: 'circuit-open' });
   });
 
-  it('reports timeout when an abort was not user-initiated', async () => {
+  it('reports "warming" when an abort was not user-initiated (timeout, model warming up)', async () => {
     const port = createMockPort('ai-answer');
     handleAnswerPort(port as unknown as chrome.runtime.Port, provider(async () => (
       { text: '', success: false, durationMs: 1, aborted: true }
@@ -77,7 +77,7 @@ describe('handleAnswerPort', () => {
     port.onMessage.fire({ type: 'ANSWER_START', requestId: 2, terms: 'hi' });
     await flush();
 
-    expect(frames(port, 'ANSWER_ERROR')[0]).toMatchObject({ reason: 'timeout' });
+    expect(frames(port, 'ANSWER_ERROR')[0]).toMatchObject({ reason: 'warming' });
   });
 
   it('stays silent after ANSWER_CANCEL (no DONE/ERROR)', async () => {

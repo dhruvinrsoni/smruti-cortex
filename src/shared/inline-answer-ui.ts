@@ -160,16 +160,21 @@ export function showAnswerUnavailable(
 /**
  * Map an `ANSWER_ERROR` reason to a user-facing hint. Returns `null` for
  * reasons that should stay silent (`empty`, `busy`, `aborted`).
+ *
+ * NOTE: only a definitive connection failure yields `unavailable` ("is Ollama
+ * running?"). A slow/cold model load is `warming` — never reported as "down".
  */
 export function answerErrorMessage(reason: string): string | null {
     switch (reason) {
         case 'unavailable':
-        case 'model-missing':
             return 'Local AI unavailable — is Ollama running?';
-        case 'circuit-open':
-            return 'Local AI paused after repeated errors — retry shortly.';
+        case 'model-missing':
+            return 'That model isn\'t installed in Ollama — pick another in Settings.';
+        case 'warming':
         case 'timeout':
-            return 'Local AI timed out — try again.';
+            return 'Local AI is warming up the model — give it a moment, then try again.';
+        case 'circuit-open':
+            return 'Local AI paused after repeated errors — check Ollama is running, then retry.';
         default:
             return null;
     }

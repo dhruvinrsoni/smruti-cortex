@@ -94,13 +94,35 @@ describe('OllamaService.generateAnswer', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('returns unavailable when the configured model is not present', async () => {
-    route(() => chatStream([DONE_LINE]), 'some-other-model');
+  it('reports a connection failure (Ollama down) as a non-aborted error, no pre-flight /api/tags probe', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      // No probe should happen — but if the chat fetch is attempted, the port is dead.
+      if (String(url).includes('/api/chat')) { throw new TypeError('Failed to fetch'); }
+      return tagsOk();
+    });
     const { OllamaService } = await import('../ollama-service');
     const svc = new OllamaService({ model: 'test:latest' });
     const res = await svc.generateAnswer('hi', { onToken: () => {} });
     expect(res.success).toBe(false);
-    expect(res.error).toMatch(/not found|not available/i);
+    expect(res.aborted).toBeFalsy();              // a real connection failure, not a timeout
+    expect(res.error).toMatch(/failed to fetch/i); // -> UI maps to "is Ollama running?"
+    // It went straight to /api/chat (no /api/tags gate).
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/api/chat'), expect.any(Object));
+    expect(mockFetch).not.toHaveBeenCalledWith(expect.stringContaining('/api/tags'), expect.anything());
+  });
+
+  it('does not pre-flight /api/tags — a reachable but cold model still streams', async () => {
+    // Only /api/chat is mocked; /api/tags is intentionally NOT routed. If the
+    // code probed /api/tags first this would throw; it must not.
+    mockFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/api/chat')) { return chatStream([chatLine('warm'), DONE_LINE]); }
+      throw new Error('unexpected /api/tags probe');
+    });
+    const { OllamaService } = await import('../ollama-service');
+    const svc = new OllamaService({ model: 'test:latest' });
+    const res = await svc.generateAnswer('hi', { onToken: () => {} });
+    expect(res.success).toBe(true);
+    expect(res.text).toBe('warm');
   });
 
   it('surfaces an Ollama error line and trips the breaker after repeated real failures', async () => {

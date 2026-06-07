@@ -98,11 +98,14 @@ describe('showAnswerUnavailable', () => {
 });
 
 describe('answerErrorMessage', () => {
-  it('maps connection-type reasons to hints and stays silent otherwise', () => {
+  it('only "unavailable" says Ollama is down; warming/timeout stay reassuring', () => {
     expect(answerErrorMessage('unavailable')).toMatch(/Ollama running/);
-    expect(answerErrorMessage('model-missing')).toMatch(/Ollama running/);
+    expect(answerErrorMessage('model-missing')).toMatch(/installed/i);
+    expect(answerErrorMessage('warming')).toMatch(/warming up/i);
+    expect(answerErrorMessage('timeout')).toMatch(/warming up/i);
     expect(answerErrorMessage('circuit-open')).toMatch(/paused/);
-    expect(answerErrorMessage('timeout')).toMatch(/timed out/);
+    // a warming/slow model must NEVER be reported as "down"
+    expect(answerErrorMessage('warming')).not.toMatch(/is Ollama running/i);
     expect(answerErrorMessage('empty')).toBeNull();
     expect(answerErrorMessage('busy')).toBeNull();
     expect(answerErrorMessage('aborted')).toBeNull();
