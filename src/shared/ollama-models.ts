@@ -39,6 +39,22 @@ export const DEFAULT_GENERATION_MODEL = 'llama3.2:3b';
  */
 export const DEFAULT_EMBEDDING_MODEL = 'mxbai-embed-large';
 
+/**
+ * Default model for inline `??` AI answers (command palette web-search mode).
+ * Same `llama3.2:3b` as generation — a fast, chat-tuned 3B model keeps streamed
+ * answers responsive. Stored under a separate setting (`SETTINGS_SCHEMA.answerModel`)
+ * so the answer model can be tuned independently of keyword expansion (`ollamaModel`).
+ * The popup dropdown reuses `RECOMMENDED_GENERATION_MODELS`.
+ */
+export const DEFAULT_ANSWER_MODEL = 'llama3.2:3b';
+
+/**
+ * Output token cap (`options.num_predict`) for inline `??` answers. Keeps a
+ * streamed answer to a few sentences and latency low. Overridable via
+ * `SETTINGS_SCHEMA.answerMaxTokens` (32–512).
+ */
+export const ANSWER_MAX_TOKENS = 200;
+
 // -----------------------------------------------------------------------------
 // Curated dropdown options
 // -----------------------------------------------------------------------------

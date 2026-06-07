@@ -2,7 +2,7 @@
 
 import { browserAPI } from './helpers';
 import { Logger, ComponentLogger, errorMeta } from './logger';
-import { DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL } from '../shared/ollama-models';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL, DEFAULT_ANSWER_MODEL, ANSWER_MAX_TOKENS } from '../shared/ollama-models';
 
 export enum DisplayMode {
     LIST = 'list',
@@ -29,6 +29,11 @@ export interface AppSettings {
     aiSearchDelayMs?: number;     // Delay in ms before AI expansion triggers after user stops typing (default: 500)
     embeddingsEnabled?: boolean;  // Enable semantic search with embeddings (default: false)
     embeddingModel?: string;      // Ollama model for embeddings (default: see DEFAULT_EMBEDDING_MODEL in src/shared/ollama-models.ts)
+    // Inline ?? AI answer (command palette web-search mode) — see src/shared/answer-prompt.ts
+    inlineAnswerEnabled?: boolean; // Stream a local-AI answer inline in ?? mode (default: false; independent of ollamaEnabled, needs Ollama running)
+    answerModel?: string;          // Ollama model for inline ?? answers (default: see DEFAULT_ANSWER_MODEL in src/shared/ollama-models.ts)
+    answerMaxTokens?: number;      // Output token cap for inline ?? answers (default: 200, range 32–512)
+    answerLoaderStyle?: 'spinner' | 'dots' | 'shimmer' | 'caret'; // 'Thinking' animation for ?? answers (default: 'spinner')
     // Privacy settings
     loadFavicons?: boolean;       // Load favicons from Google API (default: true)
     sensitiveUrlBlacklist?: string[];  // User-defined domains/patterns to skip metadata extraction (default: [])
@@ -161,7 +166,24 @@ export const SETTINGS_SCHEMA: { [K in keyof Required<AppSettings>]: SettingSchem
         default: DEFAULT_EMBEDDING_MODEL,  // Dedicated embedding model — defined in src/shared/ollama-models.ts
         validate: (val) => typeof val === 'string' && val.length > 0,
     },
-    
+    // Inline ?? AI answer — double-gated with ollamaEnabled at the call site
+    inlineAnswerEnabled: {
+        default: false,
+        validate: (val) => typeof val === 'boolean',
+    },
+    answerModel: {
+        default: DEFAULT_ANSWER_MODEL,  // Inline ?? answer model — defined in src/shared/ollama-models.ts
+        validate: (val) => typeof val === 'string' && val.length > 0,
+    },
+    answerMaxTokens: {
+        default: ANSWER_MAX_TOKENS,  // num_predict cap for inline answers — defined in src/shared/ollama-models.ts
+        validate: (val) => typeof val === 'number' && val >= 32 && val <= 512,
+    },
+    answerLoaderStyle: {
+        default: 'spinner',
+        validate: (val) => val === 'spinner' || val === 'dots' || val === 'shimmer' || val === 'caret',
+    },
+
     // Privacy settings
     loadFavicons: {
         default: true,
