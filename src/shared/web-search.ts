@@ -195,3 +195,82 @@ export function buildWebSearchUrl(
 
     return { url: base + encodeURIComponent(searchTerms), mode: 'static-engine' };
 }
+
+/** A single ?? engine rendered as a navigable chip row in the inline answer pane. */
+export interface WebSearchEngineChip {
+    key: string;
+    displayName: string;
+    /** Built target for the current terms; empty string when {@link disabled}. */
+    url: string;
+    mode: WebSearchMode;
+    /** True for jira/confluence with no site URL configured. */
+    disabled?: boolean;
+    disabledReason?: WebSearchSiteError;
+}
+
+/**
+ * Ordered, de-duplicated list of every ?? engine key, derived from the single
+ * registry (prefix map + static engines). Adding an engine/prefix above makes
+ * it appear here automatically — no separate list to maintain.
+ */
+export function allWebSearchEngineKeys(): string[] {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    const push = (key: string | undefined): void => {
+        if (key && !seen.has(key)) {
+            seen.add(key);
+            ordered.push(key);
+        }
+    };
+    for (const prefix of WEB_SEARCH_PREFIX_ORDER) {
+        push(SEARCH_ENGINE_PREFIXES[prefix]);
+    }
+    for (const key of Object.values(SEARCH_ENGINE_PREFIXES)) {
+        push(key);
+    }
+    for (const key of Object.keys(SEARCH_ENGINES)) {
+        push(key);
+    }
+    return ordered;
+}
+
+/**
+ * Engine chips for the inline ?? answer pane — one per available engine, built
+ * for the given terms. Jira/Confluence appear as `disabled` chips when their
+ * site URL is unset (activating one shows the same settings toast as today).
+ * Registry-derived, so adding an engine/prefix auto-adds a chip.
+ * @returns [] when terms are empty.
+ */
+export function getAvailableWebSearchEngines(
+    terms: string,
+    settings: Pick<AppSettings, 'jiraSiteUrl' | 'confluenceSiteUrl'>,
+): WebSearchEngineChip[] {
+    const trimmed = terms.trim();
+    if (!trimmed) {
+        return [];
+    }
+    const chips: WebSearchEngineChip[] = [];
+    for (const key of allWebSearchEngineKeys()) {
+        const built = buildWebSearchUrl(
+            { engineKey: key, searchTerms: trimmed, usedPrefix: false },
+            settings,
+        );
+        const displayName = getWebSearchEngineDisplayName(key);
+        if ('error' in built) {
+            if (built.error === 'no-jira-site' || built.error === 'no-confluence-site') {
+                chips.push({
+                    key,
+                    displayName,
+                    url: '',
+                    mode: key === 'confluence' ? 'confluence' : 'jira-jql',
+                    disabled: true,
+                    disabledReason: built.error,
+                });
+            }
+            // 'no-terms' is unreachable here (trimmed is non-empty); unknown keys are skipped.
+            continue;
+        }
+        chips.push({ key, displayName, url: built.url, mode: built.mode });
+    }
+    return chips;
+}
