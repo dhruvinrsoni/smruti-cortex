@@ -276,6 +276,48 @@
                 <small>-1 = infinite (no timeout), default: 30000 (30s), max: 120000 (2min)</small>
               </div>
             </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="modal-inlineAnswerEnabled">
+              <div class="toggle-content">
+                <strong>Inline answers in ?? search</strong>
+                <small>As you type a ?? web search, stream a short local-AI answer + your matching pages. Needs Ollama running (works independently of AI search).</small>
+              </div>
+              <span class="toggle-switch"><span class="toggle-thumb"></span></span>
+            </label>
+            <label class="setting-option">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div class="model-select-wrap" id="answer-select-wrap">
+                  <div class="model-select-trigger" id="answer-select-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-label="Answer Model">
+                    <span class="model-select-value" id="answer-select-value"></span>
+                    <span class="model-select-arrow">▾</span>
+                  </div>
+                  <div class="model-select-dropdown" id="answer-select-dropdown" role="listbox" hidden>
+                    <input type="text" class="model-select-search" id="answer-select-search" placeholder="Search or type model…" autocomplete="off" spellcheck="false">
+                    <div class="model-select-list" id="answer-select-list"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="modal-answerModel" value="">
+                <button type="button" id="refresh-answer-models-btn" class="refresh-models-btn" title="Fetch installed chat models from Ollama">🔄</button>
+              </div>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Answer Model</strong>
+                <small>Local model for inline ?? answers (default: llama3.2:3b). A small, fast chat model keeps answers snappy.</small>
+              </div>
+            </label>
+            <label class="setting-option">
+              <select id="modal-answerLoaderStyle" style="width:160px;">
+                <option value="spinner">Spinner (braille)</option>
+                <option value="dots">Pulsing dots</option>
+                <option value="shimmer">Shimmer bars</option>
+                <option value="caret">Blinking caret</option>
+              </select>
+              <span class="option-indicator"></span>
+              <div class="option-content">
+                <strong>Answer loading style</strong>
+                <small>Animation shown while the ?? answer is generating. Try them all, then lock one in.</small>
+              </div>
+            </label>
           </div>
         </div>
         <div class="settings-section" data-tab="ai">

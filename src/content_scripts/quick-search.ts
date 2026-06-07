@@ -38,6 +38,18 @@ import {
   highlightHtml,
   renderAIStatus as renderAIStatusShared,
 } from '../shared/search-ui-base';
+import { getAvailableWebSearchEngines } from '../shared/web-search';
+import {
+  buildInlineAnswerBlock,
+  buildInlineAnswerRows,
+  appendAnswerToken,
+  setAnswerState,
+  showAnswerUnavailable,
+  answerErrorMessage,
+  type AnswerBlock,
+  type InlineAnswerRow,
+  type InlineAnswerClassNames,
+} from '../shared/inline-answer-ui';
 
 import { type AppSettings, DisplayMode } from '../core/settings';
 import { sendMessageWithRetry } from '../shared/runtime-messaging';
@@ -254,6 +266,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
   let cachedSettings: AppSettings | null = null;
   let aiDebounceTimer: number | null = null; // Separate longer debounce for AI expansion
   let aiSearchPending = false; // True from handleInput until Phase 2 response arrives (or AI disabled)
+  // --- Inline ?? AI-answer state (local Ollama only) ---
+  let answerPort: chrome.runtime.Port | null = null;
+  let answerRequestId = 0;          // monotonic; bumped per START
+  let answerActiveId = 0;           // request whose frames we currently render
+  let answerBlock: AnswerBlock | null = null;
+  let answerDebounceTimer: number | null = null;
+  let answerHistoryToken = 0;       // staleness guard for the one-shot history fetch
+  let answerHistoryRows: InlineAnswerRow[] = [];
+  let answerChipRows: InlineAnswerRow[] = [];
+  let answerHighlightTerms = '';
   let hidePortCloseTimer: number | null = null;
   let spinnerEl: HTMLDivElement | null = null;
   let clearBtnEl: HTMLButtonElement | null = null;
@@ -1003,6 +1025,38 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     .cmd-icon { font-size: 16px; flex-shrink: 0; width: 24px; text-align: center; margin-top: 1px; }
     .cmd-label { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cmd-current { font-size: 10px; color: var(--accent-color, #3b82f6); font-weight: 600; }
+    /* Inline ?? AI answer pane */
+    .inline-answer { padding: 10px 14px 12px; border-bottom: 1px solid var(--border-color); }
+    .inline-answer[data-state="hidden"] { display: none; }
+    .inline-answer-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 5px; }
+    .inline-answer-text { font-size: 13px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; }
+    /* thinking-phase loader */
+    .inline-answer-loader { display: none; align-items: center; gap: 7px; min-height: 18px; }
+    .inline-answer[data-state="thinking"] .inline-answer-loader { display: flex; }
+    .inline-answer[data-state="thinking"] .inline-answer-text { display: none; }
+    .inline-answer[data-loader="shimmer"] .inline-answer-loader { flex-direction: column; align-items: stretch; }
+    .ila-thinking { font-size: 12px; color: var(--text-secondary); }
+    .ila-spin::before { content: '⠋'; color: var(--accent-color); font-size: 14px; animation: ila-spin-frames 0.8s steps(1,end) infinite; }
+    @keyframes ila-spin-frames { 0%{content:'⠋'} 12%{content:'⠙'} 25%{content:'⠹'} 37%{content:'⠸'} 50%{content:'⠼'} 62%{content:'⠴'} 75%{content:'⠦'} 87%{content:'⠧'} 100%{content:'⠏'} }
+    .ila-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-color); display: inline-block; animation: ila-dots 1.2s ease-in-out infinite; }
+    .ila-dot:nth-child(2) { animation-delay: 0.2s; }
+    .ila-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes ila-dots { 0%,80%,100%{opacity:0.25} 40%{opacity:1} }
+    .ila-bar { display: block; height: 9px; border-radius: 4px; background: linear-gradient(90deg, var(--bg-hover) 25%, var(--text-secondary) 37%, var(--bg-hover) 63%); background-size: 400% 100%; animation: ila-shimmer 1.4s ease infinite; opacity: 0.5; }
+    .ila-bar:first-child { width: 80%; margin-bottom: 5px; }
+    .ila-bar:last-child { width: 55%; }
+    @keyframes ila-shimmer { 0%{background-position:100% 0} 100%{background-position:0 0} }
+    .inline-answer[data-loader="caret"][data-state="thinking"] .inline-answer-loader::after { content: '▍'; color: var(--accent-color); animation: ila-blink 1s steps(1,end) infinite; }
+    /* streaming caret */
+    .inline-answer[data-state="streaming"] .inline-answer-text::after { content: '▍'; color: var(--accent-color); animation: ila-blink 1s steps(1,end) infinite; }
+    @keyframes ila-blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+    /* unavailable hint */
+    .inline-answer-hint { font-size: 12px; color: var(--text-secondary); }
+    .inline-answer-hint-link { background: none; border: none; padding: 0; color: var(--accent-color); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; }
+    .command-row.inline-row { flex-direction: column; align-items: stretch; gap: 2px; }
+    .inline-row .cmd-label { white-space: normal; }
+    .inline-row .cmd-sub { font-size: 11px; color: var(--text-url); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .inline-row.inline-disabled { opacity: 0.6; }
     .cmd-category {
       font-size: 9px;
       text-transform: uppercase;
@@ -2396,6 +2450,8 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
 
     if (inputEl) {inputEl.blur();}
     aiSearchPending = false;
+    cancelInlineAnswer();
+    answerBlock = null;
     hideSpinner();
     renderAIStatus(null);
     // Clear any pending debounce timers (prevents stale searches after close)
@@ -2496,6 +2552,9 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (debounceTimer) {clearTimeout(debounceTimer);}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
     if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;}
+    // Cancel any in-flight inline answer; renderWebSearchPreview re-arms it if
+    // still in ?? mode, so leaving the mode (or any keystroke) stops the stream.
+    cancelInlineAnswer();
 
     // Cancel any in-flight SW search immediately so a stale scoring loop doesn't
     // block the queue while the user is still typing.
@@ -3733,6 +3792,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     if (!resultsEl) {return;}
 
     if (currentMode === 'websearch') {
+      // Inline-answer pane: if the user arrowed into a history/chip row, Enter
+      // activates THAT row (Shift preserved for background tab). With no row
+      // selected, fall through to the default-engine open below.
+      if (inlineAnswerEnabledNow() && selectedIndex >= 0) {
+        const selectedRow = resultsEl.querySelector('.command-row.selected') as HTMLElement | null;
+        if (selectedRow) {
+          selectedRow.dispatchEvent(new MouseEvent('click', { shiftKey, bubbles: true }));
+          return;
+        }
+      }
       const raw = inputEl?.value ?? '';
       log.trace('WebSearch', `enter raw="${raw.slice(0, 500)}"`);
       const { query } = detectMode(raw.trim());
@@ -3849,8 +3918,166 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
     (rows[selectedIndex] as HTMLElement)?.scrollIntoView({ block: 'nearest' });
   }
 
+  const INLINE_ANSWER_CLASSNAMES: InlineAnswerClassNames = {
+    answerBlock: 'inline-answer',
+    answerLabel: 'inline-answer-label',
+    answerText: 'inline-answer-text',
+    row: 'command-row inline-row',
+    rowSelected: 'selected',
+    historyRow: 'inline-hist-row',
+    chipRow: 'inline-chip-row',
+    disabledRow: 'inline-disabled',
+    rowTitle: 'cmd-label',
+    rowSubtitle: 'cmd-sub',
+    highlight: 'highlight',
+    aiHighlight: 'highlight-ai',
+  };
+
+  function inlineAnswerEnabledNow(): boolean {
+    // Independent of `ollamaEnabled` (which governs AI for normal search). The
+    // answer still needs Ollama *running* — handled by the reachability check
+    // with a graceful hint fallback.
+    return !!cachedSettings?.inlineAnswerEnabled;
+  }
+
+  function connectAnswerPort(): chrome.runtime.Port | null {
+    if (answerPort) { return answerPort; }
+    if (!isExtensionContextValid()) { return null; }
+    try {
+      const port = chrome.runtime.connect({ name: 'ai-answer' });
+      port.onMessage.addListener((msg: { type?: string; requestId?: number; token?: string; reason?: string } | null) => {
+        if (!msg || msg.requestId !== answerActiveId || !answerBlock) { return; }
+        if (msg.type === 'ANSWER_TOKEN') { appendAnswerToken(answerBlock, String(msg.token ?? '')); }
+        else if (msg.type === 'ANSWER_DONE') { setAnswerState(answerBlock, 'done'); }
+        else if (msg.type === 'ANSWER_ERROR') {
+          const hint = answerErrorMessage(String(msg.reason ?? ''));
+          // Overlay is a content script — it can't open the popup's settings modal,
+          // so the hint is plain text (no deep-link action).
+          if (hint) { showAnswerUnavailable(answerBlock, { message: hint }); }
+          else { setAnswerState(answerBlock, 'hidden'); }
+        }
+      });
+      port.onDisconnect.addListener(() => { answerPort = null; });
+      answerPort = port;
+      return port;
+    } catch { answerPort = null; return null; }
+  }
+
+  function cancelInlineAnswer(): void {
+    if (answerDebounceTimer) { clearTimeout(answerDebounceTimer); answerDebounceTimer = null; }
+    if (answerPort && answerActiveId) {
+      try { answerPort.postMessage({ type: 'ANSWER_CANCEL', requestId: answerActiveId }); } catch { /* port may be closed */ }
+    }
+  }
+
+  function openExternalFromInline(url: string, background: boolean): void {
+    if (background) {
+      try { chrome.runtime.sendMessage({ type: 'WINDOW_CREATE', windowType: 'background-tab', url }, ack); }
+      catch { window.open(url); }
+    } else {
+      window.open(url, '_blank');
+    }
+  }
+
+  function activateInlineRow(row: InlineAnswerRow, mods: { shift: boolean; ctrlOrMeta: boolean }): void {
+    if (row.kind === 'chip' && row.chip) {
+      if (row.chip.disabled) {
+        showToast(webSearchSiteUrlToastMessage(row.chip.disabledReason ?? 'no-jira-site'), 'warning');
+        return;
+      }
+      openExternalFromInline(row.chip.url, mods.shift);
+    } else if (row.kind === 'history' && row.result) {
+      openExternalFromInline(row.result.url, mods.shift);
+    }
+    hideOverlay();
+  }
+
+  function rebuildInlineRows(): void {
+    if (!resultsEl || !answerBlock) { return; }
+    while (answerBlock.root.nextSibling) { answerBlock.root.nextSibling.remove(); }
+    const rows = [...answerHistoryRows, ...answerChipRows];
+    const { fragment } = buildInlineAnswerRows(rows, {
+      classNames: INLINE_ANSWER_CLASSNAMES,
+      tokens: tokenizeQuery(answerHighlightTerms),
+      selectedIndex,
+      onActivate: (row, _i, mods) => activateInlineRow(row, mods),
+    });
+    resultsEl.appendChild(fragment);
+    updateResultCount('');
+  }
+
+  function fetchInlineHistory(terms: string): void {
+    const token = ++answerHistoryToken;
+    try {
+      // History list follows the usual search settings: skip AI keyword
+      // expansion only when normal AI search is off (semantic follows
+      // embeddingsEnabled inside runSearch).
+      chrome.runtime.sendMessage(
+        { type: 'SEARCH_QUERY', query: terms, skipAI: !(cachedSettings?.ollamaEnabled) },
+        (resp: { results?: SearchResult[] } | undefined) => {
+          if (chrome.runtime.lastError) { return; }
+          if (token !== answerHistoryToken || !answerBlock) { return; }
+          const results = Array.isArray(resp?.results) ? resp.results.slice(0, 4) : [];
+          answerHistoryRows = results.map((r) => ({ kind: 'history' as const, result: r }));
+          rebuildInlineRows();
+        },
+      );
+    } catch { /* ignore */ }
+  }
+
+  function scheduleInlineAnswer(terms: string): void {
+    cancelInlineAnswer();
+    if (!terms) { if (answerBlock) { setAnswerState(answerBlock, 'hidden'); } return; }
+    const delay = cachedSettings?.aiSearchDelayMs ?? 500;
+    answerDebounceTimer = window.setTimeout(() => {
+      answerDebounceTimer = null;
+      const port = connectAnswerPort();
+      if (!port || !answerBlock) { return; }
+      answerActiveId = ++answerRequestId;
+      setAnswerState(answerBlock, 'thinking'); // loader shows until the first token
+      try { port.postMessage({ type: 'ANSWER_START', requestId: answerActiveId, terms }); }
+      catch { if (answerBlock) { setAnswerState(answerBlock, 'hidden'); } }
+      fetchInlineHistory(terms);
+    }, delay);
+  }
+
+  function renderInlineAnswerPane(terms: string): void {
+    if (!resultsEl) { return; }
+    selectedIndex = -1; // Enter opens the default engine until the user arrows into a row.
+    answerHighlightTerms = terms;
+    resultsEl.innerHTML = '';
+    resultsEl.className = 'results list';
+    resultsEl.setAttribute('role', 'listbox');
+    resultsEl.setAttribute('aria-label', 'AI answer and related links');
+
+    const modelLabel = `local · ${cachedSettings?.answerModel ?? 'llama3.2:3b'}`;
+    answerBlock = buildInlineAnswerBlock({
+      classNames: INLINE_ANSWER_CLASSNAMES,
+      modelLabel,
+      loaderStyle: cachedSettings?.answerLoaderStyle ?? 'spinner',
+    });
+    resultsEl.appendChild(answerBlock.root);
+
+    answerChipRows = getAvailableWebSearchEngines(terms, cachedSettings ?? {}).map((chip) => ({ kind: 'chip' as const, chip }));
+    answerHistoryRows = [];
+    rebuildInlineRows();
+
+    scheduleInlineAnswer(terms);
+  }
+
   function renderWebSearchPreview(query: string): void {
     if (!resultsEl) {return;}
+
+    if (inlineAnswerEnabledNow() && query) {
+      const inlineDefaultKey = cachedSettings?.webSearchEngine ?? 'google';
+      const inlineParsed = parseWebSearchQuery(query, inlineDefaultKey);
+      if (inlineParsed.searchTerms.trim()) {
+        renderInlineAnswerPane(inlineParsed.searchTerms.trim());
+        return;
+      }
+    }
+    // Fallback (feature/Ollama off, or prefix-only): drop any stale answer block.
+    answerBlock = null;
 
     log.trace('WebSearch', `preview render query="${query.slice(0, 500)}"`);
     selectedIndex = 0;
@@ -5789,10 +6016,16 @@ if (!window.__SMRUTI_QUICK_SEARCH_LOADED__) {
         // Ignore - port may already be disconnected
       }
     }
-    
+    // Disconnect inline-answer port
+    if (answerPort) {
+      try { answerPort.disconnect(); } catch { /* already gone */ }
+      answerPort = null;
+    }
+
     // Clear any pending timers
     if (debounceTimer) {clearTimeout(debounceTimer); debounceTimer = null;}
     if (aiDebounceTimer) {clearTimeout(aiDebounceTimer); aiDebounceTimer = null;}
+    if (answerDebounceTimer) {clearTimeout(answerDebounceTimer); answerDebounceTimer = null;}
     if (qsFocusTimer) {clearTimeout(qsFocusTimer); qsFocusTimer = null;}
     if (overlayFocusInterval) {clearInterval(overlayFocusInterval); overlayFocusInterval = null;}
     overlayFocusTimeouts.forEach(t => clearTimeout(t));

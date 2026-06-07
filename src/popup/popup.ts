@@ -52,6 +52,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   RECOMMENDED_GENERATION_MODELS,
   RECOMMENDED_EMBEDDING_MODELS,
+  EMBEDDING_ONLY_NAME_PATTERNS,
   getPullCommand,
 } from '../shared/ollama-models';
 import type { AppSettings } from '../core/settings';
@@ -82,6 +83,19 @@ import {
   highlightHtml,
   renderAIStatus as renderAIStatusShared,
 } from '../shared/search-ui-base';
+import { getAvailableWebSearchEngines } from '../shared/web-search';
+import {
+  buildInlineAnswerBlock,
+  buildInlineAnswerRows,
+  appendAnswerToken,
+  setAnswerState,
+  showAnswerUnavailable,
+  answerErrorMessage,
+  type AnswerBlock,
+  type InlineAnswerRow,
+  type InlineAnswerClassNames,
+} from '../shared/inline-answer-ui';
+import { DEFAULT_ANSWER_MODEL } from '../shared/ollama-models';
 
 // Onboarding checklist (Silo A): mark a milestone at most once per popup session so
 // we never hit chrome.storage on every keystroke. markMilestone is itself idempotent.
@@ -1008,10 +1022,160 @@ function initializePopup() {
     resultsList.appendChild(tourLi);
   }
 
+  // --- Inline ?? AI-answer state (popup; local Ollama only) ---
+  const POPUP_INLINE_CLASSNAMES: InlineAnswerClassNames = {
+    answerBlock: 'inline-answer',
+    answerLabel: 'inline-answer-label',
+    answerText: 'inline-answer-text',
+    row: 'palette-selectable-row inline-row',
+    rowSelected: 'inline-row-selected',
+    historyRow: 'inline-hist-row',
+    chipRow: 'inline-chip-row',
+    disabledRow: 'inline-disabled',
+    rowTitle: 'cmd-label',
+    rowSubtitle: 'cmd-sub',
+    highlight: 'highlight',
+    aiHighlight: 'highlight-ai',
+  };
+  let popupAnswerPort: chrome.runtime.Port | null = null;
+  let popupAnswerRequestId = 0;
+  let popupAnswerActiveId = 0;
+  let popupAnswerBlock: AnswerBlock | null = null;
+  let popupAnswerDebounceTimer: number | null = null;
+  let popupAnswerHistoryToken = 0;
+  let popupInlineRows: InlineAnswerRow[] = [];
+  let popupAnswerHistoryRows: InlineAnswerRow[] = [];
+  let popupAnswerChipRows: InlineAnswerRow[] = [];
+  let popupAnswerTerms = '';
+
+  function popupInlineAnswerActive(): boolean {
+    // Independent of `ollamaEnabled` (AI for normal search). Needs Ollama
+    // *running* — handled by the reachability check + graceful hint fallback.
+    return !!SettingsManager.getSetting('inlineAnswerEnabled');
+  }
+
+  function connectPopupAnswerPort(): chrome.runtime.Port | null {
+    if (popupAnswerPort) { return popupAnswerPort; }
+    try {
+      const port = chrome.runtime.connect({ name: 'ai-answer' });
+      port.onMessage.addListener((msg: { type?: string; requestId?: number; token?: string; reason?: string } | null) => {
+        if (!msg || msg.requestId !== popupAnswerActiveId || !popupAnswerBlock) { return; }
+        if (msg.type === 'ANSWER_TOKEN') { appendAnswerToken(popupAnswerBlock, String(msg.token ?? '')); }
+        else if (msg.type === 'ANSWER_DONE') { setAnswerState(popupAnswerBlock, 'done'); }
+        else if (msg.type === 'ANSWER_ERROR') {
+          const hint = answerErrorMessage(String(msg.reason ?? ''));
+          if (hint) {
+            // Deep-link straight to the AI settings tab for a one-click fix.
+            showAnswerUnavailable(popupAnswerBlock, {
+              message: hint,
+              action: { label: 'Open AI settings', onClick: () => { openSettingsPage(); switchSettingsTab('ai'); } },
+            });
+          } else {
+            setAnswerState(popupAnswerBlock, 'hidden');
+          }
+        }
+      });
+      port.onDisconnect.addListener(() => { popupAnswerPort = null; });
+      popupAnswerPort = port;
+      return port;
+    } catch { popupAnswerPort = null; return null; }
+  }
+
+  function cancelPopupInlineAnswer(): void {
+    if (popupAnswerDebounceTimer) { clearTimeout(popupAnswerDebounceTimer); popupAnswerDebounceTimer = null; }
+    if (popupAnswerPort && popupAnswerActiveId) {
+      try { popupAnswerPort.postMessage({ type: 'ANSWER_CANCEL', requestId: popupAnswerActiveId }); } catch { /* closed */ }
+    }
+  }
+
+  function activatePopupInlineRow(row: InlineAnswerRow | undefined, shiftKey: boolean): void {
+    if (!row) { return; }
+    if (row.kind === 'chip' && row.chip) {
+      if (row.chip.disabled) {
+        showToast(webSearchSiteUrlToastMessage(row.chip.disabledReason ?? 'no-jira-site'), 'warning');
+        return;
+      }
+      chrome.tabs.create({ url: row.chip.url, active: !shiftKey });
+    } else if (row.kind === 'history' && row.result) {
+      chrome.tabs.create({ url: row.result.url, active: !shiftKey });
+    }
+  }
+
+  function rebuildPopupInlineRows(resultsList: HTMLUListElement): void {
+    if (!popupAnswerBlock) { return; }
+    while (popupAnswerBlock.root.nextSibling) { popupAnswerBlock.root.nextSibling.remove(); }
+    popupInlineRows = [...popupAnswerHistoryRows, ...popupAnswerChipRows];
+    const { fragment } = buildInlineAnswerRows(popupInlineRows, {
+      classNames: POPUP_INLINE_CLASSNAMES,
+      tokens: tokenizeQuery(popupAnswerTerms),
+      selectedIndex: popupSelectedIndex,
+      onActivate: (row, _i, mods) => activatePopupInlineRow(row, mods.shift),
+    });
+    resultsList.appendChild(fragment);
+  }
+
+  function fetchPopupInlineHistory(terms: string, resultsList: HTMLUListElement): void {
+    const token = ++popupAnswerHistoryToken;
+    try {
+      // History list follows the usual search settings: skip AI keyword
+      // expansion only when normal AI search is off (semantic follows
+      // embeddingsEnabled inside runSearch).
+      chrome.runtime.sendMessage(
+        { type: 'SEARCH_QUERY', query: terms, skipAI: !SettingsManager.getSetting('ollamaEnabled') },
+        (resp: { results?: SearchResult[] } | undefined) => {
+          if (chrome.runtime.lastError) { return; }
+          if (token !== popupAnswerHistoryToken || !popupAnswerBlock) { return; }
+          const results = Array.isArray(resp?.results) ? resp.results.slice(0, 4) : [];
+          popupAnswerHistoryRows = results.map((r) => ({ kind: 'history' as const, result: r }));
+          rebuildPopupInlineRows(resultsList);
+        },
+      );
+    } catch { /* ignore */ }
+  }
+
+  function schedulePopupInlineAnswer(terms: string, resultsList: HTMLUListElement): void {
+    cancelPopupInlineAnswer();
+    if (!terms) { if (popupAnswerBlock) { setAnswerState(popupAnswerBlock, 'hidden'); } return; }
+    const delay = SettingsManager.getSetting('aiSearchDelayMs') ?? 500;
+    popupAnswerDebounceTimer = window.setTimeout(() => {
+      popupAnswerDebounceTimer = null;
+      const port = connectPopupAnswerPort();
+      if (!port || !popupAnswerBlock) { return; }
+      popupAnswerActiveId = ++popupAnswerRequestId;
+      setAnswerState(popupAnswerBlock, 'thinking'); // loader shows until the first token
+      try { port.postMessage({ type: 'ANSWER_START', requestId: popupAnswerActiveId, terms }); }
+      catch { if (popupAnswerBlock) { setAnswerState(popupAnswerBlock, 'hidden'); } }
+      fetchPopupInlineHistory(terms, resultsList);
+    }, delay);
+  }
+
+  function renderPopupInlinePane(terms: string, resultsList: HTMLUListElement): void {
+    popupSelectedIndex = -1; // Enter opens the default engine until the user arrows into a row.
+    popupAnswerTerms = terms;
+    resultsList.innerHTML = '';
+    resultsList.className = 'results list';
+
+    const modelLabel = `local · ${SettingsManager.getSetting('answerModel') ?? DEFAULT_ANSWER_MODEL}`;
+    popupAnswerBlock = buildInlineAnswerBlock({
+      classNames: POPUP_INLINE_CLASSNAMES,
+      modelLabel,
+      loaderStyle: SettingsManager.getSetting('answerLoaderStyle') ?? 'spinner',
+    });
+    resultsList.appendChild(popupAnswerBlock.root);
+
+    popupAnswerChipRows = getAvailableWebSearchEngines(terms, SettingsManager.getSettings()).map((chip) => ({ kind: 'chip' as const, chip }));
+    popupAnswerHistoryRows = [];
+    rebuildPopupInlineRows(resultsList);
+
+    schedulePopupInlineAnswer(terms, resultsList);
+  }
+
   function renderPopupPaletteResults(mode: PopupPaletteMode, query: string): void {
     const resultsList = $('results') as HTMLUListElement;
     if (!resultsList) {return;}
 
+    cancelPopupInlineAnswer();
+    popupAnswerBlock = null;
     popupWindowPickerActive = false;
     popupSelectedIndex = 0;
     resultsList.innerHTML = '';
@@ -1235,6 +1399,15 @@ function initializePopup() {
         }
         resultCountNode.textContent = '';
         return;
+      }
+      if (popupInlineAnswerActive()) {
+        const inlineDefaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
+        const inlineParsed = parseWebSearchQuery(query, inlineDefaultKey);
+        if (inlineParsed.searchTerms.trim()) {
+          renderPopupInlinePane(inlineParsed.searchTerms.trim(), resultsList);
+          resultCountNode.textContent = '';
+          return;
+        }
       }
       const defaultKey = SettingsManager.getSetting('webSearchEngine') ?? 'google';
       const settings = SettingsManager.getSettings();
@@ -1636,6 +1809,12 @@ function initializePopup() {
     const input = $('search-input') as HTMLInputElement;
 
     if (popupPaletteMode === 'websearch') {
+      // Inline-answer pane: once the user arrows into a history/chip row, Enter
+      // activates THAT row; with no row selected, fall through to default open.
+      if (popupInlineAnswerActive() && popupSelectedIndex >= 0 && popupInlineRows.length > 0) {
+        activatePopupInlineRow(popupInlineRows[popupSelectedIndex], shiftKey);
+        return;
+      }
       const raw = (input?.value ?? '').trim();
       logger.trace('webSearchEnter', `raw="${raw.slice(0, 500)}"`);
       const { query } = detectPopupMode(raw);
@@ -2766,12 +2945,41 @@ function initializePopup() {
       ollamaEndpointInput.value = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
     }
 
-    // Initialize custom model select
-    initModelSelect(SettingsManager.getSetting('ollamaModel') || DEFAULT_GENERATION_MODEL);
+    // Generation model picker (reusable component) — refresh lists all models.
+    createModelSelect({
+      prefix: 'model',
+      hiddenInputId: 'modal-ollamaModel',
+      defaultValue: DEFAULT_GENERATION_MODEL,
+      recommendedList: RECOMMENDED_GENERATION_MODELS,
+      settingsKey: 'ollamaModel',
+      toastLabel: 'Model',
+      refreshBtnId: 'refresh-models-btn',
+    });
 
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
     if (ollamaTimeoutInput) {
       ollamaTimeoutInput.value = String(SettingsManager.getSetting('ollamaTimeout') ?? 30000);
+    }
+
+    // Inline ?? AI answer settings
+    const inlineAnswerEnabledInput = modal.querySelector('#modal-inlineAnswerEnabled') as HTMLInputElement;
+    if (inlineAnswerEnabledInput) {
+      inlineAnswerEnabledInput.checked = SettingsManager.getSetting('inlineAnswerEnabled') ?? false;
+    }
+    // Answer model picker — refresh excludes embedding-only models (can't chat).
+    createModelSelect({
+      prefix: 'answer',
+      hiddenInputId: 'modal-answerModel',
+      defaultValue: DEFAULT_ANSWER_MODEL,
+      recommendedList: RECOMMENDED_GENERATION_MODELS,
+      settingsKey: 'answerModel',
+      toastLabel: 'Answer model',
+      refreshBtnId: 'refresh-answer-models-btn',
+      refreshFilter: (name) => !EMBEDDING_ONLY_NAME_PATTERNS.some(p => name.toLowerCase().includes(p)),
+    });
+    const answerLoaderStyleInput = modal.querySelector('#modal-answerLoaderStyle') as HTMLSelectElement;
+    if (answerLoaderStyleInput) {
+      answerLoaderStyleInput.value = SettingsManager.getSetting('answerLoaderStyle') ?? 'spinner';
     }
 
     // Semantic search settings
@@ -2780,7 +2988,17 @@ function initializePopup() {
       embeddingsEnabledInput.checked = SettingsManager.getSetting('embeddingsEnabled') ?? false;
     }
 
-    initEmbedSelect(SettingsManager.getSetting('embeddingModel') || DEFAULT_EMBEDDING_MODEL);
+    // Embedding model picker — refresh filters to embedding models only.
+    createModelSelect({
+      prefix: 'embed',
+      hiddenInputId: 'modal-embeddingModel',
+      defaultValue: DEFAULT_EMBEDDING_MODEL,
+      recommendedList: RECOMMENDED_EMBEDDING_MODELS,
+      settingsKey: 'embeddingModel',
+      toastLabel: 'Embedding model',
+      refreshBtnId: 'refresh-embed-models-btn',
+      refreshFilter: (name) => name.toLowerCase().includes('embed'),
+    });
 
     // Privacy settings
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
@@ -2875,41 +3093,65 @@ function initializePopup() {
 
   // Sourced from src/shared/ollama-models.ts so dropdowns, schema defaults, and
   // Quick-Setup instructions stay in lockstep.
-  const MODEL_SELECT_DEFAULTS: Array<{ value: string; hint: string }> = RECOMMENDED_GENERATION_MODELS.map(m => ({ value: m.value, hint: m.hint }));
-  let modelSelectOptions: Array<{ value: string; hint?: string }> = [...MODEL_SELECT_DEFAULTS];
-  let modelSelectInitialized = false;
-  let renderModelSelectList: ((filter?: string) => void) | null = null;
+  // ===== REUSABLE SEARCHABLE MODEL SELECT =====
+  // One implementation for all three model pickers (ollamaModel / embeddingModel
+  // / answerModel). Per-instance state is keyed by `prefix` so the refresh
+  // button can re-render its own list.
+  interface ModelSelectConfig {
+    prefix: string;                 // 'model' | 'embed' | 'answer' → #<prefix>-select-*
+    hiddenInputId: string;          // e.g. 'modal-ollamaModel'
+    defaultValue: string;
+    recommendedList: Array<{ value: string; hint: string }>;
+    settingsKey: 'ollamaModel' | 'embeddingModel' | 'answerModel';
+    toastLabel: string;
+    refreshBtnId?: string;
+    refreshFilter?: (name: string) => boolean;  // filter /api/tags results (e.g. embed-only, or exclude embed-only)
+  }
+  const modelSelectInited = new Set<string>();
 
-  function initModelSelect(currentValue: string): void {
-    const valueEl = document.getElementById('model-select-value');
-    const hiddenInput = document.getElementById('modal-ollamaModel') as HTMLInputElement | null;
-    if (valueEl) {valueEl.textContent = currentValue;}
-    if (hiddenInput) {hiddenInput.value = currentValue;}
+  function createModelSelect(cfg: ModelSelectConfig): void {
+    const valueEl = document.getElementById(`${cfg.prefix}-select-value`);
+    const hiddenInput = document.getElementById(cfg.hiddenInputId) as HTMLInputElement | null;
+    const current = (SettingsManager.getSetting(cfg.settingsKey) as string) || cfg.defaultValue;
+    if (valueEl) {valueEl.textContent = current;}
+    if (hiddenInput) {hiddenInput.value = current;}
 
-    if (modelSelectInitialized) {return;}
-    modelSelectInitialized = true;
+    if (modelSelectInited.has(cfg.prefix)) {return;}
+    modelSelectInited.add(cfg.prefix);
 
-    const trigger = document.getElementById('model-select-trigger');
-    const dropdown = document.getElementById('model-select-dropdown');
-    const searchInput = document.getElementById('model-select-search') as HTMLInputElement | null;
-    const listEl = document.getElementById('model-select-list');
-    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput) {return;}
+    const trigger = document.getElementById(`${cfg.prefix}-select-trigger`);
+    const dropdown = document.getElementById(`${cfg.prefix}-select-dropdown`);
+    const searchInput = document.getElementById(`${cfg.prefix}-select-search`) as HTMLInputElement | null;
+    const listEl = document.getElementById(`${cfg.prefix}-select-list`);
+    const wrap = document.getElementById(`${cfg.prefix}-select-wrap`);
+    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput || !wrap) {return;}
 
-    // All variables above are null-checked. TypeScript cannot narrow them inside closures,
-    // so we suppress non-null assertion warnings for this entire block.
+    const defaults = cfg.recommendedList.map(m => ({ value: m.value, hint: m.hint }));
+    let options: Array<{ value: string; hint?: string }> = [...defaults];
+
     /* eslint-disable @typescript-eslint/no-non-null-assertion */
-    function renderList(filter = '') {
+    const select = (value: string): void => {
+      valueEl!.textContent = value;
+      hiddenInput!.value = value;
+      SettingsManager.setSetting(cfg.settingsKey, value).catch(e => logger.debug('settings', `Failed to save ${cfg.settingsKey}`, errorMeta(e)));
+      showToast(`${cfg.toastLabel} set to: ${value}`, 'info');
+      close();
+    };
+    const highlight = (activeEl?: Element | null): void => {
+      listEl!.querySelectorAll('.model-select-option').forEach(el => el.classList.toggle('highlighted', el === activeEl));
+    };
+    const renderList = (filter = ''): void => {
       const lf = filter.toLowerCase().trim();
       const filtered = lf
-        ? modelSelectOptions.filter(o => o.value.toLowerCase().includes(lf) || (o.hint || '').toLowerCase().includes(lf))
-        : [...modelSelectOptions];
+        ? options.filter(o => o.value.toLowerCase().includes(lf) || (o.hint || '').toLowerCase().includes(lf))
+        : [...options];
 
       listEl!.innerHTML = '';
       if (filtered.length === 0 && lf) {
         const div = document.createElement('div');
         div.className = 'model-select-option';
         div.textContent = `↵ Use "${filter}"`;
-        div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectModel(filter.trim()); });
+        div.addEventListener('mousedown', (ev) => { ev.preventDefault(); select(filter.trim()); });
         listEl!.appendChild(div);
       } else {
         filtered.forEach((o) => {
@@ -2926,217 +3168,99 @@ function initializePopup() {
             hint.textContent = o.hint;
             div.appendChild(hint);
           }
-          div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectModel(o.value); });
+          div.addEventListener('mousedown', (ev) => { ev.preventDefault(); select(o.value); });
           div.addEventListener('mouseenter', () => highlight(div));
           listEl!.appendChild(div);
         });
       }
-    }
-
-    function highlight(activeEl?: Element | null) {
-      listEl!.querySelectorAll('.model-select-option').forEach(el => el.classList.toggle('highlighted', el === activeEl));
-    }
-
-    function getHighlighted(): HTMLElement | null {
-      return listEl!.querySelector('.model-select-option.highlighted');
-    }
-
-    function selectModel(value: string) {
-      valueEl!.textContent = value;
-      hiddenInput!.value = value;
-      hiddenInput!.dispatchEvent(new Event('change', { bubbles: true }));
-      closeDropdown();
-    }
-
-    function openDropdown() {
+    };
+    const open = (): void => {
       dropdown!.removeAttribute('hidden');
-      trigger.setAttribute('aria-expanded', 'true');
+      trigger!.setAttribute('aria-expanded', 'true');
       searchInput!.value = '';
       renderList();
       searchInput!.focus();
-    }
-
-    function closeDropdown() {
+    };
+    const close = (): void => {
       dropdown!.setAttribute('hidden', '');
-      trigger.setAttribute('aria-expanded', 'false');
-    }
-
-    renderModelSelectList = renderList;
+      trigger!.setAttribute('aria-expanded', 'false');
+    };
 
     trigger.addEventListener('click', () => {
-      if (dropdown.hasAttribute('hidden')) {openDropdown();} else {closeDropdown();}
+      if (dropdown.hasAttribute('hidden')) {open();} else {close();}
     });
     trigger.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); openDropdown(); }
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); open(); }
     });
-
-    searchInput.addEventListener('input', () => renderList(searchInput.value));
+    searchInput.addEventListener('input', () => renderList(searchInput!.value));
     searchInput.addEventListener('keydown', (e) => {
-      const options = Array.from(listEl!.querySelectorAll('.model-select-option')) as HTMLElement[];
-      const highlighted = getHighlighted();
-      let idx = highlighted ? options.indexOf(highlighted) : -1;
-
+      const opts = Array.from(listEl!.querySelectorAll('.model-select-option')) as HTMLElement[];
+      const highlighted = listEl!.querySelector('.model-select-option.highlighted') as HTMLElement | null;
+      let idx = highlighted ? opts.indexOf(highlighted) : -1;
       if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        idx = Math.min(idx + 1, options.length - 1);
-        highlight(options[idx]);
-        options[idx]?.scrollIntoView({ block: 'nearest' });
+        e.preventDefault(); idx = Math.min(idx + 1, opts.length - 1); highlight(opts[idx]); opts[idx]?.scrollIntoView({ block: 'nearest' });
       } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        idx = Math.max(idx - 1, 0);
-        highlight(options[idx]);
-        options[idx]?.scrollIntoView({ block: 'nearest' });
+        e.preventDefault(); idx = Math.max(idx - 1, 0); highlight(opts[idx]); opts[idx]?.scrollIntoView({ block: 'nearest' });
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (highlighted?.dataset.value) {
-          selectModel(highlighted.dataset.value);
-        } else if (searchInput.value.trim()) {
-          selectModel(searchInput.value.trim());
-        }
+        if (highlighted?.dataset.value) { select(highlighted.dataset.value); }
+        else if (searchInput!.value.trim()) { select(searchInput!.value.trim()); }
       } else if (e.key === 'Escape') {
-        e.preventDefault();
-        closeDropdown();
-        trigger.focus();
+        e.preventDefault(); close(); trigger!.focus();
       }
     });
-
     document.addEventListener('mousedown', (e) => {
-      const wrap = document.getElementById('model-select-wrap');
-      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) {closeDropdown();}
+      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) {close();}
     });
-    /* eslint-enable @typescript-eslint/no-non-null-assertion */
-  }
 
-  // ===== SEARCHABLE EMBEDDING MODEL SELECT =====
-  const EMBED_SELECT_DEFAULTS: Array<{ value: string; hint: string }> = RECOMMENDED_EMBEDDING_MODELS.map(m => ({ value: m.value, hint: m.hint }));
-  let embedSelectOptions: Array<{ value: string; hint?: string }> = [...EMBED_SELECT_DEFAULTS];
-  let embedSelectInitialized = false;
-  let renderEmbedSelectList: ((filter?: string) => void) | null = null;
-
-  function initEmbedSelect(currentValue: string): void {
-    const valueEl = document.getElementById('embed-select-value');
-    const hiddenInput = document.getElementById('modal-embeddingModel') as HTMLInputElement | null;
-    if (valueEl) {valueEl.textContent = currentValue;}
-    if (hiddenInput) {hiddenInput.value = currentValue;}
-
-    if (embedSelectInitialized) {return;}
-    embedSelectInitialized = true;
-
-    const trigger = document.getElementById('embed-select-trigger');
-    const dropdown = document.getElementById('embed-select-dropdown');
-    const searchInput = document.getElementById('embed-select-search') as HTMLInputElement | null;
-    const listEl = document.getElementById('embed-select-list');
-    if (!trigger || !dropdown || !searchInput || !listEl || !valueEl || !hiddenInput) {return;}
-
-    /* eslint-disable @typescript-eslint/no-non-null-assertion */
-    function renderList(filter = '') {
-      const lf = filter.toLowerCase().trim();
-      const filtered = lf
-        ? embedSelectOptions.filter(o => o.value.toLowerCase().includes(lf) || (o.hint || '').toLowerCase().includes(lf))
-        : [...embedSelectOptions];
-
-      listEl!.innerHTML = '';
-      if (filtered.length === 0 && lf) {
-        const div = document.createElement('div');
-        div.className = 'model-select-option';
-        div.textContent = `↵ Use "${filter}"`;
-        div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectEmbed(filter.trim()); });
-        listEl!.appendChild(div);
-      } else {
-        filtered.forEach((o) => {
-          const div = document.createElement('div');
-          div.className = 'model-select-option' + (o.value === hiddenInput!.value ? ' selected' : '');
-          div.dataset.value = o.value;
-          const label = document.createElement('span');
-          label.className = 'model-select-option-label';
-          label.textContent = o.value;
-          div.appendChild(label);
-          if (o.hint) {
-            const hint = document.createElement('span');
-            hint.className = 'model-select-option-hint' + (o.hint.includes('★') ? ' recommended' : '');
-            hint.textContent = o.hint;
-            div.appendChild(hint);
+    // Optional 🔄 refresh: fetch installed models, apply the filter, re-render.
+    if (cfg.refreshBtnId) {
+      const refreshBtn = document.getElementById(cfg.refreshBtnId) as HTMLButtonElement | null;
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+          const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+          refreshBtn.disabled = true; refreshBtn.textContent = '⏳';
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          try {
+            const response = await fetch(`${endpoint}/api/tags`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const data = await response.json();
+            const all: Array<{ name: string; size?: number }> = data.models || [];
+            const models = cfg.refreshFilter ? all.filter(m => cfg.refreshFilter!(m.name)) : all;
+            if (models.length > 0) {
+              const hintMap = buildHintMap(defaults);
+              options = models.map((m) => {
+                const hint = hintMap.get(m.name) || hintMap.get(m.name.split(':')[0]);
+                if (hint) { return { value: m.name, hint }; }
+                const sizeStr = m.size ? formatModelSize(m.size) : '';
+                return { value: m.name, hint: sizeStr || undefined };
+              });
+              renderList();
+              showToast(`Found ${models.length} model${models.length > 1 ? 's' : ''}`, 'info');
+            } else if (all.length > 0) {
+              showToast('No matching models found', 'warning');
+            } else {
+              showToast('No models found. Is Ollama running?', 'warning');
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            const msg = error instanceof Error && error.name === 'AbortError'
+              ? 'Timed out after 5s. Is Ollama running?'
+              : 'Failed to fetch models. Is Ollama running?';
+            showToast(msg, 'error');
+            logger.error('settingsModal', 'Fetch Ollama models failed', errorMeta(error));
+          } finally {
+            refreshBtn.disabled = false; refreshBtn.textContent = '🔄';
           }
-          div.addEventListener('mousedown', (ev) => { ev.preventDefault(); selectEmbed(o.value); });
-          div.addEventListener('mouseenter', () => highlightEmbed(div));
-          listEl!.appendChild(div);
         });
       }
     }
-
-    function highlightEmbed(activeEl?: Element | null) {
-      listEl!.querySelectorAll('.model-select-option').forEach(el => el.classList.toggle('highlighted', el === activeEl));
-    }
-
-    function getHighlightedEmbed(): HTMLElement | null {
-      return listEl!.querySelector('.model-select-option.highlighted');
-    }
-
-    function selectEmbed(value: string) {
-      valueEl!.textContent = value;
-      hiddenInput!.value = value;
-      hiddenInput!.dispatchEvent(new Event('change', { bubbles: true }));
-      closeEmbedDropdown();
-    }
-
-    function openEmbedDropdown() {
-      dropdown!.removeAttribute('hidden');
-      trigger.setAttribute('aria-expanded', 'true');
-      searchInput!.value = '';
-      renderList();
-      searchInput!.focus();
-    }
-
-    function closeEmbedDropdown() {
-      dropdown!.setAttribute('hidden', '');
-      trigger.setAttribute('aria-expanded', 'false');
-    }
-
-    renderEmbedSelectList = renderList;
-
-    trigger.addEventListener('click', () => {
-      if (dropdown.hasAttribute('hidden')) {openEmbedDropdown();} else {closeEmbedDropdown();}
-    });
-    trigger.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); openEmbedDropdown(); }
-    });
-
-    searchInput.addEventListener('input', () => renderList(searchInput.value));
-    searchInput.addEventListener('keydown', (e) => {
-      const options = Array.from(listEl!.querySelectorAll('.model-select-option')) as HTMLElement[];
-      const highlighted = getHighlightedEmbed();
-      let idx = highlighted ? options.indexOf(highlighted) : -1;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        idx = Math.min(idx + 1, options.length - 1);
-        highlightEmbed(options[idx]);
-        options[idx]?.scrollIntoView({ block: 'nearest' });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        idx = Math.max(idx - 1, 0);
-        highlightEmbed(options[idx]);
-        options[idx]?.scrollIntoView({ block: 'nearest' });
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (highlighted?.dataset.value) {
-          selectEmbed(highlighted.dataset.value);
-        } else if (searchInput.value.trim()) {
-          selectEmbed(searchInput.value.trim());
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        closeEmbedDropdown();
-        trigger.focus();
-      }
-    });
-
-    document.addEventListener('mousedown', (e) => {
-      const wrap = document.getElementById('embed-select-wrap');
-      if (wrap && !wrap.contains(e.target as Node) && !dropdown.hasAttribute('hidden')) {closeEmbedDropdown();}
-    });
     /* eslint-enable @typescript-eslint/no-non-null-assertion */
   }
+
+  // (Embedding + answer model selects are created via createModelSelect — see call sites.)
 
   // Initialize bookmark button in settings modal (guarded to prevent duplicate listeners)
   let bookmarkBtnInitialized = false;
@@ -3630,66 +3754,7 @@ function initializePopup() {
       });
     }
 
-    // Ollama model changes (hidden input synced by custom model select)
-    const ollamaModelInput = modal.querySelector('#modal-ollamaModel') as HTMLInputElement;
-    if (ollamaModelInput) {
-      ollamaModelInput.addEventListener('change', () => {
-        const val = ollamaModelInput.value.trim();
-        if (val) {
-          SettingsManager.setSetting('ollamaModel', val).catch(e => logger.debug('settings', 'Failed to save ollamaModel', errorMeta(e)));
-          showToast(`Model set to: ${val}`, 'info');
-        }
-      });
-    }
-    
-    // Refresh models button - fetch available models from Ollama
-    const refreshModelsBtn = modal.querySelector('#refresh-models-btn') as HTMLButtonElement;
-    if (refreshModelsBtn) {
-      refreshModelsBtn.addEventListener('click', async () => {
-        const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
-        refreshModelsBtn.disabled = true;
-        refreshModelsBtn.textContent = '⏳';
-
-        // GUARDRAIL: 5-second timeout to prevent hanging if Ollama is unresponsive
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        try {
-          const response = await fetch(`${endpoint}/api/tags`, {
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          if (!response.ok) {throw new Error(`HTTP ${response.status}`);}
-
-          const data = await response.json();
-          const models = data.models || [];
-
-          if (models.length > 0) {
-            const hintMap = buildHintMap(MODEL_SELECT_DEFAULTS);
-            modelSelectOptions = models.map((m: { name: string; size?: number }) => {
-              const hint = hintMap.get(m.name) || hintMap.get(m.name.split(':')[0]);
-              if (hint) {return { value: m.name, hint };}
-              const sizeStr = m.size ? formatModelSize(m.size) : '';
-              return { value: m.name, hint: sizeStr || undefined };
-            });
-            if (renderModelSelectList) {renderModelSelectList();}
-            showToast(`Found ${models.length} models`, 'info');
-          } else {
-            showToast('No models found', 'warning');
-          }
-        } catch (error) {
-          clearTimeout(timeoutId);
-          const msg = error instanceof Error && error.name === 'AbortError'
-            ? 'Timed out after 5s. Is Ollama running?'
-            : 'Failed to fetch models. Is Ollama running?';
-          showToast(msg, 'error');
-          logger.error('settingsModal', 'Fetch Ollama models failed', errorMeta(error));
-        } finally {
-          refreshModelsBtn.disabled = false;
-          refreshModelsBtn.textContent = '🔄';
-        }
-      });
-    }
+    // (ollamaModel select + 🔄 refresh are wired by createModelSelect above.)
 
     // Ollama timeout changes
     const ollamaTimeoutInput = modal.querySelector('#modal-ollamaTimeout') as HTMLInputElement;
@@ -3712,6 +3777,29 @@ function initializePopup() {
       });
     }
 
+    // Inline ?? AI answer changes
+    const inlineAnswerEnabledInput = modal.querySelector('#modal-inlineAnswerEnabled') as HTMLInputElement;
+    if (inlineAnswerEnabledInput) {
+      inlineAnswerEnabledInput.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        SettingsManager.setSetting('inlineAnswerEnabled', target.checked).catch(err => logger.debug('settings', 'Failed to save inlineAnswerEnabled', errorMeta(err)));
+        logger.info('settingsModal', `Inline ?? answers ${target.checked ? 'ENABLED' : 'DISABLED'} by user`);
+        showToast('Inline ?? answers ' + (target.checked ? 'enabled' : 'disabled'), 'info');
+        if (target.checked) {
+          showToast('Make sure Ollama is running locally for ?? answers', 'info');
+        }
+      });
+    }
+    // (answerModel select + 🔄 refresh are wired by createModelSelect above.)
+    const answerLoaderStyleInput = modal.querySelector('#modal-answerLoaderStyle') as HTMLSelectElement;
+    if (answerLoaderStyleInput) {
+      answerLoaderStyleInput.addEventListener('change', () => {
+        const val = answerLoaderStyleInput.value as 'spinner' | 'dots' | 'shimmer' | 'caret';
+        SettingsManager.setSetting('answerLoaderStyle', val).catch(err => logger.debug('settings', 'Failed to save answerLoaderStyle', errorMeta(err)));
+        showToast(`Answer loading style: ${val}`, 'info');
+      });
+    }
+
     // Semantic search settings
     const embeddingsEnabledInput = modal.querySelector('#modal-embeddingsEnabled') as HTMLInputElement;
     if (embeddingsEnabledInput) {
@@ -3726,64 +3814,7 @@ function initializePopup() {
       });
     }
 
-    const embeddingModelHidden = modal.querySelector('#modal-embeddingModel') as HTMLInputElement;
-    if (embeddingModelHidden) {
-      embeddingModelHidden.addEventListener('change', () => {
-        const val = embeddingModelHidden.value.trim();
-        if (val) {
-          SettingsManager.setSetting('embeddingModel', val).catch(e => logger.debug('settings', 'Failed to save embeddingModel', errorMeta(e)));
-          showToast(`Embedding model set to: ${val}`, 'info');
-        }
-      });
-    }
-
-    // Refresh embedding models button - fetch embedding models from Ollama (filtered by 'embed')
-    const refreshEmbedModelsBtn = modal.querySelector('#refresh-embed-models-btn') as HTMLButtonElement;
-    if (refreshEmbedModelsBtn) {
-      refreshEmbedModelsBtn.addEventListener('click', async () => {
-        const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
-        refreshEmbedModelsBtn.disabled = true;
-        refreshEmbedModelsBtn.textContent = '⏳';
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        try {
-          const response = await fetch(`${endpoint}/api/tags`, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (!response.ok) {throw new Error(`HTTP ${response.status}`);}
-
-          const data = await response.json();
-          const allModels: Array<{ name: string }> = data.models || [];
-          const embedModels = allModels.filter(m => m.name.toLowerCase().includes('embed'));
-
-          if (embedModels.length > 0) {
-            const embedHintMap = buildHintMap(EMBED_SELECT_DEFAULTS);
-            embedSelectOptions = embedModels.map((m: { name: string; size?: number }) => {
-              const hint = embedHintMap.get(m.name) || embedHintMap.get(m.name.split(':')[0]);
-              if (hint) {return { value: m.name, hint };}
-              const sizeStr = m.size ? formatModelSize(m.size) : '';
-              return { value: m.name, hint: sizeStr || undefined };
-            });
-            if (renderEmbedSelectList) {renderEmbedSelectList();}
-            showToast(`Found ${embedModels.length} embedding model${embedModels.length > 1 ? 's' : ''}`, 'info');
-          } else if (allModels.length > 0) {
-            showToast(`No embedding models found. Try: ${getPullCommand(DEFAULT_EMBEDDING_MODEL)}`, 'warning');
-          } else {
-            showToast('No models found. Is Ollama running?', 'warning');
-          }
-        } catch (error) {
-          clearTimeout(timeoutId);
-          const msg = error instanceof Error && error.name === 'AbortError'
-            ? 'Timed out after 5s. Is Ollama running?'
-            : 'Failed to fetch models. Is Ollama running?';
-          showToast(msg, 'error');
-        } finally {
-          refreshEmbedModelsBtn.disabled = false;
-          refreshEmbedModelsBtn.textContent = '🔄';
-        }
-      });
-    }
+    // (embeddingModel select + 🔄 refresh are wired by createModelSelect above.)
 
     // Privacy settings - Load Favicons
     const loadFaviconsInput = modal.querySelector('#modal-loadFavicons') as HTMLInputElement;
