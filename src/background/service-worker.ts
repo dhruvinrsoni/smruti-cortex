@@ -14,6 +14,7 @@ import { startHealthMonitoring, ensureReady } from './resilience';
 import { createRegistries } from './composition-root';
 import { registerCommandsListenerEarly, keepServiceWorkerAlive, reinjectContentScript } from './lifecycle/commands-listener';
 import { setupPortBasedMessaging, broadcastToActivePorts } from './lifecycle/port-messaging';
+import { setupAnswerStreamPort } from './lifecycle/answer-stream-port';
 import { setupDataChangeListeners, type DataChangeSource } from './lifecycle/data-change-listeners';
 import { setupOmnibox } from './lifecycle/omnibox';
 import { applyFreshInstallProfile } from './lifecycle/fresh-install';
@@ -30,6 +31,8 @@ setupPortBasedMessaging({
   getInitPromise: () => initializationPromise,
   ensureReady,
 });
+// Inline `??` AI-answer streaming on a dedicated port (local Ollama only).
+setupAnswerStreamPort();
 
 function broadcastDataChange(source: DataChangeSource): void {
   broadcastToActivePorts({ type: 'DATA_CHANGED', source });

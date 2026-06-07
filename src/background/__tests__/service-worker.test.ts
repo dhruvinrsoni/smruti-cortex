@@ -262,10 +262,19 @@ vi.mock('../../core/helpers', () => {
           },
         },
         onConnect: {
-           
+
           addListener: (cb: any) => {
-             
-            (globalThis as any).__swTestPortHandler = cb;
+            // Multiple onConnect listeners are now registered (quick-search +
+            // ai-answer). Fan out to all of them so a fired port reaches the
+            // handler that owns it, regardless of registration order.
+
+            const g = globalThis as any;
+            const prev = g.__swTestPortHandlers as Array<(p: any) => void> | undefined;
+            g.__swTestPortHandlers = prev ? [...prev, cb] : [cb];
+
+            g.__swTestPortHandler = (port: any) => {
+              for (const handler of g.__swTestPortHandlers) { handler(port); }
+            };
           },
         },
         onStartup: { addListener: () => {} },
@@ -315,6 +324,11 @@ vi.mock('../ollama-service', () => ({
   getOllamaConfigFromSettings: vi.fn(async () => ({})),
   getOllamaService: vi.fn(() => ({ checkStatus: vi.fn(async () => ({ available: false })), warmup: vi.fn(async () => true) })),
   normalizeModelName: vi.fn((name: string) => name.replace(/:latest$/, '')),
+  createOllamaAnswerProvider: vi.fn(() => ({
+    id: 'ollama-local',
+    isAvailable: vi.fn(async () => false),
+    streamAnswer: vi.fn(async () => ({ text: '', success: false, durationMs: 0 })),
+  })),
 }));
 
 vi.mock('../ai-keyword-cache', () => ({
