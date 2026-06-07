@@ -57,6 +57,9 @@ interface SettingSchema<T> {
 | `aiSearchDelayMs` | number | 500 | Phase 2 debounce (ms) |
 | `embeddingsEnabled` | boolean | false | Semantic search |
 | `embeddingModel` | string | `mxbai-embed-large` | Embedding model (334M params, 1024-dim, ~670 MB) |
+| `inlineAnswerEnabled` | boolean | false | Stream a local-AI answer inline in `??` mode (also gated by `ollamaEnabled`) |
+| `answerModel` | string | `llama3.2:3b` | Model for inline `??` answers (separate from `ollamaModel`) |
+| `answerMaxTokens` | number | 200 | Output cap (`num_predict`) for inline `??` answers (32–512) |
 
 <!-- Model defaults sourced from src/shared/ollama-models.ts -->
 

@@ -1,5 +1,41 @@
 [
   {
+    "id": "inline-answer-programming",
+    "file": "SmrutiCortex Command Palette DoubleQueMark AI-Enabled ollama answer for programming meaning que Screenshot 2026-06-07 025807.png",
+    "alt": "Inline ?? answer — local AI explains \"programming\" right in the results, with matching pages and engine chips below",
+    "sections": ["hero", "ai-carousel"],
+    "tour": {
+      "title": "Inline ?? Answers",
+      "subtitle": "Type ?? + a question and a concise answer streams in from your local Ollama — no tab switch. Your matching pages and Search-on-Google/YouTube/GitHub chips sit right below; Enter still opens the full web search.",
+      "highlight": { "x": "1%", "y": "12%", "w": "97%", "h": "78%" },
+      "category": "ai"
+    }
+  },
+  {
+    "id": "inline-answer-sanskrit-jaya",
+    "file": "SmrutiCortex Command Palette DoubleQueMark AI-Enabled ollama answer for jay traya meaning in sanskrit expained with sanskrit words Screenshot 2026-06-07 035307.png",
+    "alt": "Inline ?? answer — local AI explains the Sanskrit phrase \"jaya traya\" with word-by-word meaning",
+    "sections": ["ai-carousel"],
+    "tour": {
+      "title": "Quick Meanings & Definitions",
+      "subtitle": "Ask for word meanings, definitions, or explanations in any language and get an instant on-device answer — perfect when you just need a quick understanding without leaving the page.",
+      "highlight": { "x": "1%", "y": "12%", "w": "97%", "h": "78%" },
+      "category": "ai"
+    }
+  },
+  {
+    "id": "inline-answer-overlay-swasti",
+    "file": "SmrutiCortex quick-search Command Palette DoubleQueMark AI-Enabled ollama answer for swasti meaning explained Screenshot 2026-06-07 035412.png",
+    "alt": "Inline ?? answer in the quick-search overlay — local AI explains the meaning of \"swasti\" on any page",
+    "sections": ["ai-carousel"],
+    "tour": {
+      "title": "?? Answers On Any Page",
+      "subtitle": "The same inline AI answer works in the quick-search overlay (Ctrl+Shift+S) — ask on any webpage and get a streamed local answer without opening a new tab.",
+      "highlight": { "x": "2%", "y": "3%", "w": "96%", "h": "93%" },
+      "category": "ai"
+    }
+  },
+  {
     "id": "github-ai",
     "file": "SmrutiCortex quick-search 'github' keyword AI matches ranked high with 'repository' keyword match with green highlight Screenshot 2026-03-10 002321.png",
     "alt": "AI Search — 'github' query with AI-expanded 'repository' match in green",
