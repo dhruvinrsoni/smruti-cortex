@@ -26,6 +26,16 @@ const ollamaMocks = {
   releaseOllamaSlot: vi.fn(),
   recordCircuitBreakerFailure: vi.fn(),
   recordCircuitBreakerSuccess: vi.fn(),
+  // Minimal real-behaviour stand-in: provides a signal, forwards an external
+  // abort, and a no-op clearTimer (no real timeout in tests).
+  useTimeoutAbort: vi.fn((_scope: unknown, opts: { externalSignal?: AbortSignal }) => {
+    const controller = new AbortController();
+    if (opts?.externalSignal) {
+      if (opts.externalSignal.aborted) { controller.abort(); }
+      else { opts.externalSignal.addEventListener('abort', () => controller.abort(), { once: true }); }
+    }
+    return { signal: controller.signal, clearTimer: () => {} };
+  }),
 };
 vi.mock('../ollama-service', () => ollamaMocks);
 

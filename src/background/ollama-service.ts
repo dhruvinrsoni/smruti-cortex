@@ -12,7 +12,10 @@
  */
 
 import { Logger, errorMeta } from '../core/logger';
-import { DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL } from '../shared/ollama-models';
+import { DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL, DEFAULT_ANSWER_MODEL, ANSWER_MAX_TOKENS } from '../shared/ollama-models';
+import { ANSWER_SYSTEM_PROMPT, type AnswerStreamOptions, type AnswerStreamResult, type AnswerProvider } from '../shared/answer-prompt';
+import { streamNdjson, parseOllamaChatStreamLine } from '../shared/ollama-stream';
+import { ResourceScope, withResources } from '../shared/resource-scope';
 
 const COMPONENT = 'OllamaService';
 const logger = Logger.forComponent(COMPONENT);
@@ -275,234 +278,350 @@ export class OllamaService {
       };
     }
 
-    // === GUARD 3: Concurrent request limiter ===
-    if (!requestSemaphore.acquire()) {
-      return {
-        embedding: [], model: this.config.model, success: false,
-        duration: 0, error: 'Another Ollama request in progress — try again shortly'
-      };
-    }
-
-    // === GUARD 4: Already aborted ===
-    if (abortSignal?.aborted) {
-      requestSemaphore.release();
-      return {
-        embedding: [], model: this.config.model, success: false,
-        duration: 0, error: 'Aborted before start'
-      };
-    }
-
-    logger.debug('generateEmbedding', '🤖 Starting embedding generation', {
-      textLength: text.length,
-      textPreview: textPreview,
-      model: this.config.model
-    });
-
-    // Quick availability check. `checkAvailability` already emits a single
-    // INFO line per transition; logging again here would duplicate it on
-    // every embedding attempt while Ollama is down.
-    const status = await this.checkAvailability();
-    if (!status.available) {
-      requestSemaphore.release();
-      logger.trace('generateEmbedding', `Cannot generate embedding: ${status.error || 'Ollama not available'}`);
-      return {
-        embedding: [],
-        model: this.config.model,
-        success: false,
-        duration: Date.now() - startTime,
-        error: status.error || 'Ollama not available'
-      };
-    }
-
-    // Generate embedding using Ollama's /api/embed endpoint
-    // API: POST /api/embed { model: string, input: string } -> { embeddings: number[][] }
-    const requestUrl = `${this.config.endpoint}/api/embed`;
-    const requestBody = {
-      model: this.config.model,
-      input: text  // Use 'input' not 'prompt' for /api/embed
-    };
-
-    logger.trace('generateEmbedding', '📡 Sending embedding request to Ollama', {
-      url: requestUrl,
-      method: 'POST',
-      timeout: this.config.timeout,
-      bodySize: JSON.stringify(requestBody).length,
-      // PRIVACY: Log that we're sending text to LOCAL Ollama only
-      destination: 'localhost (on-device processing)'
-    });
-
-    try {
-      const controller = new AbortController();
-
-      // Support infinite timeout: -1 or 0 = no timeout, positive = timeout value
-      // GUARDRAIL: Even "infinite" is capped at 120s to prevent permanent hangs
-      const effectiveTimeout = this.config.timeout <= 0 ? 120_000 : this.config.timeout;
-      const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
-
-      // If caller provided an abort signal, forward it to our controller
-      if (abortSignal) {
-        if (abortSignal.aborted) {
-          clearTimeout(timeoutId);
-          controller.abort();
-        } else {
-          abortSignal.addEventListener('abort', () => {
-            clearTimeout(timeoutId);
-            controller.abort();
-          }, { once: true });
-        }
-      }
-
-      const timeoutDisplay = this.config.timeout <= 0 ? `capped at ${effectiveTimeout}ms` : `${effectiveTimeout}ms`;
-      logger.debug('generateEmbedding', `⏱️ Sending POST request (timeout: ${timeoutDisplay})...`);
-      const fetchStartTime = Date.now();
-
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      const fetchDuration = Date.now() - fetchStartTime;
-
-      logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
-
-      if (!response.ok) {
-        const errorText = await readResponseWithLimit(response, 1024 * 64).catch(() => 'No error details');
-
-        // === Handle 400 "context length exceeded" — input problem, NOT server failure ===
-        // Don't trip circuit breaker for input validation errors.
-        // This happens when text exceeds the model's token context window.
-        if (response.status === 400 && (errorText.includes('context length') || errorText.includes('input length'))) {
-          logger.warn('generateEmbedding',
-            `⚠️ Input too long for model context window (${text.length} chars). ` +
-            'Text was already truncated — model may have a very small context. ' +
-            'Consider using a model with larger context (e.g., nomic-embed-text:latest).');
-
-          // Graceful failure — do NOT count toward circuit breaker
-          requestSemaphore.release();
-          return {
-            embedding: [], model: this.config.model, success: false,
-            duration: Date.now() - startTime,
-            error: `Input too long for model context (${text.length} chars)`
-          };
-        }
-
-        // Provide helpful error message for common issues
-        const errorMsg = `Ollama API error: ${response.status} ${response.statusText}`;
-        let helpText = '';
-
-        if (response.status === 403) {
-          // CORS issue - Ollama is blocking the extension origin
-          helpText = 'CORS blocked. Set OLLAMA_ORIGINS=* environment variable and restart Ollama.';
-          logger.warn('generateEmbedding', '🔒 CORS BLOCKED: Ollama is rejecting requests from Chrome extensions');
-          logger.info('generateEmbedding', '💡 FIX: Set environment variable OLLAMA_ORIGINS=* and restart Ollama');
-          logger.debug('generateEmbedding', '📖 Instructions:', {
-            windows: 'setx OLLAMA_ORIGINS "*" then restart Ollama',
-            linux: 'export OLLAMA_ORIGINS="*" or add to ~/.bashrc',
-            mac: 'launchctl setenv OLLAMA_ORIGINS "*" or add to ~/.zshrc',
-            docker: 'docker run -e OLLAMA_ORIGINS="*" ...'
-          });
-        }
-
-        logger.debug('generateEmbedding', '❌ Ollama API returned error', {
-          status: response.status,
-          statusText: response.statusText,
-          errorBody: errorText,
-          helpText
-        });
-
-        throw new Error(helpText ? `${errorMsg} - ${helpText}` : `${errorMsg} - ${errorText}`);
-      }
-
-      logger.debug('generateEmbedding', '📄 Parsing JSON response...');
-      const parseStartTime = Date.now();
-      const data = await readJsonWithLimit<{ embeddings?: number[][] }>(response);
-      const parseDuration = Date.now() - parseStartTime;
-      const duration = Date.now() - startTime;
-
-      logger.debug('generateEmbedding', `✅ JSON parsed in ${parseDuration}ms`);
-
-      // /api/embed returns { embeddings: number[][] } - take first embedding
-      const embedding = data.embeddings?.[0] || [];
-      
-      logger.trace('generateEmbedding', '📊 Raw response parsed', {
-        hasEmbeddings: !!data.embeddings,
-        embeddingsCount: data.embeddings?.length || 0,
-        firstEmbeddingLength: embedding.length,
-        // Show first 5 values as sample for debugging
-        embeddingSample: embedding.slice(0, 5)
-      });
-
-      if (embedding.length === 0) {
-        logger.warn('generateEmbedding',
-          `Embedding response contained 0 dimensions in ${duration}ms — model may not support this input`);
+    // try-with-resources: the slot + timeout/abort are torn down on every exit
+    // path so the single-flight slot is never left stuck and Ollama is never
+    // left engaged.
+    return withResources(async (scope) => {
+      // === GUARD 3: Concurrent request limiter ===
+      if (!useOllamaSlot(scope)) {
         return {
-          embedding,
-          model: this.config.model,
-          success: false,
-          duration,
-          error: 'Embedding response contained 0 dimensions'
+          embedding: [], model: this.config.model, success: false,
+          duration: 0, error: 'Another Ollama request in progress — try again shortly'
         };
       }
 
-      logger.debug('generateEmbedding', `Embedding generated in ${duration}ms (${embedding.length} dimensions)`);
-      logger.debug('generateEmbedding', '📈 Embedding stats', {
-        dimensions: embedding.length,
-        durationMs: duration,
-        bytesProcessed: text.length,
-        throughput: `${(text.length / duration * 1000).toFixed(0)} chars/sec`
+      // === GUARD 4: Already aborted ===
+      if (abortSignal?.aborted) {
+        return {
+          embedding: [], model: this.config.model, success: false,
+          duration: 0, error: 'Aborted before start'
+        };
+      }
+
+      logger.debug('generateEmbedding', '🤖 Starting embedding generation', {
+        textLength: text.length,
+        textPreview: textPreview,
+        model: this.config.model
       });
 
-      circuitBreaker.recordSuccess();
-      sessionEmbeddingCount++;
-
-      return {
-        embedding,
-        model: this.config.model,
-        success: true,
-        duration
-      };
-
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      const isAbort = errorMsg.includes('abort') || errorMsg.includes('AbortError');
-
-      // Only count real Ollama failures toward circuit breaker — NOT search-cancelled aborts
-      if (!isAbort) {
-        circuitBreaker.recordFailure();
+      // Quick availability check. `checkAvailability` already emits a single
+      // INFO line per transition; logging again here would duplicate it on
+      // every embedding attempt while Ollama is down.
+      const status = await this.checkAvailability();
+      if (!status.available) {
+        logger.trace('generateEmbedding', `Cannot generate embedding: ${status.error || 'Ollama not available'}`);
+        return {
+          embedding: [],
+          model: this.config.model,
+          success: false,
+          duration: Date.now() - startTime,
+          error: status.error || 'Ollama not available'
+        };
       }
 
-      if (isAbort) {
-        logger.warn('generateEmbedding', `⏱️ REQUEST TIMEOUT after ${duration}ms (limit: ${this.config.timeout}ms)`);
-        logger.info('generateEmbedding', '💡 First embedding may take 5-10s for model loading. Try increasing timeout in settings.');
-        logger.debug('generateEmbedding', 'Timeout details', {
-          durationMs: duration,
-          configuredTimeout: this.config.timeout,
-          suggestion: 'Increase ollamaTimeout in settings to 10000ms or higher'
-        });
-      } else {
-        logger.debug('generateEmbedding', '❌ Embedding generation failed', {
-          error: errorMsg,
-          isAbort,
-          durationMs: duration,
-          configuredTimeout: this.config.timeout
-        });
-      }
-      logger.warn('generateEmbedding', `❌ Embedding failed after ${duration}ms: ${errorMsg}`);
-
-      return {
-        embedding: [],
+      // Generate embedding using Ollama's /api/embed endpoint
+      // API: POST /api/embed { model: string, input: string } -> { embeddings: number[][] }
+      const requestUrl = `${this.config.endpoint}/api/embed`;
+      const requestBody = {
         model: this.config.model,
-        success: false,
-        duration,
-        error: errorMsg
+        input: text  // Use 'input' not 'prompt' for /api/embed
       };
-    } finally {
-      requestSemaphore.release();
+
+      logger.trace('generateEmbedding', '📡 Sending embedding request to Ollama', {
+        url: requestUrl,
+        method: 'POST',
+        timeout: this.config.timeout,
+        bodySize: JSON.stringify(requestBody).length,
+        // PRIVACY: Log that we're sending text to LOCAL Ollama only
+        destination: 'localhost (on-device processing)'
+      });
+
+      try {
+        const { signal, clearTimer } = useTimeoutAbort(scope, {
+          timeoutMs: this.config.timeout,
+          externalSignal: abortSignal,
+        });
+
+        const effectiveTimeout = this.config.timeout <= 0 ? 120_000 : this.config.timeout;
+        const timeoutDisplay = this.config.timeout <= 0 ? `capped at ${effectiveTimeout}ms` : `${effectiveTimeout}ms`;
+        logger.debug('generateEmbedding', `⏱️ Sending POST request (timeout: ${timeoutDisplay})...`);
+        const fetchStartTime = Date.now();
+
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal
+        });
+
+        // Response in hand — the read/parse below is fast and not subject to the
+        // request timeout (scope teardown still aborts on any abnormal exit).
+        clearTimer();
+        const fetchDuration = Date.now() - fetchStartTime;
+
+        logger.debug('generateEmbedding', `📨 Response received in ${fetchDuration}ms: ${response.status} ${response.statusText}`);
+
+        if (!response.ok) {
+          const errorText = await readResponseWithLimit(response, 1024 * 64).catch(() => 'No error details');
+
+          // === Handle 400 "context length exceeded" — input problem, NOT server failure ===
+          // Don't trip circuit breaker for input validation errors.
+          // This happens when text exceeds the model's token context window.
+          if (response.status === 400 && (errorText.includes('context length') || errorText.includes('input length'))) {
+            logger.warn('generateEmbedding',
+              `⚠️ Input too long for model context window (${text.length} chars). ` +
+              'Text was already truncated — model may have a very small context. ' +
+              'Consider using a model with larger context (e.g., nomic-embed-text:latest).');
+
+            // Graceful failure — do NOT count toward circuit breaker
+            return {
+              embedding: [], model: this.config.model, success: false,
+              duration: Date.now() - startTime,
+              error: `Input too long for model context (${text.length} chars)`
+            };
+          }
+
+          // Provide helpful error message for common issues
+          const errorMsg = `Ollama API error: ${response.status} ${response.statusText}`;
+          let helpText = '';
+
+          if (response.status === 403) {
+            // CORS issue - Ollama is blocking the extension origin
+            helpText = 'CORS blocked. Set OLLAMA_ORIGINS=* environment variable and restart Ollama.';
+            logger.warn('generateEmbedding', '🔒 CORS BLOCKED: Ollama is rejecting requests from Chrome extensions');
+            logger.info('generateEmbedding', '💡 FIX: Set environment variable OLLAMA_ORIGINS=* and restart Ollama');
+            logger.debug('generateEmbedding', '📖 Instructions:', {
+              windows: 'setx OLLAMA_ORIGINS "*" then restart Ollama',
+              linux: 'export OLLAMA_ORIGINS="*" or add to ~/.bashrc',
+              mac: 'launchctl setenv OLLAMA_ORIGINS "*" or add to ~/.zshrc',
+              docker: 'docker run -e OLLAMA_ORIGINS="*" ...'
+            });
+          }
+
+          logger.debug('generateEmbedding', '❌ Ollama API returned error', {
+            status: response.status,
+            statusText: response.statusText,
+            errorBody: errorText,
+            helpText
+          });
+
+          throw new Error(helpText ? `${errorMsg} - ${helpText}` : `${errorMsg} - ${errorText}`);
+        }
+
+        logger.debug('generateEmbedding', '📄 Parsing JSON response...');
+        const parseStartTime = Date.now();
+        const data = await readJsonWithLimit<{ embeddings?: number[][] }>(response);
+        const parseDuration = Date.now() - parseStartTime;
+        const duration = Date.now() - startTime;
+
+        logger.debug('generateEmbedding', `✅ JSON parsed in ${parseDuration}ms`);
+
+        // /api/embed returns { embeddings: number[][] } - take first embedding
+        const embedding = data.embeddings?.[0] || [];
+
+        logger.trace('generateEmbedding', '📊 Raw response parsed', {
+          hasEmbeddings: !!data.embeddings,
+          embeddingsCount: data.embeddings?.length || 0,
+          firstEmbeddingLength: embedding.length,
+          // Show first 5 values as sample for debugging
+          embeddingSample: embedding.slice(0, 5)
+        });
+
+        if (embedding.length === 0) {
+          logger.warn('generateEmbedding',
+            `Embedding response contained 0 dimensions in ${duration}ms — model may not support this input`);
+          return {
+            embedding,
+            model: this.config.model,
+            success: false,
+            duration,
+            error: 'Embedding response contained 0 dimensions'
+          };
+        }
+
+        logger.debug('generateEmbedding', `Embedding generated in ${duration}ms (${embedding.length} dimensions)`);
+        logger.debug('generateEmbedding', '📈 Embedding stats', {
+          dimensions: embedding.length,
+          durationMs: duration,
+          bytesProcessed: text.length,
+          throughput: `${(text.length / duration * 1000).toFixed(0)} chars/sec`
+        });
+
+        circuitBreaker.recordSuccess();
+        sessionEmbeddingCount++;
+
+        return {
+          embedding,
+          model: this.config.model,
+          success: true,
+          duration
+        };
+
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        const isAbort = errorMsg.includes('abort') || errorMsg.includes('AbortError');
+
+        // Only count real Ollama failures toward circuit breaker — NOT search-cancelled aborts
+        if (!isAbort) {
+          circuitBreaker.recordFailure();
+        }
+
+        if (isAbort) {
+          logger.warn('generateEmbedding', `⏱️ REQUEST TIMEOUT after ${duration}ms (limit: ${this.config.timeout}ms)`);
+          logger.info('generateEmbedding', '💡 First embedding may take 5-10s for model loading. Try increasing timeout in settings.');
+          logger.debug('generateEmbedding', 'Timeout details', {
+            durationMs: duration,
+            configuredTimeout: this.config.timeout,
+            suggestion: 'Increase ollamaTimeout in settings to 10000ms or higher'
+          });
+        } else {
+          logger.debug('generateEmbedding', '❌ Embedding generation failed', {
+            error: errorMsg,
+            isAbort,
+            durationMs: duration,
+            configuredTimeout: this.config.timeout
+          });
+        }
+        logger.warn('generateEmbedding', `❌ Embedding failed after ${duration}ms: ${errorMsg}`);
+
+        return {
+          embedding: [],
+          model: this.config.model,
+          success: false,
+          duration,
+          error: errorMsg
+        };
+      }
+    });
+  }
+
+  /**
+   * Stream a concise text answer for the inline `??` answer pane.
+   *
+   * PRIVACY NOTE: The prompt is sent ONLY to local Ollama (localhost) via
+   * `/api/chat` with `stream:true`. No external network calls. Reuses the same
+   * guards as {@link generateEmbedding} (circuit breaker, memory pressure,
+   * single-flight semaphore) so answers never stack up against embeddings.
+   * Aborts (rapid typing / mode change) do NOT trip the circuit breaker.
+   */
+  async generateAnswer(prompt: string, opts: AnswerStreamOptions): Promise<AnswerStreamResult> {
+    const startTime = Date.now();
+    let accumulated = '';
+    const fail = (error: string, aborted = false): AnswerStreamResult => ({
+      text: accumulated, success: false, durationMs: Date.now() - startTime, error, aborted,
+    });
+
+    const trimmed = prompt.trim();
+    if (!trimmed) {
+      return fail('Empty prompt');
     }
+    // === GUARD 1: Circuit breaker === (cheap, no resources held)
+    if (circuitBreaker.isOpen()) {
+      return fail('Circuit breaker open — too many recent failures');
+    }
+    // === GUARD 2: Memory pressure ===
+    const mem = checkMemoryPressure();
+    if (!mem.ok) {
+      return fail(`Memory pressure: ${mem.usedMB}MB used (limit: ${mem.limitMB}MB)`);
+    }
+
+    // try-with-resources: the slot, timeout/abort, and stream reader are ALL
+    // torn down in disposeAll() — success, error, or abort — so Ollama is never
+    // left engaged and the single-flight slot is never stuck occupied.
+    return withResources(async (scope) => {
+      // === GUARD 3: Concurrent request limiter ===
+      if (!useOllamaSlot(scope)) {
+        return fail('Another Ollama request in progress — try again shortly');
+      }
+      // === GUARD 4: Already aborted ===
+      if (opts.abortSignal?.aborted) {
+        return fail('Aborted before start', true);
+      }
+
+      const model = opts.model || this.config.model;
+      try {
+        const status = await this.checkAvailability();
+        if (!status.available) {
+          return fail(status.error || 'Ollama not available');
+        }
+
+        const { signal } = useTimeoutAbort(scope, {
+          timeoutMs: opts.timeoutMs ?? this.config.timeout,
+          externalSignal: opts.abortSignal,
+        });
+
+        const requestBody = {
+          model,
+          messages: [
+            { role: 'system', content: ANSWER_SYSTEM_PROMPT },
+            { role: 'user', content: trimmed },
+          ],
+          stream: true,
+          options: { num_predict: opts.maxTokens ?? ANSWER_MAX_TOKENS, temperature: 0.3 },
+        };
+
+        logger.debug('generateAnswer', '🤖 Streaming inline answer', {
+          model, promptLength: trimmed.length, destination: 'localhost (on-device processing)',
+        });
+
+        const response = await fetch(`${this.config.endpoint}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal,
+        });
+
+        if (!response.ok) {
+          const errorText = await readResponseWithLimit(response, 1024 * 64).catch(() => 'No error details');
+          throw new Error(`Ollama API error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        let streamError: string | undefined;
+        const onChunk = (chunk: { token: string; error?: string }): void => {
+          if (chunk.error) { streamError = chunk.error; return; }
+          if (chunk.token) {
+            accumulated += chunk.token;
+            opts.onToken(chunk.token);
+          }
+        };
+
+        const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+        if (body && typeof body.getReader === 'function') {
+          const reader = body.getReader();
+          scope.add(() => reader.cancel().catch(() => { /* already closed */ }));
+          await streamNdjson(reader, onChunk, { maxBytes: MAX_RESPONSE_BYTES });
+        } else {
+          // Fallback for environments without a streaming body (e.g. test mocks):
+          // buffer the NDJSON text and parse it line-by-line.
+          const text = await readResponseWithLimit(response).catch(() => '');
+          for (const line of text.split('\n')) {
+            const chunk = parseOllamaChatStreamLine(line);
+            if (chunk) { onChunk(chunk); if (chunk.done) { break; } }
+          }
+        }
+
+        if (streamError) {
+          throw new Error(streamError);
+        }
+
+        circuitBreaker.recordSuccess();
+        logger.debug('generateAnswer', `✅ Answer streamed in ${Date.now() - startTime}ms (${accumulated.length} chars)`);
+        return { text: accumulated, success: true, durationMs: Date.now() - startTime };
+
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        const isAbort = errorMsg.includes('abort') || errorMsg.includes('AbortError');
+        // Aborts come from rapid typing / mode change — never count them against the breaker.
+        if (!isAbort) {
+          circuitBreaker.recordFailure();
+          logger.warn('generateAnswer', `❌ Answer generation failed after ${Date.now() - startTime}ms: ${errorMsg}`);
+        } else {
+          logger.trace('generateAnswer', 'Answer stream aborted (rapid typing / mode change)');
+        }
+        return fail(errorMsg, isAbort);
+      }
+    });
   }
 
   /**
@@ -657,6 +776,56 @@ const requestSemaphore = {
 
 export function acquireOllamaSlot(): boolean { return requestSemaphore.acquire(); }
 export function releaseOllamaSlot(): void { requestSemaphore.release(); }
+
+// === RESOURCE GUARDRAILS (try-with-resources for AI calls) ===
+// These wrap the scattered acquire/clear/abort cleanup into disposables so a
+// `withResources` body always tears them down — on success, error, or abort —
+// and Ollama is never left engaged with the single-flight slot stuck occupied.
+
+/** Acquire the single-flight Ollama slot for the scope's lifetime. Returns false if busy. */
+export function useOllamaSlot(scope: ResourceScope): boolean {
+  if (!requestSemaphore.acquire()) { return false; }
+  scope.add(() => requestSemaphore.release());
+  return true;
+}
+
+/**
+ * Create an AbortController + timeout bound to the scope. Forwards an optional
+ * external signal. On dispose: clears the timer and aborts the controller — a
+ * no-op once the request has completed, a real teardown (closing the Ollama
+ * connection) if it hasn't. `timeoutMs <= 0` is capped at 120s.
+ */
+export function useTimeoutAbort(
+  scope: ResourceScope,
+  opts: { timeoutMs: number; externalSignal?: AbortSignal },
+): { signal: AbortSignal; clearTimer: () => void } {
+  const controller = new AbortController();
+  const effective = opts.timeoutMs <= 0 ? 120_000 : opts.timeoutMs;
+  const timeoutId = setTimeout(() => controller.abort(), effective);
+  const clearTimer = (): void => clearTimeout(timeoutId);
+  // Forward an external signal. Track the handler so dispose can detach it —
+  // important when the same signal is reused across a batch (e.g. keyword
+  // expansion), so listeners don't accumulate on a long-lived signal.
+  let onExternalAbort: (() => void) | undefined;
+  const ext = opts.externalSignal;
+  if (ext) {
+    if (ext.aborted) {
+      controller.abort();
+    } else {
+      onExternalAbort = () => controller.abort();
+      ext.addEventListener('abort', onExternalAbort);
+    }
+  }
+  // Teardown: stop the timer, detach the listener, and abort (a no-op once the
+  // request has completed, a real teardown — closing the Ollama connection — if
+  // it has not).
+  scope.add(() => {
+    clearTimer();
+    if (ext && onExternalAbort) { ext.removeEventListener('abort', onExternalAbort); }
+    controller.abort();
+  });
+  return { signal: controller.signal, clearTimer };
+}
 
 // === MEMORY PRESSURE GUARD ===
 // Chrome extensions have limited memory; prevent embedding generation from consuming it all
@@ -814,4 +983,59 @@ export function getOllamaService(config?: Partial<OllamaConfig>): OllamaService 
   }
 
   return ollamaService;
+}
+
+// === INLINE ?? ANSWER SERVICE ===
+// A SEPARATE singleton from the embedding/keyword service so the answer model
+// (`answerModel`) and the keyword/embedding model don't clobber each other's
+// `config.model` (which `checkAvailability` validates against).
+let answerOllamaService: OllamaService | null = null;
+
+/** Build OllamaConfig for the inline-answer model from settings. */
+export async function getAnswerOllamaConfigFromSettings(): Promise<Partial<OllamaConfig>> {
+  try {
+    const { SettingsManager } = await import('../core/settings');
+    const endpoint = SettingsManager.getSetting('ollamaEndpoint') || 'http://localhost:11434';
+    const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
+    const rawModel = SettingsManager.getSetting('answerModel') || DEFAULT_ANSWER_MODEL;
+    return { endpoint, model: canonicalizeModelId(rawModel), timeout, maxRetries: 1 };
+  } catch {
+    logger.debug('getAnswerOllamaConfigFromSettings', 'SettingsManager not available, using defaults');
+    return {};
+  }
+}
+
+/** Get or create the dedicated inline-answer Ollama service, applying config changes. */
+export function getAnswerOllamaService(config?: Partial<OllamaConfig>): OllamaService {
+  if (!answerOllamaService) {
+    answerOllamaService = new OllamaService(config ?? { model: DEFAULT_ANSWER_MODEL });
+    return answerOllamaService;
+  }
+  if (config) {
+    const current = answerOllamaService.getConfig();
+    const hasChange = (Object.keys(config) as Array<keyof OllamaConfig>).some(
+      key => config[key] !== current[key],
+    );
+    if (hasChange) { answerOllamaService.updateConfig(config); }
+  }
+  return answerOllamaService;
+}
+
+/**
+ * The v1 (and only) {@link AnswerProvider}: local Ollama. The provider seam
+ * lets a future online provider (DuckDuckGo/Wikipedia) slot in — note that any
+ * remote provider requires new manifest host_permissions + a privacy review.
+ */
+export function createOllamaAnswerProvider(): AnswerProvider {
+  return {
+    id: 'ollama-local',
+    async isAvailable(): Promise<boolean> {
+      const svc = getAnswerOllamaService(await getAnswerOllamaConfigFromSettings());
+      return (await svc.checkAvailability()).available;
+    },
+    async streamAnswer(prompt: string, opts: AnswerStreamOptions): Promise<AnswerStreamResult> {
+      const svc = getAnswerOllamaService(await getAnswerOllamaConfigFromSettings());
+      return svc.generateAnswer(prompt, opts);
+    },
+  };
 }

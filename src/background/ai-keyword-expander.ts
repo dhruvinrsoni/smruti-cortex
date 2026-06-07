@@ -19,7 +19,8 @@
 
 import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess } from './ollama-service';
+import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess, useTimeoutAbort } from './ollama-service';
+import { withResources } from '../shared/resource-scope';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
 import { DEFAULT_GENERATION_MODEL, EMBEDDING_ONLY_NAME_PATTERNS } from '../shared/ollama-models';
 
@@ -280,72 +281,62 @@ async function callOllamaForKeywords(
     keyword
   });
 
-  const controller = new AbortController();
-  // Mirror the embedding guard: never allow an unbounded fetch.
-  const effectiveTimeout = timeout > 0 ? timeout : 120_000;
-  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
-
-  // Propagate search abort signal so Ollama fetch is cancelled when the search is superseded.
-  // This releases the Ollama slot immediately, preventing the next search's embedding from
-  // failing with "Another Ollama request in progress".
-  const onSearchAbort = () => controller.abort();
-  if (searchSignal) {
-    if (searchSignal.aborted) {
-      clearTimeout(timeoutId);
-      throw new Error('Search aborted before Ollama call');
-    }
-    searchSignal.addEventListener('abort', onSearchAbort, { once: true });
+  // Preserve the original early-abort behaviour (throw before any setup).
+  if (searchSignal?.aborted) {
+    throw new Error('Search aborted before Ollama call');
   }
 
-  const startTime = Date.now();
-
-  try {
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
+  // try-with-resources: the timeout timer, the search-abort listener, and the
+  // AbortController are all torn down on every exit path (success/error/abort),
+  // so the Ollama fetch is never left dangling.
+  return withResources(async (scope) => {
+    const { signal, clearTimer } = useTimeoutAbort(scope, {
+      timeoutMs: timeout,
+      externalSignal: searchSignal,
     });
+    const startTime = Date.now();
 
-    clearTimeout(timeoutId);
+    try {
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal
+      });
 
-    const duration = Date.now() - startTime;
+      clearTimer();
 
-    if (!response.ok) {
-      const errorText = await readResponseText(response, 64 * 1024).catch(() => '');
-      throw new Error(`Ollama API error: ${response.status} - ${errorText}`);
+      const duration = Date.now() - startTime;
+
+      if (!response.ok) {
+        const errorText = await readResponseText(response, 64 * 1024).catch(() => '');
+        throw new Error(`Ollama API error: ${response.status} - ${errorText}`);
+      }
+
+      const rawText = await readResponseText(response);
+      const data = JSON.parse(rawText);
+      // /api/chat returns { message: { content: "..." } }, /api/generate returns { response: "..." }
+      const generatedText = data.message?.content || data.response || '';
+
+      logger.debug('callOllamaForKeywords', `📨 Response received in ${duration}ms`, {
+        responseLength: generatedText.length,
+        preview: generatedText.substring(0, 200)
+      });
+
+      // Parse the JSON response, handling various edge cases
+      const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
+      recordCircuitBreakerSuccess();
+      return expandedKeywords;
+
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Abort errors are intentional (timeout or search superseded) — don't trip the breaker.
+        throw new Error('Aborted (timeout or search superseded)');
+      }
+      recordCircuitBreakerFailure();
+      throw error;
     }
-
-    const rawText = await readResponseText(response);
-    const data = JSON.parse(rawText);
-    // /api/chat returns { message: { content: "..." } }, /api/generate returns { response: "..." }
-    const generatedText = data.message?.content || data.response || '';
-
-    logger.debug('callOllamaForKeywords', `📨 Response received in ${duration}ms`, {
-      responseLength: generatedText.length,
-      preview: generatedText.substring(0, 200)
-    });
-
-    // Parse the JSON response, handling various edge cases
-    const expandedKeywords = parseKeywordResponse(generatedText, [keyword]);
-    if (searchSignal) {searchSignal.removeEventListener('abort', onSearchAbort);}
-    clearTimeout(timeoutId);
-    recordCircuitBreakerSuccess();
-    return expandedKeywords;
-
-  } catch (error: unknown) {
-    clearTimeout(timeoutId);
-    if (searchSignal) {
-      searchSignal.removeEventListener('abort', onSearchAbort);
-    }
-
-    if (error instanceof Error && error.name === 'AbortError') {
-      // Abort errors are intentional (timeout or search superseded) — don't trip the breaker.
-      throw new Error('Aborted (timeout or search superseded)');
-    }
-    recordCircuitBreakerFailure();
-    throw error;
-  }
+  });
 }
 
 /**
