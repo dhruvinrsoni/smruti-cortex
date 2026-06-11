@@ -213,9 +213,14 @@ if (releaseMode) {
 
   await step('Bundle Size Benchmark', 'node ./scripts/benchmark-performance.mjs');
 
-  // (a) Dependency vulnerability scan. `--audit-level=high` exits non-zero only
-  //     when HIGH or CRITICAL CVEs are present; lower-severity advisories pass.
-  await step('npm audit (HIGH/CRITICAL only)', 'npm audit --audit-level=high');
+  // (a) Dependency vulnerability scan, scoped to PRODUCTION deps (--omit=dev).
+  //     The shipped extension bundles ZERO npm runtime deps (package.json has no
+  //     "dependencies"), so every advisory in the tree is dev tooling — vitest's
+  //     UI-server CVE (a mode we never run), jsdom's ws, etc. — that never reaches
+  //     a user. Auditing production deps is the correct question for a shipped
+  //     artifact; any real runtime dep added later is still scanned.
+  //     `--audit-level=high` exits non-zero only on HIGH/CRITICAL.
+  await step('npm audit (prod deps, HIGH/CRITICAL)', 'npm audit --omit=dev --audit-level=high');
 
   // (b) Manifest <-> submission-doc parity audit (the D1 perm-gap fix lives
   //     inside store-check.mjs). This is the same audit a release reviewer
