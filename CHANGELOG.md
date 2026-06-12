@@ -1,5 +1,37 @@
 ## [9.4.1] — 2026-05-25
 
+## [9.6.0] — 2026-06-12
+
+### Features
+- prioritize foreground AI over the background embedding backfill
+- add throttled() for rate-limiting hot-path logs
+- inline ?? AI answers + reusable model selector
+- shared CSP-safe inline-answer renderer (block, loader, rows)
+- ai-answer streaming port (SW<->UI)
+- streaming generateAnswer + try-with-resources guardrail for all AI calls
+- registry-derived engine chips for inline answers
+- inline ?? answer settings + answer-model constants
+- add ResourceScope try-with-resources utility
+
+### Bug Fixes
+- satisfy prefer-const/no-this-alias in acquireAsync
+- report ?? answer 'down' only on real connection failure; keep loader during model warmup
+
+### Refactoring
+- INFO = lifecycle only — demote/throttle hot-path logs
+
+### Other
+- add logging-policy skill + CLAUDE.md pointer
+- record v9.5.0 Chrome Web Store submission date (2026-06-05)
+- add inline ?? answer screenshots + settings reference
+- add store-policy skill + CWS compliance checklist
+- trim v9.5.0 listing to <5 platforms — fix CWS keyword-spam rejection
+- pin vitest to the stable 4.0.x line
+- scope release npm audit to production deps (--omit=dev)
+- npm audit fix — resolve ws advisories (jsdom test dep)
+
+---
+
 ## [9.5.0] — 2026-05-30
 
 ### Features
