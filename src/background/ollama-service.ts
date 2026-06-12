@@ -800,27 +800,25 @@ const requestSemaphore = {
     if (waitMs <= 0 || abortSignal?.aborted) { return Promise.resolve(false); }
     return new Promise<boolean>((resolve) => {
       let settled = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      // `finish` closes over `timer` (a const declared below); it only ever runs
+      // after the timer is created, so the closure reference is safe.
+      const finish = (val: boolean): void => {
+        if (settled) { return; }
+        settled = true;
+        clearTimeout(timer);
+        const idx = this.waiters.indexOf(waiter);
+        if (idx >= 0) { this.waiters.splice(idx, 1); }
+        if (abortSignal) { abortSignal.removeEventListener('abort', onAbort); }
+        resolve(val);
+      };
       const waiter = (): void => {
         if (settled) { return; }
         if (this.acquire()) { finish(true); }
         else { this.waiters.push(waiter); } // someone else took it — wait again
       };
-      const cleanup = (): void => {
-        if (timer !== undefined) { clearTimeout(timer); }
-        const idx = this.waiters.indexOf(waiter);
-        if (idx >= 0) { this.waiters.splice(idx, 1); }
-        if (abortSignal) { abortSignal.removeEventListener('abort', onAbort); }
-      };
-      const finish = (val: boolean): void => {
-        if (settled) { return; }
-        settled = true;
-        cleanup();
-        resolve(val);
-      };
       const onAbort = (): void => finish(false);
       this.waiters.push(waiter);
-      timer = setTimeout(() => finish(false), waitMs);
+      const timer = setTimeout(() => finish(false), waitMs);
       if (abortSignal) { abortSignal.addEventListener('abort', onAbort, { once: true }); }
     });
   }
