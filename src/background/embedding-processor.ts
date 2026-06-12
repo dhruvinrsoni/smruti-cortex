@@ -428,14 +428,16 @@ class EmbeddingProcessorImpl {
                             this.withEmbeddings++;
                             this.recordCompletion();
 
-                            // Log progress every 10 items
+                            // Background progress is operational detail — DEBUG, throttled to
+                            // ~once/30s (the start + completion lines stay at INFO).
                             if (this.processed % 10 === 0) {
                                 const progress = this.getProgress();
-                                logger.info('runLoop',
+                                logger.throttled('progress', 'debug', 'runLoop',
                                     `Progress: ${this.withEmbeddings}/${this.total} ` +
                                     `(${Math.round(this.withEmbeddings / this.total * 100)}%) ` +
                                     `| Speed: ${progress.speed} items/min ` +
-                                    `| ETA: ${progress.estimatedMinutes} min`
+                                    `| ETA: ${progress.estimatedMinutes} min`,
+                                    30_000
                                 );
                             }
 

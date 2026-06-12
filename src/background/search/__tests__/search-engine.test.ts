@@ -138,7 +138,7 @@ describe('search-engine', () => {
     vi.doMock('../../../core/logger', () => ({
       Logger: {
         forComponent: () => ({
-          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
         }),
       },
       errorMeta: (err: unknown) => err instanceof Error
@@ -320,7 +320,7 @@ describe('search-engine', () => {
 
       // Re-mock everything else the same way importModule does (vi.resetModules cleared them).
       vi.doMock('../../../core/logger', () => ({
-        Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+        Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
         errorMeta: (err: unknown) => err instanceof Error ? { name: err.name, message: err.message } : { name: 'non-Error', message: String(err) },
       }));
       vi.doMock('../../../core/settings', () => ({
@@ -632,13 +632,15 @@ describe('search-engine', () => {
       vi.doMock('../../../core/logger', () => ({
         Logger: {
           forComponent: () => ({
-            debug: vi.fn(),
-            info: vi.fn((_ctx: string, msg: string) => {
+            // The per-search result summary is now DEBUG (lifecycle-only INFO policy).
+            debug: vi.fn((_ctx: string, msg: string) => {
               capturedInfoMessages.push(msg);
             }),
+            info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
             trace: vi.fn(),
+            throttled: vi.fn(),
           }),
         },
         errorMeta: (err: unknown) => err instanceof Error
@@ -730,15 +732,17 @@ describe('search-engine', () => {
       vi.doMock('../../../core/logger', () => ({
         Logger: {
           forComponent: () => ({
-            debug: vi.fn(),
-            info: vi.fn((_ctx: string, msg: string) => {
+            // The standard "(N matches, M indexed)" summary is now DEBUG.
+            debug: vi.fn((_ctx: string, msg: string) => {
               if (typeof msg === 'string' && msg.includes('matches,')) {
                 standardLogFired = true;
               }
             }),
+            info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
             trace: vi.fn(),
+            throttled: vi.fn(),
           }),
         },
         errorMeta: (err: unknown) => err instanceof Error
@@ -947,7 +951,7 @@ describe('search-engine', () => {
       vi.doMock('../../../core/logger', () => ({
         Logger: {
           forComponent: () => ({
-            debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+            debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
           }),
         },
         errorMeta: (err: unknown) => err instanceof Error
@@ -1228,7 +1232,7 @@ describe('search-engine', () => {
     vi.resetModules();
     const items = overrides.items ?? [];
     vi.doMock('../../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (err: unknown) => err instanceof Error ? { name: err.name, message: err.message } : { name: 'non-Error', message: String(err) },
     }));
     vi.doMock('../../../core/settings', () => ({

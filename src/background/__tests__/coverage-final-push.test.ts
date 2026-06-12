@@ -12,7 +12,7 @@ import { DisplayMode } from '../../core/settings';
 vi.mock('../../core/logger', () => ({
   Logger: {
     forComponent: () => ({
-      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
     }),
     getRecentLogs: vi.fn(() => []),
   },
@@ -89,7 +89,7 @@ describe('scorer-manager — getAllScorers branches', () => {
   it('returns embedding scorer with weight 0 when embeddings disabled', async () => {
     vi.resetModules();
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => ({ message: String(e) }),
     }));
     vi.doMock('../../core/settings', () => ({
@@ -105,7 +105,7 @@ describe('scorer-manager — getAllScorers branches', () => {
   it('returns embedding scorer with weight 0.4 when embeddings enabled', async () => {
     vi.resetModules();
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => ({ message: String(e) }),
     }));
     vi.doMock('../../core/settings', () => ({
@@ -121,7 +121,7 @@ describe('scorer-manager — getAllScorers branches', () => {
   it('crossDimensional scorer returns 0 for single-token queries', async () => {
     vi.resetModules();
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => ({ message: String(e) }),
     }));
     vi.doMock('../../core/settings', () => ({
@@ -141,7 +141,7 @@ describe('scorer-manager — getAllScorers branches', () => {
   it('domainFamiliarity scorer returns 0 when hostname is empty', async () => {
     vi.resetModules();
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => ({ message: String(e) }),
     }));
     vi.doMock('../../core/settings', () => ({
@@ -161,7 +161,7 @@ describe('scorer-manager — getAllScorers branches', () => {
   it('domainFamiliarity scorer returns 0 when domain visit count is 0', async () => {
     vi.resetModules();
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => ({ message: String(e) }),
     }));
     vi.doMock('../../core/settings', () => ({
@@ -181,7 +181,7 @@ describe('scorer-manager — getAllScorers branches', () => {
   it('multiTokenMatch scorer returns 0 for single-token queries', async () => {
     vi.resetModules();
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => ({ message: String(e) }),
     }));
     vi.doMock('../../core/settings', () => ({
@@ -219,7 +219,7 @@ describe('embedding-processor — additional branch gaps', () => {
     vi.doMock('../../core/logger', () => ({
       Logger: {
         forComponent: () => ({
-          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
         }),
       },
       errorMeta: (err: unknown) => err instanceof Error
@@ -323,7 +323,7 @@ describe('embedding-processor — additional branch gaps', () => {
     vi.doMock('../../core/logger', () => ({
       Logger: {
         forComponent: () => ({
-          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
         }),
       },
       errorMeta: (err: unknown) => err instanceof Error
@@ -593,7 +593,7 @@ describe('diagnostics — branch gaps', () => {
     vi.doMock('../../core/logger', () => ({
       Logger: {
         forComponent: () => ({
-          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
         }),
         getRecentLogs: vi.fn(() => []),
       },
@@ -699,7 +699,7 @@ describe('diagnostics — branch gaps', () => {
     vi.doMock('../../core/logger', () => ({
       Logger: {
         forComponent: () => ({
-          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
         }),
         getRecentLogs: vi.fn(() => []),
       },
@@ -761,7 +761,7 @@ describe('search-engine — additional branch gaps', () => {
     vi.resetModules();
     const items = overrides.items ?? [];
     vi.doMock('../../core/logger', () => ({
-      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+      Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
       errorMeta: (e: unknown) => e instanceof Error ? { name: e.name, message: e.message } : { name: 'non-Error', message: String(e) },
     }));
     vi.doMock('../../core/settings', () => ({
@@ -1002,7 +1002,7 @@ describe('search-engine — additional branch gaps', () => {
     it('logs when synonym expansion adds tokens', async () => {
       vi.resetModules();
       vi.doMock('../../core/logger', () => ({
-        Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() }) },
+        Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
         errorMeta: (e: unknown) => ({ message: String(e) }),
       }));
       vi.doMock('../../core/settings', () => ({

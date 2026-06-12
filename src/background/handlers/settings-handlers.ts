@@ -125,7 +125,7 @@ export function registerSettingsHandlers(
   });
 
   preInit.register('POPUP_PERF_LOG', async (msg, _sender, sendResponse) => {
-    log.info('POPUP_PERF_LOG', `[PopupPerf] ${msg.stage} | ts=${msg.timestamp} | elapsedMs=${msg.elapsedMs}`);
+    log.debug('POPUP_PERF_LOG', `[PopupPerf] ${msg.stage} | ts=${msg.timestamp} | elapsedMs=${msg.elapsedMs}`);
     sendResponse({ status: 'ok' });
   });
 

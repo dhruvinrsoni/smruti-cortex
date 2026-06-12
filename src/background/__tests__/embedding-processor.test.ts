@@ -250,17 +250,17 @@ describe('embedding-processor', () => {
   // ── New tests covering lines 270-308 ──────────────────────────────────────
 
   describe('progress logging every 10 items (lines 270-278)', () => {
-    it('should call logger.info with progress stats after every 10th item', async () => {
-      // Capture the logger spy by intercepting forComponent
-      let capturedInfo: ReturnType<typeof vi.fn> | null = null;
+    it('should throttle progress at debug after every 10th item', async () => {
+      // Capture the throttled spy by intercepting forComponent
+      let capturedThrottled: ReturnType<typeof vi.fn> | null = null;
 
       vi.resetModules();
       vi.doMock('../../core/logger', () => ({
         Logger: {
           forComponent: () => {
-            const info = vi.fn();
-            capturedInfo = info;
-            return { debug: vi.fn(), info, warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
+            const throttled = vi.fn();
+            capturedThrottled = throttled;
+            return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled };
           },
         },
         errorMeta: (err: unknown) => err instanceof Error
@@ -302,9 +302,9 @@ describe('embedding-processor', () => {
       // Give the async loop time to process all 10 items (each has a 50ms sleep)
       await new Promise(r => setTimeout(r, 1500));
 
-      expect(capturedInfo).not.toBeNull();
-      const progressCalls = (capturedInfo as ReturnType<typeof vi.fn>).mock.calls.filter(
-        (args: unknown[]) => typeof args[1] === 'string' && (args[1] as string).includes('Progress:')
+      expect(capturedThrottled).not.toBeNull();
+      const progressCalls = (capturedThrottled as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (args: unknown[]) => args[1] === 'debug' && typeof args[3] === 'string' && (args[3] as string).includes('Progress:')
       );
       expect(progressCalls.length).toBeGreaterThanOrEqual(1);
     });

@@ -175,7 +175,7 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
   const timeout = SettingsManager.getSetting('ollamaTimeout') ?? 30000;
   const generationModel = getGenerationModel(model);
 
-  logger.info('expandQueryKeywords', `🤖 Expanding ${uncachedTokens.length} keyword(s): [${uncachedTokens.join(', ')}]`, {
+  logger.debug('expandQueryKeywords', `🤖 Expanding ${uncachedTokens.length} keyword(s): [${uncachedTokens.join(', ')}]`, {
     generationModel,
     endpoint,
     cachedCount: expandableTokens.length - uncachedTokens.length
@@ -192,7 +192,7 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
         expanded.forEach(k => allKeywords.add(k));
         anyOllamaCalled = true;
 
-        logger.info('expandQueryKeywords', `✅ Expanded "${keyword}" → ${expanded.length} keywords`, {
+        logger.debug('expandQueryKeywords', `✅ Expanded "${keyword}" → ${expanded.length} keywords`, {
           sample: expanded.slice(0, 8)
         });
       } catch (error) {

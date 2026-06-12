@@ -135,7 +135,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         const cachedResults = searchCache.get(q);
         if (cachedResults) {
             const cacheTime = performance.now() - searchStartTime;
-            logger.info('runSearch', `⚡ Cache hit! Returning ${cachedResults.length} results in ${cacheTime.toFixed(2)}ms`);
+            logger.debug('runSearch', `⚡ Cache hit! Returning ${cachedResults.length} results in ${cacheTime.toFixed(2)}ms`);
             return cachedResults;
         }
     } else {
@@ -171,7 +171,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     let aiExpanded = false;
 
     if (ollamaEnabled && !options?.skipAI) {
-        logger.info('runSearch', '🤖 AI keyword expansion ACTIVE');
+        logger.debug('runSearch', '🤖 AI keyword expansion ACTIVE');
         try {
             const expandedTokens = await expandQueryKeywords(q, searchAbort.signal);
             const expansionSource = getLastExpansionSource();
@@ -189,7 +189,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 } else {
                     aiStatus.aiKeywords = 'expanded';
                 }
-                logger.info('runSearch', `✅ Expanded "${q}" → ${searchTokens.length} keywords (source: ${expansionSource})`, {
+                logger.debug('runSearch', `✅ Expanded "${q}" → ${searchTokens.length} keywords (source: ${expansionSource})`, {
                     original: originalTokens,
                     expanded: searchTokens.filter(t => !originalTokens.includes(t))
                 });
@@ -199,9 +199,9 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             logger.warn('runSearch', '⚠️ Keyword expansion failed, using original query', errorMeta(error));
         }
     } else if (ollamaEnabled && options?.skipAI) {
-        logger.info('runSearch', '🔍 Keyword search (AI deferred — Phase 1)');
+        logger.debug('runSearch', '🔍 Keyword search (AI deferred — Phase 1)');
     } else {
-        logger.info('runSearch', '🔍 Keyword search (AI disabled)');
+        logger.debug('runSearch', '🔍 Keyword search (AI disabled)');
     }
 
     const scorers = getAllScorers();
@@ -226,7 +226,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
             aiStatus.semantic = 'circuit-breaker';
             logger.warn('runSearch', '🔴 Circuit breaker open — skipping semantic search');
         } else {
-            logger.info('runSearch', '🧠 Semantic search ACTIVE - generating query embedding');
+            logger.debug('runSearch', '🧠 Semantic search ACTIVE - generating query embedding');
             try {
                 // Use EMBEDDING model (not generation model) with user's settings
                 const embConfig = await ollamaModule.getOllamaConfigFromSettings(true);
@@ -234,11 +234,18 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 const embeddingResult = await ollamaService.generateEmbedding(q, searchAbort.signal);
                 if (embeddingResult.success && embeddingResult.embedding.length > 0) {
                     queryEmbedding = embeddingResult.embedding;
-                    logger.info('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
+                    logger.debug('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
                 } else {
                     aiStatus.semantic = 'error';
                     aiStatus.semanticError = `Embedding generation failed: ${embeddingResult.error || 'empty result'}`;
-                    logger.warn('runSearch', `⚠️ Query embedding generation failed: ${embeddingResult.error || 'empty'}`);
+                    const embErr = embeddingResult.error || 'empty';
+                    // "busy"/abort is expected during background backfill or rapid typing —
+                    // we silently fall back to keyword ranking, so it's DEBUG, not WARN.
+                    if (/in progress|abort/i.test(embErr)) {
+                        logger.debug('runSearch', `Query embedding skipped (${embErr}); using keyword ranking`);
+                    } else {
+                        logger.warn('runSearch', `⚠️ Query embedding generation failed: ${embErr}`);
+                    }
                 }
             } catch (error) {
                 aiStatus.semantic = 'error';
@@ -253,7 +260,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
     try {
         items = await getAllIndexedItems();
     } catch (dbErr) {
-        logger.error('runSearch', 'IndexedDB failed — falling back to chrome.history.search', undefined, dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+        logger.error('runSearch', 'IndexedDB failed — falling back to chrome.history.search', errorMeta(dbErr));
         items = [];
     }
 
@@ -465,7 +472,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 score += scorerScore;
                 scorerDetails.push({ name: scorer.name, score: scorerScore, weight: scorer.weight });
             } catch (err) {
-                logger.error('runSearch', `Scorer "${scorer.name}" threw — treating as 0`, undefined, err instanceof Error ? err : new Error(String(err)));
+                logger.throttled(`scorer-threw:${scorer.name}`, 'error', 'runSearch', `Scorer "${scorer.name}" threw — treating as 0`, 5_000, errorMeta(err));
                 scorerDetails.push({ name: scorer.name, score: 0, weight: scorer.weight });
             }
         }
@@ -708,7 +715,7 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
         }
         if (embeddingsGenerated > 0) {
             aiStatus.embeddingsGenerated = embeddingsGenerated;
-            logger.info('runSearch', `🧠 Embedding generation stats: ${embeddingsGenerated}/${MAX_EMBEDDINGS_PER_SEARCH} cap, ${embeddingTimeSpent.toFixed(0)}ms/${EMBEDDING_TIME_BUDGET_MS}ms budget`);
+            logger.debug('runSearch', `🧠 Embedding generation stats: ${embeddingsGenerated}/${MAX_EMBEDDINGS_PER_SEARCH} cap, ${embeddingTimeSpent.toFixed(0)}ms/${EMBEDDING_TIME_BUDGET_MS}ms budget`);
         }
     }
 
@@ -763,12 +770,12 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
 
     // Enhanced logging with AI breakdown
     if (aiOnlyMatches > 0 || hybridMatches > 0) {
-        logger.info('runSearch',
+        logger.debug('runSearch',
             `🔍 "${q}" → ${finalResults.length} results ` +
             `(${keywordMatches - hybridMatches} keyword + ${aiOnlyMatches} AI-only + ${hybridMatches} hybrid | ${items.length} indexed)`
         );
     } else {
-        logger.info('runSearch', `🔍 "${q}" → ${finalResults.length} results (${results.length} matches, ${items.length} indexed)`);
+        logger.debug('runSearch', `🔍 "${q}" → ${finalResults.length} results (${results.length} matches, ${items.length} indexed)`);
     }
 
     // Store results in cache for future queries

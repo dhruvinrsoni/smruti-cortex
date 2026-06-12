@@ -200,7 +200,8 @@ export async function cacheFavicon(hostname: string): Promise<string | null> {
         }
 
         if (!response.ok) {
-            logger.warn('cacheFavicon', `Failed to fetch favicon for ${hostname}: ${response.status}`);
+            // Expected for sites with no favicon (404) or internal hosts — throttle + DEBUG, no stack.
+            logger.throttled('favicon-fail', 'debug', 'cacheFavicon', `Failed to fetch favicon for ${hostname}: ${response.status}`, 60_000);
             await storeNegativeEntry(hostname);
             return null;
         }
