@@ -160,6 +160,7 @@ Load `.github/skills/<name>/SKILL.md` for deep domain knowledge:
 | `ui-components` | Touching popup, quick-search overlay, Shadow DOM |
 | `command-palette` | Adding/changing palette commands, prefix modes, web search engines |
 | `testing` | Writing or fixing tests |
+| `logging` | **Before adding/changing any log call** — levels (INFO = lifecycle only), `throttled()` for hot paths, never pass a raw Error |
 | `settings` | Changing any setting key, default, or validation |
 | `workflows-ci` | Modifying GitHub Actions (3 active workflows: health-check, lint-report, ranking-reports) |
 | `test-generation` | Generating new test files (full rules + mock patterns) |
@@ -193,7 +194,7 @@ Prefer in this order:
 
 - **Scorers are isolated:** Each scorer in `src/background/search/scorers/` is independent. A change to `title-scorer.ts` won't affect `url-scorer.ts`.
 - **Settings schema is truth:** Never hardcode a setting key. Always reference `SETTINGS_SCHEMA` in `src/core/settings.ts`.
-- **Logger everywhere:** Use `Logger.forComponent('Name')` — never raw `console.log`.
+- **Logger everywhere:** Use `Logger.forComponent('Name')` — never raw `console.log`. **INFO = lifecycle only** (startup/index/settings); per-keystroke/per-item logs go to DEBUG; throttle hot paths with `logger.throttled(...)`; pass `errorMeta(err)`, never a raw `Error`. See the `logging` skill.
 - **Tests run fast:** `npm test` finishes in ~28s. Always run after code changes before committing.
 - **Build is slow:** `npm run build` takes ~30s + pre-commit hook adds another run on commit. Verify logic via `npm test` first.
 - **Chrome APIs require mocking:** jsdom has no `chrome.*`. Every test that touches Chrome APIs must mock them. See `.github/skills/testing/SKILL.md` patterns.
