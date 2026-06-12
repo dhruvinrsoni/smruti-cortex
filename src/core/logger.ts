@@ -329,6 +329,19 @@ export class Logger {
     }
 }
 
+/** Throttle level — the subset of log levels worth rate-limiting on hot paths. */
+export type ThrottleLevel = 'debug' | 'info' | 'warn' | 'error';
+
+// Module-scoped last-emit timestamps, keyed `${className}:${key}`. Lives outside
+// the class so every ComponentLogger instance for the same component shares one
+// window (the processor/favicon cache create fresh loggers per call site).
+const throttleLastEmit = new Map<string, number>();
+
+/** Test hook: clear all throttle windows so suites don't leak state between cases. */
+export function __resetThrottleState(): void {
+    throttleLastEmit.clear();
+}
+
 /**
  * Component-specific logger following Spring Boot patterns
  */
@@ -353,6 +366,29 @@ export class ComponentLogger {
 
     trace(methodName: string, message: string, data?: any): void { // eslint-disable-line @typescript-eslint/no-explicit-any
         Logger.trace(this.className, methodName, message, data);
+    }
+
+    /**
+     * Rate-limited log for hot paths (backfill progress, favicon failures, etc.).
+     * Emits at `level` only if at least `minGapMs` has elapsed since the last emit
+     * for this `(component, key)` pair; otherwise it's dropped silently. Use a
+     * stable `key` per logical stream so unrelated messages don't share a window.
+     */
+    throttled(
+        key: string,
+        level: ThrottleLevel,
+        methodName: string,
+        message: string,
+        minGapMs: number,
+        data?: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    ): void {
+        const mapKey = `${this.className}:${key}`;
+        const now = Date.now();
+        const last = throttleLastEmit.get(mapKey);
+        // Emit if never emitted before, or the window has fully elapsed.
+        if (last !== undefined && now - last < minGapMs) { return; }
+        throttleLastEmit.set(mapKey, now);
+        this[level](methodName, message, data);
     }
 }
 

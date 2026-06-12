@@ -16,6 +16,9 @@ function createComponentLogger() {
     warn: vi.fn(),
     error: vi.fn(),
     trace: vi.fn(),
+    // Mock is a no-op spy (no real throttling) — consumers only need the method
+    // to exist; throttle behaviour itself is covered against the real logger.
+    throttled: vi.fn(),
   };
 }
 
