@@ -78,6 +78,8 @@ export function handleAnswerPort(port: chrome.runtime.Port, provider: AnswerProv
 
         void provider.streamAnswer(prompt, {
             abortSignal: controller.signal,
+            // Foreground answer: wait briefly for the slot if the backfill holds it.
+            waitForSlotMs: 1500,
             onToken: (token) => {
                 if (!cancelled.has(requestId)) {
                     safePortPost(port, { type: 'ANSWER_TOKEN', requestId, token });

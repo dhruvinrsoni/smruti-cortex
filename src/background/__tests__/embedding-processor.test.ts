@@ -64,7 +64,7 @@ describe('embedding-processor', () => {
     vi.doMock('../../core/logger', () => ({
       Logger: {
         forComponent: () => ({
-          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(),
+          debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn(),
         }),
       },
       errorMeta: (err: unknown) => err instanceof Error
@@ -307,6 +307,52 @@ describe('embedding-processor', () => {
         (args: unknown[]) => args[1] === 'debug' && typeof args[3] === 'string' && (args[3] as string).includes('Progress:')
       );
       expect(progressCalls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('foreground priority — abort in-flight item on search activity', () => {
+    it('aborts the in-flight embedding the instant setSearchActive(true) fires', async () => {
+      let capturedSignal: AbortSignal | undefined;
+
+      vi.resetModules();
+      vi.doMock('../../core/logger', () => ({
+        Logger: { forComponent: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn(), throttled: vi.fn() }) },
+        errorMeta: (err: unknown) => err instanceof Error
+          ? { name: err.name, message: err.message }
+          : { name: 'non-Error', message: String(err) },
+      }));
+      vi.doMock('../../core/settings', () => ({
+        SettingsManager: { init: vi.fn(), getSetting: vi.fn((key: string) => settingsMock[key]) },
+      }));
+      const oneItem = { url: 'https://x.com', title: 'X', hostname: 'x.com', tokens: ['x'], visitCount: 1, lastVisit: Date.now() };
+      vi.doMock('../database', () => ({
+        countItemsWithoutEmbeddings: vi.fn(async () => ({ total: 1, withoutEmbeddings: 1 })),
+        getItemsWithoutEmbeddingsBatch: vi.fn().mockResolvedValueOnce([oneItem]).mockResolvedValue([]),
+        saveIndexedItem: vi.fn(),
+      }));
+      vi.doMock('../indexing', () => ({
+        // Slow embedding that resolves immediately when its signal aborts (so no timer leaks).
+        generateItemEmbedding: vi.fn(async (_item: unknown, signal?: AbortSignal) => {
+          capturedSignal = signal;
+          await new Promise<void>((resolve) => {
+            const t = setTimeout(resolve, 1000);
+            signal?.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+          });
+          return signal?.aborted ? undefined : [0.1, 0.2, 0.3];
+        }),
+      }));
+      vi.doMock('../ollama-service', () => makeOllamaServiceMock());
+
+      const { embeddingProcessor } = await import('../embedding-processor');
+      await embeddingProcessor.start();
+      await new Promise((r) => setTimeout(r, 80)); // let the item begin embedding
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(false);
+
+      embeddingProcessor.setSearchActive(true); // foreground search arrives mid-embedding
+      expect(capturedSignal!.aborted).toBe(true); // in-flight item aborted → slot freed at once
+
+      embeddingProcessor.stop();
     });
   });
 

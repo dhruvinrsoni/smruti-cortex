@@ -15,7 +15,7 @@ const logger = Logger.forComponent('Indexing');
 /**
  * Generate embedding for an indexed item if semantic search is enabled
  */
-export async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }): Promise<number[] | undefined> {
+export async function generateItemEmbedding(item: { title: string; metaDescription?: string; url: string }, signal?: AbortSignal): Promise<number[] | undefined> {
     try {
         // Check if embeddings are enabled
         const embeddingsEnabled = SettingsManager.getSetting('embeddingsEnabled') ?? false;
@@ -44,7 +44,9 @@ export async function generateItemEmbedding(item: { title: string; metaDescripti
 
         logger.debug('generateItemEmbedding', `🧠 Generating embedding for: "${item.title.substring(0, 50)}..."`);
 
-        const result = await ollamaService.generateEmbedding(text);
+        // Background backfill: no slot wait (instant-fail). The signal lets a
+        // foreground search abort this in-flight item so it yields the slot.
+        const result = await ollamaService.generateEmbedding(text, signal);
 
         if (result.success && result.embedding.length > 0) {
             logger.trace('generateItemEmbedding', `✅ Embedding generated (${result.embedding.length} dimensions)`);

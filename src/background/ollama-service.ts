@@ -241,7 +241,7 @@ export class OllamaService {
    * PRIVACY NOTE: Text is sent ONLY to local Ollama (localhost).
    * No external network calls. All processing is on-device.
    */
-  async generateEmbedding(text: string, abortSignal?: AbortSignal): Promise<EmbeddingResponse> {
+  async generateEmbedding(text: string, abortSignal?: AbortSignal, opts?: { waitForSlotMs?: number }): Promise<EmbeddingResponse> {
     const startTime = Date.now();
 
     // === GUARD 0: Input length validation ===
@@ -288,8 +288,8 @@ export class OllamaService {
     // path so the single-flight slot is never left stuck and Ollama is never
     // left engaged.
     return withResources(async (scope) => {
-      // === GUARD 3: Concurrent request limiter ===
-      if (!useOllamaSlot(scope)) {
+      // === GUARD 3: Concurrent request limiter (foreground waits; background fails fast) ===
+      if (!(await useOllamaSlot(scope, { waitForSlotMs: opts?.waitForSlotMs ?? 0, abortSignal }))) {
         return {
           embedding: [], model: this.config.model, success: false,
           duration: 0, error: 'Another Ollama request in progress — try again shortly'
@@ -536,8 +536,8 @@ export class OllamaService {
     // torn down in disposeAll() — success, error, or abort — so Ollama is never
     // left engaged and the single-flight slot is never stuck occupied.
     return withResources(async (scope) => {
-      // === GUARD 3: Concurrent request limiter ===
-      if (!useOllamaSlot(scope)) {
+      // === GUARD 3: Concurrent request limiter (foreground waits for the slot) ===
+      if (!(await useOllamaSlot(scope, { waitForSlotMs: opts.waitForSlotMs ?? 0, abortSignal: opts.abortSignal }))) {
         return fail('Another Ollama request in progress — try again shortly');
       }
       // === GUARD 4: Already aborted ===
@@ -770,6 +770,9 @@ export function recordCircuitBreakerSuccess(): void {
 const requestSemaphore = {
   active: 0,
   maxConcurrent: 1,
+  // FIFO wake list for acquireAsync waiters (foreground requests waiting for the
+  // background backfill to yield the slot).
+  waiters: [] as Array<() => void>,
 
   acquire(): boolean {
     if (this.active >= this.maxConcurrent) {
@@ -782,20 +785,70 @@ const requestSemaphore = {
 
   release(): void {
     this.active = Math.max(0, this.active - 1);
+    // Wake the next waiter so a foreground request can grab the just-freed slot.
+    const next = this.waiters.shift();
+    if (next) { next(); }
+  },
+
+  /**
+   * Acquire the slot, optionally waiting up to `waitMs` for it to free (used by
+   * FOREGROUND requests so they win the slot once the backfill yields). Returns
+   * false on timeout or abort. `waitMs <= 0` is the original instant behavior.
+   */
+  acquireAsync(waitMs: number, abortSignal?: AbortSignal): Promise<boolean> {
+    if (this.acquire()) { return Promise.resolve(true); }
+    if (waitMs <= 0 || abortSignal?.aborted) { return Promise.resolve(false); }
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const waiter = (): void => {
+        if (settled) { return; }
+        if (this.acquire()) { finish(true); }
+        else { this.waiters.push(waiter); } // someone else took it — wait again
+      };
+      const cleanup = (): void => {
+        if (timer !== undefined) { clearTimeout(timer); }
+        const idx = this.waiters.indexOf(waiter);
+        if (idx >= 0) { this.waiters.splice(idx, 1); }
+        if (abortSignal) { abortSignal.removeEventListener('abort', onAbort); }
+      };
+      const finish = (val: boolean): void => {
+        if (settled) { return; }
+        settled = true;
+        cleanup();
+        resolve(val);
+      };
+      const onAbort = (): void => finish(false);
+      this.waiters.push(waiter);
+      timer = setTimeout(() => finish(false), waitMs);
+      if (abortSignal) { abortSignal.addEventListener('abort', onAbort, { once: true }); }
+    });
   }
 };
 
 export function acquireOllamaSlot(): boolean { return requestSemaphore.acquire(); }
 export function releaseOllamaSlot(): void { requestSemaphore.release(); }
+/** Foreground-priority acquire: wait up to `waitMs` for the slot. */
+export function acquireOllamaSlotAsync(waitMs: number, abortSignal?: AbortSignal): Promise<boolean> {
+  return requestSemaphore.acquireAsync(waitMs, abortSignal);
+}
 
 // === RESOURCE GUARDRAILS (try-with-resources for AI calls) ===
 // These wrap the scattered acquire/clear/abort cleanup into disposables so a
 // `withResources` body always tears them down — on success, error, or abort —
 // and Ollama is never left engaged with the single-flight slot stuck occupied.
 
-/** Acquire the single-flight Ollama slot for the scope's lifetime. Returns false if busy. */
-export function useOllamaSlot(scope: ResourceScope): boolean {
-  if (!requestSemaphore.acquire()) { return false; }
+/**
+ * Acquire the single-flight Ollama slot for the scope's lifetime. Returns false if
+ * busy. Foreground callers pass `waitForSlotMs` (+ their abort signal) to wait for
+ * the background backfill to yield; background callers omit it (instant fail).
+ */
+export async function useOllamaSlot(
+  scope: ResourceScope,
+  opts?: { waitForSlotMs?: number; abortSignal?: AbortSignal },
+): Promise<boolean> {
+  const acquired = await requestSemaphore.acquireAsync(opts?.waitForSlotMs ?? 0, opts?.abortSignal);
+  if (!acquired) { return false; }
   scope.add(() => requestSemaphore.release());
   return true;
 }

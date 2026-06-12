@@ -19,7 +19,7 @@
 
 import { Logger, errorMeta } from '../core/logger';
 import { SettingsManager } from '../core/settings';
-import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlot, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess, useTimeoutAbort } from './ollama-service';
+import { isCircuitBreakerOpen, checkMemoryPressure, acquireOllamaSlotAsync, releaseOllamaSlot, recordCircuitBreakerFailure, recordCircuitBreakerSuccess, useTimeoutAbort } from './ollama-service';
 import { withResources } from '../shared/resource-scope';
 import { loadCache, getCachedExpansion, getPrefixMatch, cacheExpansion } from './ai-keyword-cache';
 import { DEFAULT_GENERATION_MODEL, EMBEDDING_ONLY_NAME_PATTERNS } from '../shared/ollama-models';
@@ -163,7 +163,8 @@ export async function expandQueryKeywords(query: string, abortSignal?: AbortSign
     lastExpansionSource = anyFromCache ? 'cache-hit' : 'skipped';
     return Array.from(allKeywords);
   }
-  if (!acquireOllamaSlot()) {
+  // Foreground (user query): wait briefly for the slot so the background backfill yields.
+  if (!(await acquireOllamaSlotAsync(1500, abortSignal))) {
     logger.debug('expandQueryKeywords', '🔒 Ollama slot busy — skipping AI expansion');
     lastExpansionSource = anyFromCache ? 'cache-hit' : 'skipped';
     return Array.from(allKeywords);

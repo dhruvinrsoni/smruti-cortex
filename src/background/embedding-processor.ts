@@ -45,6 +45,10 @@ class EmbeddingProcessorImpl {
     // Set from port-messaging.ts on every SEARCH_QUERY / CANCEL_SEARCH frame
     // and from search-handlers.ts on the popup's request/response equivalent.
     private lastUserQueryAt = 0;
+    // AbortController for the embedding currently in flight. Aborted the instant
+    // a foreground search starts so the background item yields the Ollama slot
+    // immediately (rather than the foreground query failing while we hold it).
+    private currentItemAbort: AbortController | null = null;
     private processed = 0;
     private total = 0;
     private withEmbeddings = 0;
@@ -185,6 +189,18 @@ class EmbeddingProcessorImpl {
                 logger.trace('setSearchActive', 'Search ended — resuming processing');
             }
         }
+        // Yield the slot NOW: abort any in-flight background embedding so the
+        // foreground search's embedding can acquire it immediately.
+        if (active) { this.abortCurrentItem(); }
+    }
+
+    /** Abort the in-flight background embedding (idempotent) so the slot frees at once. */
+    private abortCurrentItem(): void {
+        const ctrl = this.currentItemAbort;
+        if (ctrl) {
+            this.currentItemAbort = null;
+            ctrl.abort();
+        }
     }
 
     /**
@@ -197,6 +213,9 @@ class EmbeddingProcessorImpl {
      */
     noteUserActivity(): void {
         this.lastUserQueryAt = Date.now();
+        // A keystroke can arrive mid-embedding (before setSearchActive flips) —
+        // abort the in-flight item so the foreground query wins the slot.
+        this.abortCurrentItem();
     }
 
     /**
@@ -417,8 +436,11 @@ class EmbeddingProcessorImpl {
                     // Re-check circuit breaker between items
                     if (isCircuitBreakerOpen()) {break;}
 
+                    // Fresh abort controller for THIS item; foreground activity
+                    // (setSearchActive/noteUserActivity) aborts it to free the slot.
+                    this.currentItemAbort = new AbortController();
                     try {
-                        const embedding = await generateItemEmbedding(item);
+                        const embedding = await generateItemEmbedding(item, this.currentItemAbort.signal);
 
                         if (embedding && embedding.length > 0) {
                             item.embedding = embedding;
@@ -464,6 +486,8 @@ class EmbeddingProcessorImpl {
                         }
 
                         await this.sleep(500);
+                    } finally {
+                        this.currentItemAbort = null;
                     }
                 }
 

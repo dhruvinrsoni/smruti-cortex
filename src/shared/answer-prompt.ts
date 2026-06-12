@@ -35,6 +35,8 @@ export interface AnswerStreamOptions {
     /** Output token cap (`options.num_predict`); provider default applies when omitted. */
     maxTokens?: number;
     timeoutMs?: number;
+    /** Foreground priority: wait up to this many ms for the Ollama slot (vs failing instantly). */
+    waitForSlotMs?: number;
 }
 
 /** Result of a streaming answer request. */

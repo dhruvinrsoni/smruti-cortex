@@ -231,7 +231,8 @@ async function runSearchInner(query: string, options?: { skipAI?: boolean }): Pr
                 // Use EMBEDDING model (not generation model) with user's settings
                 const embConfig = await ollamaModule.getOllamaConfigFromSettings(true);
                 const ollamaService = ollamaModule.getOllamaService(embConfig);
-                const embeddingResult = await ollamaService.generateEmbedding(q, searchAbort.signal);
+                // Foreground query: wait briefly for the slot so the background backfill yields to us.
+                const embeddingResult = await ollamaService.generateEmbedding(q, searchAbort.signal, { waitForSlotMs: 1500 });
                 if (embeddingResult.success && embeddingResult.embedding.length > 0) {
                     queryEmbedding = embeddingResult.embedding;
                     logger.debug('runSearch', `✅ Query embedding generated (${queryEmbedding.length} dimensions)`);

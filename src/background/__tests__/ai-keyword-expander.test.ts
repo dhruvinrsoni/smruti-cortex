@@ -23,6 +23,7 @@ const ollamaMocks = {
   isCircuitBreakerOpen: vi.fn(() => false),
   checkMemoryPressure: vi.fn(() => ({ ok: true, permanent: false })),
   acquireOllamaSlot: vi.fn(() => true),
+  acquireOllamaSlotAsync: vi.fn(async () => true),
   releaseOllamaSlot: vi.fn(),
   recordCircuitBreakerFailure: vi.fn(),
   recordCircuitBreakerSuccess: vi.fn(),
@@ -65,6 +66,7 @@ describe('ai-keyword-expander', () => {
     ollamaMocks.isCircuitBreakerOpen.mockReturnValue(false);
     ollamaMocks.checkMemoryPressure.mockReturnValue({ ok: true, permanent: false });
     ollamaMocks.acquireOllamaSlot.mockReturnValue(true);
+    ollamaMocks.acquireOllamaSlotAsync.mockResolvedValue(true);
     cacheMocks.getCachedExpansion.mockReturnValue(null);
     cacheMocks.getPrefixMatch.mockReturnValue(null);
 
@@ -155,7 +157,7 @@ describe('ai-keyword-expander', () => {
 
     it('should skip AI when Ollama slot is busy', async () => {
       const { expandQueryKeywords, getLastExpansionSource } = await importFreshModule();
-      ollamaMocks.acquireOllamaSlot.mockReturnValue(false);
+      ollamaMocks.acquireOllamaSlotAsync.mockResolvedValue(false);
       const result = await expandQueryKeywords('war');
       expect(result).toContain('war');
       expect(getLastExpansionSource()).toBe('skipped');
